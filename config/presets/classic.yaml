@@ -1,0 +1,7 @@
+# Classic: 128x64, daily updates, months long. Inherits everything from
+# ../schema.yaml; only overrides appear here.
+extends: ../schema.yaml
+world: { name: "Classic", width: 128, height: 64 }
+schedule: { update_interval: "24h", etus_per_update: 60 }
+players: { max_countries: 40 }
+units: { enabled: true }

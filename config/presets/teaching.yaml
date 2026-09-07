@@ -1,0 +1,9 @@
+# Teaching: tiny world, no units, economy only. Meant for a first game and for
+# the M0/M2 playtests. Sanctuary rules are relaxed so the world is visible.
+extends: ../schema.yaml
+world: { name: "Teaching", width: 16, height: 16, terrain: { land_fraction: 0.6, island_size: 40, min_distance_between_capitals: 4 } }
+schedule: { update_interval: "1h", etus_per_update: 60 }
+players: { max_countries: 4 }
+units: { enabled: false }
+options: { fallout: false, plague: false, hidden: false, scorched_earth: false }
+agents: { diplomacy: true }

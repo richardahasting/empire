@@ -1,0 +1,722 @@
+# =============================================================================
+# EMPIRE — world configuration schema
+# =============================================================================
+#
+# This file is the *schema*, written as a fully-populated, commented YAML
+# document. Every key here is a knob the engine reads; nothing gameplay-
+# relevant is hardcoded. A world is created from ONE file of this shape.
+# The presets in config/presets/ override a subset of these values.
+#
+# Conventions
+#   - All rates are PER ETU (Empire Time Unit) unless the key name says
+#     _per_update. An update is schedule.etus_per_update ETUs; the engine
+#     multiplies. This is how the same rules scale from a months-long game
+#     to a one-evening blitz.
+#   - Every percentage is 0..100 (efficiency, road_level), every fraction
+#     is 0.0..1.0 (rates, multipliers).
+#   - Commodity ids: civ mil uw food iron dust bar oil pet shell gun lcm hcm rad
+#   - Terrain ids:   ocean wilderness mountain plains forest   (+ swamp, optional)
+#
+# Provenance markers, so Richard can decide the rule himself:
+#   KNOWN:  value or mechanic taken from the Wolfpack Empire econfig defaults
+#           or server source as I remember them. Treat as "probably right".
+#   GUESS:  I do not know what the original did, or I know it did something
+#           this design has deliberately replaced. The number is a plausible
+#           starting point for the balance harness, nothing more.
+#   NEW:    mechanic that has no counterpart in the original (rail, reach
+#           limits, probabilistic radar, agents, handicaps). No original to
+#           be faithful to; the value is a design choice.
+#
+# Validation: the loader (empire-config module) rejects unknown keys, missing
+# required keys, out-of-range values, and cross-references that do not
+# resolve (a sector type that consumes a commodity not in the commodity
+# table, a preset that names a country twice, etc.). Load-time errors name
+# the YAML path.
+# =============================================================================
+
+schema_version: 1
+
+# -----------------------------------------------------------------------------
+# WORLD
+# -----------------------------------------------------------------------------
+world:
+  name: "Classic"
+  width: 128                 # KNOWN: Wolfpack default 64x32; the prompt asks 128x64.
+  height: 64
+  wrap_x: true               # KNOWN: original world wraps in both axes (torus).
+  wrap_y: true               #        GUESS: prompt never says; keeping the torus.
+  seed: 20260907             # Master seed. Every RNG stream is derived from it.
+
+  # Hex grid. Internally offset coordinates (odd-r); player-facing coordinates
+  # are relative to the country's capital, as the original did.
+  # KNOWN: the original's grid was a "brick" layout — each row shifted half a
+  # sector, x+y always even — which is topologically a hex grid. The player-
+  # facing convention (x,y with x±2 as E/W neighbours) is preserved by the
+  # coordinate adapter, not the engine.
+  coordinates:
+    player_facing: "original_brick"   # original_brick | axial
+
+  terrain:
+    generator: "fairland"      # KNOWN: name of the original's world generator.
+    land_fraction: 0.30
+    island_size: 25            # mean sectors per island/continent seed
+    continent_count: 0         # 0 = one continent per country (fairland default)
+    spike: 10                  # KNOWN fairland knob: coastline jaggedness 0..100
+    min_distance_between_capitals: 12   # in sectors; validation rejects if impossible
+    # GUESS: the original had no plains/forest terrain — those were designations
+    # on wilderness, and terrain was derived from elevation (<0 sea, high =
+    # mountain). This design adds plains/forest/swamp as *terrain*. Fractions
+    # below apply to land only and must sum to 1.0.
+    land_mix: { wilderness: 0.40, plains: 0.30, forest: 0.18, mountain: 0.10, swamp: 0.02 }
+    # Elevation feeds radar range and rail/road cost. Metres, generated per sector.
+    elevation_by_terrain:
+      ocean:      { min: -200, max: 0 }
+      wilderness: { min: 0,   max: 400 }
+      plains:     { min: 0,   max: 150 }
+      forest:     { min: 50,  max: 600 }
+      swamp:      { min: 0,   max: 20 }
+      mountain:   { min: 600, max: 3000 }
+
+  # Per-sector resource endowments, 0..100, drawn at generation.
+  # KNOWN: original resources (fert, min, gold, oil, uran) were functions of
+  # elevation — minerals and gold high in mountains, fertility low there.
+  # GUESS: exact curves. Expressed here as per-terrain triangular distributions.
+  resources:
+    fertility:   { wilderness: [20,60,90], plains: [50,80,100], forest: [20,45,70], swamp: [10,30,50], mountain: [0,5,20] }
+    minerals:    { wilderness: [0,20,60],  plains: [0,10,30],   forest: [0,15,40],  swamp: [0,5,10],   mountain: [30,70,100] }
+    gold:        { wilderness: [0,5,40],   plains: [0,2,10],    forest: [0,5,20],   swamp: [0,0,5],    mountain: [10,40,100] }
+    oil:         { wilderness: [0,10,60],  plains: [0,15,70],   forest: [0,5,30],   swamp: [10,40,90], mountain: [0,0,10] }
+    uranium:     { wilderness: [0,5,40],   plains: [0,2,20],    forest: [0,3,20],   swamp: [0,0,5],    mountain: [5,30,100] }
+
+# -----------------------------------------------------------------------------
+# SCHEDULE / TIME
+# -----------------------------------------------------------------------------
+schedule:
+  update_interval: "24h"       # ISO-ish duration: 15m, 1h, 24h
+  etus_per_update: 60          # KNOWN: Wolfpack default etu_per_update = 60
+  first_update_at: "2026-10-01T03:00:00Z"
+  pause_on_failed_update: true # a rolled-back update halts the schedule and pages the deity
+  max_updates: 0               # 0 = unbounded; blitz presets set a hard end
+
+# -----------------------------------------------------------------------------
+# PLAYERS / COUNTRIES
+# -----------------------------------------------------------------------------
+players:
+  max_countries: 40
+  starting_cash: 5000          # GUESS: original startup money varied by deity; 5000 is the prompt's number
+  # KNOWN-ish: Wolfpack `newcap` seeds the capital with civs and food. Exact
+  # numbers were deity-set. GUESS at the split between the two sanctuaries.
+  starting_commodities:
+    capital:    { civ: 550, mil: 55, uw: 0, food: 1000, iron: 0, dust: 0, bar: 0, oil: 0, pet: 0, shell: 0, gun: 0, lcm: 100, hcm: 0, rad: 0 }
+    sanctuary:  { civ: 550, mil: 55, uw: 0, food: 1000, iron: 0, dust: 0, bar: 0, oil: 0, pet: 0, shell: 0, gun: 0, lcm: 100, hcm: 0, rad: 0 }
+  starting_efficiency: 100     # KNOWN: sanctuary sectors start at 100%
+  starting_mobility: 127       # KNOWN: sector mobility cap is 127
+  starting_levels: { tech: 0, research: 0, education: 0, happiness: 0 }
+  # Sanctuary: the country's two sectors are invisible and invulnerable, and
+  # the country cannot act outside them, until it breaks sanctuary.
+  # KNOWN: original sanctuary rules. GUESS: what "frozen" means for updates —
+  # this design runs the update normally inside sanctuary (civs grow, food is
+  # eaten) so a player who waits is not penalised for it. Set false to freeze.
+  sanctuary:
+    update_runs_while_in_sanctuary: true
+    break_costs_btu: 0
+
+  # Optional per-country overrides. Names must be unique. Absent here, the
+  # deity adds countries through the admin API before the first update.
+  countries: []
+  #  - name: Sonnet
+  #    controller: agent                     # human | agent
+  #    agent: { adapter: anthropic, model: claude-sonnet-4-6 }
+  #    handicap: { btu_rate: 0.80 }
+  #  - name: Rick
+  #    controller: human
+
+# -----------------------------------------------------------------------------
+# COMMODITIES — the master table. Everything else references these ids.
+# -----------------------------------------------------------------------------
+commodities:
+  # weight: mobility cost multiplier per unit moved (KNOWN: original "pack"
+  #   values; e.g. moving 1 gun costs far more than 1 food).
+  # signature: how visible held stock is to detection (NEW; see detection).
+  # priority: contention tiebreak in the distribution planner — lower wins
+  #   (NEW; original had no explicit ordering, scan order decided).
+  # People are commodities for movement purposes but have their own growth/
+  #   consumption rules in economy.population.
+  - { id: civ,   name: civilians,           weight: 1.0, signature: 0.3, priority: 10, is_person: true }
+  - { id: mil,   name: military,            weight: 1.0, signature: 1.0, priority: 20, is_person: true }
+  - { id: uw,    name: uncompensated workers, weight: 1.0, signature: 0.3, priority: 30, is_person: true }
+  - { id: food,  name: food,                weight: 1.0, signature: 0.1, priority: 1  }
+  - { id: iron,  name: iron ore,            weight: 1.0, signature: 0.1, priority: 40 }
+  - { id: dust,  name: gold dust,           weight: 5.0, signature: 0.0, priority: 50 }
+  - { id: bar,   name: gold bars,           weight: 50.0, signature: 0.0, priority: 50 }
+  - { id: oil,   name: oil,                 weight: 1.0, signature: 0.1, priority: 45 }
+  - { id: pet,   name: petrol,              weight: 1.0, signature: 0.2, priority: 5  }
+  - { id: shell, name: shells,              weight: 1.0, signature: 0.5, priority: 60 }
+  - { id: gun,   name: guns,                weight: 10.0, signature: 0.8, priority: 60 }
+  - { id: lcm,   name: light construction materials, weight: 1.0, signature: 0.1, priority: 2 }
+  - { id: hcm,   name: heavy construction materials, weight: 1.0, signature: 0.1, priority: 3 }
+  - { id: rad,   name: radioactive material, weight: 8.0, signature: 0.2, priority: 70 }
+
+# -----------------------------------------------------------------------------
+# TERRAIN — per-terrain modifiers referenced by mobility and infrastructure
+# -----------------------------------------------------------------------------
+terrain:
+  ocean:      { passable_by_land: false, base_move_cost: null }
+  wilderness: { passable_by_land: true,  base_move_cost: 1.0 }
+  plains:     { passable_by_land: true,  base_move_cost: 0.8 }
+  forest:     { passable_by_land: true,  base_move_cost: 1.4 }
+  swamp:      { passable_by_land: true,  base_move_cost: 2.0 }
+  mountain:   { passable_by_land: true,  base_move_cost: 2.5 }
+
+# -----------------------------------------------------------------------------
+# ECONOMY
+# -----------------------------------------------------------------------------
+economy:
+
+  # --- Population ------------------------------------------------------------
+  population:
+    food_per_civ_per_etu: 0.0005      # KNOWN: eatrate 0.0005
+    food_per_mil_per_etu: 0.0005      # KNOWN: same eatrate
+    food_per_uw_per_etu:  0.0005
+    civ_birth_rate_per_etu: 0.005     # KNOWN: obrate 0.005
+    uw_birth_rate_per_etu:  0.0025    # KNOWN: uwbrate 0.0025
+    food_per_birth: 0.0006            # KNOWN: babyeat
+    # Starvation: when food runs out, a fraction of each population class dies.
+    # KNOWN: original starved proportionally to shortfall. GUESS: cap per update.
+    starvation_max_fraction_per_update: 0.25
+    # Population ceiling per sector = sector_type.max_population * eff/100,
+    # further scaled by research level (KNOWN: original "maxpop" grows with
+    # research). GUESS at the curve.
+    max_pop_research_curve: { base: 1.0, per_research_point: 0.01, cap: 2.0 }
+    # Plague. KNOWN mechanic; GUESS defaults. options.plague toggles.
+    plague:
+      base_probability_per_etu: 0.00005
+      crowding_exponent: 1.5
+      mortality: 0.10
+      duration_updates: 3
+
+  # --- Work ------------------------------------------------------------------
+  # Each civ contributes 1 work-unit, each uw and mil a fraction. Production is
+  # limited by min(work available, materials available) scaled by efficiency.
+  # KNOWN: this three-way min is the original model. GUESS at uw/mil factors.
+  work:
+    per_civ: 1.0
+    per_uw:  1.0
+    per_mil: 0.5
+    happiness_effect_curve: { neutral_at: 0, slope_per_point: 0.01, min: 0.5, max: 1.2 }
+
+  # --- Sector types ------------------------------------------------------------
+  # One entry per designation. Fields:
+  #   glyph            single char for the console map (KNOWN: original letters)
+  #   category         extraction | manufacturing | infrastructure | social | special
+  #   build            materials + cash per efficiency point when building up
+  #   max_population   at 100% efficiency, before research scaling
+  #   produces         { commodity: units per work-unit per ETU at eff 100 }
+  #   consumes         { commodity: units per unit produced } (material inputs)
+  #   resource_gate    which sector resource (fertility/minerals/...) scales output
+  #   level_effect     national level that scales output and its curve id
+  #   min_tech         tech required to designate
+  #   capacity         per-commodity storage max; unlisted = default_capacity
+  #   store_multiplier warehouse-style storage bonus (applies to all commodities)
+  #   flags            special behaviours the engine knows by name
+  #
+  # PROVENANCE: glyphs, the categories, and the input→output chains are KNOWN
+  # (iron→lcm/hcm, oil→pet, dust→bar, lcm+hcm+oil→shell, etc.). Every numeric
+  # rate is a GUESS calibrated against nothing yet — the M0 balance harness
+  # exists to fix that. Treat the numbers as placeholders.
+  default_capacity: 9999      # KNOWN: original per-sector item cap 9999
+  sector_types:
+    # --- special -------------------------------------------------------------
+    - id: wilderness
+      glyph: "-"
+      category: special
+      build: {}
+      max_population: 100
+      flags: [undesignated]
+    - id: sanctuary
+      glyph: "/"
+      category: special
+      max_population: 1000
+      flags: [invulnerable, invisible, no_designate]
+    - id: wasteland
+      glyph: "\\"
+      category: special
+      max_population: 0
+      flags: [no_designate, fallout_origin]
+
+    # --- infrastructure ------------------------------------------------------
+    - id: capital
+      glyph: "c"
+      category: infrastructure
+      build: { lcm: 1.0, cash: 0 }
+      max_population: 1000
+      flags: [btu_source, one_per_country_active]
+    - id: warehouse
+      glyph: "w"
+      category: infrastructure
+      build: { lcm: 1.0 }
+      max_population: 1000
+      store_multiplier: 10.0     # KNOWN: warehouse holds 10x
+      flags: [distribution_hub]
+    - id: harbor
+      glyph: "h"
+      category: infrastructure
+      build: { lcm: 1.0, hcm: 1.0 }
+      max_population: 1000
+      min_tech: 0
+      flags: [coastal_required, builds_ships]
+    - id: airfield
+      glyph: "*"
+      category: infrastructure
+      build: { lcm: 1.0, hcm: 1.0 }
+      max_population: 1000
+      min_tech: 30
+      flags: [builds_planes]
+    - id: depot                  # NEW: rail endpoint
+      glyph: "="
+      category: infrastructure
+      build: { lcm: 1.0, hcm: 2.0, cash: 5 }
+      max_population: 1000
+      min_tech: 50
+      store_multiplier: 5.0
+      flags: [rail_endpoint, distribution_hub]
+    - id: fortress
+      glyph: "f"
+      category: infrastructure
+      build: { lcm: 1.0, hcm: 1.0 }
+      max_population: 1000
+      flags: [defense_bonus]
+    - id: radar
+      glyph: ")"
+      category: infrastructure
+      build: { lcm: 2.0, hcm: 1.0, cash: 10 }
+      max_population: 1000
+      min_tech: 40
+      flags: [radar_station]
+    - id: nuclear_plant
+      glyph: "n"
+      category: infrastructure
+      build: { lcm: 2.0, hcm: 2.0 }
+      max_population: 1000
+      min_tech: 200
+      flags: [builds_nukes]
+
+    # --- extraction ----------------------------------------------------------
+    - id: agribusiness
+      glyph: "a"
+      category: extraction
+      build: { lcm: 1.0 }
+      max_population: 1000
+      produces: { food: 0.009 }            # GUESS placeholder rate
+      resource_gate: fertility
+      level_effect: { level: tech, curve: production_tech }
+    - id: forest
+      glyph: "F"                            # NEW (Richard 2026-09-07: keep). Second, weaker lcm source on forest terrain.
+      category: extraction
+      build: { lcm: 1.0 }
+      max_population: 1000
+      produces: { lcm: 0.002 }
+      resource_gate: fertility
+      terrain_required: [forest]
+    - id: mine
+      glyph: "m"
+      category: extraction
+      build: { lcm: 1.0 }
+      max_population: 1000
+      produces: { iron: 0.003 }
+      resource_gate: minerals
+    - id: gold_mine
+      glyph: "g"
+      category: extraction
+      build: { lcm: 1.0 }
+      max_population: 1000
+      produces: { dust: 0.001 }
+      resource_gate: gold
+    - id: oil_field
+      glyph: "o"
+      category: extraction
+      build: { lcm: 1.0 }
+      max_population: 1000
+      produces: { oil: 0.003 }
+      resource_gate: oil
+      level_effect: { level: tech, curve: production_tech }
+    - id: uranium_mine
+      glyph: "u"
+      category: extraction
+      build: { lcm: 1.0 }
+      max_population: 1000
+      min_tech: 100
+      produces: { rad: 0.0005 }
+      resource_gate: uranium
+      level_effect: { level: tech, curve: production_tech }
+
+    # --- manufacturing -------------------------------------------------------
+    - id: light_manufacturing
+      glyph: "j"
+      category: manufacturing
+      build: { lcm: 1.0 }
+      max_population: 1000
+      produces: { lcm: 0.003 }
+      consumes: { iron: 1.0 }              # 1 iron -> 1 lcm  (KNOWN ratio)
+      level_effect: { level: tech, curve: production_tech }
+    - id: heavy_industry
+      glyph: "k"
+      category: manufacturing
+      build: { lcm: 1.0 }
+      max_population: 1000
+      produces: { hcm: 0.0015 }
+      consumes: { iron: 2.0 }              # 2 iron -> 1 hcm  (KNOWN ratio)
+      level_effect: { level: tech, curve: production_tech }
+    - id: refinery
+      glyph: "%"
+      category: manufacturing
+      build: { lcm: 1.0, hcm: 1.0 }
+      max_population: 1000
+      produces: { pet: 0.005 }
+      consumes: { oil: 1.0 }               # KNOWN: 1 oil -> ~10 pet at high eff; GUESS ratio here
+      level_effect: { level: tech, curve: production_tech }
+    - id: shell_plant
+      glyph: "i"
+      category: manufacturing
+      build: { lcm: 1.0, hcm: 1.0 }
+      max_population: 1000
+      produces: { shell: 0.002 }
+      consumes: { lcm: 2.0, hcm: 1.0 }
+      level_effect: { level: tech, curve: production_tech }
+    - id: gun_plant
+      glyph: "d"                            # KNOWN: original "defense plant" made guns
+      category: manufacturing
+      build: { lcm: 1.0, hcm: 1.0 }
+      max_population: 1000
+      produces: { gun: 0.0005 }
+      consumes: { lcm: 5.0, hcm: 10.0, oil: 1.0 }
+      level_effect: { level: tech, curve: production_tech }
+    - id: defense_plant             # GUESS: prompt lists gun plant AND defense plant; treating this as the anti-air/fortification materials plant
+      glyph: "D"
+      category: manufacturing
+      build: { lcm: 1.0, hcm: 1.0 }
+      max_population: 1000
+      min_tech: 60
+      produces: { shell: 0.001, gun: 0.0002 }
+      consumes: { lcm: 3.0, hcm: 5.0 }
+    - id: bank
+      glyph: "b"
+      category: manufacturing
+      build: { lcm: 1.0, hcm: 1.0 }
+      max_population: 1000
+      produces: { bar: 0.0002 }
+      consumes: { dust: 5.0 }              # KNOWN: 5 dust -> 1 bar
+      flags: [interest_bearing]
+
+    # --- social --------------------------------------------------------------
+    - id: enlistment_center
+      glyph: "e"
+      category: social
+      build: { lcm: 1.0 }
+      max_population: 1000
+      produces: { mil: 0.001 }
+      consumes: { civ: 1.0 }               # KNOWN: civs become mil
+    - id: school                            # NEW two-tier ladder (Richard 2026-09-07: keep). Original had one library/school "l".
+      glyph: "l"
+      category: social
+      build: { lcm: 1.0 }
+      max_population: 1000
+      produces_level: { education: 0.0002 }
+      consumes: { lcm: 1.0 }
+      level_effect: { level: education, curve: level_diminishing }
+    - id: university
+      glyph: "L"
+      category: social
+      build: { lcm: 2.0, hcm: 1.0 }
+      max_population: 1000
+      min_tech: 20
+      produces_level: { education: 0.0006 }
+      consumes: { lcm: 2.0, hcm: 1.0 }
+    - id: research_lab                      # KNOWN: "t" technical center produced tech; "r" research lab produced research
+      glyph: "r"
+      category: social
+      build: { lcm: 1.0, hcm: 1.0 }
+      max_population: 1000
+      produces_level: { research: 0.0003 }
+      consumes: { dust: 1.0, oil: 1.0, lcm: 1.0 }
+      level_effect: { level: education, curve: level_diminishing }
+    - id: technical_center
+      glyph: "t"
+      category: social
+      build: { lcm: 1.0, hcm: 1.0 }
+      max_population: 1000
+      produces_level: { tech: 0.0003 }
+      consumes: { dust: 1.0, oil: 1.0, lcm: 1.0 }
+      level_effect: { level: education, curve: level_diminishing }
+    - id: hospital                          # NEW (Richard 2026-09-07): plague counter ONLY. Inert when options.plague is false.
+      glyph: "H"                            # No happiness output — park is the happiness sector.
+      category: social
+      build: { lcm: 2.0, hcm: 1.0 }
+      max_population: 1000
+      min_tech: 30
+      consumes: { lcm: 0.5 }                # upkeep per ETU per 100 eff (validator: no produces, so this is a pure sink)
+      flags: [plague_mitigation]
+      plague_mitigation:
+        radius_sectors: 2                   # this sector and neighbours within radius
+        mortality_multiplier_at_100: 0.4    # plague mortality x this, scaled by eff (1.0 at eff 0)
+        probability_multiplier_at_100: 0.6  # outbreak chance x this
+        stacking: min                       # overlapping hospitals: take the best single one, no stacking
+    - id: park                              # KNOWN: "p" park produced happiness
+      glyph: "p"
+      category: social
+      build: { lcm: 1.0 }
+      max_population: 1000
+      produces_level: { happiness: 0.0004 }
+      consumes: { lcm: 1.0 }
+
+  # --- Production curves -----------------------------------------------------
+  # Named curves referenced by sector_types.level_effect. Evaluated as
+  # multiplier = f(level). KNOWN: original used prod_eff(level) = level /
+  # (level + tech_factor) style saturating curves (tech_factor 50 in Wolfpack
+  # for some sectors). GUESS at every constant.
+  curves:
+    production_tech:   { type: saturating, k: 50 }            # level/(level+k)+baseline
+    level_diminishing: { type: log, base: 2.0, easy: 1.0 }    # KNOWN: tech_log_base=2, easy_tech=1
+    flat:              { type: constant, value: 1.0 }
+
+  # --- Sector efficiency build-up -------------------------------------------
+  # Efficiency rises each update by spending sector_types[].build materials
+  # per point plus work. KNOWN: original "buil" rate; GUESS at the constants.
+  efficiency:
+    max_points_per_etu: 0.4              # cap on efficiency gain per ETU per sector (60 ETU -> 24 pts)
+    work_per_point: 25                   # work-units consumed per efficiency point
+    # Redesignation. What fraction of current efficiency survives when a
+    # sector's designation changes. Resolution order: exact (from,to) pair,
+    # then same-category, then default. Richard 2026-09-07: adjustable, not
+    # a fixed rule. (GUESS at the original: it dropped to 0 for most changes.)
+    redesignate:
+      keep_fraction_default: 0.0             # 0.0 = original behaviour (start over)
+      keep_fraction_same_category: 0.0       # e.g. mine -> gold_mine
+      keep_fraction_by_pair: {}              # e.g. { "warehouse->depot": 0.5, "school->university": 0.75 }
+      min_efficiency_after: 0                # floor applied after the fraction
+    decay_per_update_if_unowned: 2.0     # abandoned sectors rot
+
+  # --- Mobility --------------------------------------------------------------
+  mobility:
+    sector_accrual_per_etu: 0.02         # KNOWN: sect_mob_scale 0.02 (x eff/100 x 100 -> ~1.2/update at 60 ETU... 
+                                         # original formula: mob += etu * sect_mob_scale * (eff scaled). GUESS on exact scaling.)
+    sector_max: 127                      # KNOWN
+    accrual_efficiency_scaled: true      # mobility accrues proportional to efficiency
+    # Cost to move ONE weight-unit of commodity INTO a sector, before road discount.
+    move_cost_by_terrain: { wilderness: 1.0, plains: 0.8, forest: 1.4, swamp: 2.0, mountain: 2.5 }
+    # KNOWN: original cost was also efficiency-dependent (low eff = high cost).
+    efficiency_discount: { at_0: 1.0, at_100: 0.4, curve: linear }
+    # Manual move (the `move` command) per-update range — NEW range-and-hold rule
+    manual_move_max_sectors_per_update: { base: 6, per_tech_point: 0.04 }
+
+  # --- Money -----------------------------------------------------------------
+  # KNOWN: original taxed civs and paid mil per ETU; research/tech cost money.
+  # GUESS at every number.
+  money:
+    tax_per_civ_per_etu: 0.0083
+    tax_per_uw_per_etu:  0.0018
+    pay_per_mil_per_etu: 0.0083
+    sector_maintenance_per_etu: 0.0      # most sectors free; infra decay is the maintenance sink
+    bank_interest_per_bar_per_etu: 0.0025 # KNOWN: bankint 0.25 per update-ish; scaled
+    bankruptcy:
+      threshold: -500
+      # KNOWN: original at negative money seized/halted production; GUESS at effect
+      effect: { production_multiplier: 0.5, mobility_multiplier: 0.5 }
+
+  # --- Levels ----------------------------------------------------------------
+  # Four national levels. Each is fed by produces_level in its sector types,
+  # scaled by the curve, and decays. KNOWN: original level_age_rate decayed
+  # research/education/happiness (not tech). GUESS at constants.
+  levels:
+    tech:      { decay_per_etu: 0.0,    start: 0 }
+    research:  { decay_per_etu: 0.0002, start: 0 }
+    education: { decay_per_etu: 0.0002, start: 0 }
+    happiness: { decay_per_etu: 0.0005, start: 0,
+                 # KNOWN: happiness consumed by population; hap_cons 600000 in original
+                 consumed_per_civ_per_etu: 0.0000017 }
+    # Cross-effects
+    education_to_research_multiplier: { curve: level_diminishing }
+    research_to_tech_multiplier:      { curve: level_diminishing }
+
+  # --- BTUs ------------------------------------------------------------------
+  btu:
+    accrual_per_capital_civ_per_etu: 0.0004   # KNOWN: btu_build_rate 0.0004
+    max: 640                                   # KNOWN: max_btus 640
+    start: 640
+    # Cost per command. KNOWN: original charged 1..3 BTU for most; GUESS table.
+    cost_by_command:
+      default: 1
+      move: 1
+      designate: 1
+      distribute: 1
+      threshold: 1
+      explore: 2
+      telegram: 1
+      announce: 1
+      build_road: 1
+      build_rail: 2
+      rail_ship: 2
+      scorched_earth_order: 3
+      map: 0
+      census: 0
+      production: 0
+      budget: 0
+
+# -----------------------------------------------------------------------------
+# DISTRIBUTION — NEW planner replacing the scan-order artifact
+# -----------------------------------------------------------------------------
+distribution:
+  # Reach: max sectors a shipment may travel per update, before road bonus.
+  max_reach_sectors: { base: 3, per_tech_point: 0.02, road_bonus_at_100: 2 }
+  mobility_debited_from: transited_sectors    # transited_sectors | endpoints_only
+  partial_delivery: hold_in_place             # hold_in_place | return_to_source | destroy (never)
+  # Contention resolution order when demand > supply or mobility:
+  #   1. proportional to demand
+  #   2. commodity.priority (lower first)
+  #   3. seeded RNG
+  contention: [proportional, commodity_priority, seeded_rng]
+  # A held (in-transit) parcel occupies a sector as "cargo" — captured with it.
+  held_cargo_counts_toward_capacity: false
+  path_cost: cheapest_mobility                # cheapest_mobility | fewest_hops
+
+# -----------------------------------------------------------------------------
+# INFRASTRUCTURE — NEW: per-sector road/rail, independent of designation
+# -----------------------------------------------------------------------------
+infrastructure:
+  road:
+    build_materials_per_point: { lcm: 1.2, cash: 8 }
+    work_per_point: 10
+    max_points_per_update: 10
+    cost_multiplier_by_terrain: { wilderness: 1.2, plains: 1.0, forest: 1.6, swamp: 2.5, mountain: 3.0 }
+    max_level_by_terrain:       { wilderness: 100, plains: 100, forest: 90, swamp: 60, mountain: 60 }
+    # Mobility cost multiplier as a function of road_level: 1.0 at 0, min_multiplier at 100.
+    mobility_discount_curve: { type: diminishing, min_multiplier: 0.25 }
+    decay_per_update: 0.5
+    maintenance_cash_per_point_per_update: 0.05
+    combat_damage_fraction: 0.30            # fraction of level lost when sector is captured
+  rail:
+    tech_required: 60
+    build_materials_per_point: { hcm: 2.0, lcm: 1.0, cash: 30 }
+    work_per_point: 20
+    max_points_per_update: 5
+    requires_depot_endpoints: true
+    min_level_to_carry: 20                  # a segment below this breaks the chain
+    capacity_per_update_at_100: 5000        # weight-units per line per update, x depot eff
+    cost_per_shipment: by_volume            # by_volume | by_distance (never)
+    cash_per_100_units_shipped: 2
+    max_sectors_per_update: { base: 8, per_tech_point: 0.05 }
+    decay_per_update: 1.0
+    maintenance_cash_per_point_per_update: 0.20
+    severed_route_behavior: strand_in_place
+    combat_damage_fraction: 0.50
+    cost_multiplier_by_terrain: { wilderness: 1.2, plains: 1.0, forest: 1.8, swamp: 4.0, mountain: 5.0 }
+    max_level_by_terrain:       { wilderness: 100, plains: 100, forest: 80, swamp: 40, mountain: 50 }
+    # Crossing water/mountain needs a bridge/tunnel: extra one-time cost.
+    bridge: { tech_required: 90, materials: { hcm: 200, lcm: 50, cash: 2000 } }
+    tunnel: { tech_required: 120, materials: { hcm: 400, lcm: 50, cash: 5000 } }
+
+# -----------------------------------------------------------------------------
+# CAPTURE / SPOILS — NEW
+# -----------------------------------------------------------------------------
+capture:
+  cargo_destroyed_fraction: 0.25          # of held cargo, lost in the fighting
+  stock_destroyed_fraction: 0.10          # of resident sector stock
+  scorched_earth_btu_cost: 3
+  scorched_earth_destroy_fraction: 1.0
+
+# -----------------------------------------------------------------------------
+# DETECTION — NEW probabilistic model (original was binary radar range)
+# -----------------------------------------------------------------------------
+detection:
+  model: probabilistic
+  radar:
+    nominal_range_at_100: 12                # sectors, at radar_level 100 & eff 100
+    range_by_radar_level: linear            # range scales linearly with radar_level x eff
+    elevation_bonus_per_100m: 0.4           # +sectors of nominal range per 100 m station elevation
+    tech_bonus_per_point: 0.02
+    decay_curve: sigmoid                    # p(d) = 1 / (1 + exp(k*(d/range - midpoint)))
+    sigmoid_k: 8.0
+    sigmoid_midpoint: 0.85
+    radar_level_build: { lcm: 2.0, hcm: 1.0, cash: 20, max_points_per_update: 5, decay_per_update: 0.5 }
+  # Signature multiplies p; >1 easier to see.
+  target_signature: { army: 1.8, fleet: 2.0, single_unit: 0.6, plane: 0.8, held_cargo: 0.2, sector: 1.0 }
+  masking_by_terrain: { forest: 0.7, mountain: 0.8, swamp: 0.9 }   # multiplier on p for targets IN that terrain
+  contact_staleness_updates: 3            # after this many updates a contact is "stale", then removed
+  contact_confidence_bands: { firm: 0.8, probable: 0.4 }           # UI rendering thresholds
+  ship:  { nominal_range: 4, decay_curve: sigmoid }
+  plane: { nominal_range: 8, decay_curve: sigmoid }
+  satellite: { enabled: false, nominal_range: 30 }
+  # Adjacent owned sectors are always seen (KNOWN: original showed neighbours).
+  adjacency_always_visible: true
+
+# -----------------------------------------------------------------------------
+# TECH / LEVEL CURVES (cross-reference into economy.curves)
+# -----------------------------------------------------------------------------
+tech:
+  curves:
+    research_to_tech: level_diminishing
+    education_to_research: level_diminishing
+  gates:                                   # things unlocked by tech level; unit table has its own
+    rail: 60
+    radar: 40
+    airfield: 30
+    uranium_mine: 100
+    nuclear_plant: 200
+
+# -----------------------------------------------------------------------------
+# UNITS — M5. Schema reserved; the table lives in units.yaml.
+# -----------------------------------------------------------------------------
+units:
+  enabled: true
+  table: units.yaml
+
+# -----------------------------------------------------------------------------
+# AGENTS — NEW
+# -----------------------------------------------------------------------------
+agents:
+  turn_window_seconds: 600                 # wall-clock timeout per agent turn
+  retries: 1
+  context_max_tokens: 60000                # truncate oldest-first above this
+  scratchpad_max_chars: 8000
+  session_windows_per_day_default: 3       # calibration protocol default
+  # Provider credentials come from env: ANTHROPIC_API_KEY, OPENAI_API_KEY, XAI_API_KEY
+  adapters: { anthropic: { env_key: ANTHROPIC_API_KEY }, openai: { env_key: OPENAI_API_KEY }, xai: { env_key: XAI_API_KEY } }
+  # Diplomacy switch for tournament control arm. When false, telegram/announce
+  # commands are rejected for EVERY country (humans too), so the arm is clean.
+  diplomacy: true
+
+# -----------------------------------------------------------------------------
+# HANDICAP DEFAULTS — per-country override under players.countries[].handicap
+# -----------------------------------------------------------------------------
+handicap_defaults:
+  btu_rate: 1.00
+  btu_cap: 1.00
+  production: 1.00
+  mobility: 1.00
+  research_rate: 1.00
+  starting_commodities: 1.00
+  command_budget_per_update: null
+  session_windows_per_day: null            # null = unlimited (humans); agents default from agents.*
+
+# -----------------------------------------------------------------------------
+# SCORING — composite, never BTUs
+# -----------------------------------------------------------------------------
+scoring:
+  weights: { civilians: 1.0, total_efficiency: 0.5, tech: 20.0, treasury: 0.01, territory: 5.0, survival: 1000.0 }
+  # When units enabled, survival+territory dominate:
+  weights_with_units: { civilians: 0.5, total_efficiency: 0.25, tech: 10.0, treasury: 0.005, territory: 20.0, survival: 5000.0 }
+  report_score_per_btu: true
+
+# -----------------------------------------------------------------------------
+# OPTIONS — feature flags (KNOWN: original had a similar option list)
+# -----------------------------------------------------------------------------
+options:
+  fallout: true
+  plague: true
+  loans: false
+  market: true
+  hidden: true              # KNOWN: HIDDEN — countries only see those they have contacted
+  scorched_earth: true
+  sanctuary: true
+  interest: true
+  demand_update: false      # KNOWN: original allowed player-demanded updates; off by default

@@ -1,0 +1,15 @@
+# Sandbox: one country, manual updates only, everything unlocked, generous
+# stocks. For poking at mechanics and for the flow-visualisation work.
+extends: ../schema.yaml
+world: { name: "Sandbox", width: 32, height: 32, terrain: { land_fraction: 0.5 } }
+schedule: { update_interval: "0", etus_per_update: 60 }   # "0" = manual trigger only
+players:
+  max_countries: 1
+  starting_cash: 1000000
+  starting_levels: { tech: 150, research: 150, education: 150, happiness: 50 }
+  starting_commodities:
+    capital:   { civ: 1000, mil: 100, food: 9999, iron: 9999, lcm: 9999, hcm: 9999, oil: 9999, dust: 9999 }
+    sanctuary: { civ: 1000, mil: 100, food: 9999, iron: 9999, lcm: 9999, hcm: 9999, oil: 9999, dust: 9999 }
+economy: { btu: { max: 9999, start: 9999 } }
+units: { enabled: true }
+options: { hidden: false, plague: false, fallout: false }

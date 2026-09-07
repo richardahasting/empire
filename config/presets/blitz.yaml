@@ -1,0 +1,15 @@
+# Blitz: 32x32, 15-minute updates, one evening (~16 updates in 4 hours).
+extends: ../schema.yaml
+world: { name: "Blitz", width: 32, height: 32, terrain: { island_size: 12, min_distance_between_capitals: 6 } }
+schedule: { update_interval: "15m", etus_per_update: 60, max_updates: 20 }
+players:
+  max_countries: 8
+  starting_cash: 20000
+  starting_commodities:
+    capital:   { civ: 900, mil: 90, food: 3000, lcm: 500, hcm: 100 }
+    sanctuary: { civ: 900, mil: 90, food: 3000, lcm: 500, hcm: 100 }
+  starting_levels: { tech: 40, research: 40, education: 40, happiness: 0 }
+economy:
+  btu: { accrual_per_capital_civ_per_etu: 0.0012, max: 640, start: 640 }
+agents: { turn_window_seconds: 120, session_windows_per_day_default: null }
+units: { enabled: true }

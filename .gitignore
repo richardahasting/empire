@@ -1,0 +1,28 @@
+# Java / Maven
+target/
+*.class
+*.jar
+!.mvn/wrapper/*.jar
+*.log
+
+# Node / Vite
+node_modules/
+dist/
+.vite/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# Env / secrets — provider keys come from the environment, never the config
+.env
+.env.*
+!.env.example
+
+# Simulation output
+sim-out/
+*.sim.json
