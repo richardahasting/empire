@@ -311,7 +311,7 @@ economy:
       resource_gate: fertility
       level_effect: { level: tech, curve: production_tech }
     - id: forest
-      glyph: "F"                            # GUESS: original had no forest designation; this maps forest terrain to lcm
+      glyph: "F"                            # NEW (Richard 2026-09-07: keep). Second, weaker lcm source on forest terrain.
       category: extraction
       build: { lcm: 1.0 }
       max_population: 1000
@@ -416,7 +416,7 @@ economy:
       max_population: 1000
       produces: { mil: 0.001 }
       consumes: { civ: 1.0 }               # KNOWN: civs become mil
-    - id: school                            # GUESS: original had "library/school" (l) as one thing producing education
+    - id: school                            # NEW two-tier ladder (Richard 2026-09-07: keep). Original had one library/school "l".
       glyph: "l"
       category: social
       build: { lcm: 1.0 }
@@ -448,15 +448,19 @@ economy:
       produces_level: { tech: 0.0003 }
       consumes: { dust: 1.0, oil: 1.0, lcm: 1.0 }
       level_effect: { level: education, curve: level_diminishing }
-    - id: hospital                          # GUESS: no original counterpart; reduces plague mortality and boosts happiness
-      glyph: "H"
+    - id: hospital                          # NEW (Richard 2026-09-07): plague counter ONLY. Inert when options.plague is false.
+      glyph: "H"                            # No happiness output — park is the happiness sector.
       category: social
       build: { lcm: 2.0, hcm: 1.0 }
       max_population: 1000
       min_tech: 30
-      produces_level: { happiness: 0.0002 }
-      consumes: { lcm: 1.0 }
+      consumes: { lcm: 0.5 }                # upkeep per ETU per 100 eff (validator: no produces, so this is a pure sink)
       flags: [plague_mitigation]
+      plague_mitigation:
+        radius_sectors: 2                   # this sector and neighbours within radius
+        mortality_multiplier_at_100: 0.4    # plague mortality x this, scaled by eff (1.0 at eff 0)
+        probability_multiplier_at_100: 0.6  # outbreak chance x this
+        stacking: min                       # overlapping hospitals: take the best single one, no stacking
     - id: park                              # KNOWN: "p" park produced happiness
       glyph: "p"
       category: social
