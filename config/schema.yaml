@@ -481,8 +481,15 @@ economy:
   efficiency:
     max_points_per_etu: 0.4              # cap on efficiency gain per ETU per sector (60 ETU -> 24 pts)
     work_per_point: 25                   # work-units consumed per efficiency point
-    redesignate_efficiency: 0            # KNOWN: redesignating drops eff to 0... GUESS: original kept some for "similar" types
-    redesignate_keep_fraction_same_category: 0.0
+    # Redesignation. What fraction of current efficiency survives when a
+    # sector's designation changes. Resolution order: exact (from,to) pair,
+    # then same-category, then default. Richard 2026-09-07: adjustable, not
+    # a fixed rule. (GUESS at the original: it dropped to 0 for most changes.)
+    redesignate:
+      keep_fraction_default: 0.0             # 0.0 = original behaviour (start over)
+      keep_fraction_same_category: 0.0       # e.g. mine -> gold_mine
+      keep_fraction_by_pair: {}              # e.g. { "warehouse->depot": 0.5, "school->university": 0.75 }
+      min_efficiency_after: 0                # floor applied after the fraction
     decay_per_update_if_unowned: 2.0     # abandoned sectors rot
 
   # --- Mobility --------------------------------------------------------------
