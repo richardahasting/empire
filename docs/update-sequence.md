@@ -50,9 +50,13 @@ update (handicap edits, schedule edits) — they are inputs, not effects.
 ### 2. Accrual
 Things that grow just by time passing, in no particular order because they do
 not interact:
-- **Mobility**: each sector gains `sector_accrual_per_etu * etus * (eff/100 if
-  efficiency_scaled)`, capped at `sector_max`, times the owner's
-  `handicap.mobility`.
+- **Mobility**: each sector gains `sector_accrual_per_etu * etus * f(eff)`,
+  where `f(eff) = floor + (1 - floor) * eff/100` with `floor =
+  accrual_efficiency_floor`. The floor exists because mobility is debited from
+  transited sectors: a 0% sector with 0 mobility could never be entered, so it
+  could never receive the materials to build efficiency, so it would stay at
+  0% forever (found by the M0 harness on 2026-09-07). Capped at `sector_max`,
+  times the owner's `handicap.mobility`.
 - **BTUs**: each country gains `accrual_per_capital_civ_per_etu * capital_civs
   * etus * handicap.btu_rate`, capped at `btu.max * handicap.btu_cap`.
   (**KNOWN:** only the *active* capital counts.)
@@ -93,7 +97,11 @@ Per sector, in parallel (they draw from different budgets):
   remainder rotting. (**NEW.** The order matters only when the treasury is
   short; it is deterministic and documented, which is the bar.)
 
-Work spent here is subtracted from the sector's work pool before step 5.
+**Work pool.** A sector's work for the update is `(civ*per_civ + uw*per_uw +
+mil*per_mil) * etus * happiness_curve`, in work-unit·ETUs, using the post-step-3
+population. Step 4 spends from it (`work_per_point` per efficiency point) and
+step 5 gets the remainder. Production rates in config are per work-unit per
+ETU, so step 5 multiplies by the pool directly, not by `etus` again.
 
 ### 5. Production
 Per sector with a producing designation:
@@ -148,12 +156,27 @@ sector's mobility**, and a **rail line's capacity**. Resolve iteratively:
 4. Re-check budgets (scaling one claim can free another); repeat until no
    budget is over-claimed. Terminates because claims only shrink.
 
+**Continuous by default.** With `distribution.quantum` unset, quantities are
+real numbers and proportional scaling is exact, so rules 2 and 3 never fire and
+the whole step is exactly rotation-symmetric. Setting a quantum (e.g. 1.0)
+ships whole units; the last indivisible unit at each over-claimed budget then
+goes by commodity priority, then seeded RNG. That tiebreak is deliberately
+*not* rotation-symmetric (it cannot be), which is why the symmetry tests run
+with the default.
+
 Then walk each flow along its path hop by hop, debiting each transited
 sector's mobility (`mobility_debited_from: transited_sectors`) until either
 the parcel arrives, its reach is exhausted, or a transited sector's mobility
 hits zero. Whatever remains becomes a **held parcel** in the last sector
 reached, recorded in the ledger with its destination, and rendered by the UI
-as an arrow that stops short. Nothing is destroyed or teleported.
+as an arrow that stops short. Nothing is destroyed or teleported. Parcels in
+the same sector with the same commodity, owner and destination merge, so a
+choked route produces one growing parcel rather than a pile of slivers.
+Remainders below 1e-9 are floating-point dust and are delivered, not parked.
+
+**Known loophole (GUESS at the right rule):** people in a held parcel are not
+in any sector's stock, so they neither eat nor breed nor work while in transit.
+Flag if civilians on the road should eat from the sector they are parked in.
 
 The direction-symmetry test (six identical chains, six directions, identical
 results) and the rotation test (rotate world 60°, output rotates) are
