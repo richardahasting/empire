@@ -35,6 +35,19 @@ make sim PRESET=teaching UPDATES=60 COUNTRIES=3 SEED=9   # headless run -> sim-o
 ./deploy.sh                                   # build web + server, restart the service, check the public URL
 ```
 
+**Terminal client** (the original was played over telnet; this is the same idea over the
+console API, so every line is the same command the web page sends):
+
+```bash
+tools/empire-cli.py                                  # https://hastingtx.org/empire
+tools/empire-cli.py --url http://127.0.0.1:8020/empire --game 14
+```
+
+Sign in with a magic link (paste the link or its token), pick or join a game, then type
+the original's verbs at `empire>` — `map`, `census`, `des`, `thresh`, `dist`, `move`,
+`expl`, `road`, `rail`, `railship`, `help` — plus client-side `view`, `projection`,
+`games`, `game N`, and for the deity `update` and `schedule 15m`. Python 3, no packages.
+
 Local dev: `cd empire-web && npm run dev` proxies `/empire/api` to a server started
 from `empire-server/.env` (set `EMPIRE_MAIL_MODE=log` to get magic links in the log).
 
