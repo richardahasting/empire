@@ -10,9 +10,10 @@ import java.util.Map;
  * The scripted agent's playbook. Everything the agent decides is a method here so a
  * different book is a different agent without touching the loop.
  *
- * <p>TODO(Richard): {@link #chooseDesignation} is the heart of it and is yours to write.
- * The default below is a placeholder so the harness runs. See the session notes for the
- * trade-offs (fertility vs minerals, when to add manufacturing, what the capital needs).
+ * <p>This is a TEST FIXTURE, not a player. It is deliberately dumb and must stay
+ * deterministic: golden hashes and the balance harness depend on it doing the same thing
+ * every run. Agents that are meant to play well learn through play (LlmAgent, M3); nobody
+ * hand-tunes strategy in here. Richard, 2026-09-07.
  */
 public interface OpeningBook {
 
@@ -32,8 +33,8 @@ public interface OpeningBook {
     default double exploreCivs() { return 20; }
 
     OpeningBook DEFAULT = new OpeningBook() {
-        // PLACEHOLDER — Richard's version replaces this. Farms where it is fertile, mines where
-        // it is not, and every fourth sector a light-manufacturing plant so the iron goes somewhere.
+        // Farms where it is fertile, mines where it is not, and every fourth sector a
+        // light-manufacturing plant so the iron goes somewhere. Good enough to exercise the engine.
         @Override public String chooseDesignation(SectorView s, CountryView v) {
             int owned = 0;
             for (SectorView o : v.sectors()) if (o.full() && !o.designation().equals("wilderness")) owned++;
