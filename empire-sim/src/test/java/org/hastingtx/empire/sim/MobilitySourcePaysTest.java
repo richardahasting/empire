@@ -71,6 +71,26 @@ class MobilitySourcePaysTest {
     }
 
     @Test
+    void twoHopEstimateMatchesTheCommand() {
+        // B → A → capital. A has plenty of mobility; B, the sender, has 30: the estimate must budget the
+        // whole route, not spend it all on the first hop and predict nothing arrives.
+        Coord B = new Coord(CAP.x() + 2, CAP.y());
+        World w = world(127, Map.of());
+        w = TestWorlds.own(w, CFG, B, "agribusiness", 100, 30, Map.of("civ", 100.0, "food", 500.0, "hcm", 1000.0), Map.of());
+        Commodities com = Commodities.of(CFG);
+        Routes.Estimate e = Routes.move(w, CFG, 0, B, CAP, com.index("hcm"), 1000);
+        assertThat(e.ok()).isTrue();
+        assertThat(e.path()).hasSize(3);
+        assertThat(e.arrivesQty()).isGreaterThan(0).isLessThan(1000);
+        assertThat(e.holdsAt()).isEqualTo(B);
+        CommandResult r = new CommandExecutor(CFG).execute(w, 0, new Command.Move(B, CAP, "hcm", 1000));
+        assertThat(r.error()).isNull();
+        assertThat(r.world().sector(CAP).stock().get(com.index("hcm"))).isCloseTo(e.arrivesQty(), within(1e-6));
+        assertThat(r.world().sector(B).mobility()).isLessThan(0.5);   // the sender spent nearly all of its 30
+        assertThat(r.world().sector(A).mobility()).isEqualTo(127.0);  // the transited sector paid nothing
+    }
+
+    @Test
     void distributionIntoAZeroMobilityCentreCompletes() {
         // A pushes all its hcm (threshold 0) to the capital, its centre. 5000 hcm costs the sender
         // 5000 × 0.2 ÷ 10 = 100 mobility: more than the centre's 60 accrual could pay under the old rule.

@@ -44,29 +44,44 @@ public final class Routes {
         if (path == null) return new Estimate(false, "no route through your territory from " + from + " to " + to, List.of(), List.of(), 0, 0, 0, 0, null, available, src.mobility());
         int reach = (int) Math.floor(cfg.economy().mobility().manualMoveMaxSectorsPerUpdate().eval(w.country(owner).levels().tech()));
         List<Double> hopCosts = new ArrayList<>();
-        boolean srcPays = cfg.distribution().sourcePays();
-        double total = 0, moving = qty, weight = ctx.weightLeaving(commodity, src), srcLeft = src.mobility();
-        Coord holdsAt = null; int hops = 0; boolean stopped = false;
+        double total = 0, weight = ctx.weightLeaving(commodity, src);
+        int hopsTotal = path.size() - 1, hopsNow = Math.min(hopsTotal, reach);
+        double[] unit = new double[path.size()];
         for (int h = 1; h < path.size(); h++) {
-            Sector t = w.sector(path.get(h));
-            double unit = weight * ctx.moveCostInto(t);
-            double cost = qty * unit;
+            unit[h] = weight * ctx.moveCostInto(w.sector(path.get(h)));
+            double cost = qty * unit[h];
             hopCosts.add(cost); total += cost;
-            if (stopped) continue;
-            if (hops >= reach) { if (holdsAt == null) holdsAt = path.get(h - 1); stopped = true; continue; }
-            // every hop is checked, even after an earlier choke: what squeezed past one may still choke later
-            double avail = srcPays ? srcLeft : t.mobility();
-            double can = unit <= 0 ? moving : Math.min(moving, avail / unit);
-            if (can < moving - 1e-9) {
-                if (holdsAt == null) holdsAt = path.get(h - 1);
-                moving = Math.max(0, can);
-                if (moving <= 1e-9) { moving = 0; stopped = true; continue; }
-            }
-            if (srcPays) srcLeft -= moving * unit;
-            hops++;
         }
-        double arrives = stopped ? 0 : moving;          // what reaches the destination this update; the rest parks
-        double held = qty - arrives;
+        double arrives, held; Coord holdsAt;
+        if (cfg.distribution().sourcePays()) {
+            // the sender pays the whole route, so what moves is what it can afford end to end (as the command does);
+            // the rest never leaves. Beyond reach, what moves parks at the last sector reached.
+            double routeUnit = 0;
+            for (int h = 1; h <= hopsNow; h++) routeUnit += unit[h];
+            double moving = routeUnit <= 0 ? qty : Math.min(qty, src.mobility() / routeUnit);
+            moving = Math.floor(moving * 1000) / 1000;
+            boolean short_ = hopsNow < hopsTotal;
+            arrives = short_ ? 0 : moving;
+            held = qty - arrives;
+            holdsAt = short_ ? path.get(hopsNow) : from;
+        } else {
+            // each entered sector pays its own hop: walk it, checking every hop even after an earlier choke,
+            // since what squeezed past one may still choke later
+            double moving = qty; holdsAt = null; int hops = 0; boolean stopped = false;
+            for (int h = 1; h < path.size(); h++) {
+                if (stopped) continue;
+                if (hops >= reach) { if (holdsAt == null) holdsAt = path.get(h - 1); stopped = true; continue; }
+                double can = unit[h] <= 0 ? moving : Math.min(moving, w.sector(path.get(h)).mobility() / unit[h]);
+                if (can < moving - 1e-9) {
+                    if (holdsAt == null) holdsAt = path.get(h - 1);
+                    moving = Math.max(0, can);
+                    if (moving <= 1e-9) { moving = 0; stopped = true; continue; }
+                }
+                hops++;
+            }
+            arrives = stopped ? 0 : moving;
+            held = qty - arrives;
+        }
         boolean complete = held <= 1e-9;
         return new Estimate(true, null, path, hopCosts, total, reach, complete ? qty : arrives, complete ? 0 : held, complete ? null : holdsAt, available, src.mobility());
     }
