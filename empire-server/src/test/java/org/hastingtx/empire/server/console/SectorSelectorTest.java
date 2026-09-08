@@ -43,6 +43,26 @@ class SectorSelectorTest {
     }
 
     @Test
+    void mixedSelectionScalesWarehouseThresholdsTenfold() {
+        assertThat(SectorSelector.isMixed("*")).isTrue();
+        assertThat(SectorSelector.isMixed("-2:2,-2:2")).isTrue();
+        assertThat(SectorSelector.isMixed("*:warehouse")).isFalse();
+        assertThat(SectorSelector.isMixed("0,0")).isFalse();
+        assertThat(CFG.distribution().massThresholdMultiplier("warehouse")).isEqualTo(10.0);
+        assertThat(CFG.distribution().massThresholdMultiplier("agribusiness")).isEqualTo(1.0);
+        // a view in which the capital's sector is a warehouse
+        SectorView cap = MINE.stream().filter(x -> x.at().equals(V.capital())).findFirst().orElseThrow();
+        SectorView wh = new SectorView(cap.at(), cap.relative(), true, cap.terrain(), cap.elevation(), cap.owner(), "warehouse", cap.efficiency(), cap.mobility(),
+                cap.roadLevel(), cap.roadTarget(), cap.railLevel(), cap.railTarget(), cap.stock(), cap.thresholds(), cap.distCenter(), cap.held(), cap.resources());
+        CountryView v2 = new CountryView(V.countryId(), V.name(), V.updateNumber(), V.capital(), V.wrapX(), V.wrapY(), V.cash(), V.btu(), V.levels(), V.handicap(),
+                V.inSanctuary(), V.bankrupt(), V.commodityIds(), List.of(wh), V.otherCountryNames());
+        assertThat(SectorSelector.massThreshold(v2, CFG, cap.at(), 400)).isEqualTo(4000.0);
+        assertThat(SectorSelector.massThreshold(V, CFG, cap.at(), 400)).isEqualTo(400.0);     // the capital is not a warehouse
+        assertThat(SectorSelector.massThreshold(v2, CFG, cap.at(), -1)).isEqualTo(-1.0);      // clearing passes through
+        assertThat(SectorSelector.massThresholdNote(CFG)).isEqualTo("warehouse ×10");
+    }
+
+    @Test
     void rectangleIsInclusiveAndOrderInsensitive() {
         assertThat(SectorSelector.expand(V, CFG, "0:0,0:0")).containsExactly(V.capital());
         List<Coord> box = SectorSelector.expand(V, CFG, "1:-1,1:-1");

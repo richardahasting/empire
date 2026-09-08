@@ -48,14 +48,15 @@ public class GameController {
     /** The rulebook the UI needs: sector types and commodities. Public knowledge. */
     public record Rules(List<SectorTypeCfg> sectorTypes, List<CommodityCfg> commodities, int etusPerUpdate, Map<String, Integer> btuCosts,
                         org.hastingtx.empire.engine.config.InfrastructureCfg.RoadCfg road, double defaultCapacity,
-                        org.hastingtx.empire.engine.config.InfrastructureCfg.RailCfg rail, double productionMinEfficiency) {}
+                        org.hastingtx.empire.engine.config.InfrastructureCfg.RailCfg rail, double productionMinEfficiency,
+                        Map<String, Double> massThresholdMultiplierByType) {}
 
     @GetMapping("/{id}/rules")
     public Rules rules(@PathVariable long id) {
         var cfg = games.get(id).cfg;
         Double minEff = cfg.economy().efficiency().productionMinEfficiency();
         return new Rules(cfg.economy().sectorTypes(), cfg.commodities(), cfg.etus(), cfg.economy().btu().costByCommand(), cfg.infrastructure().road(), cfg.economy().defaultCapacity(),
-                cfg.infrastructure().rail(), minEff == null ? 0 : minEff);
+                cfg.infrastructure().rail(), minEff == null ? 0 : minEff, cfg.distribution().massThresholdMultiplierByType() == null ? Map.of() : cfg.distribution().massThresholdMultiplierByType());
     }
 
     /**
@@ -118,8 +119,12 @@ public class GameController {
             case "designate", "threshold", "distribute", "build_road", "build_rail" -> { }
             default -> throw new IllegalArgumentException(r.verb() + " applies to one sector at a time");
         }
-        List<Command> cmds = SectorSelector.expand(games.view(id, a), games.get(id).cfg, r.scope()).stream().map(r::toCommand).toList();
-        return games.commandAll(id, a, cmds, "panel");
+        CountryView v = games.view(id, a);
+        var cfg = games.get(id).cfg;
+        boolean scaled = "threshold".equals(r.verb()) && SectorSelector.isMixed(r.scope()) && !Boolean.TRUE.equals(r.clear());
+        List<Command> cmds = SectorSelector.expand(v, cfg, r.scope()).stream()
+                .map(at -> scaled ? new Command.Threshold(at, r.commodity(), SectorSelector.massThreshold(v, cfg, at, r.amount() == null ? 0 : r.amount())) : r.toCommand(at)).toList();
+        return games.commandAll(id, a, cmds, "panel", scaled ? SectorSelector.massThresholdNote(cfg) : null);
     }
 
     public record ConsoleRequest(String line) {}

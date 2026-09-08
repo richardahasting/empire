@@ -37,7 +37,12 @@ public class Console {
                 case "census", "cen" -> new Reply(census(v), true, null, null);
                 case "break" -> cmd(gameId, a, new Command.BreakSanctuary());
                 case "des", "designate" -> { need(t, 3, "des SECTOR type"); yield many(gameId, a, v, cfg, t[1], at -> new Command.Designate(at, t[2])); }
-                case "thresh", "threshold" -> { need(t, 4, "thresh SECTOR commodity amount"); double n = Double.parseDouble(t[3]); yield many(gameId, a, v, cfg, t[1], at -> new Command.Threshold(at, t[2], n)); }
+                case "thresh", "threshold" -> {
+                    need(t, 4, "thresh SECTOR commodity amount");
+                    double n = Double.parseDouble(t[3]);
+                    boolean mixed = SectorSelector.isMixed(t[1]);
+                    yield many(gameId, a, v, cfg, t[1], at -> new Command.Threshold(at, t[2], mixed ? SectorSelector.massThreshold(v, cfg, at, n) : n), mixed && n >= 0 ? SectorSelector.massThresholdNote(cfg) : null);
+                }
                 case "dist", "distribute" -> { need(t, 3, "dist SECTOR cx,cy|none"); Coord ctr = t[2].equalsIgnoreCase("none") ? null : abs(v, t[2]); yield many(gameId, a, v, cfg, t[1], at -> new Command.Distribute(at, ctr)); }
                 case "move" -> { need(t, 5, "move commodity from_x,y to_x,y qty"); yield cmd(gameId, a, new Command.Move(abs(v, t[2]), abs(v, t[3]), t[1], Double.parseDouble(t[4]))); }
                 case "rail" -> { need(t, 3, "rail SECTOR LEVEL"); double lvl = Double.parseDouble(t[2]); yield many(gameId, a, v, cfg, t[1], at -> new Command.BuildRail(at, lvl)); }
@@ -54,9 +59,11 @@ public class Console {
     private Reply cmd(long gameId, Account a, Command c) { return reply(games.command(gameId, a, c, "console")); }
 
     /** The same verb on one sector or many: SECTOR is x,y · * · *:TYPE · x1:x2,y1:y2 (see {@link SectorSelector}). */
-    private Reply many(long gameId, Account a, CountryView v, GameConfig cfg, String sel, java.util.function.Function<Coord, Command> f) {
+    private Reply many(long gameId, Account a, CountryView v, GameConfig cfg, String sel, java.util.function.Function<Coord, Command> f) { return many(gameId, a, v, cfg, sel, f, null); }
+
+    private Reply many(long gameId, Account a, CountryView v, GameConfig cfg, String sel, java.util.function.Function<Coord, Command> f, String note) {
         List<Command> cmds = SectorSelector.expand(v, cfg, sel).stream().map(f).toList();
-        return cmds.size() == 1 ? cmd(gameId, a, cmds.get(0)) : reply(games.commandAll(gameId, a, cmds, "console"));
+        return cmds.size() == 1 ? cmd(gameId, a, cmds.get(0)) : reply(games.commandAll(gameId, a, cmds, "console", note));
     }
 
     private static Reply reply(GameService.Outcome o) {
@@ -131,6 +138,7 @@ public class Console {
             rail SECTOR LEVEL            standing order: lay rail toward LEVEL (needs tech 60; 0 cancels)
             SECTOR is x,y · * (all yours) · *:TYPE (all of one designation, id or glyph, e.g. *:a) · x1:x2,y1:y2 (a rectangle)
               each sector pays its own BTU; e.g. road * 100 · thresh *:agribusiness hcm 50 · thresh -2:2,-2:2 food 100
+              thresh on * or a rectangle scales by designation (warehouse ×10); *:warehouse or one sector sets it as typed
             railship COMMODITY x,y x2,y2 N   train N units between two depots at the update (line checked now)
             """;
 }

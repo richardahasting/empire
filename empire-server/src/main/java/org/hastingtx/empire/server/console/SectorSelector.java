@@ -26,6 +26,29 @@ public final class SectorSelector {
 
     public static boolean isMass(String s) { return s.startsWith("*") || s.contains(":"); }
 
+    /** A selection that can mix designations: {@code *} or a rectangle, not {@code *:TYPE} and not one sector. */
+    public static boolean isMixed(String s) { return s != null && isMass(s.trim()) && !s.trim().startsWith("*:"); }
+
+    /**
+     * The threshold to set at {@code at} when {@code amount} was typed for a mixed selection: scaled by
+     * {@code distribution.mass_threshold_multiplier_by_type} for that sector's designation (issue #40).
+     * Clears (negative) pass through.
+     */
+    public static double massThreshold(CountryView v, GameConfig cfg, Coord at, double amount) {
+        if (amount < 0) return amount;
+        for (SectorView s : v.sectors()) if (s.at().equals(at)) return amount * cfg.distribution().massThresholdMultiplier(s.designation());
+        return amount;
+    }
+
+    /** "warehouses ×10" or null — for replies and dialogs. */
+    public static String massThresholdNote(GameConfig cfg) {
+        var m = cfg.distribution().massThresholdMultiplierByType();
+        if (m == null || m.isEmpty()) return null;
+        StringBuilder sb = new StringBuilder();
+        m.forEach((type, mult) -> { if (mult != null && mult > 0 && mult != 1.0) sb.append(sb.isEmpty() ? "" : ", ").append(type).append(" ×").append(mult % 1 == 0 ? String.valueOf(mult.longValue()) : mult.toString()); });
+        return sb.isEmpty() ? null : sb.toString();
+    }
+
     public static List<Coord> expand(CountryView v, GameConfig cfg, String sel) {
         String s = sel == null ? "" : sel.trim();
         if (s.isEmpty()) throw new IllegalArgumentException("which sector? x,y · * · *:TYPE · x1:x2,y1:y2");

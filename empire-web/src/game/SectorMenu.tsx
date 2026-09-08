@@ -73,7 +73,7 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
       {s && owned && dialog === "move" && <MoveDialog gameId={gameId} view={view} from={s} byRel={byRel} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} onPick={(commodity, qty) => { setDialog(null); onStartPick({ verb: "move", from: s, commodity, qty }); }} />}
       {s && owned && dialog === "explore" && <ExploreDialog gameId={gameId} view={view} from={s} targets={adjacentUnowned} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} onPick={(civs, supply) => { setDialog(null); onStartPick({ verb: "explore", from: s, commodity: "civ", qty: civs, supply }); }} />}
       {s && owned && dialog === "designate" && <DesignateDialog view={view} rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
-      {s && owned && dialog === "threshold" && <ThresholdDialog view={view} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
+      {s && owned && dialog === "threshold" && <ThresholdDialog view={view} rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "road" && <RoadDialog rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "rail" && <RailDialog rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "railship" && <RailShipDialog gameId={gameId} view={view} rules={rules} from={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
@@ -256,10 +256,13 @@ function DesignateDialog({ view, rules, sector: s, onClose, onCommand, busy }: {
   );
 }
 
-function ThresholdDialog({ view, sector: s, onClose, onCommand, busy }: { view: CountryView; sector: SectorView; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean }) {
+function ThresholdDialog({ view, rules, sector: s, onClose, onCommand, busy }: { view: CountryView; rules: Rules; sector: SectorView; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean }) {
   const [commodity, setCommodity] = useState("food");
   const [amount, setAmount] = useState(s.thresholds["food"] !== undefined ? String(s.thresholds["food"]) : "");
   const [scope, setScope] = useState("");
+  // a mixed selection (all my sectors) scales by designation, e.g. warehouses ×10; "all my <type>" and one sector set it as typed
+  const mult = Object.entries(rules.massThresholdMultiplierByType ?? {}).filter(([, m]) => m > 0 && m !== 1);
+  const scaledNote = scope === "*" && mult.length > 0 && amount !== "" ? mult.map(([t, m]) => `${t}s get ${(Number(amount) * m).toFixed(0)} (×${m})`).join(", ") : null;
   return (
     <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent>
@@ -272,6 +275,7 @@ function ThresholdDialog({ view, sector: s, onClose, onCommand, busy }: { view: 
           </label>
           <label>Amount<Input value={amount} onChange={e => setAmount(e.target.value)} inputMode="numeric" autoFocus /></label>
           <ScopeSelect s={s} scope={scope} setScope={setScope} />
+          {scaledNote && <p className="text-xs text-muted-foreground">{scaledNote}</p>}
         </div>
         <DialogFooter>
           {(scope || s.thresholds[commodity] !== undefined) && <Button variant="danger" disabled={busy} onClick={async () => { await onCommand({ verb: "threshold", x: s.at.x, y: s.at.y, commodity, clear: true, scope: scope || undefined }); onClose(); }}>Clear</Button>}

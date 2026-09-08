@@ -97,6 +97,26 @@ public class GameService {
         return g;
     }
 
+    /**
+     * Re-read a game's rules from its preset as shipped now. A game snapshots its config at
+     * creation, so a rule change never reaches a running game on its own (issues #36, #40); this
+     * replaces the snapshot and reloads the world under the new config. Commodity and sector-type
+     * lists must not have changed shape — stocks are stored by commodity id, so adding one is fine.
+     */
+    public Summary refreshConfig(long gameId, Account a) {
+        Game old = get(gameId);
+        old.lock.lock();
+        try {
+            ConfigLoader.Loaded l = loader.loadPreset(old.preset);
+            games.setConfig(gameId, loader.toYaml(l.raw()), l.hash());
+            GameRow row = games.find(gameId).orElseThrow();
+            Game g = new Game(row, l.config(), worlds.load(row, l.config()));
+            loaded.put(gameId, g);
+            log.info("game {} '{}': rules reloaded from preset {} (config {})", gameId, row.name(), old.preset, l.hash().substring(0, 12));
+            return summary(g, a);
+        } finally { old.lock.unlock(); }
+    }
+
     /** "24h", "15m", "90s", "1h30m"; "0" or blank = manual. */
     public static long parseInterval(String spec) {
         if (spec == null || spec.isBlank() || spec.trim().equals("0")) return 0;
@@ -239,7 +259,10 @@ public class GameService {
      * saved once, logged per command. Each sector pays its own BTU; when BTUs run out the rest are
      * skipped and the reply says so. Partial success is success — the summary lists what was skipped.
      */
-    public Outcome commandAll(long gameId, Account a, List<Command> cmds, String source) {
+    public Outcome commandAll(long gameId, Account a, List<Command> cmds, String source) { return commandAll(gameId, a, cmds, source, null); }
+
+    /** As above; {@code note} (e.g. "warehouse ×10") is appended to the summary when given. */
+    public Outcome commandAll(long gameId, Account a, List<Command> cmds, String source, String note) {
         if (cmds.size() == 1) return command(gameId, a, cmds.get(0), source);
         Game g = get(gameId);
         int country = myCountry(gameId, a);
@@ -265,6 +288,7 @@ public class GameService {
                 if (skipped.size() > 4) sb.append("; …");
             }
             if (outOfBtu > 0) sb.append("; out of BTUs with ").append(outOfBtu).append(" still to do");
+            if (note != null && applied > 0) sb.append(" (").append(note).append(")");
             String msg = sb.toString();
             return new Outcome(applied > 0, applied > 0 ? null : msg, btu, CountryView.of(g.world, g.cfg, country), applied > 0 ? msg : null);
         } finally { g.lock.unlock(); }

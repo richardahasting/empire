@@ -633,6 +633,10 @@ distribution:
   held_cargo_counts_toward_capacity: false
   path_cost: cheapest_mobility                # cheapest_mobility | fewest_hops
   mobility_bonus: 10                          # KNOWN: distribute.c IMPORT_BONUS/EXPORT_BONUS = 10 — ten times cheaper than a hand move
+  # NEW (Richard 2026-09-08, issue #40): a threshold set on a mixed selection (`thresh * food 400`,
+  # or a rectangle) is multiplied for these designations — a warehouse is where the stock lives, so
+  # it gets ×10. A single sector or `*:warehouse` takes the number as typed. Clearing is unaffected.
+  mass_threshold_multiplier_by_type: { warehouse: 10 }
   # null = continuous quantities (allocation is exactly proportional and therefore exactly
   # direction-symmetric). Set e.g. 1.0 to ship whole units; the last indivisible unit then
   # goes by commodity priority, then seeded RNG — which is deliberately NOT rotation-symmetric.

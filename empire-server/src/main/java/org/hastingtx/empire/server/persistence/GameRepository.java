@@ -24,6 +24,7 @@ public class GameRepository {
     public List<GameRow> all() { return db.sql("SELECT * FROM game ORDER BY id").query(this::map).list(); }
     public Optional<GameRow> find(long id) { return db.sql("SELECT * FROM game WHERE id = :id").param("id", id).query(this::map).optional(); }
 
+    public void setConfig(long id, String configYaml, String configHash) { db.sql("UPDATE game SET config_yaml = :y, config_hash = :h WHERE id = :id").param("y", configYaml).param("h", configHash).param("id", id).update(); }
     public void setStatus(long id, String status) { db.sql("UPDATE game SET status = :s WHERE id = :id").param("s", status).param("id", id).update(); }
     public void setSchedule(long id, long intervalSeconds, java.time.Instant nextUpdateAt) {
         db.sql("UPDATE game SET interval_seconds = :i, next_update_at = :n WHERE id = :id")
