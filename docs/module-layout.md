@@ -60,25 +60,21 @@ empire/
 │       ├── Tournament              #   on empire-config (M3)
 │       └── Bisection               #   handicap calibration (M3)
 │
-├── empire-server/                  # Spring Boot 3. M1+.
+├── empire-server/                  # Spring Boot 4 (4.0.6 is what this box runs; same API surface as 3.x). M1+.
 │   └── src/main/java/org/hastingtx/empire/server/
-│       ├── persistence/            # JPA entities (separate from engine records; mapped by hand),
-│       │                           #   Flyway migrations in resources/db/migration
-│       │                           #   Tables: world, sector, country, stock, held_parcel, rail_line,
-│       │                           #   contact, update_log (seed + hash + diff), command_log,
-│       │                           #   message_log (telegrams/announcements), agent_turn_log
-│       ├── scheduler/              # UpdateScheduler (Quartz or Spring @Scheduled), AgentWindowScheduler
-│       ├── api/                    # REST: /api/game, /api/command, /api/view, /api/admin
-│       │                           #   Every console verb and every panel action -> POST /api/command
-│       ├── ws/                     # STOMP: /topic/update, /user/queue/telegram, /topic/news, /user/queue/contact
-│       ├── auth/                   # session accounts; country bound at join
-│       ├── console/                # text-command parser (map, census, des, move, dist, thresh, prod,
-│       │                           #   budget, expl, tele, wire) -> Command records
-│       └── admin/                  # deity endpoints: create world from config, pause/resume/force,
-│                                   #   god's-eye view (server-only, never in CountryView)
+│       ├── persistence/            # Hand-mapped JDBC (JdbcTemplate/JdbcClient), no JPA: engine records are
+│       │                           #   immutable and diff-saved. Tables: game, country, sector, sector_stock
+│       │                           #   (normalised), held_parcel, move_order, update_log, command_log,
+│       │                           #   account, auth_token. Flyway in resources/db/migration.
+│       ├── auth/                   # magic link -> session token (both stored as SHA-256), Bearer interceptor,
+│       │                           #   Mailer (smtp via Postfix on localhost, or log mode for dev/tests)
+│       ├── game/                   # GameService: loaded games in memory behind a lock, write-through
+│       ├── console/                # text verbs -> the same Command records -> the same executor; map/census text
+│       ├── api/                    # /api/auth, /api/games (view, rules, command, console, last-update), /api/admin
+│       └── (ws/, scheduler/)       # M2/M3
 │   └── src/main/resources/
-│       ├── application.yaml        # server.servlet.context-path=/empire, port 8020
-│       └── static/                 # built frontend copied in at package time
+│       ├── application.yaml        # server.servlet.context-path=/empire, port 8020, ${EMPIRE_*} env
+│       └── static/                 # empire-web/dist copied in by the Maven resources plugin at package time
 │
 ├── empire-web/                     # React + TypeScript + Vite + Tailwind. Not a Maven module;
 │   ├── vite.config.ts              #   base: '/empire/'. Built by frontend-maven-plugin or
@@ -133,10 +129,11 @@ fixtures under `empire-engine/src/test/resources/golden/<preset>/<seed>/`.
 
 ## Deployment (linuxserver)
 
-- Spring Boot fat jar as `empire.service` (systemd), bound to
-  `127.0.0.1:8020`, context path `/empire`.
+- Spring Boot fat jar as `empire.service` (systemd, `ops/empire.service`),
+  bound to `127.0.0.1:8020`, context path `/empire`. `./deploy.sh` builds and
+  restarts. Secrets in `empire-server/.env` (never committed).
 - nginx already proxies `hastingtx.org/empire/` → `127.0.0.1:8020` with
   WebSocket upgrade; `www.` 301s to the bare host. While the service is
   down, nginx serves `/var/www/empire/holding.html`.
-- PostgreSQL: new role `empire_user`, database `empire` (per the shared-server
-  rule in `~/CLAUDE.md`; to be created at M1 and recorded in that table).
+- PostgreSQL: role `empire_user`, database `empire` (created 2026-09-07 and
+  recorded in the shared-server table in `~/CLAUDE.md`).

@@ -31,6 +31,7 @@ public record Sector(
     public boolean ownedBy(int c) { return owner == c; }
     public double threshold(int i) { return thresholds[i]; }
     public boolean hasThreshold(int i) { return !Double.isNaN(thresholds[i]); }
+    public int heldCount() { return held.size(); }
 
     public Sector withOwner(int o) { return new Sector(at, terrain, elevation, resources, o, designation, efficiency, mobility, stock, thresholds, distCenter, roadLevel, railLevel, radarLevel, held, sanctuary); }
     public Sector withDesignation(String d, double eff) { return new Sector(at, terrain, elevation, resources, owner, d, eff, mobility, stock, thresholds, distCenter, roadLevel, railLevel, radarLevel, held, sanctuary); }

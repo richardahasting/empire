@@ -1,6 +1,8 @@
 .PHONY: build test sim clean
 MVN ?= mvn -q -B
-build:
+web:
+	cd empire-web && npm ci --silent && npm run build --silent
+build: web
 	$(MVN) -DskipTests package
 test:
 	$(MVN) test
