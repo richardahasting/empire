@@ -163,7 +163,7 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
 
   return (
     <div ref={wrap} className="relative h-full w-full overflow-hidden rounded-lg border border-border bg-background">
-      <canvas ref={canvas} className="block cursor-crosshair" onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={() => { drag.current = null; setMouse(null); lastHover.current = null; onHover?.(null, 0, 0); }} onWheel={onWheel} onContextMenu={onCtx} style={picking ? { cursor: "cell" } : undefined} />
+      <canvas ref={canvas} className="absolute inset-0 block cursor-crosshair" onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={() => { drag.current = null; setMouse(null); lastHover.current = null; onHover?.(null, 0, 0); }} onWheel={onWheel} onContextMenu={onCtx} style={picking ? { cursor: "cell" } : undefined} />
       {tooltip && mouse && (
         <div className="pointer-events-none absolute z-10 rounded-md border border-border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md whitespace-pre"
              style={{ left: mouse.x + 14, top: mouse.y + 14 }}>{tooltip}</div>
