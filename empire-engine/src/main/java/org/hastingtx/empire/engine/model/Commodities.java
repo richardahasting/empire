@@ -18,17 +18,18 @@ public final class Commodities {
     private final int[] priority;
     private final boolean[] person;
     private final double[] signature;
+    private final CommodityCfg[] cfg;
     private final Map<String, Integer> index = new HashMap<>();
 
     public final int civ, mil, uw, food;
 
     public Commodities(List<CommodityCfg> table) {
         int n = table.size();
-        ids = new String[n]; weight = new double[n]; priority = new int[n]; person = new boolean[n]; signature = new double[n];
+        ids = new String[n]; weight = new double[n]; priority = new int[n]; person = new boolean[n]; signature = new double[n]; cfg = new CommodityCfg[n];
         for (int i = 0; i < n; i++) {
             CommodityCfg c = table.get(i);
             if (index.put(c.id(), i) != null) throw new IllegalArgumentException("duplicate commodity id " + c.id());
-            ids[i] = c.id(); weight[i] = c.weight(); priority[i] = c.priority(); person[i] = c.person(); signature[i] = c.signature();
+            ids[i] = c.id(); weight[i] = c.weight(); priority[i] = c.priority(); person[i] = c.person(); signature[i] = c.signature(); cfg[i] = c;
         }
         civ = require("civ"); mil = require("mil"); uw = require("uw"); food = require("food");
     }
@@ -50,6 +51,8 @@ public final class Commodities {
     }
     public boolean has(String id) { return index.containsKey(id); }
     public double weight(int i) { return weight[i]; }
+    /** Shipping weight per unit when leaving a sector of the given packing class (KNOWN: lbs / pkg). */
+    public double weight(int i, String packingClass) { return weight[i] / cfg[i].pack(packingClass); }
     public int priority(int i) { return priority[i]; }
     public boolean isPerson(int i) { return person[i]; }
     public double signature(int i) { return signature[i]; }

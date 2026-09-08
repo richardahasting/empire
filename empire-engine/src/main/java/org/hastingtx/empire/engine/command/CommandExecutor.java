@@ -123,7 +123,7 @@ public final class CommandExecutor {
         if (path == null) return CommandResult.fail(w, "no route through your territory from " + m.from() + " to " + m.to());
         int reach = (int) Math.floor(cfg.economy().mobility().manualMoveMaxSectorsPerUpdate().eval(c.levels().tech()));
         if (path.size() - 1 > reach) return CommandResult.fail(w, m.to() + " is " + (path.size() - 1) + " sectors away; your reach is " + reach);
-        double weight = com.weight(ci);
+        double weight = ctx.weightLeaving(ci, from);
         double moving = m.qty();
         double[] unit = new double[path.size()];
         for (int h = 1; h < path.size(); h++) {
@@ -168,7 +168,8 @@ public final class CommandExecutor {
         if (e.civs() < 1) return CommandResult.fail(w, "need at least one civilian");
         if (from.stock().get(com.civ) < e.civs()) return CommandResult.fail(w, "only " + fmt(from.stock().get(com.civ)) + " civilians in " + e.from());
         // GUESS: original charged the source sector's mobility for the walk. Cost = civs × cost into target.
-        double mobCost = e.civs() * com.weight(com.civ) * moveCostInto(to);
+        org.hastingtx.empire.engine.update.Ctx ectx = new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0);
+        double mobCost = e.civs() * ectx.weightLeaving(com.civ, from) * moveCostInto(to);
         if (from.mobility() < mobCost) return CommandResult.fail(w, "need " + fmt(mobCost) + " mobility in " + e.from() + ", have " + fmt(from.mobility()));
         World next = w.withSector(from.withMobility(from.mobility() - mobCost).withStock(from.stock().plus(com.civ, -e.civs())));
         next = next.withSector(to.withOwner(c.id()).withStock(to.stock().plus(com.civ, e.civs())));

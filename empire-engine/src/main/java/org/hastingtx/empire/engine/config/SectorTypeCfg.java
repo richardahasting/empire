@@ -19,7 +19,13 @@ public record SectorTypeCfg(
         Double storeMultiplier,
         List<String> terrainRequired,
         List<String> flags,
-        PlagueMitigation plagueMitigation) {
+        PlagueMitigation plagueMitigation,
+        /** Packing class for shipping weight: normal | warehouse | bank | urban | inefficient (KNOWN: sect.config pkg). */
+        String packing,
+        /** Cash charged per unit produced (KNOWN: product.config cost). */
+        Double productionCashPerUnit,
+        /** Cash charged per ETU just for existing (KNOWN: sect.config maint; the capital pays 1). */
+        Double maintenanceCashPerEtu) {
 
     public record LevelEffect(String level, String curve) {}
 
@@ -36,4 +42,7 @@ public record SectorTypeCfg(
     public Map<String, Double> consumes() { return consumes == null ? Map.of() : consumes; }
     public double storeMultiplierOr1() { return storeMultiplier == null ? 1.0 : storeMultiplier; }
     public int minTechOr0() { return minTech == null ? 0 : minTech; }
+    public String packingOrNormal() { return packing == null ? "normal" : packing; }
+    public double productionCashPerUnitOr0() { return productionCashPerUnit == null ? 0 : productionCashPerUnit; }
+    public double maintenanceCashPerEtuOr0() { return maintenanceCashPerEtu == null ? 0 : maintenanceCashPerEtu; }
 }

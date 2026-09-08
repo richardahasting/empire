@@ -45,10 +45,18 @@ public final class Ctx {
         return cfg.economy().defaultCapacity() * t.storeMultiplierOr1();
     }
 
-    /** Population ceiling for this sector. */
+    /** Population ceiling for this sector. KNOWN: flat per type (big cities aside); RES_POP scales it by research. */
     public double maxPopulation(Sector s) {
         double research = s.owned() ? country(s.owner()).levels().research() : 0;
-        return type(s).maxPopulation() * (s.efficiency() / 100.0) * cfg.economy().population().maxPopResearchCurve().eval(research);
+        var pop = cfg.economy().population();
+        double effScale = Boolean.TRUE.equals(pop.maxPopScalesWithEfficiency()) ? s.efficiency() / 100.0 : 1.0;
+        return type(s).maxPopulation() * effScale * pop.maxPopResearchCurve().eval(research);
+    }
+
+    /** Shipping weight of one unit of c leaving sector s (packing applies at >= 60% efficiency, KNOWN). */
+    public double weightLeaving(int c, Sector s) {
+        String cls = s.efficiency() >= 60 ? type(s).packingOrNormal() : "inefficient";
+        return com.weight(c, cls);
     }
 
     /** Mobility cost per weight-unit to move INTO sector s (terrain × efficiency × road). */

@@ -111,7 +111,7 @@ public final class FlowStep implements Step {
             }
             // mobility
             double[] mobClaim = new double[ctx.led.nSectors];
-            for (Plan p : plans) for (int h = 1; h < p.path.size(); h++) mobClaim[ctx.idx(p.path.get(h))] += p.claim * ctx.com.weight(p.commodity) * ctx.moveCostInto(ctx.snap.sector(p.path.get(h)));
+            for (Plan p : plans) for (int h = 1; h < p.path.size(); h++) mobClaim[ctx.idx(p.path.get(h))] += hopCost(ctx, p, p.claim, h);
             for (Plan p : plans) {
                 double f = 1.0;
                 for (int h = 1; h < p.path.size(); h++) { int t = ctx.idx(p.path.get(h)); if (mobClaim[t] > mobBudget[t] + 1e-9) f = Math.min(f, mobBudget[t] / mobClaim[t]); }
@@ -158,7 +158,7 @@ public final class FlowStep implements Step {
             int hops = 0; int cur = p.originIdx; String hold = null; double moving = qty;
             for (int h = 1; h < p.path.size(); h++) {
                 int t = ctx.idx(p.path.get(h));
-                double unitCost = ctx.com.weight(p.commodity) * ctx.moveCostInto(ctx.snap.sector(p.path.get(h)));
+                double unitCost = unitCost(ctx, p, h);
                 double avail = mobBudget[t] - mobSpent[t];
                 double canMove = unitCost <= 0 ? moving : Math.min(moving, floorQ(Math.max(0, avail) / unitCost, quantum));
                 if (canMove < 1e-9) canMove = 0;
@@ -213,8 +213,13 @@ public final class FlowStep implements Step {
 
     private static long srcKey(Plan p) { return p.fromHeld != null ? (long) p.sourceKey : (((long) p.originIdx << 8) | p.commodity); }
 
-    private static double hopCost(Ctx ctx, Plan p, double qty, int h) {
-        return qty * ctx.com.weight(p.commodity) * ctx.moveCostInto(ctx.snap.sector(p.path.get(h)));
+    private static double hopCost(Ctx ctx, Plan p, double qty, int h) { return qty * unitCost(ctx, p, h); }
+
+    /** Mobility per unit for hop h: packed weight (leaving the origin) × cost into the entered sector, ÷ the distribution bonus. */
+    private static double unitCost(Ctx ctx, Plan p, int h) {
+        double w = ctx.weightLeaving(p.commodity, ctx.sector(p.originIdx));
+        double bonus = p.kind.equals("move") ? 1.0 : ctx.cfg.distribution().mobilityBonusOr1();
+        return w * ctx.moveCostInto(ctx.snap.sector(p.path.get(h))) / bonus;
     }
 
     private static boolean mobRoom(Ctx ctx, Plan p, double qty, double[] budget, double[] used) {

@@ -33,10 +33,15 @@ public final class BuildUpStep implements Step {
             }
             int cid = s.owner();
 
-            // efficiency
+            // upkeep just for existing (KNOWN: the capital pays $1 per ETU)
+            double upkeepEtu = t.maintenanceCashPerEtuOr0() * ctx.etus;
+            if (upkeepEtu > 0) { cashLeft[cid] -= upkeepEtu; ctx.led.cash[cid] -= upkeepEtu; }
+
+            // efficiency: KNOWN — half the sector's work may build, one point per work unit, $1 a point, no materials for most types
             if (!t.hasFlag("undesignated") && s.efficiency() < 100) {
                 double points = Math.min(ec.maxPointsPerEtu() * ctx.etus, 100 - s.efficiency());
-                double work = ctx.workAvailablePost(i);
+                double share = ec.buildWorkShare() == null ? 1.0 : ec.buildWorkShare();
+                double work = ctx.workAvailablePost(i) * share;
                 if (ec.workPerPoint() > 0) points = Math.min(points, work / ec.workPerPoint());
                 Map<String, Double> build = t.build();
                 for (var e : build.entrySet()) {
@@ -68,6 +73,8 @@ public final class BuildUpStep implements Step {
                 double m = mult == null ? 1.0 : mult;
                 double work = ctx.workAvailablePost(i);
                 if (road.workPerPoint() > 0) points = Math.min(points, work / (road.workPerPoint() * m));
+                double mobPerPoint = road.mobilityPerPoint() == null ? 0 : road.mobilityPerPoint() * m;
+                if (mobPerPoint > 0) points = Math.min(points, Math.max(0, s.mobility() + ctx.led.mobility[i]) / mobPerPoint);
                 for (var e : road.buildMaterialsPerPoint().entrySet()) {
                     double per = e.getValue() * m;
                     if (per <= 0) continue;
@@ -82,6 +89,7 @@ public final class BuildUpStep implements Step {
                         else ctx.led.consume(i, ctx.com.index(e.getKey()), points * per);
                     }
                     ctx.workSpent[i] += points * road.workPerPoint() * m;
+                    if (mobPerPoint > 0) ctx.led.mobility[i] -= points * mobPerPoint;
                     ctx.led.road[i] += points;
                 }
             }

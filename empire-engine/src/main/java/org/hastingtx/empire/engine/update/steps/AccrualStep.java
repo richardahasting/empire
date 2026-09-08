@@ -26,7 +26,10 @@ public final class AccrualStep implements Step {
         for (Country c : ctx.snap.countries()) {
             Sector cap = ctx.snap.sector(c.capital());
             if (cap.owner() != c.id() || !ctx.type(cap).hasFlag("btu_source")) continue;
-            double gain = b.accrualPerCapitalCivPerEtu() * cap.stock().get(ctx.com.civ) * ctx.etus * c.handicap().btuRate();
+            double civ = cap.stock().get(ctx.com.civ);
+            if (b.capitalCivCap() != null) civ = Math.min(civ, b.capitalCivCap());
+            double effFactor = Boolean.TRUE.equals(b.scaleByEfficiencyPercent()) ? Math.max(0.5, cap.efficiency()) : 1.0;
+            double gain = b.accrualPerCapitalCivPerEtu() * civ * effFactor * ctx.etus * c.handicap().btuRate();
             double cap_ = b.max() * c.handicap().btuCap();
             ctx.led.btu[c.id()] += Math.max(0, Math.min(gain, cap_ - c.btu()));
         }

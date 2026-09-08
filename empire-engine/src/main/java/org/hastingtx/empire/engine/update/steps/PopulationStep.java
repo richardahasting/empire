@@ -49,9 +49,20 @@ public final class PopulationStep implements Step {
             } else {
                 if (have > 0) ctx.led.consume(i, food, have);
                 foodLeft = 0;
+                // KNOWN: victims = unfed people beyond what the food covers, at most half; uw starve first, then civ, then mil
                 double shortfall = demand <= 0 ? 0 : 1.0 - have / demand;
-                double frac = Math.min(shortfall, p.starvationMaxFractionPerUpdate());
-                double dCiv = xCiv * frac, dMil = xMil * frac, dUw = xUw * frac;   // only the unfed excess can starve
+                double excess = xCiv + xMil + xUw;
+                double toStarve = Math.min(excess * shortfall, excess * p.starvationMaxFractionPerUpdate());
+                double dCiv = 0, dMil = 0, dUw = 0;
+                for (String who : p.starvationOrderOrDefault()) {
+                    if (toStarve <= 0) break;
+                    switch (who) {
+                        case "uw" -> { dUw = Math.min(xUw, toStarve); toStarve -= dUw; }
+                        case "civ" -> { dCiv = Math.min(xCiv, toStarve); toStarve -= dCiv; }
+                        case "mil" -> { dMil = Math.min(xMil, toStarve); toStarve -= dMil; }
+                        default -> {}
+                    }
+                }
                 if (dCiv > 0) ctx.led.die(i, civ, dCiv);
                 if (dMil > 0) ctx.led.die(i, mil, dMil);
                 if (dUw > 0) ctx.led.die(i, uw, dUw);
@@ -67,7 +78,7 @@ public final class PopulationStep implements Step {
                 double uwBirths = nUw * (Math.pow(1 + p.uwBirthRatePerEtu(), ctx.etus) - 1);
                 double wanted = civBirths + uwBirths;
                 double allowed = Math.min(wanted, room);
-                if (p.foodPerBirth() > 0) allowed = Math.min(allowed, foodLeft / p.foodPerBirth() + subsistenceHeadroom);
+                if (p.foodPerBirth() > 0) allowed = Math.min(allowed, foodLeft / (p.birthFoodReserveFactorOr2() * p.foodPerBirth()) + subsistenceHeadroom);
                 if (allowed > 0 && wanted > 0) {
                     double scale = allowed / wanted;
                     double bc = civBirths * scale, bu = uwBirths * scale;
