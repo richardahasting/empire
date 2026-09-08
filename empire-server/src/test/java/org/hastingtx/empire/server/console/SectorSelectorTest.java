@@ -62,7 +62,7 @@ class SectorSelectorTest {
         assertThat(SectorSelector.massThreshold(v2, CFG, cap.at(), "mil", 50)).isEqualTo(50.0);
         assertThat(SectorSelector.massThreshold(V, CFG, cap.at(), "food", 400)).isEqualTo(400.0);   // the capital is not a warehouse
         assertThat(SectorSelector.massThreshold(v2, CFG, cap.at(), "food", -1)).isEqualTo(-1.0);    // clearing passes through
-        assertThat(SectorSelector.massThresholdNote(CFG)).isEqualTo("warehouse ×10, goods only");
+        assertThat(SectorSelector.massThresholdNote(CFG)).isEqualTo("warehouse ×10, city ×10, goods only");
     }
 
     @Test
