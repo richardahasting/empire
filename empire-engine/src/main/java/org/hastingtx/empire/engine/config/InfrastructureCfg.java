@@ -21,6 +21,7 @@ public record InfrastructureCfg(RoadCfg road, RailCfg rail) {
             int techRequired,
             Map<String, Double> buildMaterialsPerPoint,
             double workPerPoint,
+            Double mobilityPerPoint,
             double maxPointsPerUpdate,
             boolean requiresDepotEndpoints,
             double minLevelToCarry,
