@@ -8,7 +8,7 @@ import { Select } from "@/components/ui/select";
 
 type DialogKind = "move" | "explore" | "designate" | "threshold" | "road" | "rail" | "railship" | null;
 
-export interface PickSpec { verb: "move" | "explore"; from: SectorView; commodity: string; qty: number; supply?: boolean }
+export interface PickSpec { verb: "move" | "explore" | "distribute"; from: SectorView; commodity: string; qty: number; supply?: boolean }
 
 interface Props {
   gameId: number; view: CountryView; rules: Rules; sector: SectorView | null;
@@ -61,6 +61,7 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
               <ContextMenuItem disabled={view.levels.tech < (rules.rail?.techRequired ?? 60)} onSelect={() => setDialog("rail")}>Build rail…{view.levels.tech < (rules.rail?.techRequired ?? 60) ? ` (tech ${rules.rail?.techRequired ?? 60})` : ""}</ContextMenuItem>
               {isDepot(s, rules) && <ContextMenuItem onSelect={() => setDialog("railship")}>Ship by rail…</ContextMenuItem>}
               <ContextMenuSeparator />
+              <ContextMenuItem onSelect={() => onStartPick({ verb: "distribute", from: s, commodity: "", qty: 0 })}>Send surplus to… (pick the centre on the map)</ContextMenuItem>
               <ContextMenuItem disabled={busy || (s.distCenter?.x === view.capital.x && s.distCenter?.y === view.capital.y)}
                 onSelect={() => void onCommand({ verb: "distribute", x: s.at.x, y: s.at.y, x2: view.capital.x, y2: view.capital.y })}>Supply from the capital (set centre)</ContextMenuItem>
               {s.distCenter && <ContextMenuItem destructive disabled={busy} onSelect={() => void onCommand({ verb: "distribute", x: s.at.x, y: s.at.y, clear: true })}>Stop automatic supply (clear centre)</ContextMenuItem>}
