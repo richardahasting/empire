@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { Countdown } from "@/game/Dashboard";
 
 export function GamesPage() {
   const { me, logout } = useAuth();
@@ -15,6 +16,12 @@ export function GamesPage() {
   const load = useCallback(() => api.get<GameSummary[]>("/games").then(setGames).catch(e => setError((e as Error).message)), []);
   useEffect(() => { void load(); }, [load]);
 
+  const setSchedule = async (g: GameSummary, interval: string) => {
+    try { await api.post(`/admin/games/${g.id}/schedule`, { interval }); await load(); } catch (e) { setError((e as Error).message); }
+  };
+  const setStatus = async (g: GameSummary, status: string) => {
+    try { await api.post(`/admin/games/${g.id}/status`, { status }); await load(); } catch (e) { setError((e as Error).message); }
+  };
   const runUpdate = async (g: GameSummary) => {
     try { await api.post(`/admin/games/${g.id}/update`); await load(); } catch (e) { setError((e as Error).message); }
   };
@@ -35,8 +42,15 @@ export function GamesPage() {
         {games.map(g => (
           <div key={g.id} className="rounded-lg border border-border bg-card p-4 text-sm">
             <div className="flex items-center justify-between">
-              <div><span className="font-medium">{g.name}</span> <Badge tone="muted">{g.preset}</Badge> <Badge tone="neutral">{g.width}×{g.height}</Badge> <Badge tone="neutral">update {g.updateNumber}</Badge></div>
-              <div className="flex gap-2">
+              <div><span className="font-medium">{g.name}</span> <Badge tone="muted">{g.preset}</Badge> <Badge tone="neutral">{g.width}×{g.height}</Badge> <Badge tone="neutral">update {g.updateNumber}</Badge> <Badge tone={g.status === "running" ? "muted" : "signal"}>{g.status}</Badge> <span className="text-xs"><Countdown game={g} /></span></div>
+              <div className="flex items-center gap-2">
+                {me?.admin && (
+                  <Select value={intervalLabel(g.intervalSeconds)} onChange={e => setSchedule(g, e.target.value)} className="w-32" aria-label="update interval">
+                    <option value="0">manual</option><option value="5m">every 5m</option><option value="15m">every 15m</option><option value="1h">every hour</option><option value="6h">every 6h</option><option value="24h">daily</option>
+                  </Select>
+                )}
+                {me?.admin && g.status === "running" && <Button size="sm" variant="ghost" onClick={() => setStatus(g, "paused")}>Pause</Button>}
+                {me?.admin && g.status === "paused" && <Button size="sm" variant="ghost" onClick={() => setStatus(g, "running")}>Resume</Button>}
                 {me?.admin && <Button size="sm" variant="secondary" onClick={() => runUpdate(g)}>Run update</Button>}
                 {g.myCountry != null && <Button asChild size="sm"><Link to={`/games/${g.id}`}>Play</Link></Button>}
               </div>
@@ -85,4 +99,11 @@ function CreateGame({ onCreated }: { onCreated: () => Promise<void> }) {
       <Button disabled={busy} onClick={() => void create()}>Create</Button>
     </section>
   );
+}
+
+function intervalLabel(seconds: number): string {
+  if (!seconds) return "0";
+  if (seconds % 3600 === 0) return `${seconds / 3600}h`;
+  if (seconds % 60 === 0) return `${seconds / 60}m`;
+  return `${seconds}s`;
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api, type CommandRequest, type ConsoleReply, type Coord, type CountryView, type GameSummary, type Outcome, type Rules } from "@/api/client";
+import { api, type CommandRequest, type ConsoleReply, type Coord, type CountryView, type GameSummary, type Outcome, type Projection, type Rules } from "@/api/client";
 import { useAuth } from "@/api/auth";
 import { HexMap, type Layer } from "@/map/HexMap";
 import { Inspector } from "@/game/Inspector";
@@ -20,6 +20,7 @@ export function GamePage() {
   const [game, setGame] = useState<GameSummary | null>(null);
   const [rules, setRules] = useState<Rules | null>(null);
   const [view, setView] = useState<CountryView | null>(null);
+  const [projection, setProjection] = useState<Projection | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [selected, setSelected] = useState<Coord | null>(null);
@@ -34,6 +35,26 @@ export function GamePage() {
     } catch (e) { setError((e as Error).message); }
   }, [gameId]);
   useEffect(() => { void load(); }, [load]);
+  // projection: recomputed whenever the view changes (your own commands change the outcome)
+  useEffect(() => {
+    if (!view) return;
+    let live = true;
+    api.get<Projection>(`/games/${gameId}/projection`).then(p => { if (live) setProjection(p); }).catch(() => { if (live) setProjection(null); });
+    return () => { live = false; };
+  }, [gameId, view]);
+  // poll: when an update has run (scheduled or by the deity), reload everything
+  useEffect(() => {
+    const t = setInterval(async () => {
+      try {
+        const g = await api.get<GameSummary>(`/games/${gameId}`);
+        setGame(prev => {
+          if (prev && g.updateNumber !== prev.updateNumber) { setNotice(`update ${g.updateNumber} ran`); void load(); }
+          return g;
+        });
+      } catch { /* offline for a moment */ }
+    }, 15000);
+    return () => clearInterval(t);
+  }, [gameId, load]);
 
   const command = useCallback(async (c: CommandRequest) => {
     setBusy(true); setNotice(null);
@@ -125,7 +146,7 @@ export function GamePage() {
           <ThemeToggle />
         </div>
       </header>
-      <Dashboard view={view} game={game} />
+      <Dashboard view={view} game={game} projection={projection} />
       {notice && <p className="text-xs text-muted-foreground">{notice}</p>}
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <SectorMenu gameId={gameId} view={view} rules={rules} sector={sector} onCommand={command} busy={busy} onStartPick={setPick}>

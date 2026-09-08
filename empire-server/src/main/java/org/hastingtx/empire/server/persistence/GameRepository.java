@@ -25,15 +25,21 @@ public class GameRepository {
     public Optional<GameRow> find(long id) { return db.sql("SELECT * FROM game WHERE id = :id").param("id", id).query(this::map).optional(); }
 
     public void setStatus(long id, String status) { db.sql("UPDATE game SET status = :s WHERE id = :id").param("s", status).param("id", id).update(); }
+    public void setSchedule(long id, long intervalSeconds, java.time.Instant nextUpdateAt) {
+        db.sql("UPDATE game SET interval_seconds = :i, next_update_at = :n WHERE id = :id")
+                .param("i", intervalSeconds).param("n", nextUpdateAt == null ? null : nextUpdateAt.atOffset(java.time.ZoneOffset.UTC)).param("id", id).update();
+    }
     public void setUpdateNumber(long id, long n) { db.sql("UPDATE game SET update_number = :n WHERE id = :id").param("n", n).param("id", id).update(); }
 
     private GameRow map(java.sql.ResultSet r, int i) throws java.sql.SQLException {
         Timestamp ts = r.getTimestamp("created_at");
         long by = r.getLong("created_by");
         Long createdBy = r.wasNull() ? null : by;   // wasNull() refers to the LAST column read
+        Timestamp next = r.getTimestamp("next_update_at");
         return new GameRow(r.getLong("id"), r.getString("name"), r.getString("preset"), r.getString("config_yaml"), r.getString("config_hash"),
                 r.getLong("seed"), r.getString("status"), r.getLong("update_number"), r.getInt("width"), r.getInt("height"),
-                r.getBoolean("wrap_x"), r.getBoolean("wrap_y"), ts == null ? null : ts.toInstant(), createdBy);
+                r.getBoolean("wrap_x"), r.getBoolean("wrap_y"), ts == null ? null : ts.toInstant(), createdBy,
+                r.getLong("interval_seconds"), next == null ? null : next.toInstant());
     }
 
     /** Who controls which country. Server-side only. */
