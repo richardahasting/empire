@@ -44,7 +44,7 @@ public final class Routes {
         if (path == null) return new Estimate(false, "no route through your territory from " + from + " to " + to, List.of(), List.of(), 0, 0, 0, 0, null, available, src.mobility());
         int reach = (int) Math.floor(cfg.economy().mobility().manualMoveMaxSectorsPerUpdate().eval(w.country(owner).levels().tech()));
         List<Double> hopCosts = new ArrayList<>();
-        double total = 0, moving = qty, weight = com.weight(commodity);
+        double total = 0, moving = qty, weight = ctx.weightLeaving(commodity, src);
         Coord holdsAt = null; int hops = 0;
         for (int h = 1; h < path.size(); h++) {
             Sector t = w.sector(path.get(h));
@@ -74,7 +74,7 @@ public final class Routes {
         if (dst.owned()) return Estimate.fail(to + " is already owned");
         double available = src.stock().get(com.civ);
         Ctx ctx = new Ctx(w, cfg, com, 0);
-        double cost = Math.max(1, civs) * com.weight(com.civ) * ctx.moveCostInto(dst);
+        double cost = Math.max(1, civs) * ctx.weightLeaving(com.civ, src) * ctx.moveCostInto(dst);
         boolean ok = civs >= 1 && available >= civs && src.mobility() >= cost;
         String err = civs < 1 ? "need at least one civilian" : available < civs ? "only " + fmt(available) + " civilians in " + from
                 : src.mobility() < cost ? "need " + fmt(cost) + " mobility in " + from + ", have " + fmt(src.mobility()) : null;

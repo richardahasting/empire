@@ -23,6 +23,12 @@ public record EconomyCfg(
             double uwBirthRatePerEtu,
             double foodPerBirth,
             double starvationMaxFractionPerUpdate,
+            /** Who starves first (KNOWN: uw, civ, mil). */
+            java.util.List<String> starvationOrder,
+            /** Births are limited to food / (factor × food_per_birth) (KNOWN: 2). */
+            Double birthFoodReserveFactor,
+            /** Population cap scales with efficiency? KNOWN: no, except big cities. */
+            Boolean maxPopScalesWithEfficiency,
             MaxPopCurve maxPopResearchCurve,
             PlagueCfg plague,
             SubsistenceCfg subsistence) {
@@ -31,9 +37,17 @@ public record EconomyCfg(
             public double limit(int fertility) { return scaleByFertility ? civsPerSector * fertility / 100.0 : civsPerSector; }
         }
         public SubsistenceCfg subsistenceOrNone() { return subsistence != null ? subsistence : new SubsistenceCfg(0, false, java.util.List.of()); }
-        public record MaxPopCurve(double base, double perResearchPoint, double cap) {
-            public double eval(double research) { return Math.min(cap, base + perResearchPoint * research); }
+        /** type "none" = flat; "res_pop" = the original's RES_POP: 0.4 + 0.6 × (50 + 4r)/(200 + 3r). */
+        public record MaxPopCurve(String type, Double base, Double perResearchPoint, Double cap) {
+            public double eval(double research) {
+                if (type == null || type.equals("none")) return 1.0;
+                if (type.equals("res_pop")) return 0.4 + 0.6 * (50.0 + 4.0 * research) / (200.0 + 3.0 * research);
+                double b = base == null ? 1 : base, per = perResearchPoint == null ? 0 : perResearchPoint, c = cap == null ? 2 : cap;
+                return Math.min(c, b + per * research);
+            }
         }
+        public java.util.List<String> starvationOrderOrDefault() { return starvationOrder == null ? java.util.List.of("uw", "civ", "mil") : starvationOrder; }
+        public double birthFoodReserveFactorOr2() { return birthFoodReserveFactor == null ? 2.0 : birthFoodReserveFactor; }
         public record PlagueCfg(double baseProbabilityPerEtu, double crowdingExponent, double mortality, int durationUpdates) {}
     }
 
@@ -48,6 +62,10 @@ public record EconomyCfg(
     public record EfficiencyCfg(
             double maxPointsPerEtu,
             double workPerPoint,
+            /** Fraction of a sector's work that may go to construction each update (KNOWN: 1/2). */
+            Double buildWorkShare,
+            /** Production needs at least this efficiency (KNOWN: 60). */
+            Double productionMinEfficiency,
             RedesignateCfg redesignate,
             double decayPerUpdateIfUnowned) {
         public record RedesignateCfg(
@@ -106,6 +124,9 @@ public record EconomyCfg(
 
     public record BtuCfg(
             double accrualPerCapitalCivPerEtu,
+            /** KNOWN: the original multiplies by efficiency in percent and caps counted civilians at 1000. */
+            Boolean scaleByEfficiencyPercent,
+            Double capitalCivCap,
             double max,
             double start,
             Map<String, Integer> costByCommand) {

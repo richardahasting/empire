@@ -17,7 +17,7 @@ class ConfigLoaderTest {
         GameConfig c = loader.loadSchema().config();
         assertThat(c.world().width()).isEqualTo(128);
         assertThat(c.economy().sectorTypes()).hasSizeGreaterThan(25);
-        assertThat(c.economy().mobility().efficiencyDiscount().at100()).isEqualTo(0.4);   // at_100 -> at100
+        assertThat(c.economy().mobility().efficiencyDiscount().at100()).isEqualTo(0.5);   // at_100 -> at100 (KNOWN: mob1 = mob0 / 2)
         assertThat(c.sectorType("hospital").plagueMitigation().mortalityMultiplierAt100()).isEqualTo(0.4);
         assertThat(c.infrastructure().rail().capacityPerUpdateAt100()).isEqualTo(5000);
         assertThat(c.distribution().maxReachSectors().roadBonusAt100()).isEqualTo(2);

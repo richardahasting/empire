@@ -88,7 +88,7 @@ class CalibrationProbesTest {
         GameConfig cfg = TestWorlds.teaching();
         World w = TestWorlds.disc(cfg, 2, Map.of("civ", 400.0, "food", 2000.0, "lcm", 500.0));
         Coord at = Hex.stepRaw(TestWorlds.CENTER, 0, 1);
-        w = TestWorlds.own(w, cfg, at, "agribusiness", 80, 100, Map.of("civ", 300.0, "food", 500.0, "lcm", 200.0), Map.of());
+        w = TestWorlds.own(w, cfg, at, "agribusiness", 80, 100, Map.of("civ", 300.0, "food", 500.0, "lcm", 200.0, "hcm", 200.0), Map.of());   // KNOWN: 2 lcm + 2 hcm + $2 + 1 mob per point
         World control = w;                                            // same world, no road order
         w = w.withSector(w.sector(at).withRoadTarget(40));
         double lcmBefore = w.sector(at).stock().get(11);

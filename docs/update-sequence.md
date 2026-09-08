@@ -110,7 +110,8 @@ step 5 gets the remainder. Production rates in config are per work-unit per
 ETU, so step 5 multiplies by the pool directly, not by `etus` again.
 
 ### 5. Production
-Per sector with a producing designation:
+Per sector with a producing designation **at or above
+`efficiency.production_min_efficiency` (60, KNOWN)**:
 ```
 work_avail   = (civ*per_civ + uw*per_uw + mil*per_mil) * happiness_curve - work_spent_in_step_4
 output_cap   = work_avail * produces[c] * (eff/100) * resource_gate/100 * level_curve(level) * handicap.production
@@ -135,7 +136,10 @@ offers it; one that just ate wants it):
   (Dijkstra over adjacency with edge weight = destination sector's
   `move_cost_by_terrain * efficiency_discount * road_discount(road_level)`),
   truncated to the country's **reach** (`distribution.max_reach_sectors`,
-  road bonus prorated along the path).
+  road bonus prorated along the path). Per-unit mobility is the packed weight
+  (`lbs / packing` of the sector the goods leave, KNOWN) × the cost to enter
+  each sector, **÷ `distribution.mobility_bonus` (10, KNOWN)**; hand moves pay
+  full price.
 - **Rail shipments** issued as commands since the last update (they were
   validated for connectivity at issue time; re-validate now against the
   step-1 rail graph, and any whose route is now broken become **stranded

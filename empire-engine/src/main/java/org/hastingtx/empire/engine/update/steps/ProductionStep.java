@@ -24,6 +24,8 @@ public final class ProductionStep implements Step {
             SectorTypeCfg t = ctx.type(s);
             if (t.produces().isEmpty() && t.producesLevel().isEmpty()) continue;
             Country c = ctx.country(s.owner());
+            Double minEff = ctx.cfg.economy().efficiency().productionMinEfficiency();
+            if (minEff != null && s.efficiency() < minEff) continue;          // KNOWN: nothing below 60%
             double work = ctx.workAvailablePost(i);
             if (work <= 0) continue;
 
@@ -74,6 +76,8 @@ public final class ProductionStep implements Step {
                 double q = producedTotal * e.getValue();
                 if (q > 0) ctx.led.consume(i, in, q);
             }
+            double cashPer = t.productionCashPerUnitOr0();
+            if (cashPer > 0) ctx.led.cash[c.id()] -= cashPer * producedTotal;   // KNOWN: guns $30, shells $3, tech $300...
         }
     }
 
