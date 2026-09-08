@@ -236,7 +236,7 @@ public final class FlowStep implements Step {
     }
 
     /** Cheapest-mobility (or fewest-hop) path through sectors owned by {@code owner}. Deterministic tie-break on coordinates. */
-    static List<Coord> path(Ctx ctx, Coord from, Coord to, int owner, DistributionCfg dc) {
+    public static List<Coord> path(Ctx ctx, Coord from, Coord to, int owner, DistributionCfg dc) {
         if (from.equals(to)) return List.of(from);
         boolean hops = "fewest_hops".equals(dc.pathCost());
         int n = ctx.led.nSectors;

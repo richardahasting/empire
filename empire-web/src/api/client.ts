@@ -68,3 +68,13 @@ export interface ConsoleReply { output: string; accepted: boolean; error?: strin
 export interface CommandRequest {
   verb: string; x?: number; y?: number; x2?: number; y2?: number; type?: string; commodity?: string; amount?: number; clear?: boolean;
 }
+
+export interface Estimate {
+  ok: boolean; error?: string; path: Coord[]; hopCosts: number[]; totalMobility: number; reach: number;
+  arrivesQty: number; heldQty: number; holdsAt: Coord | null; available: number; sourceMobility: number;
+}
+export function estimate(gameId: number, q: { verb: "move" | "explore"; x: number; y: number; x2: number; y2: number; commodity?: string; amount: number }): Promise<Estimate> {
+  const p = new URLSearchParams({ verb: q.verb, x: String(q.x), y: String(q.y), x2: String(q.x2), y2: String(q.y2), amount: String(q.amount) });
+  if (q.commodity) p.set("commodity", q.commodity);
+  return api.get<Estimate>(`/games/${gameId}/estimate?${p}`);
+}
