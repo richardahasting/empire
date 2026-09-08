@@ -260,9 +260,10 @@ function ThresholdDialog({ view, rules, sector: s, onClose, onCommand, busy }: {
   const [commodity, setCommodity] = useState("food");
   const [amount, setAmount] = useState(s.thresholds["food"] !== undefined ? String(s.thresholds["food"]) : "");
   const [scope, setScope] = useState("");
-  // a mixed selection (all my sectors) scales by designation, e.g. warehouses ×10; "all my <type>" and one sector set it as typed
+  // a mixed selection (all my sectors) scales goods by designation, e.g. warehouses ×10 — never people; "all my <type>" and one sector set it as typed
   const mult = Object.entries(rules.massThresholdMultiplierByType ?? {}).filter(([, m]) => m > 0 && m !== 1);
-  const scaledNote = scope === "*" && mult.length > 0 && amount !== "" ? mult.map(([t, m]) => `${t}s get ${(Number(amount) * m).toFixed(0)} (×${m})`).join(", ") : null;
+  const person = !!rules.commodities.find(c => c.id === commodity)?.isPerson;
+  const scaledNote = scope === "*" && mult.length > 0 && amount !== "" ? (person ? `${commodity} is people: ${mult.map(([t]) => `${t}s`).join(", ")} get ${Number(amount).toFixed(0)} like everyone else` : mult.map(([t, m]) => `${t}s get ${(Number(amount) * m).toFixed(0)} (×${m})`).join(", ")) : null;
   return (
     <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent>

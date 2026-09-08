@@ -123,7 +123,7 @@ public class GameController {
         var cfg = games.get(id).cfg;
         boolean scaled = "threshold".equals(r.verb()) && SectorSelector.isMixed(r.scope()) && !Boolean.TRUE.equals(r.clear());
         List<Command> cmds = SectorSelector.expand(v, cfg, r.scope()).stream()
-                .map(at -> scaled ? new Command.Threshold(at, r.commodity(), SectorSelector.massThreshold(v, cfg, at, r.amount() == null ? 0 : r.amount())) : r.toCommand(at)).toList();
+                .map(at -> scaled ? new Command.Threshold(at, r.commodity(), SectorSelector.massThreshold(v, cfg, at, r.commodity(), r.amount() == null ? 0 : r.amount())) : r.toCommand(at)).toList();
         return games.commandAll(id, a, cmds, "panel", scaled ? SectorSelector.massThresholdNote(cfg) : null);
     }
 

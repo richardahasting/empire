@@ -56,10 +56,13 @@ class SectorSelectorTest {
                 cap.roadLevel(), cap.roadTarget(), cap.railLevel(), cap.railTarget(), cap.stock(), cap.thresholds(), cap.distCenter(), cap.held(), cap.resources());
         CountryView v2 = new CountryView(V.countryId(), V.name(), V.updateNumber(), V.capital(), V.wrapX(), V.wrapY(), V.cash(), V.btu(), V.levels(), V.handicap(),
                 V.inSanctuary(), V.bankrupt(), V.commodityIds(), List.of(wh), V.otherCountryNames());
-        assertThat(SectorSelector.massThreshold(v2, CFG, cap.at(), 400)).isEqualTo(4000.0);
-        assertThat(SectorSelector.massThreshold(V, CFG, cap.at(), 400)).isEqualTo(400.0);     // the capital is not a warehouse
-        assertThat(SectorSelector.massThreshold(v2, CFG, cap.at(), -1)).isEqualTo(-1.0);      // clearing passes through
-        assertThat(SectorSelector.massThresholdNote(CFG)).isEqualTo("warehouse ×10");
+        assertThat(SectorSelector.massThreshold(v2, CFG, cap.at(), "food", 400)).isEqualTo(4000.0);
+        assertThat(SectorSelector.massThreshold(v2, CFG, cap.at(), "hcm", 400)).isEqualTo(4000.0);
+        assertThat(SectorSelector.massThreshold(v2, CFG, cap.at(), "civ", 700)).isEqualTo(700.0);   // people are never scaled
+        assertThat(SectorSelector.massThreshold(v2, CFG, cap.at(), "mil", 50)).isEqualTo(50.0);
+        assertThat(SectorSelector.massThreshold(V, CFG, cap.at(), "food", 400)).isEqualTo(400.0);   // the capital is not a warehouse
+        assertThat(SectorSelector.massThreshold(v2, CFG, cap.at(), "food", -1)).isEqualTo(-1.0);    // clearing passes through
+        assertThat(SectorSelector.massThresholdNote(CFG)).isEqualTo("warehouse ×10, goods only");
     }
 
     @Test

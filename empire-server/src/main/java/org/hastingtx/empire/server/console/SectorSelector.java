@@ -32,21 +32,23 @@ public final class SectorSelector {
     /**
      * The threshold to set at {@code at} when {@code amount} was typed for a mixed selection: scaled by
      * {@code distribution.mass_threshold_multiplier_by_type} for that sector's designation (issue #40).
-     * Clears (negative) pass through.
+     * People (civ, mil, uw) are never scaled — a warehouse holds no more of them than anywhere else
+     * (Richard 2026-09-08). Clears (negative) pass through.
      */
-    public static double massThreshold(CountryView v, GameConfig cfg, Coord at, double amount) {
+    public static double massThreshold(CountryView v, GameConfig cfg, Coord at, String commodity, double amount) {
         if (amount < 0) return amount;
+        if (commodity != null && cfg.commodities().stream().anyMatch(c -> c.id().equals(commodity) && c.person())) return amount;
         for (SectorView s : v.sectors()) if (s.at().equals(at)) return amount * cfg.distribution().massThresholdMultiplier(s.designation());
         return amount;
     }
 
-    /** "warehouses ×10" or null — for replies and dialogs. */
+    /** "warehouse ×10, goods only" or null — for replies and dialogs. */
     public static String massThresholdNote(GameConfig cfg) {
         var m = cfg.distribution().massThresholdMultiplierByType();
         if (m == null || m.isEmpty()) return null;
         StringBuilder sb = new StringBuilder();
         m.forEach((type, mult) -> { if (mult != null && mult > 0 && mult != 1.0) sb.append(sb.isEmpty() ? "" : ", ").append(type).append(" ×").append(mult % 1 == 0 ? String.valueOf(mult.longValue()) : mult.toString()); });
-        return sb.isEmpty() ? null : sb.toString();
+        return sb.isEmpty() ? null : sb.append(", goods only").toString();
     }
 
     public static List<Coord> expand(CountryView v, GameConfig cfg, String sel) {
