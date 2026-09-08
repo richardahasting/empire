@@ -272,12 +272,12 @@ public class GameService {
             World before = g.world, cur = before;
             Coord cap = before.country(country).capital();
             int applied = 0, outOfBtu = 0; double btu = 0;
-            List<String> skipped = new ArrayList<>();
+            List<String> skipped = new ArrayList<>(), notes = new ArrayList<>();
             for (int i = 0; i < cmds.size(); i++) {
                 Command cmd = cmds.get(i);
                 CommandResult r = g.exec.execute(cur, country, cmd);
                 logs.command(gameId, country, before.updateNumber(), source, cmd.verb(), cmd, r.ok(), r.error(), r.btuSpent());
-                if (r.ok()) { cur = r.world(); applied++; btu += r.btuSpent(); continue; }
+                if (r.ok()) { cur = r.world(); applied++; btu += r.btuSpent(); if (r.info() != null) notes.add(relativise(before, cap, sectorOf(cmd) + ": " + r.info())); continue; }
                 if (r.error().startsWith("not enough BTUs")) { outOfBtu = cmds.size() - i; break; }
                 skipped.add(relativise(before, cap, sectorOf(cmd) + ": " + r.error()));
             }
@@ -286,6 +286,10 @@ public class GameService {
             if (!skipped.isEmpty()) {
                 sb.append("; skipped ").append(skipped.size()).append(" — ").append(String.join("; ", skipped.subList(0, Math.min(4, skipped.size()))));
                 if (skipped.size() > 4) sb.append("; …");
+            }
+            if (!notes.isEmpty()) {
+                sb.append("; ").append(notes.size()).append(" adjusted — ").append(String.join("; ", notes.subList(0, Math.min(3, notes.size()))));
+                if (notes.size() > 3) sb.append("; …");
             }
             if (outOfBtu > 0) sb.append("; out of BTUs with ").append(outOfBtu).append(" still to do");
             if (note != null && applied > 0) sb.append(" (").append(note).append(")");
