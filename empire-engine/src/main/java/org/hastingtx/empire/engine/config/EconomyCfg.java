@@ -24,7 +24,13 @@ public record EconomyCfg(
             double foodPerBirth,
             double starvationMaxFractionPerUpdate,
             MaxPopCurve maxPopResearchCurve,
-            PlagueCfg plague) {
+            PlagueCfg plague,
+            SubsistenceCfg subsistence) {
+        /** People who live off the land: no food consumed, no starvation, up to the limit. */
+        public record SubsistenceCfg(double civsPerSector, boolean scaleByFertility, java.util.List<String> appliesTo) {
+            public double limit(int fertility) { return scaleByFertility ? civsPerSector * fertility / 100.0 : civsPerSector; }
+        }
+        public SubsistenceCfg subsistenceOrNone() { return subsistence != null ? subsistence : new SubsistenceCfg(0, false, java.util.List.of()); }
         public record MaxPopCurve(double base, double perResearchPoint, double cap) {
             public double eval(double research) { return Math.min(cap, base + perResearchPoint * research); }
         }

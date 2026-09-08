@@ -181,6 +181,15 @@ economy:
     civ_birth_rate_per_etu: 0.005     # KNOWN: obrate 0.005
     uw_birth_rate_per_etu:  0.0025    # KNOWN: uwbrate 0.0025
     food_per_birth: 0.0006            # KNOWN: babyeat
+    # Subsistence. KNOWN: the original let a few hundred civilians per sector live off the
+    # land. Richard 2026-09-07: "people don't starve unless they have a gun to their head.
+    # Let them hunt, fish, and gather food." People up to this limit eat nothing from stock
+    # and never starve; only the people beyond it need food. Births under the limit need
+    # no stocked food either.
+    subsistence:
+      civs_per_sector: 300            # 300 was the original's number; Richard suspects it is high — tune in the harness
+      scale_by_fertility: true        # limit × fertility/100 (an 80-fertility plain feeds 240; a 5-fertility mountain, 15)
+      applies_to: [civ, uw, mil]      # who forages, in this order
     # Starvation: when food runs out, a fraction of each population class dies.
     # KNOWN: original starved proportionally to shortfall. GUESS: cap per update.
     starvation_max_fraction_per_update: 0.25

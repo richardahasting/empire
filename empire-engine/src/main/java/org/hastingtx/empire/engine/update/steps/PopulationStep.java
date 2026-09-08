@@ -25,24 +25,38 @@ public final class PopulationStep implements Step {
             double nCiv = s.stock().get(civ), nMil = s.stock().get(mil), nUw = s.stock().get(uw);
             if (nCiv + nMil + nUw <= 0) continue;
 
-            // 1. eating
-            double demand = (nCiv * p.foodPerCivPerEtu() + nMil * p.foodPerMilPerEtu() + nUw * p.foodPerUwPerEtu()) * ctx.etus;
+            // 1. eating. The first `limit` people live off the land (subsistence); only the rest draw on stock.
+            EconomyCfg.PopulationCfg.SubsistenceCfg sub = p.subsistenceOrNone();
+            double limit = s.terrain().isLand() ? sub.limit(s.resources().fertility()) : 0;
+            double fCiv = 0, fUw = 0, fMil = 0;   // fed by foraging, by class, in the configured order
+            for (String who : sub.appliesTo()) {
+                if (limit <= 0) break;
+                switch (who) {
+                    case "civ" -> { fCiv = Math.min(nCiv, limit); limit -= fCiv; }
+                    case "uw" -> { fUw = Math.min(nUw, limit); limit -= fUw; }
+                    case "mil" -> { fMil = Math.min(nMil, limit); limit -= fMil; }
+                    default -> {}
+                }
+            }
+            double subsistenceHeadroom = Math.max(0, limit);   // unused foraging capacity: births here need no stock
+            double xCiv = nCiv - fCiv, xUw = nUw - fUw, xMil = nMil - fMil;   // the people who need stocked food
+            double demand = (xCiv * p.foodPerCivPerEtu() + xMil * p.foodPerMilPerEtu() + xUw * p.foodPerUwPerEtu()) * ctx.etus;
             double have = s.stock().get(food);
             double foodLeft;
             if (have >= demand) {
-                ctx.led.consume(i, food, demand);
+                if (demand > 0) ctx.led.consume(i, food, demand);
                 foodLeft = have - demand;
             } else {
-                ctx.led.consume(i, food, have);
+                if (have > 0) ctx.led.consume(i, food, have);
                 foodLeft = 0;
                 double shortfall = demand <= 0 ? 0 : 1.0 - have / demand;
                 double frac = Math.min(shortfall, p.starvationMaxFractionPerUpdate());
-                double dCiv = nCiv * frac, dMil = nMil * frac, dUw = nUw * frac;
+                double dCiv = xCiv * frac, dMil = xMil * frac, dUw = xUw * frac;   // only the unfed excess can starve
                 if (dCiv > 0) ctx.led.die(i, civ, dCiv);
                 if (dMil > 0) ctx.led.die(i, mil, dMil);
                 if (dUw > 0) ctx.led.die(i, uw, dUw);
                 nCiv -= dCiv; nMil -= dMil; nUw -= dUw;
-                if (s.owned()) ctx.led.event("starvation", s.owner(), s.at(), "starvation in " + s.at(), dCiv + dMil + dUw);
+                if (s.owned() && dCiv + dMil + dUw > 0) ctx.led.event("starvation", s.owner(), s.at(), "starvation in " + s.at(), dCiv + dMil + dUw);
             }
 
             // 2. births, bounded by ceiling and by food
@@ -53,11 +67,13 @@ public final class PopulationStep implements Step {
                 double uwBirths = nUw * (Math.pow(1 + p.uwBirthRatePerEtu(), ctx.etus) - 1);
                 double wanted = civBirths + uwBirths;
                 double allowed = Math.min(wanted, room);
-                if (p.foodPerBirth() > 0) allowed = Math.min(allowed, foodLeft / p.foodPerBirth());
+                if (p.foodPerBirth() > 0) allowed = Math.min(allowed, foodLeft / p.foodPerBirth() + subsistenceHeadroom);
                 if (allowed > 0 && wanted > 0) {
                     double scale = allowed / wanted;
                     double bc = civBirths * scale, bu = uwBirths * scale;
-                    ctx.led.consume(i, food, allowed * p.foodPerBirth());
+                    // births under the unused subsistence limit are free; the rest eat from stock
+                    double fromStock = Math.max(0, allowed - subsistenceHeadroom);
+                    if (p.foodPerBirth() > 0 && fromStock > 0) ctx.led.consume(i, food, Math.min(foodLeft, fromStock * p.foodPerBirth()));
                     if (bc > 0) ctx.led.grow(i, civ, bc);
                     if (bu > 0) ctx.led.grow(i, uw, bu);
                     nCiv += bc; nUw += bu;
