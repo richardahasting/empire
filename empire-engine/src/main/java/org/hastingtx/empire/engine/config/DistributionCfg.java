@@ -1,6 +1,7 @@
 package org.hastingtx.empire.engine.config;
 
 import java.util.List;
+import java.util.Map;
 
 public record DistributionCfg(
         EconomyCfg.TechScaled maxReachSectors,
@@ -11,7 +12,15 @@ public record DistributionCfg(
         String pathCost,
         Double quantum,
         /** Distribution moves goods this many times cheaper than a hand move (KNOWN: IMPORT/EXPORT_BONUS 10). */
-        Double mobilityBonus) {
+        Double mobilityBonus,
+        /** A threshold set on a mixed selection (`*` or a rectangle) is multiplied by this for sectors of the given type; absent = 1. Issue #40. */
+        Map<String, Double> massThresholdMultiplierByType) {
+    /** ×1 unless the designation is listed. */
+    public double massThresholdMultiplier(String designation) {
+        if (massThresholdMultiplierByType == null || designation == null) return 1.0;
+        Double m = massThresholdMultiplierByType.get(designation);
+        return m == null || m <= 0 ? 1.0 : m;
+    }
     /** True when the sector the goods leave from pays the whole route's mobility ({@code sending_sector}); false when every entered sector pays ({@code transited_sectors}). */
     public boolean sourcePays() { return "sending_sector".equals(mobilityDebitedFrom) || "source".equals(mobilityDebitedFrom); }
     public double mobilityBonusOr1() { return mobilityBonus == null || mobilityBonus <= 0 ? 1.0 : mobilityBonus; }

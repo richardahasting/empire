@@ -30,7 +30,7 @@ export function ConsolePanel({ onLine }: Props) {
   return (
     <div className="flex h-full flex-col gap-2">
       <pre ref={out} className="min-h-0 flex-1 overflow-auto rounded-md border border-border bg-muted p-2 font-mono text-xs leading-snug whitespace-pre">{lines.join("\n")}</pre>
-      <Input value={input} onChange={e => setInput(e.target.value)} onKeyDown={onKey} placeholder="map · census · des 1,0 agribusiness · thresh 1,0 food 100 · dist 1,0 0,0" className="font-mono text-xs" />
+      <Input value={input} onChange={e => setInput(e.target.value)} onKeyDown={onKey} placeholder="map · census · des 1,0 agribusiness · thresh * hcm 100 · road *:a 100 · dist 1,0 0,0" className="font-mono text-xs" />
     </div>
   );
 }
