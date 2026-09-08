@@ -47,7 +47,7 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
               <ContextMenuSeparator />
               <ContextMenuLabel>Inventory — click to move</ContextMenuLabel>
               {view.commodityIds.filter(c => (s.stock[c] ?? 0) >= 1).map(c => (
-                <ContextMenuItem key={c} className="justify-between tabular-nums" onSelect={() => onStartPick({ verb: "move", from: s, commodity: c, qty: Math.floor(s.stock[c] ?? 0) })}>
+                <ContextMenuItem key={c} className="justify-between tabular-nums" onSelect={() => onStartPick({ verb: "move", from: s, commodity: c, qty: defaultMoveQty(c, s.stock[c] ?? 0) })}>
                   <span>{c}</span><span className="text-muted-foreground">{Math.floor(s.stock[c] ?? 0)}{s.held[c] ? ` (+${s.held[c].toFixed(0)} in transit)` : ""}</span>
                 </ContextMenuItem>
               ))}
@@ -72,6 +72,12 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
       {s && owned && dialog === "threshold" && <ThresholdDialog view={view} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
     </>
   );
+}
+
+/** Goods prefill in full; people prefill by half, because emptying a sector of its people is rarely what you meant. */
+export function defaultMoveQty(commodity: string, stock: number): number {
+  const people = commodity === "civ" || commodity === "mil" || commodity === "uw";
+  return Math.floor(people ? stock / 2 : stock);
 }
 
 /** The sector at a glance, inside the menu. */

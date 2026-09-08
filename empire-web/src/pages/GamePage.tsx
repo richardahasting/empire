@@ -136,6 +136,9 @@ export function GamePage() {
                 <Input value={String(pick.qty)} onChange={e => { const q = Math.max(0, Math.floor(Number(e.target.value) || 0)); setPick({ ...pick, qty: q }); }}
                        inputMode="numeric" className="h-7 w-20 text-xs" aria-label="quantity" />
                 <span>{pick.verb === "move" ? pick.commodity : "civilians"} <span className="text-muted-foreground">(of {Math.floor(pick.from.stock[pick.commodity] ?? 0)})</span> from {pick.from.relative.x},{pick.from.relative.y} — click a destination</span>
+                {pick.commodity === "civ" && pick.from.at.x === view.capital.x && pick.from.at.y === view.capital.y && (pick.from.stock["civ"] ?? 0) - pick.qty < 100 && (
+                  <span className="text-destructive">leaves the capital with {Math.max(0, Math.floor((pick.from.stock["civ"] ?? 0) - pick.qty))} civilians — BTUs come from them</span>
+                )}
                 <Button size="sm" variant="ghost" onClick={() => setPick(null)}>Cancel (Esc)</Button>
               </div>
             )}
