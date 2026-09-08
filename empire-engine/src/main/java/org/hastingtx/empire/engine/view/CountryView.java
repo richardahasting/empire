@@ -17,6 +17,8 @@ public record CountryView(
         String name,
         long updateNumber,
         Coord capital,
+        boolean wrapX,
+        boolean wrapY,
         double cash,
         double btu,
         Levels levels,
@@ -75,7 +77,7 @@ public record CountryView(
         }
         List<String> others = new ArrayList<>();
         for (Country o : w.countries()) if (o.id() != countryId) others.add(o.name());
-        return new CountryView(countryId, c.name(), w.updateNumber(), c.capital(), c.cash(), c.btu(), c.levels(), c.handicap(),
+        return new CountryView(countryId, c.name(), w.updateNumber(), c.capital(), w.wrapX(), w.wrapY(), c.cash(), c.btu(), c.levels(), c.handicap(),
                 c.inSanctuary(), c.bankrupt(), ids, views, others);
     }
 

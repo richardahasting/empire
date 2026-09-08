@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Empire</title>
+    <link rel="icon" type="image/svg+xml" href="/empire/favicon.svg" />
+    <script>
+      (function () {
+        var stored = localStorage.getItem("ds-theme");
+        var resolved = stored === "dark" || (stored !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+        if (resolved === "dark") document.documentElement.classList.add("dark");
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

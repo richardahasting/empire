@@ -43,6 +43,15 @@ public final class ConfigLoader {
     /** A preset by name from the bundled config/presets, e.g. "teaching". */
     public Loaded loadPreset(String name) { return load(new ConfigSource.Classpath("config/presets/" + name + ".yaml")); }
 
+    /** A complete (already merged) YAML document held in memory, e.g. the config stored with a game. */
+    public Loaded loadYaml(String yamlText) {
+        return load(new ConfigSource() {
+            public String name() { return "inline"; }
+            public InputStream open() { return new java.io.ByteArrayInputStream(yamlText.getBytes(StandardCharsets.UTF_8)); }
+            public ConfigSource sibling(String relative) { throw new ConfigException("inline config cannot extend " + relative); }
+        });
+    }
+
     /** The bundled schema itself, which is a complete "classic" configuration. */
     public Loaded loadSchema() { return load(new ConfigSource.Classpath("config/schema.yaml")); }
 

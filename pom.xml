@@ -17,6 +17,7 @@
     <module>empire-agent-api</module>
     <module>empire-agents</module>
     <module>empire-sim</module>
+    <module>empire-server</module>
   </modules>
 
   <properties>

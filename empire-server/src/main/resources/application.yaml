@@ -1,0 +1,32 @@
+server:
+  port: 8020
+  address: 127.0.0.1
+  servlet:
+    context-path: /empire
+  forward-headers-strategy: native
+
+spring:
+  application:
+    name: empire
+  datasource:
+    url: ${EMPIRE_DB_URL:jdbc:postgresql://127.0.0.1:5432/empire}
+    username: ${EMPIRE_DB_USER:empire_user}
+    password: ${EMPIRE_DB_PASSWORD:}
+  flyway:
+    enabled: true
+  mail:
+    host: localhost
+    port: 25
+
+empire:
+  app-url: ${EMPIRE_APP_URL:http://localhost:8020/empire}
+  from-addr: ${EMPIRE_FROM_ADDR:empire@hastingtx.org}
+  from-name: ${EMPIRE_FROM_NAME:Empire}
+  admin-emails: ${EMPIRE_ADMIN_EMAILS:}
+  mail-mode: ${EMPIRE_MAIL_MODE:log}
+  magic-link-ttl-minutes: 30
+  session-ttl-days: 90
+
+logging:
+  level:
+    org.hastingtx.empire: INFO

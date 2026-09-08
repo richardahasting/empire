@@ -1,0 +1,20 @@
+[Unit]
+Description=Empire — browser strategy game (Spring Boot)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=richard
+Group=richard
+WorkingDirectory=/home/richard/projects/empire
+EnvironmentFile=/home/richard/projects/empire/empire-server/.env
+Environment=HOME=/home/richard
+ExecStart=/usr/bin/java -Xms256m -Xmx1g -jar /home/richard/projects/empire/empire-server/target/empire-server.jar
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/var/log/empire.log
+StandardError=append:/var/log/empire.log
+
+[Install]
+WantedBy=multi-user.target

@@ -19,16 +19,20 @@ Live at <https://hastingtx.org/empire/> (holding page until M1).
 
 ## Status
 
-**M0 in progress** (issue #3): engine, config loader, world generator, the
-deterministic update with plan-then-apply flows, ScriptedAgent, and the headless
-simulation harness. 23 tests including the six-direction and 60° rotation
-symmetry proofs, a jqwik conservation property, a golden state hash, and the
-calibration probes. No persistence, HTTP, or UI yet.
+**M1 in progress** (issue #5): PostgreSQL persistence (Flyway), passwordless
+magic-link accounts, REST API, the React map UI (canvas hex map with layers,
+sector inspector, console with history, nation dashboard), admin world creation
+and a manual update trigger. Deployed as `empire.service` behind nginx at
+`/empire/`. M0 (issue #3): engine, config, simulation harness, 23 tests.
 
 ```bash
-mvn -q test                                   # everything
+mvn -q test                                   # engine, config, sim, server (server test needs EMPIRE_DB_PASSWORD)
 make sim PRESET=teaching UPDATES=60 COUNTRIES=3 SEED=9   # headless run -> sim-out/
+./deploy.sh                                   # build web + server, restart the service, check the public URL
 ```
+
+Local dev: `cd empire-web && npm run dev` proxies `/empire/api` to a server started
+from `empire-server/.env` (set `EMPIRE_MAIL_MODE=log` to get magic links in the log).
 
 All numeric rates in `config/schema.yaml` are placeholders; the harness exists
 to calibrate them.
