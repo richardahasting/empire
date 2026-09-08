@@ -174,9 +174,11 @@ the same sector with the same commodity, owner and destination merge, so a
 choked route produces one growing parcel rather than a pile of slivers.
 Remainders below 1e-9 are floating-point dust and are delivered, not parked.
 
-**Known loophole (GUESS at the right rule):** people in a held parcel are not
-in any sector's stock, so they neither eat nor breed nor work while in transit.
-Flag if civilians on the road should eat from the sector they are parked in.
+**People in transit go hungry until they arrive** (Richard, 2026-09-07).
+A held parcel is not in any sector's stock, so civilians, military and workers
+on the road neither eat, nor breed, nor work, nor die, until the parcel lands.
+This is the rule, not a loophole: the cost of a choked route is that the people
+on it contribute nothing while they wait.
 
 The direction-symmetry test (six identical chains, six directions, identical
 results) and the rotation test (rotate world 60°, output rotates) are
