@@ -10,13 +10,23 @@ interface Props {
   layer: Layer; stockCommodity: string; selected: Coord | null;
   onSelect: (c: Coord | null) => void;
   onContextMenu?: (c: Coord | null) => void;
+  /** Called as the pointer crosses sectors (null when it leaves the grid). */
+  onHover?: (c: Coord | null, clientX: number, clientY: number) => void;
+  /** Route to highlight (absolute coords), e.g. the estimate for a move being picked. */
+  highlightPath?: Coord[];
+  /** Text to float next to the pointer. */
+  tooltip?: string | null;
+  /** Targeting mode: crosshair cursor and no drag-to-pan on click. */
+  picking?: boolean;
 }
 
 /**
  * Canvas hex map. Draws only what the view contains (fog of war is the server's job).
  * Coordinates are absolute for drawing; labels show the country-relative form.
  */
-export function HexMap({ view, rules, width, height, layer, stockCommodity, selected, onSelect, onContextMenu }: Props) {
+export function HexMap({ view, rules, width, height, layer, stockCommodity, selected, onSelect, onContextMenu, onHover, highlightPath, tooltip, picking }: Props) {
+  const [mouse, setMouse] = useState<{ x: number; y: number } | null>(null);
+  const lastHover = useRef<string | null>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
@@ -99,12 +109,20 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
       }
       if (Object.keys(s.held).length > 0 && l.size >= 8) { ctx.fillStyle = p.muted; ctx.beginPath(); ctx.arc(cx + l.size * 0.45, cy - l.size * 0.45, Math.max(2, l.size * 0.15), 0, Math.PI * 2); ctx.fill(); }
     }
+    if (highlightPath && highlightPath.length > 1) {
+      ctx.strokeStyle = p.accent; ctx.lineWidth = Math.max(2, l.size * 0.18); ctx.lineCap = "round"; ctx.lineJoin = "round";
+      ctx.beginPath();
+      highlightPath.forEach((c, i) => { const d = toDisplay(c); const { cx, cy } = hexCenter(d.x, d.y, l); if (i === 0) ctx.moveTo(cx, cy); else ctx.lineTo(cx, cy); });
+      ctx.stroke();
+      const end = toDisplay(highlightPath[highlightPath.length - 1]); const { cx, cy } = hexCenter(end.x, end.y, l);
+      ctx.fillStyle = p.accent; ctx.beginPath(); ctx.arc(cx, cy, Math.max(3, l.size * 0.22), 0, Math.PI * 2); ctx.fill();
+    }
     if (selected) {
       const d = toDisplay(selected);
       const { cx, cy } = hexCenter(d.x, d.y, l);
       hexPath(ctx, cx, cy, l.size - 0.5); ctx.strokeStyle = p.ring; ctx.lineWidth = 3; ctx.stroke();
     }
-  }, [view, byCoord, layer, stockCommodity, selected, width, height, layout, typeCategory, typeGlyph, toWorld, toDisplay]);
+  }, [view, byCoord, layer, stockCommodity, selected, width, height, layout, typeCategory, typeGlyph, toWorld, toDisplay, highlightPath]);
 
   useEffect(() => {
     const el = wrap.current; if (!el) return;
@@ -114,6 +132,14 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
 
   const onDown = (e: React.MouseEvent) => { drag.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y, moved: false }; };
   const onMove = (e: React.MouseEvent) => {
+    const r = canvas.current!.getBoundingClientRect();
+    setMouse({ x: e.clientX - r.left, y: e.clientY - r.top });
+    if (onHover) {
+      const hit = pick(e.clientX - r.left, e.clientY - r.top, layout(), width, height);
+      const c = hit ? toWorld(hit.x, hit.y) : null;
+      const key = c ? `${c.x},${c.y}` : "";
+      if (key !== lastHover.current) { lastHover.current = key; onHover(c, e.clientX, e.clientY); }
+    }
     const d = drag.current; if (!d) return;
     const dx = e.clientX - d.x, dy = e.clientY - d.y;
     if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
@@ -137,7 +163,11 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
 
   return (
     <div ref={wrap} className="relative h-full w-full overflow-hidden rounded-lg border border-border bg-background">
-      <canvas ref={canvas} className="block cursor-crosshair" onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={() => (drag.current = null)} onWheel={onWheel} onContextMenu={onCtx} />
+      <canvas ref={canvas} className="block cursor-crosshair" onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={() => { drag.current = null; setMouse(null); lastHover.current = null; onHover?.(null, 0, 0); }} onWheel={onWheel} onContextMenu={onCtx} style={picking ? { cursor: "cell" } : undefined} />
+      {tooltip && mouse && (
+        <div className="pointer-events-none absolute z-10 rounded-md border border-border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md whitespace-pre"
+             style={{ left: mouse.x + 14, top: mouse.y + 14 }}>{tooltip}</div>
+      )}
     </div>
   );
 }
