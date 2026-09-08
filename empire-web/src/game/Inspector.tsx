@@ -19,7 +19,7 @@ export function Inspector({ sector: s, view, rules, onCommand, busy }: Props) {
   if (!s.full) {
     return (
       <div className="space-y-2 text-sm">
-        <h3 className="font-semibold">Sector {rel} <span className="text-muted-foreground">({s.at.x},{s.at.y})</span></h3>
+        <h3 className="font-semibold">Sector {rel}</h3>
         <p>{s.terrain}{s.owner >= 0 ? ` — held by ${view.otherCountryNames.length ? "another country" : "someone"}` : " — unowned"}</p>
         {s.owner < 0 && s.terrain !== "ocean" && (
           <div className="flex items-end gap-2">
@@ -39,7 +39,7 @@ export function Inspector({ sector: s, view, rules, onCommand, busy }: Props) {
 
   return (
     <div className="space-y-3 text-sm">
-      <h3 className="font-semibold">Sector {rel} <span className="text-muted-foreground">({s.at.x},{s.at.y})</span></h3>
+      <h3 className="font-semibold">Sector {rel}</h3>
       <div className="flex flex-wrap gap-1">
         <Badge tone="accent">{s.designation}</Badge><Badge tone="muted">{s.terrain}</Badge>
         <Badge tone="neutral">eff {s.efficiency.toFixed(0)}%</Badge><Badge tone="neutral">mob {s.mobility.toFixed(0)}</Badge>

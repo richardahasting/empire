@@ -48,7 +48,7 @@ export interface SectorView {
   held: Record<string, number>; resources: Resources | null;
 }
 export interface CountryView {
-  countryId: number; name: string; updateNumber: number; capital: Coord; cash: number; btu: number;
+  countryId: number; name: string; updateNumber: number; capital: Coord; wrapX: boolean; wrapY: boolean; cash: number; btu: number;
   levels: Levels; inSanctuary: boolean; bankrupt: boolean; commodityIds: string[]; sectors: SectorView[]; otherCountryNames: string[];
 }
 export interface CountrySeat { id: number; name: string; taken: boolean }

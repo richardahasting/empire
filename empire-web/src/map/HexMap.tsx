@@ -27,6 +27,24 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
     for (const s of view.sectors) m.set(`${s.at.x},${s.at.y}`, s);
     return m;
   }, [view]);
+  // Display frame: the capital sits at display cell (cx, cy) in the middle of the grid. Wrapping
+  // axes are shifted so the country is never split across an edge; non-wrapping axes stay 1:1.
+  // Row parity must be preserved when shifting y, or the odd-row stagger would flip.
+  const frame = useMemo(() => {
+    const cx = view.wrapX ? Math.floor(width / 2) : view.capital.x;
+    let cy = view.wrapY ? Math.floor(height / 2) : view.capital.y;
+    if (view.wrapY && ((cy - view.capital.y) & 1)) cy -= 1;
+    return { cx, cy, shiftX: view.capital.x - cx, shiftY: view.capital.y - cy };
+  }, [view, width, height]);
+  const toWorld = useCallback((dx: number, dy: number): Coord => ({
+    x: view.wrapX ? ((dx + frame.shiftX) % width + width) % width : dx,
+    y: view.wrapY ? ((dy + frame.shiftY) % height + height) % height : dy,
+  }), [view, frame, width, height]);
+  const toDisplay = useCallback((c: Coord): Coord => ({
+    x: view.wrapX ? ((c.x - frame.shiftX) % width + width) % width : c.x,
+    y: view.wrapY ? ((c.y - frame.shiftY) % height + height) % height : c.y,
+  }), [view, frame, width, height]);
+
   const typeCategory = useMemo(() => Object.fromEntries(rules.sectorTypes.map(t => [t.id, t.category])), [rules]);
   const typeGlyph = useMemo(() => Object.fromEntries(rules.sectorTypes.map(t => [t.id, t.glyph])), [rules]);
 
@@ -35,8 +53,12 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
     const cw = el?.clientWidth ?? 800, ch = el?.clientHeight ?? 600;
     const sizeW = cw / (Math.sqrt(3) * (width + 0.5)), sizeH = ch / (1.5 * height + 0.5);
     const size = Math.max(6, Math.min(sizeW, sizeH)) * zoom;
-    return { size, originX: pan.x, originY: pan.y };
-  }, [width, height, zoom, pan]);
+    // centre the drawing on the capital
+    const w = Math.sqrt(3) * size;
+    const originX = cw / 2 - (w * (frame.cx + (frame.cy & 1 ? 0.5 : 0)) + w / 2) + pan.x;
+    const originY = ch / 2 - (size * 1.5 * frame.cy + size) + pan.y;
+    return { size, originX, originY };
+  }, [width, height, zoom, pan, frame]);
 
   useEffect(() => {
     const c = canvas.current, el = wrap.current;
@@ -51,9 +73,10 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
     ctx.fillStyle = p.background; ctx.fillRect(0, 0, el.clientWidth, el.clientHeight);
     const maxStock = Math.max(1, ...view.sectors.filter(s => s.full).map(s => s.stock[stockCommodity] ?? 0));
 
-    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
-      const s = byCoord.get(`${x},${y}`);
-      const { cx, cy } = hexCenter(x, y, l);
+    for (let dy = 0; dy < height; dy++) for (let dx = 0; dx < width; dx++) {
+      const wc = toWorld(dx, dy);
+      const s = byCoord.get(`${wc.x},${wc.y}`);
+      const { cx, cy } = hexCenter(dx, dy, l);
       hexPath(ctx, cx, cy, l.size - 0.5);
       if (!s) { ctx.fillStyle = p.grid; ctx.globalAlpha = 0.25; ctx.fill(); ctx.globalAlpha = 1; continue; }
       ctx.fillStyle = p.terrain[s.terrain] ?? p.grid; ctx.fill();
@@ -76,10 +99,11 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
       if (Object.keys(s.held).length > 0 && l.size >= 8) { ctx.fillStyle = p.muted; ctx.beginPath(); ctx.arc(cx + l.size * 0.45, cy - l.size * 0.45, Math.max(2, l.size * 0.15), 0, Math.PI * 2); ctx.fill(); }
     }
     if (selected) {
-      const { cx, cy } = hexCenter(selected.x, selected.y, l);
+      const d = toDisplay(selected);
+      const { cx, cy } = hexCenter(d.x, d.y, l);
       hexPath(ctx, cx, cy, l.size - 0.5); ctx.strokeStyle = p.ring; ctx.lineWidth = 3; ctx.stroke();
     }
-  }, [view, byCoord, layer, stockCommodity, selected, width, height, layout, typeCategory, typeGlyph]);
+  }, [view, byCoord, layer, stockCommodity, selected, width, height, layout, typeCategory, typeGlyph, toWorld, toDisplay]);
 
   useEffect(() => {
     const el = wrap.current; if (!el) return;
@@ -98,7 +122,8 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
     const d = drag.current; drag.current = null;
     if (d && d.moved) return;
     const r = canvas.current!.getBoundingClientRect();
-    onSelect(pick(e.clientX - r.left, e.clientY - r.top, layout(), width, height));
+    const hit = pick(e.clientX - r.left, e.clientY - r.top, layout(), width, height);
+    onSelect(hit ? toWorld(hit.x, hit.y) : null);
   };
   const onWheel = (e: React.WheelEvent) => { setZoom(z => Math.max(0.4, Math.min(6, z * (e.deltaY < 0 ? 1.15 : 0.87)))); };
 
