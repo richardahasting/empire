@@ -58,6 +58,29 @@ class CalibrationProbesTest {
         assertThat(lcmMade).as("lcm reached the capital").isGreaterThan(0);
     }
 
+    /** Subsistence: a small population with no food at all lives off the land and never starves. */
+    @Test
+    void peopleLiveOffTheLand() {
+        GameConfig cfg = TestWorlds.teaching();
+        World w = TestWorlds.disc(cfg, 2, Map.of("civ", 100.0));           // capital: 100 civs, zero food, fertility 80 -> limit 240
+        int starvation = 0;
+        for (int u = 0; u < 20; u++) { var r = Update.run(w, cfg, 300 + u); for (var e : r.events()) if (e.type().equals("starvation")) starvation++; w = r.next(); }
+        assertThat(starvation).as("nobody starves under the subsistence limit").isZero();
+        assertThat(w.sector(TestWorlds.CENTER).stock().get(0)).as("and they even grow, up to the limit").isGreaterThan(100).isLessThanOrEqualTo(240.5);
+    }
+
+    /** Subsistence: a crowd beyond the limit starves down toward it, never below it. */
+    @Test
+    void onlyTheExcessStarves() {
+        GameConfig cfg = TestWorlds.teaching();
+        World w = TestWorlds.disc(cfg, 2, Map.of("civ", 1000.0));
+        int starvation = 0;
+        for (int u = 0; u < 20; u++) { var r = Update.run(w, cfg, 400 + u); for (var e : r.events()) if (e.type().equals("starvation")) starvation++; w = r.next(); }
+        double civ = w.sector(TestWorlds.CENTER).stock().get(0);
+        assertThat(starvation).as("the excess starves").isGreaterThan(0);
+        assertThat(civ).as("but the population settles at the subsistence limit").isGreaterThanOrEqualTo(240 - 1e-6).isLessThan(400);
+    }
+
     /** Roads rot when nobody pays for them, at the configured rate. */
     @Test
     void unpaidRoadsRot() {

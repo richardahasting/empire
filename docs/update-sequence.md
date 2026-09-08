@@ -65,14 +65,20 @@ not interact:
 
 ### 3. Population
 Per sector, from snapshot stocks:
-1. **Eating.** Demand = `(civ + mil + uw) * food_per_*_per_etu * etus`. If
-   food ≥ demand, food -= demand. Else starvation: each class loses
-   `min(shortfall_fraction, starvation_max_fraction_per_update)` of itself
-   (**GUESS:** original starved civs first, then mil? I am not sure.), and
-   food goes to 0.
+1. **Subsistence, then eating.** The first `subsistence.civs_per_sector`
+   people (× fertility/100 when `scale_by_fertility`, in `applies_to` order:
+   civ, uw, mil) live off the land: they consume no stock and cannot starve.
+   (**KNOWN:** the original let a few hundred civilians per sector forage.
+   Richard, 2026-09-07: "people don't starve unless they have a gun to their
+   head.") Only the people beyond the limit have demand =
+   `excess * food_per_*_per_etu * etus`. If food ≥ demand, food -= demand.
+   Else starvation: each class loses `min(shortfall_fraction,
+   starvation_max_fraction_per_update)` of its *excess* (**GUESS:** original
+   starved civs first, then mil? I am not sure.), and food goes to 0.
 2. **Births.** civ and uw grow by closed-form compounding, bounded by the
    sector's population ceiling (`max_population * eff/100 * research curve`),
-   consuming `food_per_birth` each; births that cannot be fed do not happen.
+   consuming `food_per_birth` each; births that cannot be fed do not happen,
+   except that births under the unused subsistence limit need no stock.
 3. **Plague** (if `options.plague`): roll per sector with the `plague` stream;
    mortality is applied to next-state population and a `PlagueEvent` emitted.
 
