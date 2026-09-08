@@ -62,8 +62,8 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
               {isDepot(s, rules) && <ContextMenuItem onSelect={() => setDialog("railship")}>Ship by rail…</ContextMenuItem>}
               <ContextMenuSeparator />
               <ContextMenuItem disabled={busy || (s.distCenter?.x === view.capital.x && s.distCenter?.y === view.capital.y)}
-                onSelect={() => void onCommand({ verb: "distribute", x: s.at.x, y: s.at.y, x2: view.capital.x, y2: view.capital.y })}>Distribute to capital</ContextMenuItem>
-              {s.distCenter && <ContextMenuItem destructive disabled={busy} onSelect={() => void onCommand({ verb: "distribute", x: s.at.x, y: s.at.y, clear: true })}>Clear distribution centre</ContextMenuItem>}
+                onSelect={() => void onCommand({ verb: "distribute", x: s.at.x, y: s.at.y, x2: view.capital.x, y2: view.capital.y })}>Supply from the capital (set centre)</ContextMenuItem>
+              {s.distCenter && <ContextMenuItem destructive disabled={busy} onSelect={() => void onCommand({ verb: "distribute", x: s.at.x, y: s.at.y, clear: true })}>Stop automatic supply (clear centre)</ContextMenuItem>}
             </>
           )}
         </ContextMenuContent>
