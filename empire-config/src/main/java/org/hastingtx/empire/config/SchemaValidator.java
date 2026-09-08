@@ -51,8 +51,8 @@ public final class SchemaValidator {
         }
         for (String req : List.of("wilderness", "sanctuary", "capital")) if (!ids.contains(req)) errs.add("economy.sector_types must include " + req);
         var lv = c.economy().levels();
-        if (!curves.contains(lv.educationToResearchMultiplier().curve())) errs.add("economy.levels.education_to_research_multiplier.curve unknown");
-        if (!curves.contains(lv.researchToTechMultiplier().curve())) errs.add("economy.levels.research_to_tech_multiplier.curve unknown");
+        if (lv.tech().logBase() <= 0 || lv.research().logBase() <= 0 || lv.education().logBase() <= 0 || lv.happiness().logBase() <= 0) errs.add("economy.levels.*.log_base must be > 0");
+        if (lv.education().averageEtus() <= 0 || lv.happiness().averageEtus() <= 0) errs.add("economy.levels.{education,happiness}.average_etus must be > 0");
         for (var e : c.economy().curves().entrySet()) {
             try { e.getValue().eval(50); } catch (RuntimeException ex) { errs.add("economy.curves." + e.getKey() + ": " + ex.getMessage()); }
         }

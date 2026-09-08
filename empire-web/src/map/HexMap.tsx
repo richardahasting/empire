@@ -3,7 +3,7 @@ import type { Coord, CountryView, FlowOut, Rules, SectorView } from "@/api/clien
 import { hexCenter, hexPath, neighbourAbs, pick, type Layout } from "./hex";
 import { palette } from "./palette";
 
-export type Layer = "ownership" | "designation" | "efficiency" | "mobility" | "stock" | "roads";
+export type Layer = "ownership" | "designation" | "efficiency" | "mobility" | "stock" | "roads" | "rail";
 
 interface Props {
   view: CountryView; rules: Rules; width: number; height: number;
@@ -103,6 +103,7 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
         else if (layer === "mobility") { overlay = p.accent; alpha = 0.05 + 0.7 * Math.min(1, s.mobility / 127); }
         else if (layer === "stock") { overlay = p.accent; alpha = 0.05 + 0.7 * ((s.stock[stockCommodity] ?? 0) / maxStock); }
         else if (layer === "roads") { if (s.roadLevel > 0 || s.roadTarget > 0) { overlay = p.accent; alpha = 0.1 + 0.6 * (s.roadLevel / 100); } }
+        else if (layer === "rail") { if (s.railLevel > 0 || s.railTarget > 0) { overlay = p.accent; alpha = 0.1 + 0.6 * (s.railLevel / 100); } }
       } else if (s.owner >= 0) { overlay = p.owner(s.owner, false); alpha = 0.45; }
       if (overlay) { ctx.globalAlpha = alpha; ctx.fillStyle = overlay; ctx.fill(); ctx.globalAlpha = 1; }
       ctx.strokeStyle = p.grid; ctx.lineWidth = 1; ctx.stroke();
@@ -133,6 +134,32 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
       }
     }
     if (flows && flows.length) drawFlows(ctx, flows, flowT ?? 1, p, l, toDisplay);
+    if (layer === "rail") {
+      // track between adjacent rail-capable sectors; a sector with track below the carrying level is flagged red
+      const minLevel = rules.rail?.minLevelToCarry ?? 20;
+      const depotTypes = new Set(rules.sectorTypes.filter(t => (t.flags ?? []).includes("rail_endpoint")).map(t => t.id));
+      ctx.lineCap = "round";
+      for (const s of view.sectors) {
+        if (!s.full) continue;
+        const a = toDisplay(s.at); const ca = hexCenter(a.x, a.y, l);
+        if (s.railLevel > 0 && s.railLevel < minLevel) { ctx.strokeStyle = "oklch(0.6 0.22 25)"; ctx.setLineDash([2, 3]); ctx.lineWidth = 2; hexPath(ctx, ca.cx, ca.cy, l.size * 0.55); ctx.stroke(); ctx.setLineDash([]); }
+        if (s.railLevel < minLevel) continue;
+        for (let d = 0; d < 6; d++) {
+          const nb = neighbourAbs(s.at, d, width, height, view.wrapX, view.wrapY);
+          if (!nb) continue;
+          const o = byCoord.get(`${nb.x},${nb.y}`);
+          if (!o || !o.full || o.railLevel < minLevel) continue;
+          if (o.at.y < s.at.y || (o.at.y === s.at.y && o.at.x < s.at.x)) continue;
+          const b = toDisplay(o.at); const cb = hexCenter(b.x, b.y, l);
+          ctx.strokeStyle = p.text; ctx.lineWidth = Math.max(2, l.size * 0.14);
+          ctx.beginPath(); ctx.moveTo(ca.cx, ca.cy); ctx.lineTo(cb.cx, cb.cy); ctx.stroke();
+          ctx.strokeStyle = p.background; ctx.lineWidth = Math.max(1, l.size * 0.05); ctx.setLineDash([l.size * 0.15, l.size * 0.15]);
+          ctx.beginPath(); ctx.moveTo(ca.cx, ca.cy); ctx.lineTo(cb.cx, cb.cy); ctx.stroke(); ctx.setLineDash([]);
+        }
+        if (depotTypes.has(s.designation ?? "")) { ctx.strokeStyle = p.text; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(ca.cx, ca.cy, l.size * 0.45, 0, Math.PI * 2); ctx.stroke(); }
+        if (s.railTarget > s.railLevel) { ctx.setLineDash([3, 3]); ctx.strokeStyle = p.muted; hexPath(ctx, ca.cx, ca.cy, l.size * 0.6); ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]); }
+      }
+    }
     if (highlightPath && highlightPath.length > 1) {
       ctx.strokeStyle = p.accent; ctx.lineWidth = Math.max(2, l.size * 0.18); ctx.lineCap = "round"; ctx.lineJoin = "round";
       ctx.beginPath();

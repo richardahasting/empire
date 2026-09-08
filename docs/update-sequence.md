@@ -194,6 +194,19 @@ The direction-symmetry test (six identical chains, six directions, identical
 results) and the rotation test (rotate world 60°, output rotates) are
 assertions on the output of *this* step plus step 12.
 
+### 7b. Rail (**NEW** by spec; runs inside step 7 after road flows)
+Trains: every pending rail order and every parked train re-plans a
+fewest-hop path over **rail-capable** sectors (owned, land, `rail_level ≥
+min_level_to_carry`) between **working depots** (depot designation at the
+production minimum efficiency, with track). No path: a new order is
+cancelled with an event; a parked train is **stranded** in place with an
+event and waits for a repair. Each rail sector has a capacity budget per
+update (`capacity_per_update_at_100 × rail_level/100`) shared proportionally;
+what leaves is scaled by the lower endpoint depot's efficiency. A train
+advances up to `max_sectors_per_update` and **holds on the rail sector it
+reached** as a `HeldParcel` of mode `rail`, visible and capturable. Cash is
+charged by volume. Rail moves spend no mobility.
+
 ### 8. Money
 Country-level:
 - **Income**: taxes on civ/uw, bank interest on bars (if `options.interest`).
@@ -204,10 +217,21 @@ Country-level:
   the **next** update (effects apply in steps 2/5 next time — never within the
   same update, to keep steps independent).
 
-### 9. Levels
-Add the step-5 level contributions; subtract decay and happiness consumption;
-apply `tech` from `research` via `research_to_tech`. (**KNOWN:** original
-level_age_rate decays research/education/happiness but never tech.)
+### 9. Levels (**KNOWN**, the original's `prod_nat()` + `age_levels()`)
+Step 5 produced raw amounts of tech, research, education and happiness.
+- **Tech and research are stocks.** Each update's production passes
+  `limit_level`: above `easy` the gain is `easy + log_base(prod − easy + 1)`,
+  capped at 250; it is added to the level. Both then **age** by
+  `level × ETUs / (100 × level_age_rate)` (1 % per 96 ETUs).
+- **Education and happiness are moving averages** of a per-ETU rate:
+  `rate = produced × consumption / (civilians × ETUs)`, happiness also
+  `× (1.5 − (E+10)/(E+20))`; the rate passes the flag-1 limit
+  (`(rate − easy) / log_base(base + rate − easy)`), then
+  `level = (level × average_etus + rate × ETUs) / (average_etus + ETUs)`.
+  Stop producing and the level drifts back down over `average_etus`.
+- **Technology bleed:** below a fifth of the leader's level, a 20 % chance
+  per update to close a third of the gap (`techbleed` RNG stream).
+- Ally sharing (`ally_factor`) is M3.
 
 ### 10. Detection
 For each country, for each radar station / ship / plane, for each candidate

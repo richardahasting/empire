@@ -29,6 +29,7 @@ public class WorldRepository {
         writeSectors(gameId, all, com);
         writeCountries(gameId, w.countries(), true);
         writeMoves(gameId, w.pendingMoves(), com);
+        writeRail(gameId, w.pendingRail(), com);
         jdbc.update("UPDATE game SET update_number = ? WHERE id = ?", w.updateNumber(), gameId);
     }
 
@@ -42,6 +43,7 @@ public class WorldRepository {
         writeSectors(gameId, changed, com);
         writeCountries(gameId, after.countries(), false);
         if (!after.pendingMoves().equals(before.pendingMoves())) writeMoves(gameId, after.pendingMoves(), com);
+        if (!after.pendingRail().equals(before.pendingRail())) writeRail(gameId, after.pendingRail(), com);
         jdbc.update("UPDATE game SET update_number = ? WHERE id = ?", after.updateNumber(), gameId);
     }
 
@@ -49,19 +51,19 @@ public class WorldRepository {
         return a.owner() == b.owner() && a.designation().equals(b.designation()) && a.efficiency() == b.efficiency() && a.mobility() == b.mobility()
                 && a.stock().equals(b.stock()) && Arrays.equals(a.thresholds(), b.thresholds()) && Objects.equals(a.distCenter(), b.distCenter())
                 && a.roadLevel() == b.roadLevel() && a.railLevel() == b.railLevel() && a.radarLevel() == b.radarLevel()
-                && a.held().equals(b.held()) && a.sanctuary() == b.sanctuary() && a.terrain() == b.terrain() && a.roadTarget() == b.roadTarget();
+                && a.held().equals(b.held()) && a.sanctuary() == b.sanctuary() && a.terrain() == b.terrain() && a.roadTarget() == b.roadTarget() && a.railTarget() == b.railTarget();
     }
 
     private void writeSectors(long gameId, List<Sector> sectors, Commodities com) {
         if (sectors.isEmpty()) return;
         jdbc.batchUpdate("""
                 INSERT INTO sector (game_id, x, y, terrain, elevation, fertility, minerals, gold, oil, uranium, owner, designation, efficiency, mobility,
-                                    road_level, rail_level, radar_level, dist_x, dist_y, sanctuary, road_target)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                                    road_level, rail_level, radar_level, dist_x, dist_y, sanctuary, road_target, rail_target)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT (game_id, x, y) DO UPDATE SET terrain = EXCLUDED.terrain, elevation = EXCLUDED.elevation, fertility = EXCLUDED.fertility,
                     minerals = EXCLUDED.minerals, gold = EXCLUDED.gold, oil = EXCLUDED.oil, uranium = EXCLUDED.uranium, owner = EXCLUDED.owner,
                     designation = EXCLUDED.designation, efficiency = EXCLUDED.efficiency, mobility = EXCLUDED.mobility, road_level = EXCLUDED.road_level,
-                    rail_level = EXCLUDED.rail_level, radar_level = EXCLUDED.radar_level, dist_x = EXCLUDED.dist_x, dist_y = EXCLUDED.dist_y, sanctuary = EXCLUDED.sanctuary, road_target = EXCLUDED.road_target""",
+                    rail_level = EXCLUDED.rail_level, radar_level = EXCLUDED.radar_level, dist_x = EXCLUDED.dist_x, dist_y = EXCLUDED.dist_y, sanctuary = EXCLUDED.sanctuary, road_target = EXCLUDED.road_target, rail_target = EXCLUDED.rail_target""",
                 sectors, 500, (PreparedStatement ps, Sector s) -> {
                     Resources r = s.resources();
                     ps.setLong(1, gameId); ps.setInt(2, s.at().x()); ps.setInt(3, s.at().y()); ps.setString(4, s.terrain().id()); ps.setInt(5, s.elevation());
@@ -72,6 +74,7 @@ public class WorldRepository {
                     else { ps.setInt(18, s.distCenter().x()); ps.setInt(19, s.distCenter().y()); }
                     ps.setBoolean(20, s.sanctuary());
                     ps.setDouble(21, s.roadTarget());
+                    ps.setDouble(22, s.railTarget());
                 });
         List<Object[]> stockRows = new ArrayList<>();
         List<Object[]> parcelRows = new ArrayList<>();
@@ -81,7 +84,7 @@ public class WorldRepository {
                 stockRows.add(new Object[] {gameId, s.at().x(), s.at().y(), com.id(c), s.stock().get(c), Double.isNaN(th) ? null : th});
             }
             for (HeldParcel p : s.held())
-                parcelRows.add(new Object[] {gameId, s.at().x(), s.at().y(), com.id(p.commodity()), p.qty(), p.owner(), p.origin().x(), p.origin().y(), p.dest().x(), p.dest().y(), p.issuedUpdate()});
+                parcelRows.add(new Object[] {gameId, s.at().x(), s.at().y(), com.id(p.commodity()), p.qty(), p.owner(), p.origin().x(), p.origin().y(), p.dest().x(), p.dest().y(), p.issuedUpdate(), p.mode()});
         }
         jdbc.batchUpdate("""
                 INSERT INTO sector_stock (game_id, x, y, commodity, qty, threshold) VALUES (?,?,?,?,?,?)
@@ -90,7 +93,7 @@ public class WorldRepository {
         for (Sector s : sectors) keys.add(new Object[] {gameId, s.at().x(), s.at().y()});
         jdbc.batchUpdate("DELETE FROM held_parcel WHERE game_id = ? AND x = ? AND y = ?", keys);
         if (!parcelRows.isEmpty())
-            jdbc.batchUpdate("INSERT INTO held_parcel (game_id, x, y, commodity, qty, owner, origin_x, origin_y, dest_x, dest_y, issued_update) VALUES (?,?,?,?,?,?,?,?,?,?,?)", parcelRows);
+            jdbc.batchUpdate("INSERT INTO held_parcel (game_id, x, y, commodity, qty, owner, origin_x, origin_y, dest_x, dest_y, issued_update, mode) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", parcelRows);
     }
 
     private void writeCountries(long gameId, List<Country> countries, boolean insert) {
@@ -114,6 +117,13 @@ public class WorldRepository {
         }
     }
 
+    private void writeRail(long gameId, List<RailOrder> orders, Commodities com) {
+        jdbc.update("DELETE FROM rail_order WHERE game_id = ?", gameId);
+        List<Object[]> rows = new ArrayList<>();
+        for (RailOrder o : orders) rows.add(new Object[] {gameId, o.owner(), o.from().x(), o.from().y(), o.to().x(), o.to().y(), com.id(o.commodity()), o.qty(), o.issuedUpdate()});
+        if (!rows.isEmpty()) jdbc.batchUpdate("INSERT INTO rail_order (game_id, owner, from_x, from_y, to_x, to_y, commodity, qty, issued_update) VALUES (?,?,?,?,?,?,?,?,?)", rows);
+    }
+
     private void writeMoves(long gameId, List<MoveOrder> moves, Commodities com) {
         jdbc.update("DELETE FROM move_order WHERE game_id = ?", gameId);
         List<Object[]> rows = new ArrayList<>();
@@ -132,7 +142,7 @@ public class WorldRepository {
             Sector s = Sector.blank(at, Terrain.of(rs.getString("terrain")), rs.getInt("elevation"),
                     new Resources(rs.getInt("fertility"), rs.getInt("minerals"), rs.getInt("gold"), rs.getInt("oil"), rs.getInt("uranium")), n)
                     .withOwner(rs.getInt("owner")).withDesignation(rs.getString("designation"), rs.getDouble("efficiency")).withMobility(rs.getDouble("mobility"))
-                    .withRoadLevel(rs.getDouble("road_level")).withRoadTarget(rs.getDouble("road_target")).withDistCenter(noDist ? null : new Coord(dx, dy)).withSanctuary(rs.getBoolean("sanctuary"));
+                    .withRoadLevel(rs.getDouble("road_level")).withRoadTarget(rs.getDouble("road_target")).withRailLevel(rs.getDouble("rail_level")).withRailTarget(rs.getDouble("rail_target")).withDistCenter(noDist ? null : new Coord(dx, dy)).withSanctuary(rs.getBoolean("sanctuary"));
             sectors[at.y() * g.width() + at.x()] = s;
         }, g.id());
         double[][] stock = new double[sectors.length][n];
@@ -148,7 +158,7 @@ public class WorldRepository {
         jdbc.query("SELECT * FROM held_parcel WHERE game_id = ? ORDER BY id", rs -> {
             int i = rs.getInt("y") * g.width() + rs.getInt("x");
             held.computeIfAbsent(i, k -> new ArrayList<>()).add(new HeldParcel(com.index(rs.getString("commodity")), rs.getDouble("qty"), rs.getInt("owner"),
-                    new Coord(rs.getInt("origin_x"), rs.getInt("origin_y")), new Coord(rs.getInt("dest_x"), rs.getInt("dest_y")), rs.getLong("issued_update")));
+                    new Coord(rs.getInt("origin_x"), rs.getInt("origin_y")), new Coord(rs.getInt("dest_x"), rs.getInt("dest_y")), rs.getLong("issued_update"), rs.getString("mode")));
         }, g.id());
         List<Sector> list = new ArrayList<>(sectors.length);
         for (int i = 0; i < sectors.length; i++) {
@@ -163,6 +173,8 @@ public class WorldRepository {
                 json.read(rs.getString("handicap"), HandicapCfg.class), rs.getBoolean("in_sanctuary"), rs.getBoolean("bankrupt"), rs.getInt("plague_left")), g.id());
         List<MoveOrder> moves = jdbc.query("SELECT * FROM move_order WHERE game_id = ? ORDER BY id", (rs, i) -> new MoveOrder(rs.getInt("owner"),
                 new Coord(rs.getInt("from_x"), rs.getInt("from_y")), new Coord(rs.getInt("to_x"), rs.getInt("to_y")), com.index(rs.getString("commodity")), rs.getDouble("qty"), rs.getLong("issued_update")), g.id());
-        return new World(g.width(), g.height(), g.wrapX(), g.wrapY(), list, countries, moves, g.updateNumber());
+        List<RailOrder> rail = jdbc.query("SELECT * FROM rail_order WHERE game_id = ? ORDER BY id", (rs, i) -> new RailOrder(rs.getInt("owner"),
+                new Coord(rs.getInt("from_x"), rs.getInt("from_y")), new Coord(rs.getInt("to_x"), rs.getInt("to_y")), com.index(rs.getString("commodity")), rs.getDouble("qty"), rs.getLong("issued_update")), g.id());
+        return new World(g.width(), g.height(), g.wrapX(), g.wrapY(), list, countries, moves, g.updateNumber(), rail);
     }
 }

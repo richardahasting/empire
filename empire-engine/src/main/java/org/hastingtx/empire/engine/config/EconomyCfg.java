@@ -111,15 +111,36 @@ public record EconomyCfg(
         }
     }
 
+    /**
+     * KNOWN (update/nat.c, age.c). Tech and research are stocks: each update's production passes
+     * limit_level (gain = easy + log_base(prod - easy + 1) above easy, cap 250) and is added; both
+     * age 1% per level_age_rate ETUs. Education and happiness are moving averages of a per-ETU
+     * rate: rate = produced × consumption / (civilians × ETUs) (happiness also × hap_edu(E) =
+     * 1.5 - (E+10)/(E+20)), limited with the flag-1 curve, then level = (level × avg + rate × ETUs)
+     * / (avg + ETUs). Technology bleed: below best/5, a 20% chance to gain (best/5 - level)/3.
+     */
     public record LevelsCfg(
-            LevelCfg tech,
-            LevelCfg research,
-            LevelCfg education,
-            LevelCfg happiness,
-            CurveRef educationToResearchMultiplier,
-            CurveRef researchToTechMultiplier) {
-        public record LevelCfg(double decayPerEtu, double start, Double consumedPerCivPerEtu) {}
-        public record CurveRef(String curve) {}
+            StockLevel tech,
+            StockLevel research,
+            AverageLevel education,
+            AverageLevel happiness,
+            double levelAgeRate,
+            Boolean techBleed,
+            Double happinessRequirementTechDivisor,
+            Double happinessRequirementEducationDivisor) {
+        public record StockLevel(double easy, double logBase, double start) {}
+        public record AverageLevel(double easy, double logBase, double consumption, double averageEtus, double start) {}
+
+        static double logx(double d, double base) { return base == 1.0 ? d : Math.log10(d) / Math.log10(base); }
+
+        /** limit_level(): flag=false for tech/research (log), flag=true for education/happiness. */
+        public static double limit(double level, double easy, double logBase, boolean flag) {
+            if (level <= easy) return level;
+            double aboveEasy = level - easy;
+            double above = flag ? aboveEasy / logx(logBase + aboveEasy, logBase) : logx(aboveEasy + 1.0, logBase);
+            if (above > 250) above = 250;
+            return above < 0 ? easy : easy + above;
+        }
     }
 
     public record BtuCfg(

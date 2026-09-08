@@ -94,6 +94,45 @@ public final class BuildUpStep implements Step {
                 }
             }
 
+            // rail building: a standing order, needs the tech, paid in lcm + hcm + cash + mobility per point (KNOWN infra.config)
+            InfrastructureCfg.RailCfg rail = ctx.cfg.infrastructure().rail();
+            if (s.railTarget() > s.railLevel() + 1e-9 && ctx.country(cid).levels().tech() >= rail.techRequired()) {
+                Double mult = rail.costMultiplierByTerrain().get(s.terrain().id());
+                Double cap = rail.maxLevelByTerrain().get(s.terrain().id());
+                double ceiling = Math.min(s.railTarget(), cap == null ? 100 : cap);
+                double points = Math.min(rail.maxPointsPerUpdate(), ceiling - s.railLevel());
+                double m = mult == null ? 1.0 : mult;
+                double work = ctx.workAvailablePost(i);
+                if (rail.workPerPoint() > 0) points = Math.min(points, work / (rail.workPerPoint() * m));
+                double mobPerPoint = rail.mobilityPerPoint() == null ? 0 : rail.mobilityPerPoint() * m;
+                if (mobPerPoint > 0) points = Math.min(points, Math.max(0, s.mobility() + ctx.led.mobility[i]) / mobPerPoint);
+                for (var e : rail.buildMaterialsPerPoint().entrySet()) {
+                    double per = e.getValue() * m;
+                    if (per <= 0) continue;
+                    if (e.getKey().equals("cash")) points = Math.min(points, cashLeft[cid] / per);
+                    else { int c = ctx.com.index(e.getKey()); points = Math.min(points, (s.stock().get(c) + ctx.led.stock[i][c]) / per); }
+                }
+                if (points > 1e-9) {
+                    for (var e : rail.buildMaterialsPerPoint().entrySet()) {
+                        double per = e.getValue() * m;
+                        if (per <= 0) continue;
+                        if (e.getKey().equals("cash")) { cashLeft[cid] -= points * per; ctx.led.cash[cid] -= points * per; }
+                        else ctx.led.consume(i, ctx.com.index(e.getKey()), points * per);
+                    }
+                    ctx.workSpent[i] += points * rail.workPerPoint() * m;
+                    if (mobPerPoint > 0) ctx.led.mobility[i] -= points * mobPerPoint;
+                    ctx.led.rail[i] += points;
+                }
+            }
+            if (s.railLevel() > 0) {
+                double upkeep = s.railLevel() * rail.maintenanceCashPerPointPerUpdate();
+                if (cashLeft[cid] >= upkeep) { cashLeft[cid] -= upkeep; ctx.led.cash[cid] -= upkeep; }
+                else {
+                    ctx.led.rail[i] -= Math.min(s.railLevel(), rail.decayPerUpdate());
+                    ctx.led.event("rail_decay", cid, s.at(), "unpaid rail maintenance in " + s.at(), rail.decayPerUpdate());
+                }
+            }
+
             // road maintenance / decay
             if (s.roadLevel() > 0) {
                 double upkeep = s.roadLevel() * road.maintenanceCashPerPointPerUpdate();

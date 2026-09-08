@@ -567,19 +567,23 @@ economy:
       effect: { production_multiplier: 0.5, mobility_multiplier: 0.5 }
 
   # --- Levels ----------------------------------------------------------------
-  # Four national levels. Each is fed by produces_level in its sector types,
-  # scaled by the curve, and decays. KNOWN: original level_age_rate decayed
-  # research/education/happiness (not tech). GUESS at constants.
+  # KNOWN (update/nat.c, age.c, constants.c). Tech and research are stocks; each update's
+  # production passes limit_level — above `easy` the gain is easy + log_base(prod − easy + 1),
+  # capped at 250 — and both age 1% per level_age_rate ETUs. Education and happiness are moving
+  # averages of a per-ETU rate: rate = produced × consumption / (civilians × ETUs), happiness
+  # also × (1.5 − (E+10)/(E+20)), limited with the flag-1 curve, then
+  # level = (level × average_etus + rate × ETUs) / (average_etus + ETUs).
+  # Education gates tech/research production (edu5 curve); happiness below
+  # (tech − 40)/40 + education/3 breeds unrest in the original (loyalty, revolt) — not modelled yet.
   levels:
-    tech:      { decay_per_etu: 0.0,    start: 0 }
-    research:  { decay_per_etu: 0.0002, start: 0 }
-    education: { decay_per_etu: 0.0002, start: 0 }
-    happiness: { decay_per_etu: 0.0005, start: 0,
-                 # KNOWN: happiness consumed by population; hap_cons 600000 in original
-                 consumed_per_civ_per_etu: 0.0000017 }
-    # Cross-effects
-    education_to_research_multiplier: { curve: level_diminishing }
-    research_to_tech_multiplier:      { curve: level_diminishing }
+    tech:      { easy: 1.0,  log_base: 2.0, start: 0 }          # easy_tech, tech_log_base
+    research:  { easy: 0.75, log_base: 2.0, start: 0 }
+    education: { easy: 5.0,  log_base: 4.0, consumption: 600000, average_etus: 192, start: 0 }   # edu_cons, edu_avg = 16×12
+    happiness: { easy: 5.0,  log_base: 6.0, consumption: 600000, average_etus: 48,  start: 0 }   # hap_cons, hap_avg = 16×3
+    level_age_rate: 96          # 1% of tech and research per 96 ETUs; 0 = no decline
+    tech_bleed: true            # below a fifth of the leader: 20% chance per update to close a third of the gap
+    happiness_requirement_tech_divisor: 40        # hap_req = (tech − 40)/40 + education/3 (for the unrest model, later)
+    happiness_requirement_education_divisor: 3
 
   # --- BTUs ------------------------------------------------------------------
   btu:
