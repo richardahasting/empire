@@ -88,7 +88,7 @@ public class GameController {
         };
         Coord cap = g.world.country(country).capital();
         List<Coord> rel = e.path().stream().map(c -> CountryView.relative(g.world, cap, c)).toList();
-        return new EstimateOut(e.ok(), e.error(), rel, e.hopCosts(), e.totalMobility(), e.reach(), e.arrivesQty(), e.heldQty(),
+        return new EstimateOut(e.ok(), GameService.relativise(g.world, cap, e.error()), rel, e.hopCosts(), e.totalMobility(), e.reach(), e.arrivesQty(), e.heldQty(),
                 e.holdsAt() == null ? null : CountryView.relative(g.world, cap, e.holdsAt()), e.available(), e.sourceMobility());
     }
 

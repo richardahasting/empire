@@ -8,6 +8,7 @@ import org.hastingtx.empire.engine.command.CommandResult;
 import org.hastingtx.empire.engine.config.GameConfig;
 import org.hastingtx.empire.engine.gen.WorldGenerator;
 import org.hastingtx.empire.engine.model.Commodities;
+import org.hastingtx.empire.engine.model.Coord;
 import org.hastingtx.empire.engine.model.Country;
 import org.hastingtx.empire.engine.model.World;
 import org.hastingtx.empire.engine.update.Update;
@@ -142,6 +143,22 @@ public class GameService {
 
     public record Outcome(boolean accepted, String error, double btuSpent, CountryView view) {}
 
+    private static final java.util.regex.Pattern ABS = java.util.regex.Pattern.compile("(?<![\\d.,-])(\\d+),(\\d+)(?![\\d.])");
+
+    /** Engine messages name sectors by absolute coordinates; players only ever see offsets from their capital. */
+    public static String relativise(World w, Coord capital, String msg) {
+        if (msg == null) return null;
+        java.util.regex.Matcher m = ABS.matcher(msg);
+        StringBuilder sb = new StringBuilder();
+        while (m.find()) {
+            Coord abs = new Coord(Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)));
+            Coord r = w.inBounds(abs) ? CountryView.relative(w, capital, abs) : abs;
+            m.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(r.x() + "," + r.y()));
+        }
+        m.appendTail(sb);
+        return sb.toString();
+    }
+
     public Outcome command(long gameId, Account a, Command cmd, String source) {
         Game g = get(gameId);
         int country = myCountry(gameId, a);
@@ -152,7 +169,7 @@ public class GameService {
             CommandResult r = g.exec.execute(before, country, cmd);
             logs.command(gameId, country, before.updateNumber(), source, cmd.verb(), cmd, r.ok(), r.error(), r.btuSpent());
             if (r.ok()) { worlds.saveDiff(gameId, before, r.world(), g.com); g.world = r.world(); }
-            return new Outcome(r.ok(), r.error(), r.btuSpent(), CountryView.of(g.world, g.cfg, country));
+            return new Outcome(r.ok(), relativise(g.world, g.world.country(country).capital(), r.error()), r.btuSpent(), CountryView.of(g.world, g.cfg, country));
         } finally { g.lock.unlock(); }
     }
 

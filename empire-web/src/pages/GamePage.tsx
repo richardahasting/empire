@@ -6,7 +6,8 @@ import { HexMap, type Layer } from "@/map/HexMap";
 import { Inspector } from "@/game/Inspector";
 import { ConsolePanel } from "@/game/ConsolePanel";
 import { Dashboard } from "@/game/Dashboard";
-import { SectorMenu } from "@/game/SectorMenu";
+import { SectorMenu, type PickSpec } from "@/game/SectorMenu";
+import { estimate, type Estimate } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -54,6 +55,51 @@ export function GamePage() {
     catch (e) { setNotice((e as Error).message); } finally { setBusy(false); }
   };
 
+  // ---- targeting mode: hover for estimates, click to commit, Esc to cancel ----
+  const [pick, setPick] = useState<PickSpec | null>(null);
+  const [hover, setHover] = useState<Coord | null>(null);
+  const [est, setEst] = useState<Estimate | null>(null);
+  const estCache = useMemo(() => new Map<string, Estimate>(), []);
+  useEffect(() => { estCache.clear(); setEst(null); }, [pick, estCache]);
+  useEffect(() => {
+    if (!pick || !hover || !view) { setEst(null); return; }
+    const key = `${hover.x},${hover.y}`;
+    const cached = estCache.get(key);
+    if (cached) { setEst(cached); return; }
+    let live = true;
+    estimate(gameId, { verb: pick.verb, x: pick.from.at.x, y: pick.from.at.y, x2: hover.x, y2: hover.y, commodity: pick.verb === "move" ? pick.commodity : undefined, amount: pick.qty })
+      .then(e => { estCache.set(key, e); if (live) setEst(e); })
+      .catch(e => { if (live) setEst({ ok: false, error: (e as Error).message, path: [], hopCosts: [], totalMobility: 0, reach: 0, arrivesQty: 0, heldQty: 0, holdsAt: null, available: 0, sourceMobility: 0 }); });
+    return () => { live = false; };
+  }, [pick, hover, view, gameId, estCache]);
+  useEffect(() => {
+    if (!pick) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setPick(null); };
+    window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey);
+  }, [pick]);
+  const byRel = useMemo(() => { const m = new Map<string, Coord>(); view?.sectors.forEach(s => m.set(`${s.relative.x},${s.relative.y}`, s.at)); return m; }, [view]);
+  const highlightPath = useMemo(() => pick && est?.ok ? est.path.map(c => byRel.get(`${c.x},${c.y}`)).filter((c): c is Coord => !!c) : undefined, [pick, est, byRel]);
+  const tooltip = useMemo(() => {
+    if (!pick || !hover || !view) return null;
+    const hv = view.sectors.find(s => s.at.x === hover.x && s.at.y === hover.y);
+    const where = hv ? `${hv.relative.x},${hv.relative.y}` : "?";
+    if (!est) return `${where}\nestimating…`;
+    if (!est.ok) return `${where}\n${est.error ?? "no route"}`;
+    // available = the least mobility among the sectors the cargo enters (they pay, per the rules)
+    const entered = est.path.slice(1).map(c => { const at = byRel.get(`${c.x},${c.y}`); return view.sectors.find(s => at && s.at.x === at.x && s.at.y === at.y)?.mobility ?? 0; });
+    const avail = entered.length ? Math.min(...entered) : 0;
+    const hold = est.heldQty > 0 && est.holdsAt ? `\n${est.heldQty.toFixed(0)} would hold at ${est.holdsAt.x},${est.holdsAt.y}` : "";
+    return `${where} · ${est.path.length - 1} hop${est.path.length - 1 === 1 ? "" : "s"}\nmob required ${est.totalMobility.toFixed(0)} / ${avail.toFixed(0)}${hold}\nclick to ${pick.verb}`;
+  }, [pick, hover, est, view, byRel]);
+  const onMapSelect = useCallback((c: Coord | null) => {
+    if (!pick) { setSelected(c); return; }
+    if (!c || !est?.ok) return;
+    const spec = pick; setPick(null);
+    void command(spec.verb === "move"
+      ? { verb: "move", x: spec.from.at.x, y: spec.from.at.y, x2: c.x, y2: c.y, commodity: spec.commodity, amount: spec.qty }
+      : { verb: "explore", x: spec.from.at.x, y: spec.from.at.y, x2: c.x, y2: c.y, amount: spec.qty });
+  }, [pick, est, command]);
+
   const sector = useMemo(() => view && selected ? view.sectors.find(s => s.at.x === selected.x && s.at.y === selected.y) ?? null : null, [view, selected]);
 
   if (error) return <main className="p-6 text-sm text-destructive">{error} · <Link className="underline" to="/games">back</Link></main>;
@@ -79,8 +125,17 @@ export function GamePage() {
       <Dashboard view={view} game={game} />
       {notice && <p className="text-xs text-muted-foreground">{notice}</p>}
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[1fr_22rem]">
-        <SectorMenu gameId={gameId} view={view} rules={rules} sector={sector} onCommand={command} busy={busy}>
-          <div className="min-h-[24rem]"><HexMap view={view} rules={rules} width={game.width} height={game.height} layer={layer} stockCommodity={stock} selected={selected} onSelect={setSelected} /></div>
+        <SectorMenu gameId={gameId} view={view} rules={rules} sector={sector} onCommand={command} busy={busy} onStartPick={setPick}>
+          <div className="relative min-h-[24rem]">
+            {pick && (
+              <div className="absolute left-2 top-2 z-10 flex items-center gap-2 rounded-md border border-border bg-popover px-2 py-1 text-xs shadow-md">
+                <span>{pick.verb === "move" ? `Moving ${pick.qty} ${pick.commodity}` : `Exploring with ${pick.qty} civilians`} from {pick.from.relative.x},{pick.from.relative.y} — click a destination</span>
+                <Button size="sm" variant="ghost" onClick={() => setPick(null)}>Cancel (Esc)</Button>
+              </div>
+            )}
+            <HexMap view={view} rules={rules} width={game.width} height={game.height} layer={layer} stockCommodity={stock} selected={selected} onSelect={onMapSelect}
+                    onHover={pick ? (c) => setHover(c) : undefined} highlightPath={highlightPath} tooltip={tooltip} picking={!!pick} />
+          </div>
         </SectorMenu>
         <aside className="flex min-h-0 flex-col gap-3">
           <div className="max-h-[50%] overflow-auto rounded-lg border border-border bg-card p-3"><Inspector sector={sector} view={view} rules={rules} onCommand={command} busy={busy} /></div>

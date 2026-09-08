@@ -8,16 +8,20 @@ import { Select } from "@/components/ui/select";
 
 type DialogKind = "move" | "explore" | "designate" | "threshold" | null;
 
+export interface PickSpec { verb: "move" | "explore"; from: SectorView; commodity: string; qty: number }
+
 interface Props {
   gameId: number; view: CountryView; rules: Rules; sector: SectorView | null;
   onCommand: (c: CommandRequest) => Promise<void>; busy: boolean; children: ReactNode;
+  /** Enter targeting mode: the parent shows estimates as the pointer moves and commits on click. */
+  onStartPick: (spec: PickSpec) => void;
 }
 
 /**
  * Right-click a sector on the map: every action for that sector, from here. Move and
  * explore show the route and the mobility it would cost before you commit.
  */
-export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, children }: Props) {
+export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, children, onStartPick }: Props) {
   const [dialog, setDialog] = useState<DialogKind>(null);
   const rel = (c: Coord) => `${c.x},${c.y}`;
   const byRel = useMemo(() => { const m = new Map<string, SectorView>(); for (const x of view.sectors) m.set(rel(x.relative), x); return m; }, [view]);
@@ -38,7 +42,9 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
           {s && !owned && <ContextMenuLabel>{rel(s.relative)} · {s.terrain}{s.owner >= 0 ? " · foreign" : " · unowned"}</ContextMenuLabel>}
           {s && owned && (
             <>
-              <ContextMenuLabel>{rel(s.relative)} · {s.designation} · mob {s.mobility.toFixed(0)}</ContextMenuLabel>
+              <ContextMenuLabel className="font-semibold text-popover-foreground">Sector {rel(s.relative)}</ContextMenuLabel>
+              <Attributes s={s} view={view} />
+              <ContextMenuSeparator />
               <ContextMenuItem onSelect={() => setDialog("move")}>Move from here…</ContextMenuItem>
               <ContextMenuItem disabled={adjacentUnowned.length === 0} onSelect={() => setDialog("explore")}>Explore from here…</ContextMenuItem>
               <ContextMenuSeparator />
@@ -53,11 +59,26 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
         </ContextMenuContent>
       </ContextMenu>
 
-      {s && owned && dialog === "move" && <MoveDialog gameId={gameId} view={view} from={s} byRel={byRel} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
-      {s && owned && dialog === "explore" && <ExploreDialog gameId={gameId} from={s} targets={adjacentUnowned} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
+      {s && owned && dialog === "move" && <MoveDialog gameId={gameId} view={view} from={s} byRel={byRel} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} onPick={(commodity, qty) => { setDialog(null); onStartPick({ verb: "move", from: s, commodity, qty }); }} />}
+      {s && owned && dialog === "explore" && <ExploreDialog gameId={gameId} from={s} targets={adjacentUnowned} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} onPick={civs => { setDialog(null); onStartPick({ verb: "explore", from: s, commodity: "civ", qty: civs }); }} />}
       {s && owned && dialog === "designate" && <DesignateDialog view={view} rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "threshold" && <ThresholdDialog view={view} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
     </>
+  );
+}
+
+/** The sector at a glance, inside the menu. */
+function Attributes({ s, view }: { s: SectorView; view: CountryView }) {
+  const main = ["civ", "mil", "food", "iron", "lcm", "hcm", "oil", "pet"].filter(c => view.commodityIds.includes(c));
+  const th = Object.keys(s.thresholds).length;
+  const held = Object.values(s.held).reduce((a, b) => a + b, 0);
+  return (
+    <div className="px-2 pb-1 text-xs text-muted-foreground">
+      <div className="text-popover-foreground">{s.designation} · {s.terrain} · eff {s.efficiency.toFixed(0)}% · mob {s.mobility.toFixed(0)}{s.roadLevel > 0 && ` · road ${s.roadLevel.toFixed(0)}`}</div>
+      {s.resources && <div>fert {s.resources.fertility} · min {s.resources.minerals} · gold {s.resources.gold} · oil {s.resources.oil} · uran {s.resources.uranium}</div>}
+      <div className="tabular-nums">{main.map(c => `${c} ${(s.stock[c] ?? 0).toFixed(0)}`).join(" · ")}</div>
+      <div>centre {s.distCenter ? `${view.sectors.find(o => o.at.x === s.distCenter!.x && o.at.y === s.distCenter!.y)?.relative.x ?? "?"},${view.sectors.find(o => o.at.x === s.distCenter!.x && o.at.y === s.distCenter!.y)?.relative.y ?? "?"}` : "none"} · {th} threshold{th === 1 ? "" : "s"}{held > 0 && ` · ${held.toFixed(0)} in transit`}</div>
+    </div>
   );
 }
 
@@ -81,7 +102,7 @@ function EstimateView({ e, unit }: { e: Estimate | null; unit: string }) {
   );
 }
 
-function MoveDialog({ gameId, view, from, byRel, onClose, onCommand, busy }: { gameId: number; view: CountryView; from: SectorView; byRel: Map<string, SectorView>; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean }) {
+function MoveDialog({ gameId, view, from, byRel, onClose, onCommand, busy, onPick }: { gameId: number; view: CountryView; from: SectorView; byRel: Map<string, SectorView>; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean; onPick: (commodity: string, qty: number) => void }) {
   const [commodity, setCommodity] = useState(from.stock["civ"] > 0 ? "civ" : "food");
   const [qty, setQty] = useState("");
   const [dest, setDest] = useState("0,0");
@@ -111,6 +132,7 @@ function MoveDialog({ gameId, view, from, byRel, onClose, onCommand, busy }: { g
           </label>
           <label>Destination (x,y relative to your capital)
             <div className="flex gap-2">
+              <Button variant="secondary" disabled={!(n > 0)} onClick={() => onPick(commodity, n)}>Pick on map…</Button>
               <Input value={dest} onChange={e => setDest(e.target.value)} className="w-28" />
               <Select value={target ? `${target.relative.x},${target.relative.y}` : ""} onChange={e => setDest(e.target.value)}>
                 <option value="">pick an owned sector…</option>
@@ -118,7 +140,7 @@ function MoveDialog({ gameId, view, from, byRel, onClose, onCommand, busy }: { g
               </Select>
             </div>
           </label>
-          {target && n > 0 ? <EstimateView e={est} unit={commodity} /> : <p className="text-xs text-muted-foreground">Enter a quantity and a destination you own.</p>}
+          {target && n > 0 ? <EstimateView e={est} unit={commodity} /> : <p className="text-xs text-muted-foreground">Enter a quantity, then pick the destination on the map or type it.</p>}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
@@ -129,7 +151,7 @@ function MoveDialog({ gameId, view, from, byRel, onClose, onCommand, busy }: { g
   );
 }
 
-function ExploreDialog({ gameId, from, targets, onClose, onCommand, busy }: { gameId: number; from: SectorView; targets: SectorView[]; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean }) {
+function ExploreDialog({ gameId, from, targets, onClose, onCommand, busy, onPick }: { gameId: number; from: SectorView; targets: SectorView[]; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean; onPick: (civs: number) => void }) {
   const [targetKey, setTargetKey] = useState(targets[0] ? `${targets[0].at.x},${targets[0].at.y}` : "");
   const [civs, setCivs] = useState("20");
   const [est, setEst] = useState<Estimate | null>(null);
@@ -158,6 +180,7 @@ function ExploreDialog({ gameId, from, targets, onClose, onCommand, busy }: { ga
           {target && n > 0 && <EstimateView e={est} unit="civilians" />}
         </div>
         <DialogFooter>
+          <Button variant="secondary" disabled={!(n > 0)} onClick={() => onPick(n)}>Pick on map…</Button>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button disabled={busy || !target || !(n > 0) || !est?.ok} onClick={async () => { await onCommand({ verb: "explore", x: from.at.x, y: from.at.y, x2: target!.at.x, y2: target!.at.y, amount: n }); onClose(); }}>Explore</Button>
         </DialogFooter>
