@@ -106,6 +106,11 @@ public class GameController {
         return console.run(id, AuthInterceptor.current(req), r.line() == null ? "" : r.line());
     }
 
+    @GetMapping("/{id}/projection")
+    public org.hastingtx.empire.engine.update.Projection.Result projection(@PathVariable long id, HttpServletRequest req) {
+        return games.projection(id, AuthInterceptor.current(req));
+    }
+
     @GetMapping("/{id}/last-update")
     public Map<String, Object> lastUpdate(@PathVariable long id, HttpServletRequest req) {
         games.myCountry(id, AuthInterceptor.current(req));

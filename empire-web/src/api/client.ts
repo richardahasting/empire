@@ -54,7 +54,11 @@ export interface CountryView {
 export interface CountrySeat { id: number; name: string; taken: boolean }
 export interface GameSummary {
   id: number; name: string; preset: string; status: string; updateNumber: number; width: number; height: number;
-  countries: CountrySeat[]; myCountry: number | null;
+  countries: CountrySeat[]; myCountry: number | null; intervalSeconds: number; nextUpdateAt: string | null;
+}
+export interface Projection {
+  forUpdate: number; cashNow: number; cashAfter: number; civNow: number; civAfter: number; foodNow: number; foodAfter: number;
+  btuNow: number; btuAfter: number; starvingSectors: number; spoilingSectors: number; flowsCompleted: number; flowsHeld: number;
 }
 export interface SectorType {
   id: string; glyph: string; category: string; maxPopulation: number; minTech: number | null;

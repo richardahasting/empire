@@ -32,6 +32,25 @@ public class AdminController {
         return games.summary(g, a);
     }
 
+    public record ScheduleRequest(String interval) {}
+
+    /** interval: "24h", "15m", "0" for manual. Resets the countdown. */
+    @PostMapping("/games/{id}/schedule")
+    public GameService.Summary schedule(@PathVariable long id, @RequestBody ScheduleRequest r, HttpServletRequest req) {
+        Account a = admin(req);
+        games.setSchedule(id, GameService.parseInterval(r.interval()));
+        return games.summary(games.get(id), a);
+    }
+
+    public record StatusRequest(String status) {}
+
+    @PostMapping("/games/{id}/status")
+    public GameService.Summary status(@PathVariable long id, @RequestBody StatusRequest r, HttpServletRequest req) {
+        Account a = admin(req);
+        games.setStatus(id, r.status());
+        return games.summary(games.get(id), a);
+    }
+
     @PostMapping("/games/{id}/update")
     public Map<String, Object> update(@PathVariable long id, HttpServletRequest req) {
         admin(req);

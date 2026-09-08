@@ -40,10 +40,12 @@ public class GameService {
         public final long id; public final GameConfig cfg; public final Commodities com; public final CommandExecutor exec;
         public final String name, preset; public final long seed;
         public volatile World world; public volatile String status;
+        public volatile long intervalSeconds; public volatile java.time.Instant nextUpdateAt;
         final ReentrantLock lock = new ReentrantLock();
         Game(GameRow row, GameConfig cfg, World world) {
             this.id = row.id(); this.cfg = cfg; this.com = Commodities.of(cfg); this.exec = new CommandExecutor(cfg);
             this.name = row.name(); this.preset = row.preset(); this.seed = row.seed(); this.world = world; this.status = row.status();
+            this.intervalSeconds = row.intervalSeconds(); this.nextUpdateAt = row.nextUpdateAt();
         }
     }
 
@@ -86,11 +88,68 @@ public class GameService {
         long id = games.create(name, preset, loader.toYaml(l.raw()), l.hash(), seed, world.width(), world.height(), world.wrapX(), world.wrapY(), createdBy);
         worlds.saveAll(id, world, Commodities.of(cfg));
         games.setStatus(id, "running");
+        long interval = parseInterval(cfg.schedule().updateInterval());
+        games.setSchedule(id, interval, interval > 0 ? java.time.Instant.now().plusSeconds(interval) : null);
         Game g = new Game(games.find(id).orElseThrow(), cfg, world);
         g.status = "running";
         loaded.put(id, g);
         log.info("created game {} '{}' preset {} seed {} countries {}", id, name, preset, seed, countryNames);
         return g;
+    }
+
+    /** "24h", "15m", "90s", "1h30m"; "0" or blank = manual. */
+    public static long parseInterval(String spec) {
+        if (spec == null || spec.isBlank() || spec.trim().equals("0")) return 0;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+)([hms])").matcher(spec.trim().toLowerCase());
+        long total = 0; boolean any = false;
+        while (m.find()) { any = true; long n = Long.parseLong(m.group(1)); total += switch (m.group(2)) { case "h" -> n * 3600; case "m" -> n * 60; default -> n; }; }
+        if (!any) throw new IllegalArgumentException("interval looks like 24h, 15m or 0: " + spec);
+        return total;
+    }
+
+    public void setSchedule(long gameId, long intervalSeconds) {
+        Game g = get(gameId);
+        if (intervalSeconds < 0) throw new IllegalArgumentException("interval must be >= 0");
+        g.intervalSeconds = intervalSeconds;
+        g.nextUpdateAt = intervalSeconds > 0 ? java.time.Instant.now().plusSeconds(intervalSeconds) : null;
+        games.setSchedule(gameId, g.intervalSeconds, g.nextUpdateAt);
+        log.info("game {} schedule: every {}s, next {}", gameId, intervalSeconds, g.nextUpdateAt);
+    }
+
+    public void setStatus(long gameId, String status) {
+        Game g = get(gameId);
+        if (!java.util.Set.of("running", "paused", "finished").contains(status)) throw new IllegalArgumentException("status must be running, paused or finished");
+        g.status = status;
+        games.setStatus(gameId, status);
+        if (status.equals("running") && g.intervalSeconds > 0 && (g.nextUpdateAt == null || g.nextUpdateAt.isBefore(java.time.Instant.now()))) {
+            g.nextUpdateAt = java.time.Instant.now().plusSeconds(g.intervalSeconds);
+            games.setSchedule(gameId, g.intervalSeconds, g.nextUpdateAt);
+        }
+    }
+
+    /** Called by the scheduler: run every due update. A failed update pauses that game and is logged; the world is untouched. */
+    public void tick() {
+        java.time.Instant now = java.time.Instant.now();
+        for (Game g : loaded.values()) {
+            if (!"running".equals(g.status) || g.intervalSeconds <= 0 || g.nextUpdateAt == null || g.nextUpdateAt.isAfter(now)) continue;
+            try {
+                forceUpdate(g.id);
+                java.time.Instant next = g.nextUpdateAt.plusSeconds(g.intervalSeconds);
+                if (next.isBefore(now)) next = now.plusSeconds(g.intervalSeconds);   // missed several: do not stampede
+                g.nextUpdateAt = next;
+                games.setSchedule(g.id, g.intervalSeconds, next);
+            } catch (RuntimeException e) {
+                log.error("scheduled update failed for game {} — pausing it: {}", g.id, e.toString());
+                g.status = "paused"; games.setStatus(g.id, "paused");
+            }
+        }
+    }
+
+    public org.hastingtx.empire.engine.update.Projection.Result projection(long gameId, Account a) {
+        Game g = get(gameId);
+        int country = myCountry(gameId, a);
+        World w = g.world;
+        return org.hastingtx.empire.engine.update.Projection.of(w, g.cfg, country, g.seed * 1_000_003L + w.updateNumber() + 1);
     }
 
     public UpdateResult forceUpdate(long gameId) {
@@ -112,7 +171,8 @@ public class GameService {
 
     // ------------------------------------------------------------------------------ players
     public record CountrySeat(int id, String name, boolean taken) {}
-    public record Summary(long id, String name, String preset, String status, long updateNumber, int width, int height, List<CountrySeat> countries, Integer myCountry) {}
+    public record Summary(long id, String name, String preset, String status, long updateNumber, int width, int height, List<CountrySeat> countries, Integer myCountry,
+                          long intervalSeconds, java.time.Instant nextUpdateAt) {}
 
     public Summary summary(Game g, Account a) {
         List<CountrySeat> seats = new ArrayList<>();
@@ -121,7 +181,7 @@ public class GameService {
             seats.add(new CountrySeat(s.countryId(), s.name(), s.accountId() != null));
             if (a != null && s.accountId() != null && s.accountId() == a.id()) mine = s.countryId();
         }
-        return new Summary(g.id, g.name, g.preset, g.status, g.world.updateNumber(), g.world.width(), g.world.height(), seats, mine);
+        return new Summary(g.id, g.name, g.preset, g.status, g.world.updateNumber(), g.world.width(), g.world.height(), seats, mine, g.intervalSeconds, g.nextUpdateAt);
     }
 
     public Summary join(long gameId, Account a, int countryId) {
