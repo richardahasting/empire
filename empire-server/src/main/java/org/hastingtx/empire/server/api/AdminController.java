@@ -51,6 +51,12 @@ public class AdminController {
         return games.summary(games.get(id), a);
     }
 
+    /** Replace the game's config snapshot with its preset as shipped now, and reload. */
+    @PostMapping("/games/{id}/config/refresh")
+    public GameService.Summary refreshConfig(@PathVariable long id, HttpServletRequest req) {
+        return games.refreshConfig(id, admin(req));
+    }
+
     @PostMapping("/games/{id}/update")
     public Map<String, Object> update(@PathVariable long id, HttpServletRequest req) {
         admin(req);

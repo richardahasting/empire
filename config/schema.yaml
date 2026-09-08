@@ -272,6 +272,13 @@ economy:
       maintenance_cash_per_etu: 1     # KNOWN: maint 1
       max_population: 1000
       flags: [btu_source, one_per_country_active]
+    - id: city                         # NEW (Richard 2026-09-08, issue #41): "the version I played in 1987 had urban areas".
+      glyph: "U"                       #   Modelled on the original's big city: ten times the people, civilians leave at
+      category: infrastructure         #   1/10 weight (urban packing), built with 100 lcm + 200 hcm to 100% (KNOWN: BIG_CITY
+      build: { cash: 1, lcm: 1, hcm: 2 }   #   l_b 100, h_b 200). Storage scales with it so the people fit.
+      max_population: 10000
+      store_multiplier: 10
+      packing: urban
     - id: warehouse
       glyph: "w"
       category: infrastructure
@@ -633,6 +640,10 @@ distribution:
   held_cargo_counts_toward_capacity: false
   path_cost: cheapest_mobility                # cheapest_mobility | fewest_hops
   mobility_bonus: 10                          # KNOWN: distribute.c IMPORT_BONUS/EXPORT_BONUS = 10 — ten times cheaper than a hand move
+  # NEW (Richard 2026-09-08, issue #40): a threshold set on a mixed selection (`thresh * food 400`,
+  # or a rectangle) is multiplied for these designations — a warehouse is where the stock lives, so
+  # it gets ×10. A single sector or `*:warehouse` takes the number as typed. Clearing is unaffected.
+  mass_threshold_multiplier_by_type: { warehouse: 10, city: 10 }
   # null = continuous quantities (allocation is exactly proportional and therefore exactly
   # direction-symmetric). Set e.g. 1.0 to ship whole units; the last indivisible unit then
   # goes by commodity priority, then seeded RNG — which is deliberately NOT rotation-symmetric.

@@ -65,14 +65,16 @@ export interface SectorType {
   produces: Record<string, number> | null; consumes: Record<string, number> | null; build: Record<string, number> | null;
   terrainRequired: string[] | null; flags: string[] | null;
 }
-export interface Commodity { id: string; name: string; weight: number; priority: number }
+export interface Commodity { id: string; name: string; weight: number; priority: number; isPerson?: boolean | null }
 export interface RoadRules { buildMaterialsPerPoint: Record<string, number>; workPerPoint: number; maxPointsPerUpdate: number; costMultiplierByTerrain: Record<string, number>; maxLevelByTerrain: Record<string, number>; decayPerUpdate: number; maintenanceCashPerPointPerUpdate: number }
 export interface RailRules { techRequired: number; buildMaterialsPerPoint: Record<string, number>; maxPointsPerUpdate: number; minLevelToCarry: number; capacityPerUpdateAt100: number; cashPer100UnitsShipped: number; maxSectorsPerUpdate: { base: number; perTechPoint: number }; costMultiplierByTerrain: Record<string, number>; maxLevelByTerrain: Record<string, number>; decayPerUpdate: number; maintenanceCashPerPointPerUpdate: number }
-export interface Rules { sectorTypes: SectorType[]; commodities: Commodity[]; etusPerUpdate: number; btuCosts: Record<string, number>; road?: RoadRules; defaultCapacity?: number; rail?: RailRules; productionMinEfficiency?: number }
+export interface Rules { sectorTypes: SectorType[]; commodities: Commodity[]; etusPerUpdate: number; btuCosts: Record<string, number>; road?: RoadRules; defaultCapacity?: number; rail?: RailRules; productionMinEfficiency?: number; massThresholdMultiplierByType?: Record<string, number> }
 export interface Outcome { accepted: boolean; error?: string; btuSpent: number; view: CountryView; info?: string | null }
 export interface ConsoleReply { output: string; accepted: boolean; error?: string; view?: CountryView }
 export interface CommandRequest {
   verb: string; x?: number; y?: number; x2?: number; y2?: number; type?: string; commodity?: string; amount?: number; clear?: boolean;
+  /** Many sectors instead of x,y: "*" (all mine), "*:TYPE" (one designation), "x1:x2,y1:y2" (a rectangle, relative). Standing orders only. */
+  scope?: string;
 }
 
 export interface Estimate {
