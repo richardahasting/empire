@@ -81,7 +81,7 @@ export function GamePage() {
     try {
       const o = await api.post<Outcome>(`/games/${gameId}/command`, c);
       setView(o.view);
-      setNotice(o.accepted ? `${c.verb}: ok (${o.btuSpent} BTU)` : `${c.verb}: ${o.error}`);
+      setNotice(o.accepted ? `${c.verb}: ${o.info ?? "ok"} (${o.btuSpent} BTU)` : `${c.verb}: ${o.error}`);
     } catch (e) { setNotice((e as Error).message); } finally { setBusy(false); }
   }, [gameId]);
 
@@ -130,7 +130,7 @@ export function GamePage() {
     // available = the least mobility among the sectors the cargo enters (they pay, per the rules)
     const entered = est.path.slice(1).map(c => { const at = byRel.get(`${c.x},${c.y}`); return view.sectors.find(s => at && s.at.x === at.x && s.at.y === at.y)?.mobility ?? 0; });
     const avail = entered.length ? Math.min(...entered) : 0;
-    const hold = est.heldQty > 0 && est.holdsAt ? `\n${est.heldQty.toFixed(0)} would hold at ${est.holdsAt.x},${est.holdsAt.y}` : "";
+    const hold = est.heldQty > 0 ? `\nonly ${est.arrivesQty.toFixed(0)} can move now` : "";
     return `${where} · ${est.path.length - 1} hop${est.path.length - 1 === 1 ? "" : "s"}\nmob required ${est.totalMobility.toFixed(0)} / ${avail.toFixed(0)}${hold}\nclick to ${pick.verb}`;
   }, [pick, hover, est, view, byRel]);
   const onMapSelect = useCallback((c: Coord | null) => {

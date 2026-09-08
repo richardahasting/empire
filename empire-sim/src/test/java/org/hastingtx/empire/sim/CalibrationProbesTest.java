@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 /**
  * Invariants prove the physics; probes prove the point (playbook: "a simulation's
@@ -98,6 +99,27 @@ class CalibrationProbesTest {
         assertThat(w.sector(at).stock().get(11)).as("paid in lcm").isLessThan(lcmBefore);
         assertThat(w.country(0).cash()).as("paid in cash, relative to the control").isLessThan(control.country(0).cash());
         assertThat(cfg.infrastructure().road().maxLevelByTerrain().get("plains")).isEqualTo(100.0);
+    }
+
+    /** A manual move is immediate: the goods land now, the entered sector pays mobility now, and a short route caps the quantity. */
+    @Test
+    void manualMoveIsImmediate() {
+        GameConfig cfg = TestWorlds.teaching();
+        World w = TestWorlds.disc(cfg, 2, Map.of("civ", 300.0, "food", 1000.0, "iron", 500.0));
+        Coord plant = Hex.stepRaw(TestWorlds.CENTER, 0, 1);
+        w = TestWorlds.own(w, cfg, plant, "light_manufacturing", 100, 40, Map.of("civ", 200.0, "food", 100.0), Map.of());
+        var exec = new org.hastingtx.empire.engine.command.CommandExecutor(cfg);
+        var r = exec.execute(w, 0, new org.hastingtx.empire.engine.command.Command.Move(TestWorlds.CENTER, plant, "iron", 400));
+        assertThat(r.ok()).as(r.error()).isTrue();
+        int iron = 4;
+        double moved = r.world().sector(plant).stock().get(iron);
+        assertThat(moved).as("iron is in the plant now, capped by the plant's 40 mobility").isGreaterThan(0).isLessThan(400);
+        assertThat(r.world().sector(TestWorlds.CENTER).stock().get(iron)).isCloseTo(500 - moved, within(1e-6));
+        assertThat(r.world().sector(plant).mobility()).as("the entered sector paid nearly all of its 40 mobility").isLessThan(0.5);
+        assertThat(r.info()).contains("mobility along the route ran out");
+        // and the plant produces at the very next update
+        World next = Update.run(r.world(), cfg, 1).next();
+        assertThat(next.sector(plant).stock().get(11)).as("lcm produced from the delivered iron").isGreaterThan(0);
     }
 
     /** Roads rot when nobody pays for them, at the configured rate. */

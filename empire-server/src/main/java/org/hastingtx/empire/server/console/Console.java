@@ -51,7 +51,7 @@ public class Console {
 
     private Reply cmd(long gameId, Account a, Command c) {
         GameService.Outcome o = games.command(gameId, a, c, "console");
-        return new Reply(o.accepted() ? "ok (" + o.btuSpent() + " BTU)" : "", o.accepted(), o.error(), o.view());
+        return new Reply(o.accepted() ? (o.info() != null ? o.info() + " (" + o.btuSpent() + " BTU)" : "ok (" + o.btuSpent() + " BTU)") : "", o.accepted(), o.error(), o.view());
     }
 
     private static void need(String[] t, int n, String usage) { if (t.length < n) throw new IllegalArgumentException("usage: " + usage); }
@@ -116,7 +116,7 @@ public class Console {
             des x,y TYPE                 designate a sector (agribusiness, mine, light_manufacturing, warehouse, ...)
             thresh x,y COMMODITY N       set a distribution threshold (negative clears)
             dist x,y cx,cy | none        name a sector's distribution centre
-            move COMMODITY x,y x2,y2 N   queue a move for the next update
+            move COMMODITY x,y x2,y2 N   move now; every sector entered pays mobility now
             expl x,y x2,y2 N             explore into an adjacent unowned sector with N civilians
             road x,y LEVEL               standing order: pave this sector toward LEVEL (0 cancels)
             """;

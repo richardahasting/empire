@@ -68,7 +68,7 @@ export interface SectorType {
 export interface Commodity { id: string; name: string; weight: number; priority: number }
 export interface RoadRules { buildMaterialsPerPoint: Record<string, number>; workPerPoint: number; maxPointsPerUpdate: number; costMultiplierByTerrain: Record<string, number>; maxLevelByTerrain: Record<string, number>; decayPerUpdate: number; maintenanceCashPerPointPerUpdate: number }
 export interface Rules { sectorTypes: SectorType[]; commodities: Commodity[]; etusPerUpdate: number; btuCosts: Record<string, number>; road?: RoadRules; defaultCapacity?: number }
-export interface Outcome { accepted: boolean; error?: string; btuSpent: number; view: CountryView }
+export interface Outcome { accepted: boolean; error?: string; btuSpent: number; view: CountryView; info?: string | null }
 export interface ConsoleReply { output: string; accepted: boolean; error?: string; view?: CountryView }
 export interface CommandRequest {
   verb: string; x?: number; y?: number; x2?: number; y2?: number; type?: string; commodity?: string; amount?: number; clear?: boolean;
