@@ -53,11 +53,12 @@ empire/
 │                                   #   prompt framing: inbound telegrams delimited as rival speech
 │
 ├── empire-sim/                     # Headless harness, M0. CLI: run N updates from a preset with a
-│   └── .../sim/                    #   roster of agents; emit CSV/JSON per update per country;
-│       ├── SimRunner               #   golden-file hash; balance charts (text + PNG via JFreeChart
-│       ├── Tournament              #   or CSV for external plotting — decide at M0).
-│       ├── Bisection               #   handicap calibration (M3)
-│       └── Report
+│   └── .../sim/                    #   roster of agents; CSV per update per country; events log;
+│       ├── Sim                     #   state hash. Also hosts the engine's INTEGRATION tests
+│       ├── SimRunner               #   (symmetry, rotation, golden, conservation, probes) because
+│       ├── Scoring                 #   they need a loaded config and empire-engine cannot depend
+│       ├── Tournament              #   on empire-config (M3)
+│       └── Bisection               #   handicap calibration (M3)
 │
 ├── empire-server/                  # Spring Boot 3. M1+.
 │   └── src/main/java/org/hastingtx/empire/server/

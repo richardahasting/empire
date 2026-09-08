@@ -19,8 +19,19 @@ Live at <https://hastingtx.org/empire/> (holding page until M1).
 
 ## Status
 
-M0 design artifacts only. No engine code yet — by design (see the spec's
-"First response").
+**M0 in progress** (issue #3): engine, config loader, world generator, the
+deterministic update with plan-then-apply flows, ScriptedAgent, and the headless
+simulation harness. 23 tests including the six-direction and 60° rotation
+symmetry proofs, a jqwik conservation property, a golden state hash, and the
+calibration probes. No persistence, HTTP, or UI yet.
+
+```bash
+mvn -q test                                   # everything
+make sim PRESET=teaching UPDATES=60 COUNTRIES=3 SEED=9   # headless run -> sim-out/
+```
+
+All numeric rates in `config/schema.yaml` are placeholders; the harness exists
+to calibrate them.
 
 ## Stack
 

@@ -68,14 +68,14 @@ world:
     # mountain). This design adds plains/forest/swamp as *terrain*. Fractions
     # below apply to land only and must sum to 1.0.
     land_mix: { wilderness: 0.40, plains: 0.30, forest: 0.18, mountain: 0.10, swamp: 0.02 }
-    # Elevation feeds radar range and rail/road cost. Metres, generated per sector.
-    elevation_by_terrain:
-      ocean:      { min: -200, max: 0 }
-      wilderness: { min: 0,   max: 400 }
-      plains:     { min: 0,   max: 150 }
-      forest:     { min: 50,  max: 600 }
-      swamp:      { min: 0,   max: 20 }
-      mountain:   { min: 600, max: 3000 }
+  # Elevation feeds radar range and rail/road cost. Metres, generated per sector.
+  elevation_by_terrain:
+    ocean:      { min: -200, max: 0 }
+    wilderness: { min: 0,   max: 400 }
+    plains:     { min: 0,   max: 150 }
+    forest:     { min: 50,  max: 600 }
+    swamp:      { min: 0,   max: 20 }
+    mountain:   { min: 600, max: 3000 }
 
   # Per-sector resource endowments, 0..100, drawn at generation.
   # KNOWN: original resources (fert, min, gold, oil, uran) were functions of
@@ -475,7 +475,7 @@ economy:
   # (level + tech_factor) style saturating curves (tech_factor 50 in Wolfpack
   # for some sectors). GUESS at every constant.
   curves:
-    production_tech:   { type: saturating, k: 50 }            # level/(level+k)+baseline
+    production_tech:   { type: saturating, k: 50, baseline: 0.5 }   # 0.5 at tech 0, 1.0 at tech 50, ->1.5
     level_diminishing: { type: log, base: 2.0, easy: 1.0 }    # KNOWN: tech_log_base=2, easy_tech=1
     flat:              { type: constant, value: 1.0 }
 
@@ -492,16 +492,19 @@ economy:
     redesignate:
       keep_fraction_default: 0.0             # 0.0 = original behaviour (start over)
       keep_fraction_same_category: 0.0       # e.g. mine -> gold_mine
-      keep_fraction_by_pair: {}              # e.g. { "warehouse->depot": 0.5, "school->university": 0.75 }
+      keep_fraction_by_pair:                 # "from->to"; either side may be "*". e.g. "warehouse->depot": 0.5
+        "sanctuary->*": 1.0                  # GUESS: breaking sanctuary should not cost the 100% you started with
       min_efficiency_after: 0                # floor applied after the fraction
     decay_per_update_if_unowned: 2.0     # abandoned sectors rot
 
   # --- Mobility --------------------------------------------------------------
   mobility:
-    sector_accrual_per_etu: 0.02         # KNOWN: sect_mob_scale 0.02 (x eff/100 x 100 -> ~1.2/update at 60 ETU... 
-                                         # original formula: mob += etu * sect_mob_scale * (eff scaled). GUESS on exact scaling.)
+    sector_accrual_per_etu: 1.0          # GUESS: Wolfpack sect_mob_scale was 0.02 but its scaling is unclear to me;
+                                         # 1.0 x eff/100 gives ~60 mobility per 60-ETU update at full efficiency, cap 127.
     sector_max: 127                      # KNOWN
-    accrual_efficiency_scaled: true      # mobility accrues proportional to efficiency
+    accrual_efficiency_scaled: true      # mobility accrues proportional to efficiency...
+    accrual_efficiency_floor: 0.25       # ...but never below this fraction, or a 0% sector could never be
+                                         # entered (transited-sector debit) and could never be built up. NEW.
     # Cost to move ONE weight-unit of commodity INTO a sector, before road discount.
     move_cost_by_terrain: { wilderness: 1.0, plains: 0.8, forest: 1.4, swamp: 2.0, mountain: 2.5 }
     # KNOWN: original cost was also efficiency-dependent (low eff = high cost).
@@ -578,6 +581,10 @@ distribution:
   # A held (in-transit) parcel occupies a sector as "cargo" — captured with it.
   held_cargo_counts_toward_capacity: false
   path_cost: cheapest_mobility                # cheapest_mobility | fewest_hops
+  # null = continuous quantities (allocation is exactly proportional and therefore exactly
+  # direction-symmetric). Set e.g. 1.0 to ship whole units; the last indivisible unit then
+  # goes by commodity priority, then seeded RNG — which is deliberately NOT rotation-symmetric.
+  quantum: null
 
 # -----------------------------------------------------------------------------
 # INFRASTRUCTURE — NEW: per-sector road/rail, independent of designation
