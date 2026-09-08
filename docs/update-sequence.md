@@ -52,10 +52,12 @@ Things that grow just by time passing, in no particular order because they do
 not interact:
 - **Mobility**: each sector gains `sector_accrual_per_etu * etus * f(eff)`,
   where `f(eff) = floor + (1 - floor) * eff/100` with `floor =
-  accrual_efficiency_floor`. The floor exists because mobility is debited from
+  accrual_efficiency_floor`. The floor dates from when mobility was debited from
   transited sectors: a 0% sector with 0 mobility could never be entered, so it
   could never receive the materials to build efficiency, so it would stay at
-  0% forever (found by the M0 harness on 2026-09-07). Capped at `sector_max`,
+  0% forever (found by the M0 harness on 2026-09-07). With the sending sector
+  paying (the default since 2026-09-08) that trap is gone; the floor stays
+  harmless. Capped at `sector_max`,
   times the owner's `handicap.mobility`.
 - **BTUs**: each country gains `accrual_per_capital_civ_per_etu * capital_civs
   * etus * handicap.btu_rate`, capped at `btu.max * handicap.btu_cap`.
@@ -155,8 +157,10 @@ Each planned flow is a tuple
 `(commodity, qty_requested, path[], mobility_cost_per_unit_per_hop[], reach)`.
 
 ### 7. Resolve contention
-Three budgets can be over-claimed: a **source's stock**, a **transited
-sector's mobility**, and a **rail line's capacity**. Resolve iteratively:
+Three budgets can be over-claimed: a **source's stock**, a **paying sector's
+mobility** (the sender's, or each transited sector's under
+`mobility_debited_from: transited_sectors`), and a **rail line's capacity**.
+Resolve iteratively:
 
 1. For every over-claimed budget, scale each claim by `budget / total_claims`
    (**proportional to demand**).
@@ -174,10 +178,11 @@ goes by commodity priority, then seeded RNG. That tiebreak is deliberately
 *not* rotation-symmetric (it cannot be), which is why the symmetry tests run
 with the default.
 
-Then walk each flow along its path hop by hop, debiting each transited
-sector's mobility (`mobility_debited_from: transited_sectors`) until either
-the parcel arrives, its reach is exhausted, or a transited sector's mobility
-hits zero. Whatever remains becomes a **held parcel** in the last sector
+Then walk each flow along its path hop by hop, debiting each hop's cost from
+the sending sector (`mobility_debited_from: sending_sector`; a resumed held
+parcel's sender is the sector holding it) until either the parcel arrives, its
+reach is exhausted, or the payer's mobility hits zero. Under
+`transited_sectors` each entered sector pays its own hop instead. Whatever remains becomes a **held parcel** in the last sector
 reached, recorded in the ledger with its destination, and rendered by the UI
 as an arrow that stops short. Nothing is destroyed or teleported. Parcels in
 the same sector with the same commodity, owner and destination merge, so a

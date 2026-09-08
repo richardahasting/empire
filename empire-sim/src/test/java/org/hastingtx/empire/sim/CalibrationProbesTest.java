@@ -101,22 +101,24 @@ class CalibrationProbesTest {
         assertThat(cfg.infrastructure().road().maxLevelByTerrain().get("plains")).isEqualTo(100.0);
     }
 
-    /** A manual move is immediate: the goods land now, the entered sector pays mobility now, and a short route caps the quantity. */
+    /** A manual move is immediate: the goods land now, the sending sector pays mobility now, and its mobility caps the quantity. */
     @Test
     void manualMoveIsImmediate() {
         GameConfig cfg = TestWorlds.teaching();
         World w = TestWorlds.disc(cfg, 2, Map.of("civ", 300.0, "food", 1000.0, "iron", 500.0));
         Coord plant = Hex.stepRaw(TestWorlds.CENTER, 0, 1);
         w = TestWorlds.own(w, cfg, plant, "light_manufacturing", 100, 40, Map.of("civ", 200.0, "food", 100.0), Map.of());
+        w = w.withSector(w.sector(TestWorlds.CENTER).withMobility(40));
         var exec = new org.hastingtx.empire.engine.command.CommandExecutor(cfg);
         var r = exec.execute(w, 0, new org.hastingtx.empire.engine.command.Command.Move(TestWorlds.CENTER, plant, "iron", 400));
         assertThat(r.ok()).as(r.error()).isTrue();
         int iron = 4;
         double moved = r.world().sector(plant).stock().get(iron);
-        assertThat(moved).as("iron is in the plant now, capped by the plant's 40 mobility").isGreaterThan(0).isLessThan(400);
+        assertThat(moved).as("iron is in the plant now, capped by the capital's 40 mobility").isGreaterThan(0).isLessThan(400);
         assertThat(r.world().sector(TestWorlds.CENTER).stock().get(iron)).isCloseTo(500 - moved, within(1e-6));
-        assertThat(r.world().sector(plant).mobility()).as("the entered sector paid nearly all of its 40 mobility").isLessThan(0.5);
-        assertThat(r.info()).contains("mobility along the route ran out");
+        assertThat(r.world().sector(TestWorlds.CENTER).mobility()).as("the sending sector paid nearly all of its 40 mobility").isLessThan(0.5);
+        assertThat(r.world().sector(plant).mobility()).as("the entered sector paid nothing").isCloseTo(40, within(1e-9));
+        assertThat(r.info()).contains("ran out");
         // and the plant produces at the very next update
         World next = Update.run(r.world(), cfg, 1).next();
         assertThat(next.sector(plant).stock().get(11)).as("lcm produced from the delivered iron").isGreaterThan(0);

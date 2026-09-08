@@ -617,7 +617,12 @@ economy:
 distribution:
   # Reach: max sectors a shipment may travel per update, before road bonus.
   max_reach_sectors: { base: 3, per_tech_point: 0.02, road_bonus_at_100: 2 }   # NEW (the original had no reach limit; see docs/original-rules.md)
-  mobility_debited_from: transited_sectors    # transited_sectors | endpoints_only
+  # Who pays a shipment's mobility. sending_sector: the sector the goods leave from pays the
+  # whole route (a held parcel's sender is the sector holding it) — KNOWN: the original's
+  # move and distribute charged the exporter. transited_sectors: every entered sector pays its
+  # own hop (the pre-2026-09-08 rule; it starved a busy distribution centre of all mobility,
+  # so nothing could ever be moved into it — Richard 2026-09-08, issue #36).
+  mobility_debited_from: sending_sector       # sending_sector | transited_sectors
   partial_delivery: hold_in_place             # hold_in_place | return_to_source | destroy (never)
   # Contention resolution order when demand > supply or mobility:
   #   1. proportional to demand

@@ -40,7 +40,7 @@ This is not a Civilization clone. The defining pleasure of Empire was *logistics
 
 **Reach limits on automatic flow.** Distribution is not unlimited. Removing the scan-order artifact removes the old accidental limiter, so an explicit and symmetric one takes its place. A commodity moving automatically along a distribution path in a single update is bounded by two things:
 
-1. **Mobility drawn from every sector it transits**, not just the endpoints. Each hop debits the transited sector's own mobility pool, scaled by terrain and reduced by that sector's road_level. A route through a well-paved corridor carries far more than the same distance through raw wilderness, and a chain of exhausted sectors chokes the flow regardless of how much surplus sits at the source.
+1. **Mobility paid by the sending sector for the whole route.** Each hop costs mobility scaled by the entered sector's terrain and reduced by its road_level, and the sum is debited from the sector the goods leave (a held parcel's sender is the sector holding it). A route through a well-paved corridor carries far more than the same distance through raw wilderness, but a busy destination is never starved by what arrives. (Revised 2026-09-08 from "every transited sector pays its own hop", which drained a distribution centre to zero and made it impossible to move anything into it; `mobility_debited_from: transited_sectors` keeps the old rule.)
 2. **A maximum reach in sectors per update**, derived from national tech level and modified by road quality along the route. Low-tech countries move food a few sectors; a developed one supplies a distant front automatically.
 
 When a shipment exhausts either budget it stops where it is, holds in that sector, and resumes at the next update. Nothing is silently destroyed or teleported. The UI must show partial deliveries as such — a flow arrow that ends short of its destination is exactly the diagnostic a player needs.
@@ -188,7 +188,7 @@ infrastructure:
 
 distribution:
   max_reach_sectors: { base: 3, per_tech_point: 0.02 }
-  mobility_debited_from: transited_sectors
+  mobility_debited_from: sending_sector
   partial_delivery: hold_in_place
 
 detection:

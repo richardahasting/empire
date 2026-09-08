@@ -133,12 +133,11 @@ export function GamePage() {
     }
     if (!est) return `${where}\nestimating…`;
     if (!est.ok) return `${where}\n${est.error ?? "no route"}`;
-    // available = the least mobility among the sectors the cargo enters (they pay, per the rules)
-    const entered = est.path.slice(1).map(c => { const at = byRel.get(`${c.x},${c.y}`); return view.sectors.find(s => at && s.at.x === at.x && s.at.y === at.y)?.mobility ?? 0; });
-    const avail = entered.length ? Math.min(...entered) : 0;
+    // available = the sending sector's mobility (it pays the whole route, per the rules)
+    const avail = est.sourceMobility;
     const hold = est.heldQty > 0 ? `\nonly ${est.arrivesQty.toFixed(0)} can move now` : "";
     return `${where} · ${est.path.length - 1} hop${est.path.length - 1 === 1 ? "" : "s"}\nmob required ${est.totalMobility.toFixed(0)} / ${avail.toFixed(0)}${hold}\nclick to ${pick.verb}`;
-  }, [pick, hover, est, view, byRel]);
+  }, [pick, hover, est, view]);
   const onMapSelect = useCallback((c: Coord | null) => {
     if (!pick) { setSelected(c); return; }
     if (pick.verb === "distribute") {

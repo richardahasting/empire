@@ -126,24 +126,34 @@ public final class CommandExecutor {
         int reach = (int) Math.floor(cfg.economy().mobility().manualMoveMaxSectorsPerUpdate().eval(c.levels().tech()));
         if (path.size() - 1 > reach) return CommandResult.fail(w, m.to() + " is " + (path.size() - 1) + " sectors away; your reach is " + reach);
         double weight = ctx.weightLeaving(ci, from);
-        double moving = m.qty();
+        boolean srcPays = cfg.distribution().sourcePays();
+        double moving = m.qty(), totalUnit = 0;
         double[] unit = new double[path.size()];
+        Coord choke = path.get(1);
         for (int h = 1; h < path.size(); h++) {
             Sector t = w.sector(path.get(h));
             unit[h] = weight * ctx.moveCostInto(t);
-            if (unit[h] > 0) moving = Math.min(moving, t.mobility() / unit[h]);
+            totalUnit += unit[h];
+            if (!srcPays && unit[h] > 0 && t.mobility() / unit[h] < moving) { moving = t.mobility() / unit[h]; choke = t.at(); }
         }
+        if (srcPays && totalUnit > 0) moving = Math.min(moving, from.mobility() / totalUnit);
         moving = Math.floor(moving * 1000) / 1000;
-        if (moving <= 0) return CommandResult.fail(w, "no mobility along the route (" + path.get(1) + " has " + fmt(w.sector(path.get(1)).mobility()) + ")");
+        if (moving <= 0) return CommandResult.fail(w, srcPays
+                ? "no mobility in " + m.from() + " (has " + fmt(from.mobility()) + "; the route costs " + fmt(totalUnit) + " per unit)"
+                : "no mobility along the route (" + choke + " has " + fmt(w.sector(choke).mobility()) + ")");
         World next = w;
-        for (int h = 1; h < path.size(); h++) {
-            Sector t = next.sector(path.get(h));
-            next = next.withSector(t.withMobility(Math.max(0, t.mobility() - moving * unit[h])));
+        if (srcPays) {
+            next = next.withSector(from.withMobility(Math.max(0, from.mobility() - moving * totalUnit)));
+        } else {
+            for (int h = 1; h < path.size(); h++) {
+                Sector t = next.sector(path.get(h));
+                next = next.withSector(t.withMobility(Math.max(0, t.mobility() - moving * unit[h])));
+            }
         }
         Sector src = next.sector(m.from()), dst = next.sector(m.to());
         next = next.withSector(src.withStock(src.stock().plus(ci, -moving)));
         next = next.withSector(dst.withStock(dst.stock().plus(ci, moving)));
-        String info = moving < m.qty() - 1e-9 ? "moved " + fmt(moving) + " of " + fmt(m.qty()) + " " + m.commodity() + " — mobility along the route ran out; the rest stayed in " + m.from()
+        String info = moving < m.qty() - 1e-9 ? "moved " + fmt(moving) + " of " + fmt(m.qty()) + " " + m.commodity() + " — " + (srcPays ? "mobility in " + m.from() : "mobility along the route") + " ran out; the rest stayed in " + m.from()
                                               : "moved " + fmt(moving) + " " + m.commodity() + " to " + m.to();
         return new CommandResult(next, null, 0, info);
     }

@@ -12,9 +12,11 @@ import java.util.*;
 /**
  * Steps 6 and 7: plan every transfer as a path on the ownership graph against the frozen
  * snapshot, resolve contention proportionally (commodity priority, then seeded RNG, for the
- * last indivisible unit), then walk each flow hop by hop debiting transited sectors'
- * mobility. Whatever cannot complete holds in place as a HeldParcel. No sector order
- * anywhere in here decides who wins anything.
+ * last indivisible unit), then walk each flow hop by hop debiting mobility from whoever
+ * pays for the hop: the sending sector alone ({@code mobility_debited_from: sending_sector},
+ * the default — a held parcel's sender is the sector holding it) or each entered sector
+ * ({@code transited_sectors}). Whatever cannot complete holds in place as a HeldParcel. No
+ * sector order anywhere in here decides who wins anything.
  */
 public final class FlowStep implements Step {
     public String name() { return "flow"; }
@@ -112,10 +114,10 @@ public final class FlowStep implements Step {
             }
             // mobility
             double[] mobClaim = new double[ctx.led.nSectors];
-            for (Plan p : plans) for (int h = 1; h < p.path.size(); h++) mobClaim[ctx.idx(p.path.get(h))] += hopCost(ctx, p, p.claim, h);
+            for (Plan p : plans) for (int h = 1; h < p.path.size(); h++) mobClaim[payer(ctx, p, h)] += hopCost(ctx, p, p.claim, h);
             for (Plan p : plans) {
                 double f = 1.0;
-                for (int h = 1; h < p.path.size(); h++) { int t = ctx.idx(p.path.get(h)); if (mobClaim[t] > mobBudget[t] + 1e-9) f = Math.min(f, mobBudget[t] / mobClaim[t]); }
+                for (int h = 1; h < p.path.size(); h++) { int t = payer(ctx, p, h); if (mobClaim[t] > mobBudget[t] + 1e-9) f = Math.min(f, mobBudget[t] / mobClaim[t]); }
                 if (f < 1.0) { p.claim *= f; changed = true; }
             }
             if (!changed) break;
@@ -137,11 +139,11 @@ public final class FlowStep implements Step {
         order.sort(Comparator.<Plan>comparingInt(p -> ctx.com.priority(p.commodity)).thenComparingDouble(tieOf::get));
         Map<Long, Double> used = new HashMap<>();
         double[] mobUsed = new double[ctx.led.nSectors];
-        for (Plan p : plans) { used.merge(srcKey(p), p.claim, Double::sum); for (int h = 1; h < p.path.size(); h++) mobUsed[ctx.idx(p.path.get(h))] += hopCost(ctx, p, p.claim, h); }
+        for (Plan p : plans) { used.merge(srcKey(p), p.claim, Double::sum); for (int h = 1; h < p.path.size(); h++) mobUsed[payer(ctx, p, h)] += hopCost(ctx, p, p.claim, h); }
         for (Plan p : order) {
             while (p.claim + quantum <= p.requested + 1e-9 && used.get(srcKey(p)) + quantum <= sourceBudget.get(srcKey(p)) + 1e-9 && mobRoom(ctx, p, quantum, mobBudget, mobUsed)) {
                 p.claim += quantum; used.merge(srcKey(p), quantum, Double::sum);
-                for (int h = 1; h < p.path.size(); h++) mobUsed[ctx.idx(p.path.get(h))] += hopCost(ctx, p, quantum, h);
+                for (int h = 1; h < p.path.size(); h++) mobUsed[payer(ctx, p, h)] += hopCost(ctx, p, quantum, h);
             }
         }
 
@@ -159,18 +161,19 @@ public final class FlowStep implements Step {
             int hops = 0; int cur = p.originIdx; String hold = null; double moving = qty;
             for (int h = 1; h < p.path.size(); h++) {
                 int t = ctx.idx(p.path.get(h));
+                int pay = payer(ctx, p, h);
                 double unitCost = unitCost(ctx, p, h);
-                double avail = mobBudget[t] - mobSpent[t];
+                double avail = mobBudget[pay] - mobSpent[pay];
                 double canMove = unitCost <= 0 ? moving : Math.min(moving, floorQ(Math.max(0, avail) / unitCost, quantum));
                 if (canMove < 1e-9) canMove = 0;
                 if (moving - canMove < 1e-9) canMove = moving;   // floating-point dust is not a parcel
-                if (canMove <= 0) { hold = "mobility exhausted in " + p.path.get(h); break; }
+                if (canMove <= 0) { hold = "mobility exhausted in " + ctx.sector(pay).at(); break; }
                 if (canMove < moving) { // the remainder holds here
                     addHeld(newHeld, cur, new HeldParcel(p.commodity, moving - canMove, p.owner, p.path.get(0), p.dest, ctx.snap.updateNumber()));
                     if (p.fromHeld == null) ctx.led.toHeld(p.originIdx, p.commodity, moving - canMove);
-                    moving = canMove; hold = "mobility exhausted in " + p.path.get(h);
+                    moving = canMove; hold = "mobility exhausted in " + ctx.sector(pay).at();
                 }
-                mobSpent[t] += moving * unitCost;
+                mobSpent[pay] += moving * unitCost;
                 cur = t; hops++;
             }
             boolean completed = ctx.sector(cur).at().equals(p.dest);
@@ -291,8 +294,13 @@ public final class FlowStep implements Step {
     }
 
     private static boolean mobRoom(Ctx ctx, Plan p, double qty, double[] budget, double[] used) {
-        for (int h = 1; h < p.path.size(); h++) { int t = ctx.idx(p.path.get(h)); if (used[t] + hopCost(ctx, p, qty, h) > budget[t] + 1e-9) return false; }
+        for (int h = 1; h < p.path.size(); h++) { int t = payer(ctx, p, h); if (used[t] + hopCost(ctx, p, qty, h) > budget[t] + 1e-9) return false; }
         return true;
+    }
+
+    /** Index of the sector whose mobility pays for hop h: the origin (sending sector, or the sector holding a resumed parcel) or the entered sector. */
+    private static int payer(Ctx ctx, Plan p, int h) {
+        return ctx.cfg.distribution().sourcePays() ? p.originIdx : ctx.idx(p.path.get(h));
     }
 
     private static double floorQ(double v, double q) { return q <= 0 ? v : Math.floor(v / q + 1e-9) * q; }

@@ -44,24 +44,46 @@ public final class Routes {
         if (path == null) return new Estimate(false, "no route through your territory from " + from + " to " + to, List.of(), List.of(), 0, 0, 0, 0, null, available, src.mobility());
         int reach = (int) Math.floor(cfg.economy().mobility().manualMoveMaxSectorsPerUpdate().eval(w.country(owner).levels().tech()));
         List<Double> hopCosts = new ArrayList<>();
-        double total = 0, moving = qty, weight = ctx.weightLeaving(commodity, src);
-        Coord holdsAt = null; int hops = 0;
+        double total = 0, weight = ctx.weightLeaving(commodity, src);
+        int hopsTotal = path.size() - 1, hopsNow = Math.min(hopsTotal, reach);
+        double[] unit = new double[path.size()];
         for (int h = 1; h < path.size(); h++) {
-            Sector t = w.sector(path.get(h));
-            double unit = weight * ctx.moveCostInto(t);
-            double cost = qty * unit;
+            unit[h] = weight * ctx.moveCostInto(w.sector(path.get(h)));
+            double cost = qty * unit[h];
             hopCosts.add(cost); total += cost;
-            if (holdsAt == null) {
-                if (hops >= reach) { holdsAt = path.get(h - 1); continue; }
-                double can = unit <= 0 ? moving : Math.min(moving, t.mobility() / unit);
-                if (can < moving - 1e-9) { holdsAt = path.get(h - 1); moving = Math.max(0, can); if (can <= 1e-9) { moving = 0; continue; } }
+        }
+        double arrives, held; Coord holdsAt;
+        if (cfg.distribution().sourcePays()) {
+            // the sender pays the whole route, so what moves is what it can afford end to end (as the command does);
+            // the rest never leaves. Beyond reach, what moves parks at the last sector reached.
+            double routeUnit = 0;
+            for (int h = 1; h <= hopsNow; h++) routeUnit += unit[h];
+            double moving = routeUnit <= 0 ? qty : Math.min(qty, src.mobility() / routeUnit);
+            moving = Math.floor(moving * 1000) / 1000;
+            boolean short_ = hopsNow < hopsTotal;
+            arrives = short_ ? 0 : moving;
+            held = qty - arrives;
+            holdsAt = short_ ? path.get(hopsNow) : from;
+        } else {
+            // each entered sector pays its own hop: walk it, checking every hop even after an earlier choke,
+            // since what squeezed past one may still choke later
+            double moving = qty; holdsAt = null; int hops = 0; boolean stopped = false;
+            for (int h = 1; h < path.size(); h++) {
+                if (stopped) continue;
+                if (hops >= reach) { if (holdsAt == null) holdsAt = path.get(h - 1); stopped = true; continue; }
+                double can = unit[h] <= 0 ? moving : Math.min(moving, w.sector(path.get(h)).mobility() / unit[h]);
+                if (can < moving - 1e-9) {
+                    if (holdsAt == null) holdsAt = path.get(h - 1);
+                    moving = Math.max(0, can);
+                    if (moving <= 1e-9) { moving = 0; stopped = true; continue; }
+                }
                 hops++;
             }
+            arrives = stopped ? 0 : moving;
+            held = qty - arrives;
         }
-        boolean complete = holdsAt == null;
-        double arrives = complete ? qty : moving;       // moving = what squeezes through past the choke; the rest parks
-        double held = qty - arrives;
-        return new Estimate(true, null, path, hopCosts, total, reach, arrives, held, complete ? null : holdsAt, available, src.mobility());
+        boolean complete = held <= 1e-9;
+        return new Estimate(true, null, path, hopCosts, total, reach, complete ? qty : arrives, complete ? 0 : held, complete ? null : holdsAt, available, src.mobility());
     }
 
     /** A rail shipment: route over rail, per-sector capacity, range per update; hopCosts carry each sector's capacity. */
