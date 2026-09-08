@@ -10,6 +10,7 @@ import org.hastingtx.empire.engine.view.CountryView;
 import org.hastingtx.empire.server.auth.Account;
 import org.hastingtx.empire.server.auth.AuthInterceptor;
 import org.hastingtx.empire.server.console.Console;
+import org.hastingtx.empire.server.console.SectorSelector;
 import org.hastingtx.empire.server.game.GameService;
 import org.hastingtx.empire.server.persistence.LogRepository;
 import org.springframework.web.bind.annotation.*;
@@ -57,26 +58,34 @@ public class GameController {
                 cfg.infrastructure().rail(), minEff == null ? 0 : minEff);
     }
 
-    /** One JSON shape for every verb; absolute coordinates. */
-    public record CommandRequest(String verb, Integer x, Integer y, Integer x2, Integer y2, String type, String commodity, Double amount, Boolean clear) {
-        Command toCommand() {
+    /**
+     * One JSON shape for every verb; absolute coordinates. {@code scope}, when set, is a
+     * {@link SectorSelector} (relative coordinates) that replaces x,y with many sectors for the
+     * per-sector standing orders: designate, threshold, distribute, build_road, build_rail.
+     */
+    public record CommandRequest(String verb, Integer x, Integer y, Integer x2, Integer y2, String type, String commodity, Double amount, Boolean clear, String scope) {
+        boolean isMass() { return scope != null && !scope.isBlank(); }
+        Command toCommand() { return toCommand(x == null || y == null ? null : new Coord(x, y)); }
+        /** The command for one sector; {@code at} stands in for x,y. */
+        Command toCommand(Coord at) {
             return switch (verb == null ? "" : verb) {
                 case "break_sanctuary" -> new Command.BreakSanctuary();
-                case "designate" -> new Command.Designate(at(x, y), type);
-                case "threshold" -> new Command.Threshold(at(x, y), commodity, Boolean.TRUE.equals(clear) ? -1 : amount == null ? 0 : amount);
-                case "distribute" -> new Command.Distribute(at(x, y), Boolean.TRUE.equals(clear) || x2 == null ? null : at(x2, y2));
-                case "move" -> new Command.Move(at(x, y), at(x2, y2), commodity, amount == null ? 0 : amount);
-                case "explore" -> new Command.Explore(at(x, y), at(x2, y2), amount == null ? 0 : amount);
-                case "build_road" -> new Command.BuildRoad(at(x, y), amount == null ? 0 : amount);
-                case "build_rail" -> new Command.BuildRail(at(x, y), amount == null ? 0 : amount);
-                case "rail_ship" -> new Command.RailShip(at(x, y), at(x2, y2), commodity, amount == null ? 0 : amount);
+                case "designate" -> new Command.Designate(need(at), type);
+                case "threshold" -> new Command.Threshold(need(at), commodity, Boolean.TRUE.equals(clear) ? -1 : amount == null ? 0 : amount);
+                case "distribute" -> new Command.Distribute(need(at), Boolean.TRUE.equals(clear) || x2 == null ? null : at(x2, y2));
+                case "move" -> new Command.Move(need(at), at(x2, y2), commodity, amount == null ? 0 : amount);
+                case "explore" -> new Command.Explore(need(at), at(x2, y2), amount == null ? 0 : amount);
+                case "build_road" -> new Command.BuildRoad(need(at), amount == null ? 0 : amount);
+                case "build_rail" -> new Command.BuildRail(need(at), amount == null ? 0 : amount);
+                case "rail_ship" -> new Command.RailShip(need(at), at(x2, y2), commodity, amount == null ? 0 : amount);
                 default -> throw new IllegalArgumentException("unknown verb: " + verb);
             };
         }
-        private static Coord at(Integer x, Integer y) {
-            if (x == null || y == null) throw new IllegalArgumentException("coordinates required");
-            return new Coord(x, y);
+        private static Coord need(Coord c) {
+            if (c == null) throw new IllegalArgumentException("coordinates required");
+            return c;
         }
+        private static Coord at(Integer x, Integer y) { return need(x == null || y == null ? null : new Coord(x, y)); }
     }
 
     /** Estimate in relative coordinates (capital = 0,0), so the client never sees the absolute frame. */
@@ -103,7 +112,14 @@ public class GameController {
 
     @PostMapping("/{id}/command")
     public GameService.Outcome command(@PathVariable long id, @RequestBody CommandRequest r, HttpServletRequest req) {
-        return games.command(id, AuthInterceptor.current(req), r.toCommand(), "panel");
+        Account a = AuthInterceptor.current(req);
+        if (!r.isMass()) return games.command(id, a, r.toCommand(), "panel");
+        switch (r.verb() == null ? "" : r.verb()) {
+            case "designate", "threshold", "distribute", "build_road", "build_rail" -> { }
+            default -> throw new IllegalArgumentException(r.verb() + " applies to one sector at a time");
+        }
+        List<Command> cmds = SectorSelector.expand(games.view(id, a), games.get(id).cfg, r.scope()).stream().map(r::toCommand).toList();
+        return games.commandAll(id, a, cmds, "panel");
     }
 
     public record ConsoleRequest(String line) {}

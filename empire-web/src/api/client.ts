@@ -73,6 +73,8 @@ export interface Outcome { accepted: boolean; error?: string; btuSpent: number; 
 export interface ConsoleReply { output: string; accepted: boolean; error?: string; view?: CountryView }
 export interface CommandRequest {
   verb: string; x?: number; y?: number; x2?: number; y2?: number; type?: string; commodity?: string; amount?: number; clear?: boolean;
+  /** Many sectors instead of x,y: "*" (all mine), "*:TYPE" (one designation), "x1:x2,y1:y2" (a rectangle, relative). Standing orders only. */
+  scope?: string;
 }
 
 export interface Estimate {

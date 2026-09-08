@@ -217,9 +217,23 @@ function ExploreDialog({ gameId, view, from, targets, onClose, onCommand, busy, 
   );
 }
 
+/** This sector, every sector, or every sector like this one (issue #38). Each sector pays its own BTU. */
+function ScopeSelect({ s, scope, setScope }: { s: SectorView; scope: string; setScope: (v: string) => void }) {
+  return (
+    <label>Apply to
+      <Select value={scope} onChange={e => setScope(e.target.value)}>
+        <option value="">this sector only</option>
+        <option value="*">all my sectors (1 BTU each)</option>
+        {s.designation && <option value={`*:${s.designation}`}>all my {s.designation} sectors (1 BTU each)</option>}
+      </Select>
+    </label>
+  );
+}
+
 function DesignateDialog({ view, rules, sector: s, onClose, onCommand, busy }: { view: CountryView; rules: Rules; sector: SectorView; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean }) {
   const options = rules.sectorTypes.filter(t => !(t.flags ?? []).some(f => f === "no_designate" || f === "undesignated") && (t.minTech ?? 0) <= view.levels.tech && (!t.terrainRequired || t.terrainRequired.includes(s.terrain)));
   const [type, setType] = useState(options[0]?.id ?? "");
+  const [scope, setScope] = useState("");
   const t = options.find(o => o.id === type);
   return (
     <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
@@ -229,11 +243,12 @@ function DesignateDialog({ view, rules, sector: s, onClose, onCommand, busy }: {
           <Select value={type} onChange={e => setType(e.target.value)}>{options.map(o => <option key={o.id} value={o.id}>{o.glyph} {o.id}</option>)}</Select>
         </label>
         {t && <p className="text-xs text-muted-foreground">{t.category}{t.produces && ` · produces ${Object.keys(t.produces).join(", ")}`}{t.consumes && ` · consumes ${Object.keys(t.consumes).join(", ")}`}{t.build && ` · builds with ${Object.keys(t.build).join(", ")}`}</p>}
+        {type !== "capital" && <div className="text-sm"><ScopeSelect s={s} scope={scope} setScope={setScope} /></div>}
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button disabled={busy || !type || type === s.designation} onClick={async () => {
+          <Button disabled={busy || !type || (!scope && type === s.designation)} onClick={async () => {
             if (type === "capital" && !window.confirm(`Move your capital to ${s.relative.x},${s.relative.y}? BTUs accrue from the civilians in the capital, and every relative coordinate will shift.`)) return;
-            await onCommand({ verb: "designate", x: s.at.x, y: s.at.y, type }); onClose();
+            await onCommand({ verb: "designate", x: s.at.x, y: s.at.y, type, scope: type === "capital" ? undefined : scope || undefined }); onClose();
           }}>Designate</Button>
         </DialogFooter>
       </DialogContent>
@@ -244,6 +259,7 @@ function DesignateDialog({ view, rules, sector: s, onClose, onCommand, busy }: {
 function ThresholdDialog({ view, sector: s, onClose, onCommand, busy }: { view: CountryView; sector: SectorView; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean }) {
   const [commodity, setCommodity] = useState("food");
   const [amount, setAmount] = useState(s.thresholds["food"] !== undefined ? String(s.thresholds["food"]) : "");
+  const [scope, setScope] = useState("");
   return (
     <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent>
@@ -255,11 +271,12 @@ function ThresholdDialog({ view, sector: s, onClose, onCommand, busy }: { view: 
             </Select>
           </label>
           <label>Amount<Input value={amount} onChange={e => setAmount(e.target.value)} inputMode="numeric" autoFocus /></label>
+          <ScopeSelect s={s} scope={scope} setScope={setScope} />
         </div>
         <DialogFooter>
-          {s.thresholds[commodity] !== undefined && <Button variant="danger" disabled={busy} onClick={async () => { await onCommand({ verb: "threshold", x: s.at.x, y: s.at.y, commodity, clear: true }); onClose(); }}>Clear</Button>}
+          {(scope || s.thresholds[commodity] !== undefined) && <Button variant="danger" disabled={busy} onClick={async () => { await onCommand({ verb: "threshold", x: s.at.x, y: s.at.y, commodity, clear: true, scope: scope || undefined }); onClose(); }}>Clear</Button>}
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button disabled={busy || amount === ""} onClick={async () => { await onCommand({ verb: "threshold", x: s.at.x, y: s.at.y, commodity, amount: Number(amount) }); onClose(); }}>Set</Button>
+          <Button disabled={busy || amount === ""} onClick={async () => { await onCommand({ verb: "threshold", x: s.at.x, y: s.at.y, commodity, amount: Number(amount), scope: scope || undefined }); onClose(); }}>Set</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -268,6 +285,7 @@ function ThresholdDialog({ view, sector: s, onClose, onCommand, busy }: { view: 
 
 function RoadDialog({ rules, sector: s, onClose, onCommand, busy }: { rules: Rules; sector: SectorView; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean }) {
   const [target, setTarget] = useState(String(Math.min(100, Math.max(s.roadTarget, Math.ceil(s.roadLevel / 10) * 10 + 20))));
+  const [scope, setScope] = useState("");
   const t = Math.max(0, Math.min(100, Number(target) || 0));
   const r = rules.road;
   const mult = r?.costMultiplierByTerrain?.[s.terrain] ?? 1;
@@ -286,10 +304,12 @@ function RoadDialog({ rules, sector: s, onClose, onCommand, busy }: { rules: Rul
               {t > cap && <div className="text-destructive">above the {s.terrain} cap of {cap}</div>}
             </div>
           )}
+          <ScopeSelect s={s} scope={scope} setScope={setScope} />
+          {scope && <p className="text-xs text-muted-foreground">Sectors whose terrain caps below {t} are skipped; the reply says which.</p>}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button disabled={busy || t > cap} onClick={async () => { await onCommand({ verb: "build_road", x: s.at.x, y: s.at.y, amount: t }); onClose(); }}>{t === 0 ? "Cancel order" : "Order"}</Button>
+          <Button disabled={busy || (!scope && t > cap)} onClick={async () => { await onCommand({ verb: "build_road", x: s.at.x, y: s.at.y, amount: t, scope: scope || undefined }); onClose(); }}>{t === 0 ? "Cancel order" : "Order"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -304,6 +324,7 @@ function isDepot(s: SectorView, rules: Rules): boolean {
 function RailDialog({ rules, sector: s, onClose, onCommand, busy }: { rules: Rules; sector: SectorView; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean }) {
   const r = rules.rail;
   const [target, setTarget] = useState(String(Math.min(100, Math.max(s.railTarget, Math.ceil(s.railLevel / 10) * 10 + 20))));
+  const [scope, setScope] = useState("");
   const t = Math.max(0, Math.min(100, Number(target) || 0));
   const mult = r?.costMultiplierByTerrain?.[s.terrain] ?? 1;
   const cap = r?.maxLevelByTerrain?.[s.terrain] ?? 100;
@@ -321,10 +342,11 @@ function RailDialog({ rules, sector: s, onClose, onCommand, busy }: { rules: Rul
               {t > cap && <div className="text-destructive">above the {s.terrain} cap of {cap}</div>}
             </div>
           )}
+          <ScopeSelect s={s} scope={scope} setScope={setScope} />
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button disabled={busy || t > cap} onClick={async () => { await onCommand({ verb: "build_rail", x: s.at.x, y: s.at.y, amount: t }); onClose(); }}>{t === 0 ? "Cancel order" : "Order"}</Button>
+          <Button disabled={busy || (!scope && t > cap)} onClick={async () => { await onCommand({ verb: "build_rail", x: s.at.x, y: s.at.y, amount: t, scope: scope || undefined }); onClose(); }}>{t === 0 ? "Cancel order" : "Order"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

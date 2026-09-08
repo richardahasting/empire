@@ -234,6 +234,57 @@ public class GameService {
         } finally { g.lock.unlock(); }
     }
 
+    /**
+     * Many commands as one action (issue #38): run in order on the evolving world under one lock,
+     * saved once, logged per command. Each sector pays its own BTU; when BTUs run out the rest are
+     * skipped and the reply says so. Partial success is success — the summary lists what was skipped.
+     */
+    public Outcome commandAll(long gameId, Account a, List<Command> cmds, String source) {
+        if (cmds.size() == 1) return command(gameId, a, cmds.get(0), source);
+        Game g = get(gameId);
+        int country = myCountry(gameId, a);
+        if (!"running".equals(g.status)) throw new IllegalArgumentException("game is " + g.status);
+        g.lock.lock();
+        try {
+            World before = g.world, cur = before;
+            Coord cap = before.country(country).capital();
+            int applied = 0, outOfBtu = 0; double btu = 0;
+            List<String> skipped = new ArrayList<>();
+            for (int i = 0; i < cmds.size(); i++) {
+                Command cmd = cmds.get(i);
+                CommandResult r = g.exec.execute(cur, country, cmd);
+                logs.command(gameId, country, before.updateNumber(), source, cmd.verb(), cmd, r.ok(), r.error(), r.btuSpent());
+                if (r.ok()) { cur = r.world(); applied++; btu += r.btuSpent(); continue; }
+                if (r.error().startsWith("not enough BTUs")) { outOfBtu = cmds.size() - i; break; }
+                skipped.add(relativise(before, cap, sectorOf(cmd) + ": " + r.error()));
+            }
+            if (applied > 0) { worlds.saveDiff(gameId, before, cur, g.com); g.world = cur; }
+            StringBuilder sb = new StringBuilder("applied to " + applied + " of " + cmds.size() + " sectors");
+            if (!skipped.isEmpty()) {
+                sb.append("; skipped ").append(skipped.size()).append(" — ").append(String.join("; ", skipped.subList(0, Math.min(4, skipped.size()))));
+                if (skipped.size() > 4) sb.append("; …");
+            }
+            if (outOfBtu > 0) sb.append("; out of BTUs with ").append(outOfBtu).append(" still to do");
+            String msg = sb.toString();
+            return new Outcome(applied > 0, applied > 0 ? null : msg, btu, CountryView.of(g.world, g.cfg, country), applied > 0 ? msg : null);
+        } finally { g.lock.unlock(); }
+    }
+
+    private static String sectorOf(Command c) {
+        Coord at = switch (c) {
+            case Command.Designate d -> d.sector();
+            case Command.Threshold t -> t.sector();
+            case Command.Distribute d -> d.sector();
+            case Command.BuildRoad r -> r.sector();
+            case Command.BuildRail r -> r.sector();
+            case Command.Move m -> m.from();
+            case Command.Explore e -> e.from();
+            case Command.RailShip r -> r.from();
+            case Command.BreakSanctuary b -> null;
+        };
+        return at == null ? c.verb() : at.x() + "," + at.y();
+    }
+
     public Country country(long gameId, int id) { return get(gameId).world.country(id); }
     public LogRepository.UpdateEntry lastUpdate(long gameId) { return logs.lastUpdate(gameId); }
 }

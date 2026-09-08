@@ -36,13 +36,13 @@ public class Console {
                 case "map" -> new Reply(map(v, cfg), true, null, null);
                 case "census", "cen" -> new Reply(census(v), true, null, null);
                 case "break" -> cmd(gameId, a, new Command.BreakSanctuary());
-                case "des", "designate" -> { need(t, 3, "des x,y type"); yield cmd(gameId, a, new Command.Designate(abs(v, t[1]), t[2])); }
-                case "thresh", "threshold" -> { need(t, 4, "thresh x,y commodity amount"); yield cmd(gameId, a, new Command.Threshold(abs(v, t[1]), t[2], Double.parseDouble(t[3]))); }
-                case "dist", "distribute" -> { need(t, 3, "dist x,y cx,cy|none"); yield cmd(gameId, a, new Command.Distribute(abs(v, t[1]), t[2].equalsIgnoreCase("none") ? null : abs(v, t[2]))); }
+                case "des", "designate" -> { need(t, 3, "des SECTOR type"); yield many(gameId, a, v, cfg, t[1], at -> new Command.Designate(at, t[2])); }
+                case "thresh", "threshold" -> { need(t, 4, "thresh SECTOR commodity amount"); double n = Double.parseDouble(t[3]); yield many(gameId, a, v, cfg, t[1], at -> new Command.Threshold(at, t[2], n)); }
+                case "dist", "distribute" -> { need(t, 3, "dist SECTOR cx,cy|none"); Coord ctr = t[2].equalsIgnoreCase("none") ? null : abs(v, t[2]); yield many(gameId, a, v, cfg, t[1], at -> new Command.Distribute(at, ctr)); }
                 case "move" -> { need(t, 5, "move commodity from_x,y to_x,y qty"); yield cmd(gameId, a, new Command.Move(abs(v, t[2]), abs(v, t[3]), t[1], Double.parseDouble(t[4]))); }
-                case "rail" -> { need(t, 3, "rail x,y LEVEL"); yield cmd(gameId, a, new Command.BuildRail(abs(v, t[1]), Double.parseDouble(t[2]))); }
+                case "rail" -> { need(t, 3, "rail SECTOR LEVEL"); double lvl = Double.parseDouble(t[2]); yield many(gameId, a, v, cfg, t[1], at -> new Command.BuildRail(at, lvl)); }
                 case "railship", "train" -> { need(t, 5, "railship COMMODITY from_x,y to_x,y qty"); yield cmd(gameId, a, new Command.RailShip(abs(v, t[2]), abs(v, t[3]), t[1], Double.parseDouble(t[4]))); }
-                case "road" -> { need(t, 3, "road x,y LEVEL"); yield cmd(gameId, a, new Command.BuildRoad(abs(v, t[1]), Double.parseDouble(t[2]))); }
+                case "road" -> { need(t, 3, "road SECTOR LEVEL"); double lvl = Double.parseDouble(t[2]); yield many(gameId, a, v, cfg, t[1], at -> new Command.BuildRoad(at, lvl)); }
                 case "expl", "explore" -> { need(t, 4, "expl from_x,y to_x,y civs"); yield cmd(gameId, a, new Command.Explore(abs(v, t[1]), abs(v, t[2]), Double.parseDouble(t[3]))); }
                 default -> new Reply("", false, "unknown command '" + verb + "' (try help)", null);
             };
@@ -51,8 +51,15 @@ public class Console {
         }
     }
 
-    private Reply cmd(long gameId, Account a, Command c) {
-        GameService.Outcome o = games.command(gameId, a, c, "console");
+    private Reply cmd(long gameId, Account a, Command c) { return reply(games.command(gameId, a, c, "console")); }
+
+    /** The same verb on one sector or many: SECTOR is x,y · * · *:TYPE · x1:x2,y1:y2 (see {@link SectorSelector}). */
+    private Reply many(long gameId, Account a, CountryView v, GameConfig cfg, String sel, java.util.function.Function<Coord, Command> f) {
+        List<Command> cmds = SectorSelector.expand(v, cfg, sel).stream().map(f).toList();
+        return cmds.size() == 1 ? cmd(gameId, a, cmds.get(0)) : reply(games.commandAll(gameId, a, cmds, "console"));
+    }
+
+    private static Reply reply(GameService.Outcome o) {
         return new Reply(o.accepted() ? (o.info() != null ? o.info() + " (" + o.btuSpent() + " BTU)" : "ok (" + o.btuSpent() + " BTU)") : "", o.accepted(), o.error(), o.view());
     }
 
@@ -115,13 +122,15 @@ public class Console {
             map                          your map (relative coordinates, capital at 0,0)
             census                       one line per owned sector
             break                        break sanctuary
-            des x,y TYPE                 designate a sector (agribusiness, mine, light_manufacturing, warehouse, ...)
-            thresh x,y COMMODITY N       set a distribution threshold (negative clears)
-            dist x,y cx,cy | none        name a sector's distribution centre
-            move COMMODITY x,y x2,y2 N   move now; every sector entered pays mobility now
+            des SECTOR TYPE              designate (agribusiness, mine, light_manufacturing, warehouse, ...)
+            thresh SECTOR COMMODITY N    set a distribution threshold (negative clears)
+            dist SECTOR cx,cy | none     name a sector's distribution centre
+            move COMMODITY x,y x2,y2 N   move now; the sending sector pays the route's mobility now
             expl x,y x2,y2 N             explore into an adjacent unowned sector with N civilians
-            road x,y LEVEL               standing order: pave this sector toward LEVEL (0 cancels)
-            rail x,y LEVEL               standing order: lay rail toward LEVEL (needs tech 60; 0 cancels)
+            road SECTOR LEVEL            standing order: pave toward LEVEL (0 cancels)
+            rail SECTOR LEVEL            standing order: lay rail toward LEVEL (needs tech 60; 0 cancels)
+            SECTOR is x,y · * (all yours) · *:TYPE (all of one designation, id or glyph, e.g. *:a) · x1:x2,y1:y2 (a rectangle)
+              each sector pays its own BTU; e.g. road * 100 · thresh *:agribusiness hcm 50 · thresh -2:2,-2:2 food 100
             railship COMMODITY x,y x2,y2 N   train N units between two depots at the update (line checked now)
             """;
 }
