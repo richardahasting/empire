@@ -650,8 +650,12 @@ infrastructure:
     combat_damage_fraction: 0.30            # fraction of level lost when sector is captured
   rail:
     tech_required: 60
-    build_materials_per_point: { hcm: 2.0, lcm: 1.0, cash: 30 }
-    work_per_point: 20
+    # KNOWN (infra.config "rail network": l_b 100, h_b 100, bmob 100, cost 100 per 100 points):
+    # 1 lcm + 1 hcm + 1 sector mobility + $1 per point, no work. Richard 2026-09-08: highways
+    # and railroads must require materials to build — they do. Bridges and tunnels are ours (NEW).
+    build_materials_per_point: { lcm: 1, hcm: 1, cash: 1 }
+    work_per_point: 0
+    mobility_per_point: 1
     max_points_per_update: 5
     requires_depot_endpoints: true
     min_level_to_carry: 20                  # a segment below this breaks the chain

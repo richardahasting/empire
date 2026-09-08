@@ -44,6 +44,7 @@ for lack of the mechanic; decide those in the morning.
 | Sector mobility per update | flat ETUs × 1.0 = 60, cap 127, regardless of efficiency | 60 × efficiency (floor 25 %) | **matched** |
 | Cost to enter a sector | 0.4 per weight unit at 0 %, 0.2 at 100 % (linear); wilderness 0.4 flat; mountain 2.4 → 1.2; highway 0.4 → 0 | 0.8 → 0.32 | **matched** (forest 0.6, swamp 0.8 are ours) |
 | Roads | cost × (1 − 0.009 × road): a tenth at road 100 | diminishing to a quarter | **matched** |
+| Building roads / rail | road: 2 lcm + 2 hcm + 1 mobility + $2 per point; rail: 1 lcm + 1 hcm + 1 mobility + $1 per point (infra.config) | road 1.2 lcm + $8 + work; rail 2 hcm + 1 lcm + $30 | **matched** (rail lands in M4 with these numbers) |
 | Weight | lbs / packing: civilians pack 10 in any ≥ 60 % sector; goods pack 10 leaving a warehouse or harbor; bars 5 (warehouse) / 4 (bank); uw 2 (warehouse) | flat weight; warehouse stored 10× | **matched** — packing added; warehouse storage back to 9999 |
 | Who pays a hand move | the **source** sector, and the whole route must be affordable or nothing moves | every sector entered pays; partial moves | **deviation** (spec's rule). Ours charges the sectors entered and moves what fits. |
 | Reach of a hand move | unlimited (mobility is the limit) | 6 sectors | **matched** (limit set to 100) |
