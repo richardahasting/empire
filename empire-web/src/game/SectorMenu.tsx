@@ -8,7 +8,7 @@ import { Select } from "@/components/ui/select";
 
 type DialogKind = "move" | "explore" | "designate" | "threshold" | null;
 
-export interface PickSpec { verb: "move" | "explore"; from: SectorView; commodity: string; qty: number }
+export interface PickSpec { verb: "move" | "explore"; from: SectorView; commodity: string; qty: number; supply?: boolean }
 
 interface Props {
   gameId: number; view: CountryView; rules: Rules; sector: SectorView | null;
@@ -45,7 +45,14 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
               <ContextMenuLabel className="font-semibold text-popover-foreground">Sector {rel(s.relative)}</ContextMenuLabel>
               <Attributes s={s} view={view} />
               <ContextMenuSeparator />
-              <ContextMenuItem onSelect={() => setDialog("move")}>Move from here…</ContextMenuItem>
+              <ContextMenuLabel>Inventory — click to move</ContextMenuLabel>
+              {view.commodityIds.filter(c => (s.stock[c] ?? 0) >= 1).map(c => (
+                <ContextMenuItem key={c} className="justify-between tabular-nums" onSelect={() => onStartPick({ verb: "move", from: s, commodity: c, qty: Math.floor(s.stock[c] ?? 0) })}>
+                  <span>{c}</span><span className="text-muted-foreground">{Math.floor(s.stock[c] ?? 0)}{s.held[c] ? ` (+${s.held[c].toFixed(0)} in transit)` : ""}</span>
+                </ContextMenuItem>
+              ))}
+              <ContextMenuSeparator />
+              <ContextMenuItem onSelect={() => setDialog("move")}>Move from here (choose amount)…</ContextMenuItem>
               <ContextMenuItem disabled={adjacentUnowned.length === 0} onSelect={() => setDialog("explore")}>Explore from here…</ContextMenuItem>
               <ContextMenuSeparator />
               <ContextMenuItem onSelect={() => setDialog("designate")}>Designate…</ContextMenuItem>
@@ -60,7 +67,7 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
       </ContextMenu>
 
       {s && owned && dialog === "move" && <MoveDialog gameId={gameId} view={view} from={s} byRel={byRel} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} onPick={(commodity, qty) => { setDialog(null); onStartPick({ verb: "move", from: s, commodity, qty }); }} />}
-      {s && owned && dialog === "explore" && <ExploreDialog gameId={gameId} from={s} targets={adjacentUnowned} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} onPick={civs => { setDialog(null); onStartPick({ verb: "explore", from: s, commodity: "civ", qty: civs }); }} />}
+      {s && owned && dialog === "explore" && <ExploreDialog gameId={gameId} view={view} from={s} targets={adjacentUnowned} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} onPick={(civs, supply) => { setDialog(null); onStartPick({ verb: "explore", from: s, commodity: "civ", qty: civs, supply }); }} />}
       {s && owned && dialog === "designate" && <DesignateDialog view={view} rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "threshold" && <ThresholdDialog view={view} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
     </>
@@ -69,14 +76,12 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
 
 /** The sector at a glance, inside the menu. */
 function Attributes({ s, view }: { s: SectorView; view: CountryView }) {
-  const main = ["civ", "mil", "food", "iron", "lcm", "hcm", "oil", "pet"].filter(c => view.commodityIds.includes(c));
   const th = Object.keys(s.thresholds).length;
   const held = Object.values(s.held).reduce((a, b) => a + b, 0);
   return (
     <div className="px-2 pb-1 text-xs text-muted-foreground">
       <div className="text-popover-foreground">{s.designation} · {s.terrain} · eff {s.efficiency.toFixed(0)}% · mob {s.mobility.toFixed(0)}{s.roadLevel > 0 && ` · road ${s.roadLevel.toFixed(0)}`}</div>
       {s.resources && <div>fert {s.resources.fertility} · min {s.resources.minerals} · gold {s.resources.gold} · oil {s.resources.oil} · uran {s.resources.uranium}</div>}
-      <div className="tabular-nums">{main.map(c => `${c} ${(s.stock[c] ?? 0).toFixed(0)}`).join(" · ")}</div>
       <div>centre {s.distCenter ? `${view.sectors.find(o => o.at.x === s.distCenter!.x && o.at.y === s.distCenter!.y)?.relative.x ?? "?"},${view.sectors.find(o => o.at.x === s.distCenter!.x && o.at.y === s.distCenter!.y)?.relative.y ?? "?"}` : "none"} · {th} threshold{th === 1 ? "" : "s"}{held > 0 && ` · ${held.toFixed(0)} in transit`}</div>
     </div>
   );
@@ -151,9 +156,17 @@ function MoveDialog({ gameId, view, from, byRel, onClose, onCommand, busy, onPic
   );
 }
 
-function ExploreDialog({ gameId, from, targets, onClose, onCommand, busy, onPick }: { gameId: number; from: SectorView; targets: SectorView[]; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean; onPick: (civs: number) => void }) {
+/** After a claim: point the new sector at the capital and give it food/civ thresholds so settlers eat. Three commands, three BTUs. */
+export async function supplyFromCapital(view: CountryView, at: Coord, onCommand: (c: CommandRequest) => Promise<void>) {
+  await onCommand({ verb: "distribute", x: at.x, y: at.y, x2: view.capital.x, y2: view.capital.y });
+  await onCommand({ verb: "threshold", x: at.x, y: at.y, commodity: "food", amount: 100 });
+  await onCommand({ verb: "threshold", x: at.x, y: at.y, commodity: "civ", amount: 100 });
+}
+
+function ExploreDialog({ gameId, view, from, targets, onClose, onCommand, busy, onPick }: { gameId: number; view: CountryView; from: SectorView; targets: SectorView[]; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean; onPick: (civs: number, supply: boolean) => void }) {
   const [targetKey, setTargetKey] = useState(targets[0] ? `${targets[0].at.x},${targets[0].at.y}` : "");
   const [civs, setCivs] = useState("20");
+  const [supply, setSupply] = useState(true);
   const [est, setEst] = useState<Estimate | null>(null);
   const target = targets.find(t => `${t.at.x},${t.at.y}` === targetKey);
   const n = Number(civs);
@@ -178,11 +191,13 @@ function ExploreDialog({ gameId, from, targets, onClose, onCommand, busy, onPick
             <Input value={civs} onChange={e => setCivs(e.target.value)} inputMode="numeric" autoFocus />
           </label>
           {target && n > 0 && <EstimateView e={est} unit="civilians" />}
+          <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={supply} onChange={e => setSupply(e.target.checked)} />
+            Supply it from the capital afterwards: distribution centre = capital, thresholds food 100 and civ 100 (3 BTU). Settlers with no food supply starve.</label>
         </div>
         <DialogFooter>
-          <Button variant="secondary" disabled={!(n > 0)} onClick={() => onPick(n)}>Pick on map…</Button>
+          <Button variant="secondary" disabled={!(n > 0)} onClick={() => onPick(n, supply)}>Pick on map…</Button>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button disabled={busy || !target || !(n > 0) || !est?.ok} onClick={async () => { await onCommand({ verb: "explore", x: from.at.x, y: from.at.y, x2: target!.at.x, y2: target!.at.y, amount: n }); onClose(); }}>Explore</Button>
+          <Button disabled={busy || !target || !(n > 0) || !est?.ok} onClick={async () => { await onCommand({ verb: "explore", x: from.at.x, y: from.at.y, x2: target!.at.x, y2: target!.at.y, amount: n }); if (supply) await supplyFromCapital(view, target!.at, onCommand); onClose(); }}>Explore</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

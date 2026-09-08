@@ -6,9 +6,10 @@ import { HexMap, type Layer } from "@/map/HexMap";
 import { Inspector } from "@/game/Inspector";
 import { ConsolePanel } from "@/game/ConsolePanel";
 import { Dashboard } from "@/game/Dashboard";
-import { SectorMenu, type PickSpec } from "@/game/SectorMenu";
+import { SectorMenu, supplyFromCapital, type PickSpec } from "@/game/SectorMenu";
 import { estimate, type Estimate } from "@/api/client";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 
@@ -93,12 +94,14 @@ export function GamePage() {
   }, [pick, hover, est, view, byRel]);
   const onMapSelect = useCallback((c: Coord | null) => {
     if (!pick) { setSelected(c); return; }
-    if (!c || !est?.ok) return;
+    if (!c || !est?.ok || pick.qty <= 0) return;
     const spec = pick; setPick(null);
-    void command(spec.verb === "move"
-      ? { verb: "move", x: spec.from.at.x, y: spec.from.at.y, x2: c.x, y2: c.y, commodity: spec.commodity, amount: spec.qty }
-      : { verb: "explore", x: spec.from.at.x, y: spec.from.at.y, x2: c.x, y2: c.y, amount: spec.qty });
-  }, [pick, est, command]);
+    if (spec.verb === "move") { void command({ verb: "move", x: spec.from.at.x, y: spec.from.at.y, x2: c.x, y2: c.y, commodity: spec.commodity, amount: spec.qty }); return; }
+    void (async () => {
+      await command({ verb: "explore", x: spec.from.at.x, y: spec.from.at.y, x2: c.x, y2: c.y, amount: spec.qty });
+      if (spec.supply && view) await supplyFromCapital(view, c, command);
+    })();
+  }, [pick, est, command, view]);
 
   const sector = useMemo(() => view && selected ? view.sectors.find(s => s.at.x === selected.x && s.at.y === selected.y) ?? null : null, [view, selected]);
 
@@ -129,7 +132,10 @@ export function GamePage() {
           <div className="relative min-h-[24rem]">
             {pick && (
               <div className="absolute left-2 top-2 z-10 flex items-center gap-2 rounded-md border border-border bg-popover px-2 py-1 text-xs shadow-md">
-                <span>{pick.verb === "move" ? `Moving ${pick.qty} ${pick.commodity}` : `Exploring with ${pick.qty} civilians`} from {pick.from.relative.x},{pick.from.relative.y} — click a destination</span>
+                <span>{pick.verb === "move" ? "Moving" : "Exploring with"}</span>
+                <Input value={String(pick.qty)} onChange={e => { const q = Math.max(0, Math.floor(Number(e.target.value) || 0)); setPick({ ...pick, qty: q }); }}
+                       inputMode="numeric" className="h-7 w-20 text-xs" aria-label="quantity" />
+                <span>{pick.verb === "move" ? pick.commodity : "civilians"} <span className="text-muted-foreground">(of {Math.floor(pick.from.stock[pick.commodity] ?? 0)})</span> from {pick.from.relative.x},{pick.from.relative.y} — click a destination</span>
                 <Button size="sm" variant="ghost" onClick={() => setPick(null)}>Cancel (Esc)</Button>
               </div>
             )}
