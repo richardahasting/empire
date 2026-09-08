@@ -19,7 +19,11 @@ Live at <https://hastingtx.org/empire/> (holding page until M1).
 
 ## Status
 
-**M1 in progress** (issue #5): PostgreSQL persistence (Flyway), passwordless
+**M4 done** (issue #27): the four national levels with the original's formulas, rail
+networks and depots (build orders, depot-to-depot trains with capacity, range,
+holding and stranding, a rail map layer), on top of the rules reconciliation with
+the Wolfpack source (#24, `docs/original-rules.md`). **M2 done** (#18): roads,
+budget projection, scheduled updates, flow animation. **M1** (issue #5): PostgreSQL persistence (Flyway), passwordless
 magic-link accounts, REST API, the React map UI (canvas hex map with layers,
 sector inspector, console with history, nation dashboard), admin world creation
 and a manual update trigger. Deployed as `empire.service` behind nginx at

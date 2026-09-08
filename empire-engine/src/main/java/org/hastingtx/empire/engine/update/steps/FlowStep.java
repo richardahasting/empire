@@ -63,6 +63,7 @@ public final class FlowStep implements Step {
         for (int i = 0; i < ctx.led.nSectors; i++) {
             for (HeldParcel p : ctx.sector(i).held()) {
                 heldRefs.add(p); heldAt.put(p, i);
+                if (p.rail()) continue;   // trains are handled by the rail pass
                 List<Coord> path = path(ctx, ctx.sector(i).at(), p.dest(), p.owner(), dc);
                 if (path == null) continue; // stays where it is
                 plans.add(new Plan("resume", p.owner(), p.commodity(), i, p.dest(), truncate(ctx, path, p.owner(), dc), p, p.qty()));
@@ -77,7 +78,7 @@ public final class FlowStep implements Step {
             List<Coord> p = path.size() - 1 > reach ? new ArrayList<>(path.subList(0, reach + 1)) : path;
             plans.add(new Plan("move", m.owner(), m.commodity(), fi, m.to(), p, null, floorQ(m.qty(), quantum)));
         }
-        if (plans.isEmpty()) { carryHeld(ctx, Map.of()); return; }
+        if (plans.isEmpty()) { Map<Integer, List<HeldParcel>> nh = new HashMap<>(); for (int i = 0; i < ctx.led.nSectors; i++) for (HeldParcel p : ctx.sector(i).held()) addHeld(nh, i, p); railPass(ctx, nh); carryHeld(ctx, nh); return; }
 
         // --- 7. resolve contention ------------------------------------------------------
         // source budgets
@@ -190,7 +191,74 @@ public final class FlowStep implements Step {
         for (int i = 0; i < ctx.led.nSectors; i++) ctx.led.mobility[i] -= mobSpent[i];
         // held parcels that were not planned (no route) stay put
         for (HeldParcel p : heldRefs) if (!consumedHeld.contains(p)) addHeld(newHeld, heldAt.get(p), p);
+        railPass(ctx, newHeld);
         carryHeld(ctx, newHeld);
+    }
+
+    /**
+     * Rail (NEW by spec): trains run depot to depot along contiguous rail. Each rail sector has a
+     * capacity budget per update (shared proportionally); a train advances up to its range and
+     * holds on the rail sector it reached; a severed line strands it in place. Cash by volume.
+     */
+    private void railPass(Ctx ctx, Map<Integer, List<HeldParcel>> newHeld) {
+        var rail = ctx.cfg.infrastructure().rail();
+        record Train(int owner, int commodity, double qty, int originIdx, Coord dest, List<Coord> path, HeldParcel from) {}
+        List<Train> trains = new ArrayList<>();
+        // new orders
+        for (var o : ctx.snap.pendingRail()) {
+            List<Coord> path = ctx.railPath(o.from(), o.to(), o.owner());
+            if (path == null) { ctx.led.event("rail_severed", o.owner(), o.from(), "no rail line from " + o.from() + " to " + o.to() + " any more; shipment cancelled", o.qty()); continue; }
+            int fi = ctx.idx(o.from());
+            double avail = ctx.sector(fi).stock().get(o.commodity()) + ctx.led.stock[fi][o.commodity()];
+            trains.add(new Train(o.owner(), o.commodity(), Math.max(0, Math.min(o.qty(), avail)), fi, o.to(), path, null));
+        }
+        // trains already on the line: they were removed from newHeld's carry-over by the road pass only if planned there; rail parcels were never planned there, so take them out now
+        for (var e : new ArrayList<>(newHeld.entrySet())) {
+            List<HeldParcel> keep = new ArrayList<>();
+            for (HeldParcel p : e.getValue()) {
+                if (!p.rail()) { keep.add(p); continue; }
+                List<Coord> path = ctx.railPath(ctx.sector(e.getKey()).at(), p.dest(), p.owner());
+                if (path == null) { keep.add(p); ctx.led.event("rail_stranded", p.owner(), ctx.sector(e.getKey()).at(), "train stranded at " + ctx.sector(e.getKey()).at() + ": the line to " + p.dest() + " is cut", p.qty()); continue; }
+                trains.add(new Train(p.owner(), p.commodity(), p.qty(), e.getKey(), p.dest(), path, p));
+            }
+            e.setValue(keep);
+        }
+        if (trains.isEmpty()) return;
+        // capacity contention per rail sector entered, proportional
+        double[] cap = new double[ctx.led.nSectors];
+        for (int i = 0; i < ctx.led.nSectors; i++) cap[i] = ctx.railCapable(i) ? ctx.railCapacity(i) : 0;
+        double[] claim = new double[trains.size()];
+        for (int k = 0; k < trains.size(); k++) claim[k] = trains.get(k).qty();
+        for (int iter = 0; iter < 50; iter++) {
+            double[] used = new double[ctx.led.nSectors]; boolean changed = false;
+            for (int k = 0; k < trains.size(); k++) for (int h = 1; h < trains.get(k).path.size(); h++) used[ctx.idx(trains.get(k).path.get(h))] += claim[k];
+            for (int k = 0; k < trains.size(); k++) {
+                double f = 1.0;
+                for (int h = 1; h < trains.get(k).path.size(); h++) { int t = ctx.idx(trains.get(k).path.get(h)); if (used[t] > cap[t] + 1e-9) f = Math.min(f, cap[t] / used[t]); }
+                if (f < 1.0) { claim[k] *= f; changed = true; }
+            }
+            if (!changed) break;
+        }
+        for (int k = 0; k < trains.size(); k++) {
+            Train t = trains.get(k);
+            double qty = claim[k];
+            if (qty <= 1e-9) { ctx.led.flows.add(new Flow("rail", t.owner, t.commodity, t.qty, 0, t.path, 0, false, "line at capacity")); continue; }
+            int range = (int) Math.floor(rail.maxSectorsPerUpdate().eval(ctx.country(t.owner).levels().tech()));
+            int hops = Math.min(range, t.path.size() - 1);
+            int stopIdx = ctx.idx(t.path.get(hops));
+            boolean arrives = hops == t.path.size() - 1;
+            // depot efficiency at the endpoints scales what actually gets through (spec: capacity scales with depot efficiency)
+            double effScale = Math.min(ctx.sector(ctx.idx(t.path.get(0))).efficiency(), ctx.sector(ctx.idx(t.dest)).efficiency()) / 100.0;
+            double moving = Math.min(qty, t.from == null ? qty : t.qty) * (t.from == null ? Math.max(0.01, effScale) : 1.0);
+            if (t.from == null) ctx.led.toHeld(t.originIdx, t.commodity, moving);   // leaves stock; becomes cargo
+            double leftover = t.qty - moving;
+            if (t.from != null && leftover > 1e-9) addHeld(newHeld, t.originIdx, t.from.withQty(leftover));
+            if (arrives) ctx.led.fromHeld(stopIdx, t.commodity, moving);
+            else addHeld(newHeld, stopIdx, new HeldParcel(t.commodity, moving, t.owner, t.path.get(0), t.dest, ctx.snap.updateNumber(), "rail"));
+            double cash = rail.cashPer100UnitsShipped() * moving / 100.0;
+            ctx.led.cash[t.owner] -= cash;
+            ctx.led.flows.add(new Flow("rail", t.owner, t.commodity, t.qty, moving, t.path, hops, arrives, arrives ? null : "range exhausted at " + t.path.get(hops)));
+        }
     }
 
     private static void carryHeld(Ctx ctx, Map<Integer, List<HeldParcel>> newHeld) {
@@ -203,8 +271,8 @@ public final class FlowStep implements Step {
         List<HeldParcel> l = m.computeIfAbsent(at, k -> new ArrayList<>());
         for (int i = 0; i < l.size(); i++) {
             HeldParcel q = l.get(i);
-            if (q.commodity() == p.commodity() && q.owner() == p.owner() && q.dest().equals(p.dest())) {
-                l.set(i, new HeldParcel(p.commodity(), q.qty() + p.qty(), p.owner(), q.origin(), p.dest(), Math.min(q.issuedUpdate(), p.issuedUpdate())));
+            if (q.commodity() == p.commodity() && q.owner() == p.owner() && q.dest().equals(p.dest()) && q.rail() == p.rail()) {
+                l.set(i, new HeldParcel(p.commodity(), q.qty() + p.qty(), p.owner(), q.origin(), p.dest(), Math.min(q.issuedUpdate(), p.issuedUpdate()), p.mode()));
                 return;
             }
         }

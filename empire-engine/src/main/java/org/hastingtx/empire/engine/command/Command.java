@@ -8,7 +8,7 @@ import org.hastingtx.empire.engine.model.Coord;
  */
 public sealed interface Command permits
         Command.BreakSanctuary, Command.Designate, Command.Threshold, Command.Distribute,
-        Command.Move, Command.Explore, Command.BuildRoad {
+        Command.Move, Command.Explore, Command.BuildRoad, Command.BuildRail, Command.RailShip {
 
     String verb();
 
@@ -27,6 +27,12 @@ public sealed interface Command permits
 
     /** Standing order: build this sector's road toward {@code targetLevel} (0..100) over the coming updates; 0 cancels. */
     record BuildRoad(Coord sector, double targetLevel) implements Command { public String verb() { return "build_road"; } }
+
+    /** Standing order: lay rail in this sector toward {@code targetLevel}; 0 cancels. Needs the tech. */
+    record BuildRail(Coord sector, double targetLevel) implements Command { public String verb() { return "build_rail"; } }
+
+    /** Ship by rail between two depots. Connectivity is checked now; the train runs at the update. */
+    record RailShip(Coord from, Coord to, String commodity, double qty) implements Command { public String verb() { return "rail_ship"; } }
 
     /** Claim an adjacent unowned land sector by moving civilians into it. Immediate. */
     record Explore(Coord from, Coord to, double civs) implements Command { public String verb() { return "explore"; } }

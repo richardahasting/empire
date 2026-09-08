@@ -156,7 +156,7 @@ export function GamePage() {
         <div className="flex items-center gap-2 text-sm">
           <label className="flex items-center gap-1">layer
             <Select value={layer} onChange={e => setLayer(e.target.value as Layer)} className="w-36">
-              <option value="ownership">ownership</option><option value="designation">designation</option><option value="efficiency">efficiency</option><option value="mobility">mobility</option><option value="stock">stock</option><option value="roads">roads</option>
+              <option value="ownership">ownership</option><option value="designation">designation</option><option value="efficiency">efficiency</option><option value="mobility">mobility</option><option value="stock">stock</option><option value="roads">roads</option><option value="rail">rail</option>
             </Select>
           </label>
           {layer === "stock" && <Select value={stock} onChange={e => setStock(e.target.value)} className="w-28">{view.commodityIds.map(c => <option key={c}>{c}</option>)}</Select>}

@@ -39,7 +39,8 @@ public final class ApplyStep {
             Sector n = s.withStock(Stocks.of(q))
                     .withEfficiency(clamp(s.efficiency() + led.efficiency[i], 0, 100))
                     .withMobility(clamp(s.mobility() + led.mobility[i], 0, mobMax))
-                    .withRoadLevel(clamp(s.roadLevel() + led.road[i], 0, 100));
+                    .withRoadLevel(clamp(s.roadLevel() + led.road[i], 0, 100))
+                    .withRailLevel(clamp(s.railLevel() + led.rail[i], 0, 100));
             if (led.heldNext[i] != null) n = n.withHeld(led.heldNext[i]);
             next.add(n);
         }
@@ -51,7 +52,7 @@ public final class ApplyStep {
             countries.add(new Country(c.id(), c.name(), c.capital(), c.cash() + led.cash[c.id()], c.btu() + led.btu[c.id()], lv,
                     c.handicap(), c.inSanctuary(), led.bankruptNext[c.id()], led.plagueLeft[c.id()]));
         }
-        World out = new World(snap.width(), snap.height(), snap.wrapX(), snap.wrapY(), next, countries, List.of(), snap.updateNumber() + 1);
+        World out = new World(snap.width(), snap.height(), snap.wrapX(), snap.wrapY(), next, countries, List.of(), snap.updateNumber() + 1, List.of());
         checkConservation(ctx, out);
         return new UpdateResult(out, List.copyOf(led.events), List.copyOf(led.flows), hash(out));
     }
@@ -82,12 +83,12 @@ public final class ApplyStep {
             for (Sector s : w.sectors()) {
                 sb.append(s.at()).append('|').append(s.terrain()).append('|').append(s.elevation()).append('|').append(s.resources()).append('|')
                   .append(s.owner()).append('|').append(s.designation()).append('|').append(f(s.efficiency())).append('|').append(f(s.mobility())).append('|')
-                  .append(f(s.roadLevel())).append('|').append(f(s.roadTarget())).append('|').append(s.distCenter()).append('|').append(s.sanctuary()).append('|');
+                  .append(f(s.roadLevel())).append('|').append(f(s.roadTarget())).append('|').append(f(s.railLevel())).append('|').append(f(s.railTarget())).append('|').append(s.distCenter()).append('|').append(s.sanctuary()).append('|');
                 for (int c = 0; c < s.stock().size(); c++) sb.append(f(s.stock().get(c))).append(',');
                 sb.append('|');
                 for (int c = 0; c < s.thresholds().length; c++) sb.append(Double.isNaN(s.thresholds()[c]) ? "-" : f(s.thresholds()[c])).append(',');
                 sb.append('|');
-                for (HeldParcel p : s.held()) sb.append(p.commodity()).append(':').append(f(p.qty())).append('>').append(p.dest()).append(';');
+                for (HeldParcel p : s.held()) sb.append(p.commodity()).append(':').append(f(p.qty())).append('>').append(p.dest()).append(p.rail() ? "R" : "").append(';');
                 sb.append('\n');
             }
             for (Country c : w.countries()) {

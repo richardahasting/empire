@@ -15,7 +15,7 @@ public final class Ledger {
     public final int nSectors, nCom, nCountries;
 
     public final double[][] stock;       // [sector][commodity]
-    public final double[] efficiency, mobility, road;
+    public final double[] efficiency, mobility, road, rail;
     public final double[] cash, btu;
     public final double[][] level;       // [country][tech, research, education, happiness]
     public final boolean[] bankruptNext;
@@ -36,7 +36,7 @@ public final class Ledger {
         this.nCom = nCom;
         this.nCountries = snap.countries().size();
         stock = new double[nSectors][nCom];
-        efficiency = new double[nSectors]; mobility = new double[nSectors]; road = new double[nSectors];
+        efficiency = new double[nSectors]; mobility = new double[nSectors]; road = new double[nSectors]; rail = new double[nSectors];
         cash = new double[nCountries]; btu = new double[nCountries];
         level = new double[nCountries][4];
         bankruptNext = new boolean[nCountries];

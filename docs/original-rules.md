@@ -70,8 +70,11 @@ for lack of the mechanic; decide those in the morning.
 | Military pay | 0.0833333 per soldier per ETU (10× a civilian's tax) | 0.0083 | **matched** |
 | Start cash | 25000 | 5000 | **matched** |
 | BTUs | ETU × civilians (≤ 1000) × efficiency-in-percent × 0.0012, cap 640: a full capital refills 640 every update | 24 per update | **matched** |
-| Level decline | 1 % per 96 ETUs of the level (proportional), not tech | flat 0.0002 per ETU | **deviation** — M4, decide then |
-| Happiness/education consumption | hap_cons / edu_cons 600000 with averaging windows | own | deviation — M4 |
+| Level decline | tech and research age 1 % per 96 ETUs (`age_levels`) | flat 0.0002 per ETU | **matched** (M4) |
+| Tech/research gains | `limit_level`: easy + log_base(prod − easy + 1), easy 1.0/0.75, base 2 | linear | **matched** (M4) |
+| Education/happiness | moving averages of a per-ETU rate: consumption 600000, averages 192/48 ETUs, hap_edu factor, flag-1 limit (easy 5, base 4/6) | accumulating stocks | **matched** (M4) |
+| Technology bleed | below best/5: 20 % chance to gain (best/5 − level)/3 | none | **matched** (M4) |
+| Unrest | happiness below (tech−40)/40 + edu/3 erodes loyalty, cuts work, may revolt | none | **deviation** — M5 territory |
 | Bank interest | bankint 0.25 "dt × bars" | 0.0025 per bar per ETU | unresolved — read `nat.c` in M4 |
 
 ## Notes for the morning

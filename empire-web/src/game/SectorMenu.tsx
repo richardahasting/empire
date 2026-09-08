@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 
-type DialogKind = "move" | "explore" | "designate" | "threshold" | "road" | null;
+type DialogKind = "move" | "explore" | "designate" | "threshold" | "road" | "rail" | "railship" | null;
 
 export interface PickSpec { verb: "move" | "explore"; from: SectorView; commodity: string; qty: number; supply?: boolean }
 
@@ -58,6 +58,8 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
               <ContextMenuItem onSelect={() => setDialog("designate")}>Designate…</ContextMenuItem>
               <ContextMenuItem onSelect={() => setDialog("threshold")}>Set threshold…</ContextMenuItem>
               <ContextMenuItem onSelect={() => setDialog("road")}>Build road…</ContextMenuItem>
+              <ContextMenuItem disabled={view.levels.tech < (rules.rail?.techRequired ?? 60)} onSelect={() => setDialog("rail")}>Build rail…{view.levels.tech < (rules.rail?.techRequired ?? 60) ? ` (tech ${rules.rail?.techRequired ?? 60})` : ""}</ContextMenuItem>
+              {isDepot(s, rules) && <ContextMenuItem onSelect={() => setDialog("railship")}>Ship by rail…</ContextMenuItem>}
               <ContextMenuSeparator />
               <ContextMenuItem disabled={busy || (s.distCenter?.x === view.capital.x && s.distCenter?.y === view.capital.y)}
                 onSelect={() => void onCommand({ verb: "distribute", x: s.at.x, y: s.at.y, x2: view.capital.x, y2: view.capital.y })}>Distribute to capital</ContextMenuItem>
@@ -72,6 +74,8 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
       {s && owned && dialog === "designate" && <DesignateDialog view={view} rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "threshold" && <ThresholdDialog view={view} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "road" && <RoadDialog rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
+      {s && owned && dialog === "rail" && <RailDialog rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
+      {s && owned && dialog === "railship" && <RailShipDialog gameId={gameId} view={view} rules={rules} from={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
     </>
   );
 }
@@ -88,7 +92,7 @@ function Attributes({ s, view }: { s: SectorView; view: CountryView }) {
   const held = Object.values(s.held).reduce((a, b) => a + b, 0);
   return (
     <div className="px-2 pb-1 text-xs text-muted-foreground">
-      <div className="text-popover-foreground">{s.designation} · {s.terrain} · eff {s.efficiency.toFixed(0)}% · mob {s.mobility.toFixed(0)}{(s.roadLevel > 0 || s.roadTarget > 0) && ` · road ${s.roadLevel.toFixed(0)}${s.roadTarget > s.roadLevel ? ` → ${s.roadTarget.toFixed(0)}` : ""}`}</div>
+      <div className="text-popover-foreground">{s.designation} · {s.terrain} · eff {s.efficiency.toFixed(0)}% · mob {s.mobility.toFixed(0)}{(s.roadLevel > 0 || s.roadTarget > 0) && ` · road ${s.roadLevel.toFixed(0)}${s.roadTarget > s.roadLevel ? ` → ${s.roadTarget.toFixed(0)}` : ""}`}{(s.railLevel > 0 || s.railTarget > 0) && ` · rail ${s.railLevel.toFixed(0)}${s.railTarget > s.railLevel ? ` → ${s.railTarget.toFixed(0)}` : ""}`}</div>
       {s.resources && <div>fert {s.resources.fertility} · min {s.resources.minerals} · gold {s.resources.gold} · oil {s.resources.oil} · uran {s.resources.uranium}</div>}
       <div>centre {s.distCenter ? `${view.sectors.find(o => o.at.x === s.distCenter!.x && o.at.y === s.distCenter!.y)?.relative.x ?? "?"},${view.sectors.find(o => o.at.x === s.distCenter!.x && o.at.y === s.distCenter!.y)?.relative.y ?? "?"}` : "none"} · {th} threshold{th === 1 ? "" : "s"}{held > 0 && ` · ${held.toFixed(0)} in transit`}</div>
     </div>
@@ -285,6 +289,82 @@ function RoadDialog({ rules, sector: s, onClose, onCommand, busy }: { rules: Rul
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button disabled={busy || t > cap} onClick={async () => { await onCommand({ verb: "build_road", x: s.at.x, y: s.at.y, amount: t }); onClose(); }}>{t === 0 ? "Cancel order" : "Order"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function isDepot(s: SectorView, rules: Rules): boolean {
+  const t = rules.sectorTypes.find(x => x.id === s.designation);
+  return !!t && (t.flags ?? []).includes("rail_endpoint");
+}
+
+function RailDialog({ rules, sector: s, onClose, onCommand, busy }: { rules: Rules; sector: SectorView; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean }) {
+  const r = rules.rail;
+  const [target, setTarget] = useState(String(Math.min(100, Math.max(s.railTarget, Math.ceil(s.railLevel / 10) * 10 + 20))));
+  const t = Math.max(0, Math.min(100, Number(target) || 0));
+  const mult = r?.costMultiplierByTerrain?.[s.terrain] ?? 1;
+  const cap = r?.maxLevelByTerrain?.[s.terrain] ?? 100;
+  const points = Math.max(0, t - s.railLevel);
+  return (
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Build rail at {s.relative.x},{s.relative.y}</DialogTitle><DialogDescription>A standing order. Rail carries nothing on its own: it works only as a contiguous line of sectors at {r?.minLevelToCarry ?? 20}+ between two depots. Materials, cash and this sector's mobility per point; decays unless maintained.</DialogDescription></DialogHeader>
+        <div className="grid gap-3 text-sm">
+          <div className="text-xs text-muted-foreground">Now {s.railLevel.toFixed(0)}{s.railTarget > 0 ? `, ordered to ${s.railTarget.toFixed(0)}` : ""} · {s.terrain} caps at {cap} · cost ×{mult}</div>
+          <label>Target level (0 cancels)<Input value={target} onChange={e => setTarget(e.target.value)} inputMode="numeric" autoFocus /></label>
+          {points > 0 && r && (
+            <div className="rounded-md border border-border bg-muted p-2 text-xs">
+              To reach {t}: {Object.entries(r.buildMaterialsPerPoint ?? {}).map(([k, v]) => `${(v * mult * points).toFixed(0)} ${k}`).join(", ")}, {(mult * points).toFixed(0)} mobility · about {Math.ceil(points / (r.maxPointsPerUpdate || 1))} update{Math.ceil(points / (r.maxPointsPerUpdate || 1)) === 1 ? "" : "s"} if supplied
+              {t > cap && <div className="text-destructive">above the {s.terrain} cap of {cap}</div>}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button disabled={busy || t > cap} onClick={async () => { await onCommand({ verb: "build_rail", x: s.at.x, y: s.at.y, amount: t }); onClose(); }}>{t === 0 ? "Cancel order" : "Order"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RailShipDialog({ gameId, view, rules, from, onClose, onCommand, busy }: { gameId: number; view: CountryView; rules: Rules; from: SectorView; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean }) {
+  const depots = view.sectors.filter(x => x.full && isDepot(x, rules) && !(x.at.x === from.at.x && x.at.y === from.at.y));
+  const [destKey, setDestKey] = useState(depots[0] ? `${depots[0].at.x},${depots[0].at.y}` : "");
+  const [commodity, setCommodity] = useState("iron");
+  const [qty, setQty] = useState("");
+  const [est, setEst] = useState<Estimate | null>(null);
+  const dest = depots.find(d => `${d.at.x},${d.at.y}` === destKey);
+  const n = Number(qty);
+  useEffect(() => {
+    setEst(null);
+    if (!dest || !(n > 0)) return;
+    let live = true;
+    estimate(gameId, { verb: "rail", x: from.at.x, y: from.at.y, x2: dest.at.x, y2: dest.at.y, commodity, amount: n }).then(e => { if (live) setEst(e); }).catch(() => {});
+    return () => { live = false; };
+  }, [gameId, from, dest, commodity, n]);
+  return (
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Ship by rail from {from.relative.x},{from.relative.y}</DialogTitle><DialogDescription>Depot to depot along a contiguous line. Checked now; the train runs at the update, {rules.rail?.maxSectorsPerUpdate.base ?? 8} sectors per update, and holds on the line beyond that. Cost is by volume, not distance.</DialogDescription></DialogHeader>
+        <div className="grid gap-3 text-sm">
+          {depots.length === 0 && <p className="text-destructive">You have no other depot.</p>}
+          <label>To depot<Select value={destKey} onChange={e => setDestKey(e.target.value)}>{depots.map(d => <option key={`${d.at.x},${d.at.y}`} value={`${d.at.x},${d.at.y}`}>{d.relative.x},{d.relative.y} · eff {d.efficiency.toFixed(0)}%</option>)}</Select></label>
+          <label>Commodity<Select value={commodity} onChange={e => setCommodity(e.target.value)}>{view.commodityIds.map(c => <option key={c} value={c}>{c} ({(from.stock[c] ?? 0).toFixed(0)} here)</option>)}</Select></label>
+          <label>Quantity<Input value={qty} onChange={e => setQty(e.target.value)} inputMode="numeric" autoFocus /></label>
+          {dest && n > 0 && (est ? (est.ok ? (
+            <div className="space-y-1 rounded-md border border-border bg-muted p-2 text-xs">
+              <div>Line: {est.path.map(c => `${c.x},${c.y}`).join(" → ")} <span className="text-muted-foreground">({est.path.length - 1} sectors, range {est.reach})</span></div>
+              <div>Capacity along the line: {Math.min(...est.hopCosts).toFixed(0)} per update · cost ${est.totalMobility.toFixed(0)}</div>
+              <div>{est.arrivesQty > 0 ? <><span className="font-medium">{est.arrivesQty.toFixed(0)}</span> arrive at the update</> : <>holds on the line at {est.holdsAt?.x},{est.holdsAt?.y} and continues next update</>}{est.heldQty > 0 && est.arrivesQty > 0 && <>, {est.heldQty.toFixed(0)} wait for capacity</>}</div>
+            </div>
+          ) : <p className="text-xs text-destructive">{est.error}</p>) : <p className="text-xs text-muted-foreground">Checking the line…</p>)}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button disabled={busy || !dest || !(n > 0) || !est?.ok} onClick={async () => { await onCommand({ verb: "rail_ship", x: from.at.x, y: from.at.y, x2: dest!.at.x, y2: dest!.at.y, commodity, amount: n }); onClose(); }}>Schedule train</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

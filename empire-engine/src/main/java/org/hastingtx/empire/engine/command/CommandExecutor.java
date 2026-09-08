@@ -34,6 +34,8 @@ public final class CommandExecutor {
             case Command.Move m -> move(w, c, m);
             case Command.Explore e -> explore(w, c, e);
             case Command.BuildRoad br -> buildRoad(w, c, br);
+            case Command.BuildRail bl -> buildRail(w, c, bl);
+            case Command.RailShip rs -> railShip(w, c, rs);
         };
         if (!r.ok()) return r;
         World next = r.world();
@@ -154,6 +156,46 @@ public final class CommandExecutor {
         Double cap = cfg.infrastructure().road().maxLevelByTerrain().get(s.terrain().id());
         if (cap != null && r.targetLevel() > cap) return CommandResult.fail(w, s.terrain().id() + " roads top out at " + fmt(cap));
         return new CommandResult(w.withSector(s.withRoadTarget(r.targetLevel())), null, 0);
+    }
+
+    private CommandResult buildRail(World w, Country c, Command.BuildRail r) {
+        Sector s = owned(w, c, r.sector());
+        if (s == null) return CommandResult.fail(w, "you do not own " + r.sector());
+        if (!s.terrain().isLand()) return CommandResult.fail(w, "cannot lay rail on the sea");
+        var rail = cfg.infrastructure().rail();
+        if (c.levels().tech() < rail.techRequired()) return CommandResult.fail(w, "rail needs tech " + rail.techRequired() + "; you have " + fmt(c.levels().tech()));
+        if (r.targetLevel() < 0 || r.targetLevel() > 100) return CommandResult.fail(w, "rail level is 0..100");
+        Double cap = rail.maxLevelByTerrain().get(s.terrain().id());
+        if (cap != null && r.targetLevel() > cap) return CommandResult.fail(w, s.terrain().id() + " rail tops out at " + fmt(cap));
+        return new CommandResult(w.withSector(s.withRailTarget(r.targetLevel())), null, 0);
+    }
+
+    /** Validated at issue time: both ends are working depots and a contiguous line joins them, or the reply names where it breaks. */
+    private CommandResult railShip(World w, Country c, Command.RailShip r) {
+        Sector from = owned(w, c, r.from());
+        if (from == null) return CommandResult.fail(w, "you do not own " + r.from());
+        Sector to = owned(w, c, r.to());
+        if (to == null) return CommandResult.fail(w, "you do not own " + r.to());
+        if (!com.has(r.commodity())) return CommandResult.fail(w, "unknown commodity: " + r.commodity());
+        if (r.qty() <= 0) return CommandResult.fail(w, "quantity must be positive");
+        if (r.from().equals(r.to())) return CommandResult.fail(w, "that is where it already is");
+        org.hastingtx.empire.engine.update.Ctx ctx = new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0);
+        int fi = w.index(r.from()), ti = w.index(r.to());
+        if (!ctx.isDepot(fi)) return CommandResult.fail(w, r.from() + " is not a working depot (needs the depot designation at 60%+ and rail of at least " + fmt(cfg.infrastructure().rail().minLevelToCarry()) + ")");
+        if (!ctx.isDepot(ti)) return CommandResult.fail(w, r.to() + " is not a working depot");
+        int ci = com.index(r.commodity());
+        double committed = 0;
+        for (var o : w.pendingRail()) if (o.owner() == c.id() && o.from().equals(r.from()) && o.commodity() == ci) committed += o.qty();
+        if (from.stock().get(ci) - committed < r.qty()) return CommandResult.fail(w, "only " + fmt(from.stock().get(ci) - committed) + " " + r.commodity() + " uncommitted in " + r.from());
+        if (ctx.railPath(r.from(), r.to(), c.id()) == null) {
+            java.util.Set<Integer> reach = ctx.railReach(r.from(), c.id());
+            int best = fi, bestD = Integer.MAX_VALUE;
+            for (int i : reach) { int d = org.hastingtx.empire.engine.geo.Hex.distance(w, w.sectors().get(i).at(), r.to()); if (d < bestD) { bestD = d; best = i; } }
+            return CommandResult.fail(w, "no rail line from " + r.from() + " to " + r.to() + ": the track ends at " + w.sectors().get(best).at());
+        }
+        java.util.List<org.hastingtx.empire.engine.model.RailOrder> next = new java.util.ArrayList<>(w.pendingRail());
+        next.add(new org.hastingtx.empire.engine.model.RailOrder(c.id(), r.from(), r.to(), ci, r.qty(), w.updateNumber()));
+        return new CommandResult(w.withPendingRail(next), null, 0, "train scheduled: " + fmt(r.qty()) + " " + r.commodity() + " " + r.from() + " → " + r.to() + " at the update");
     }
 
     private CommandResult explore(World w, Country c, Command.Explore e) {

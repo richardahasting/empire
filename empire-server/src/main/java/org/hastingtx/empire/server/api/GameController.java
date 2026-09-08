@@ -46,12 +46,15 @@ public class GameController {
 
     /** The rulebook the UI needs: sector types and commodities. Public knowledge. */
     public record Rules(List<SectorTypeCfg> sectorTypes, List<CommodityCfg> commodities, int etusPerUpdate, Map<String, Integer> btuCosts,
-                        org.hastingtx.empire.engine.config.InfrastructureCfg.RoadCfg road, double defaultCapacity) {}
+                        org.hastingtx.empire.engine.config.InfrastructureCfg.RoadCfg road, double defaultCapacity,
+                        org.hastingtx.empire.engine.config.InfrastructureCfg.RailCfg rail, double productionMinEfficiency) {}
 
     @GetMapping("/{id}/rules")
     public Rules rules(@PathVariable long id) {
         var cfg = games.get(id).cfg;
-        return new Rules(cfg.economy().sectorTypes(), cfg.commodities(), cfg.etus(), cfg.economy().btu().costByCommand(), cfg.infrastructure().road(), cfg.economy().defaultCapacity());
+        Double minEff = cfg.economy().efficiency().productionMinEfficiency();
+        return new Rules(cfg.economy().sectorTypes(), cfg.commodities(), cfg.etus(), cfg.economy().btu().costByCommand(), cfg.infrastructure().road(), cfg.economy().defaultCapacity(),
+                cfg.infrastructure().rail(), minEff == null ? 0 : minEff);
     }
 
     /** One JSON shape for every verb; absolute coordinates. */
@@ -65,6 +68,8 @@ public class GameController {
                 case "move" -> new Command.Move(at(x, y), at(x2, y2), commodity, amount == null ? 0 : amount);
                 case "explore" -> new Command.Explore(at(x, y), at(x2, y2), amount == null ? 0 : amount);
                 case "build_road" -> new Command.BuildRoad(at(x, y), amount == null ? 0 : amount);
+                case "build_rail" -> new Command.BuildRail(at(x, y), amount == null ? 0 : amount);
+                case "rail_ship" -> new Command.RailShip(at(x, y), at(x2, y2), commodity, amount == null ? 0 : amount);
                 default -> throw new IllegalArgumentException("unknown verb: " + verb);
             };
         }
@@ -87,7 +92,8 @@ public class GameController {
         Routes.Estimate e = switch (verb) {
             case "move" -> Routes.move(g.world, g.cfg, country, from, to, g.com.index(commodity), amount);
             case "explore" -> Routes.explore(g.world, g.cfg, country, from, to, amount);
-            default -> throw new IllegalArgumentException("verb must be move or explore");
+            case "rail" -> Routes.rail(g.world, g.cfg, country, from, to, g.com.index(commodity), amount);
+            default -> throw new IllegalArgumentException("verb must be move, explore or rail");
         };
         Coord cap = g.world.country(country).capital();
         List<Coord> rel = e.path().stream().map(c -> CountryView.relative(g.world, cap, c)).toList();

@@ -64,6 +64,38 @@ public final class Routes {
         return new Estimate(true, null, path, hopCosts, total, reach, arrives, held, complete ? null : holdsAt, available, src.mobility());
     }
 
+    /** A rail shipment: route over rail, per-sector capacity, range per update; hopCosts carry each sector's capacity. */
+    public static Estimate rail(World w, GameConfig cfg, int owner, Coord from, Coord to, int commodity, double qty) {
+        Commodities com = Commodities.of(cfg);
+        if (!w.inBounds(from) || !w.inBounds(to)) return Estimate.fail("out of bounds");
+        Ctx ctx = new Ctx(w, cfg, com, 0);
+        int fi = w.index(from), ti = w.index(to);
+        if (w.sectors().get(fi).owner() != owner) return Estimate.fail("you do not own " + from);
+        if (w.sectors().get(ti).owner() != owner) return Estimate.fail("you do not own " + to);
+        if (!ctx.isDepot(fi)) return Estimate.fail(from + " is not a working depot");
+        if (!ctx.isDepot(ti)) return Estimate.fail(to + " is not a working depot");
+        double available = w.sectors().get(fi).stock().get(commodity);
+        for (var o : w.pendingRail()) if (o.owner() == owner && o.from().equals(from) && o.commodity() == commodity) available -= o.qty();
+        if (qty <= 0) return Estimate.fail("quantity must be positive");
+        if (available < qty) return new Estimate(false, "only " + fmt(available) + " " + com.id(commodity) + " uncommitted in " + from, List.of(), List.of(), 0, 0, 0, 0, null, available, 0);
+        List<Coord> path = ctx.railPath(from, to, owner);
+        if (path == null) {
+            java.util.Set<Integer> reach = ctx.railReach(from, owner);
+            int best = fi, bestD = Integer.MAX_VALUE;
+            for (int i : reach) { int d = Hex.distance(w, w.sectors().get(i).at(), to); if (d < bestD) { bestD = d; best = i; } }
+            return new Estimate(false, "no rail line from " + from + " to " + to + ": the track ends at " + w.sectors().get(best).at(), List.of(), List.of(), 0, 0, 0, 0, null, available, 0);
+        }
+        List<Double> caps = new ArrayList<>();
+        double minCap = Double.MAX_VALUE;
+        for (int h = 1; h < path.size(); h++) { double c = ctx.railCapacity(w.index(path.get(h))); caps.add(c); minCap = Math.min(minCap, c); }
+        int range = (int) Math.floor(cfg.infrastructure().rail().maxSectorsPerUpdate().eval(w.country(owner).levels().tech()));
+        double effScale = Math.min(w.sectors().get(fi).efficiency(), w.sectors().get(ti).efficiency()) / 100.0;
+        double moving = Math.min(qty, minCap) * Math.max(0.01, effScale);
+        boolean arrives = path.size() - 1 <= range;
+        double cash = cfg.infrastructure().rail().cashPer100UnitsShipped() * moving / 100.0;
+        return new Estimate(true, null, path, caps, cash, range, arrives ? moving : 0, arrives ? qty - moving : moving, arrives ? null : path.get(range), available, 0);
+    }
+
     public static Estimate explore(World w, GameConfig cfg, int owner, Coord from, Coord to, double civs) {
         Commodities com = Commodities.of(cfg);
         if (!w.inBounds(from) || !w.inBounds(to)) return Estimate.fail("out of bounds");
