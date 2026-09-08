@@ -242,8 +242,11 @@ step-attributed log in one transaction.
 - Command execution. Player commands (`des`, `move`, `dist`, `thresh`,
   `tele`…) execute **between** updates against the live state, cost BTUs at
   issue time, and are the only thing that mutates state outside this
-  function. Queued rail shipments and manual moves are the sole exception:
-  they are *recorded* at issue time and *executed* in step 6.
+  function. **Manual `move` is immediate** (Richard, 2026-09-08, as in the
+  original): the goods land now and every sector entered pays its mobility
+  now; if mobility along the route is short the quantity is capped to what
+  fits and the rest stays at the source. Rail shipments are the exception:
+  recorded at issue time, executed in step 6 with range-and-hold.
 - Market and loans — options that, when enabled, run as their own step 8b
   (settle market orders, accrue loan interest). Schema slot reserved.
 

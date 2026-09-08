@@ -110,7 +110,7 @@ function EstimateView({ e, unit }: { e: Estimate | null; unit: string }) {
     <div className="space-y-1 rounded-md border border-border bg-muted p-2 text-xs">
       <div>Route: {e.path.map(c => `${c.x},${c.y}`).join(" → ")} <span className="text-muted-foreground">({hops} hop{hops === 1 ? "" : "s"}, reach {e.reach} per update)</span></div>
       <div>Mobility: <span className="tabular-nums font-medium">{e.totalMobility.toFixed(1)}</span> total, debited from each sector entered ({e.hopCosts.map(c => c.toFixed(1)).join(" + ")})</div>
-      <div>This update: <span className="font-medium">{e.arrivesQty.toFixed(0)} {unit}</span> arrive{e.heldQty > 0 && e.holdsAt && <>, <span className="font-medium">{e.heldQty.toFixed(0)}</span> hold at {e.holdsAt.x},{e.holdsAt.y} and continue next update</>}</div>
+      <div><span className="font-medium">{e.arrivesQty.toFixed(0)} {unit}</span> move now{e.heldQty > 0 && <>, <span className="font-medium">{e.heldQty.toFixed(0)}</span> stay behind for lack of mobility</>}</div>
     </div>
   );
 }
@@ -133,7 +133,7 @@ function MoveDialog({ gameId, view, from, byRel, onClose, onCommand, busy, onPic
   return (
     <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent>
-        <DialogHeader><DialogTitle>Move from {from.relative.x},{from.relative.y}</DialogTitle><DialogDescription>Queued now, travels at the next update. Mobility comes out of every sector it enters.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>Move from {from.relative.x},{from.relative.y}</DialogTitle><DialogDescription>Moves now. Mobility comes out of every sector it enters; if it runs short, what fits moves and the rest stays here.</DialogDescription></DialogHeader>
         <div className="grid gap-3 text-sm">
           <label>Commodity
             <Select value={commodity} onChange={e => setCommodity(e.target.value)}>
@@ -157,7 +157,7 @@ function MoveDialog({ gameId, view, from, byRel, onClose, onCommand, busy, onPic
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button disabled={busy || !target || !(n > 0) || !est?.ok} onClick={async () => { await onCommand({ verb: "move", x: from.at.x, y: from.at.y, x2: target!.at.x, y2: target!.at.y, commodity, amount: n }); onClose(); }}>Queue move</Button>
+          <Button disabled={busy || !target || !(n > 0) || !est?.ok} onClick={async () => { await onCommand({ verb: "move", x: from.at.x, y: from.at.y, x2: target!.at.x, y2: target!.at.y, commodity, amount: n }); onClose(); }}>Move</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

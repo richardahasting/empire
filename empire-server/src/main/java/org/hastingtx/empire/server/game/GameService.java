@@ -201,7 +201,7 @@ public class GameService {
         return CountryView.of(g.world, g.cfg, myCountry(gameId, a));
     }
 
-    public record Outcome(boolean accepted, String error, double btuSpent, CountryView view) {}
+    public record Outcome(boolean accepted, String error, double btuSpent, CountryView view, String info) {}
 
     private static final java.util.regex.Pattern ABS = java.util.regex.Pattern.compile("(?<![\\d.,-])(\\d+),(\\d+)(?![\\d.])");
 
@@ -229,7 +229,8 @@ public class GameService {
             CommandResult r = g.exec.execute(before, country, cmd);
             logs.command(gameId, country, before.updateNumber(), source, cmd.verb(), cmd, r.ok(), r.error(), r.btuSpent());
             if (r.ok()) { worlds.saveDiff(gameId, before, r.world(), g.com); g.world = r.world(); }
-            return new Outcome(r.ok(), relativise(g.world, g.world.country(country).capital(), r.error()), r.btuSpent(), CountryView.of(g.world, g.cfg, country));
+            Coord cap = g.world.country(country).capital();
+            return new Outcome(r.ok(), relativise(g.world, cap, r.error()), r.btuSpent(), CountryView.of(g.world, g.cfg, country), relativise(g.world, cap, r.info()));
         } finally { g.lock.unlock(); }
     }
 

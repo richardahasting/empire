@@ -39,7 +39,7 @@ public final class CommandExecutor {
         World next = r.world();
         Country nc = next.country(countryId);
         next = next.withCountry(nc.withBtu(nc.btu() - cost));
-        return new CommandResult(next, null, cost);
+        return new CommandResult(next, null, cost, r.info());
     }
 
     private CommandResult breakSanctuary(World w, Country c) {
@@ -101,6 +101,11 @@ public final class CommandExecutor {
         return new CommandResult(w.withSector(s.withDistCenter(d.center())), null, 0);
     }
 
+    /**
+     * Immediate, as in the original: the goods land now and every sector entered pays its mobility
+     * now. If mobility along the route is short, the quantity is capped to what fits; the rest stays
+     * at the source. Richard, 2026-09-08. Distribution and rail keep the update-time range-and-hold rule.
+     */
     private CommandResult move(World w, Country c, Command.Move m) {
         Sector from = owned(w, c, m.from());
         if (from == null) return CommandResult.fail(w, "you do not own " + m.from());
@@ -108,15 +113,37 @@ public final class CommandExecutor {
         if (to == null) return CommandResult.fail(w, "you do not own " + m.to());
         if (!com.has(m.commodity())) return CommandResult.fail(w, "unknown commodity: " + m.commodity());
         if (m.qty() <= 0) return CommandResult.fail(w, "quantity must be positive");
-        int ci = com.index(m.commodity());
-        double committed = 0;
-        for (MoveOrder o : w.pendingMoves()) if (o.from().equals(m.from()) && o.commodity() == ci) committed += o.qty();
-        if (from.stock().get(ci) - committed < m.qty())
-            return CommandResult.fail(w, "only " + fmt(from.stock().get(ci) - committed) + " " + m.commodity() + " uncommitted in " + m.from());
         if (c.inSanctuary()) return CommandResult.fail(w, "break sanctuary first");
-        List<MoveOrder> next = new ArrayList<>(w.pendingMoves());
-        next.add(new MoveOrder(c.id(), m.from(), m.to(), ci, m.qty(), w.updateNumber()));
-        return new CommandResult(w.withPendingMoves(next), null, 0);
+        int ci = com.index(m.commodity());
+        double have = from.stock().get(ci);
+        if (have < m.qty()) return CommandResult.fail(w, "only " + fmt(have) + " " + m.commodity() + " in " + m.from());
+        if (m.from().equals(m.to())) return CommandResult.fail(w, "that is where it already is");
+        org.hastingtx.empire.engine.update.Ctx ctx = new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0);
+        java.util.List<Coord> path = org.hastingtx.empire.engine.update.steps.FlowStep.path(ctx, m.from(), m.to(), c.id(), cfg.distribution());
+        if (path == null) return CommandResult.fail(w, "no route through your territory from " + m.from() + " to " + m.to());
+        int reach = (int) Math.floor(cfg.economy().mobility().manualMoveMaxSectorsPerUpdate().eval(c.levels().tech()));
+        if (path.size() - 1 > reach) return CommandResult.fail(w, m.to() + " is " + (path.size() - 1) + " sectors away; your reach is " + reach);
+        double weight = com.weight(ci);
+        double moving = m.qty();
+        double[] unit = new double[path.size()];
+        for (int h = 1; h < path.size(); h++) {
+            Sector t = w.sector(path.get(h));
+            unit[h] = weight * ctx.moveCostInto(t);
+            if (unit[h] > 0) moving = Math.min(moving, t.mobility() / unit[h]);
+        }
+        moving = Math.floor(moving * 1000) / 1000;
+        if (moving <= 0) return CommandResult.fail(w, "no mobility along the route (" + path.get(1) + " has " + fmt(w.sector(path.get(1)).mobility()) + ")");
+        World next = w;
+        for (int h = 1; h < path.size(); h++) {
+            Sector t = next.sector(path.get(h));
+            next = next.withSector(t.withMobility(Math.max(0, t.mobility() - moving * unit[h])));
+        }
+        Sector src = next.sector(m.from()), dst = next.sector(m.to());
+        next = next.withSector(src.withStock(src.stock().plus(ci, -moving)));
+        next = next.withSector(dst.withStock(dst.stock().plus(ci, moving)));
+        String info = moving < m.qty() - 1e-9 ? "moved " + fmt(moving) + " of " + fmt(m.qty()) + " " + m.commodity() + " — mobility along the route ran out; the rest stayed in " + m.from()
+                                              : "moved " + fmt(moving) + " " + m.commodity() + " to " + m.to();
+        return new CommandResult(next, null, 0, info);
     }
 
     private CommandResult buildRoad(World w, Country c, Command.BuildRoad r) {
