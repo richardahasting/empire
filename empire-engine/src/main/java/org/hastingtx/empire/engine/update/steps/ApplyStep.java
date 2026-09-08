@@ -34,6 +34,10 @@ public final class ApplyStep {
                 if (!ctx.com.isPerson(c)) {
                     double cap = ctx.capacity(s, c);
                     if (q[c] > cap) { led.destroyed[c] += q[c] - cap; led.event("spoilage", s.owner(), s.at(), ctx.com.id(c) + " over capacity in " + s.at(), q[c] - cap); q[c] = cap; }
+                } else if (c == ctx.com.civ || c == ctx.com.uw) {
+                    // KNOWN (human.c trunc_people): civilians and workers above the sector's population cap are truncated every update
+                    double cap = ctx.maxPopulation(s);
+                    if (q[c] > cap + 1e-9) { led.destroyed[c] += q[c] - cap; led.event("overcrowding", s.owner(), s.at(), ctx.com.id(c) + " over the population limit in " + s.at(), q[c] - cap); q[c] = cap; }
                 }
             }
             Sector n = s.withStock(Stocks.of(q))

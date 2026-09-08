@@ -122,6 +122,16 @@ class CalibrationProbesTest {
         assertThat(next.sector(plant).stock().get(11)).as("lcm produced from the delivered iron").isGreaterThan(0);
     }
 
+    /** Civilians pushed past a sector's cap are truncated at the update (KNOWN: trunc_people). */
+    @Test
+    void overcrowdingIsTruncated() {
+        GameConfig cfg = TestWorlds.teaching();
+        World w = TestWorlds.disc(cfg, 2, Map.of("civ", 2500.0, "food", 9000.0));   // 2500 in a 1000-cap capital
+        var r = Update.run(w, cfg, 77);
+        assertThat(r.next().sector(TestWorlds.CENTER).stock().get(0)).isCloseTo(1000, within(1e-6));
+        assertThat(r.events()).anyMatch(e -> e.type().equals("overcrowding"));
+    }
+
     /** Roads rot when nobody pays for them, at the configured rate. */
     @Test
     void unpaidRoadsRot() {

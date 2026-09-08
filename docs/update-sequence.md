@@ -256,7 +256,10 @@ Apply the ledger to the snapshot to produce `next`. Then the invariants:
   documented source/sink entries. Any other discrepancy is a bug and the
   update fails.
 - **No negative stocks, no stock over capacity, no level outside 0..100,
-  no mobility outside 0..max.**
+  no mobility outside 0..max.** Civilians and workers above a sector's
+  population cap are truncated here with an `overcrowding` event (**KNOWN**:
+  the original's `trunc_people()` runs every update), so a sector cannot be
+  packed past its cap by distribution or moves.
 - **Determinism**: `hash(next)` is stored in the update log; the golden-file
   test re-runs and compares.
 
