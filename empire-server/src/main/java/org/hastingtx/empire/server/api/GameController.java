@@ -5,6 +5,7 @@ import org.hastingtx.empire.engine.command.Command;
 import org.hastingtx.empire.engine.config.CommodityCfg;
 import org.hastingtx.empire.engine.config.SectorTypeCfg;
 import org.hastingtx.empire.engine.model.Coord;
+import org.hastingtx.empire.engine.update.Routes;
 import org.hastingtx.empire.engine.view.CountryView;
 import org.hastingtx.empire.server.auth.Account;
 import org.hastingtx.empire.server.auth.AuthInterceptor;
@@ -68,6 +69,27 @@ public class GameController {
             if (x == null || y == null) throw new IllegalArgumentException("coordinates required");
             return new Coord(x, y);
         }
+    }
+
+    /** Estimate in relative coordinates (capital = 0,0), so the client never sees the absolute frame. */
+    public record EstimateOut(boolean ok, String error, List<Coord> path, List<Double> hopCosts, double totalMobility, int reach,
+                              double arrivesQty, double heldQty, Coord holdsAt, double available, double sourceMobility) {}
+
+    @GetMapping("/{id}/estimate")
+    public EstimateOut estimate(@PathVariable long id, @RequestParam String verb, @RequestParam int x, @RequestParam int y, @RequestParam int x2, @RequestParam int y2,
+                                @RequestParam(required = false) String commodity, @RequestParam(defaultValue = "0") double amount, HttpServletRequest req) {
+        GameService.Game g = games.get(id);
+        int country = games.myCountry(id, AuthInterceptor.current(req));
+        Coord from = new Coord(x, y), to = new Coord(x2, y2);
+        Routes.Estimate e = switch (verb) {
+            case "move" -> Routes.move(g.world, g.cfg, country, from, to, g.com.index(commodity), amount);
+            case "explore" -> Routes.explore(g.world, g.cfg, country, from, to, amount);
+            default -> throw new IllegalArgumentException("verb must be move or explore");
+        };
+        Coord cap = g.world.country(country).capital();
+        List<Coord> rel = e.path().stream().map(c -> CountryView.relative(g.world, cap, c)).toList();
+        return new EstimateOut(e.ok(), e.error(), rel, e.hopCosts(), e.totalMobility(), e.reach(), e.arrivesQty(), e.heldQty(),
+                e.holdsAt() == null ? null : CountryView.relative(g.world, cap, e.holdsAt()), e.available(), e.sourceMobility());
     }
 
     @PostMapping("/{id}/command")

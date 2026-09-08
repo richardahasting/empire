@@ -9,13 +9,14 @@ interface Props {
   view: CountryView; rules: Rules; width: number; height: number;
   layer: Layer; stockCommodity: string; selected: Coord | null;
   onSelect: (c: Coord | null) => void;
+  onContextMenu?: (c: Coord | null) => void;
 }
 
 /**
  * Canvas hex map. Draws only what the view contains (fog of war is the server's job).
  * Coordinates are absolute for drawing; labels show the country-relative form.
  */
-export function HexMap({ view, rules, width, height, layer, stockCommodity, selected, onSelect }: Props) {
+export function HexMap({ view, rules, width, height, layer, stockCommodity, selected, onSelect, onContextMenu }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
@@ -125,11 +126,18 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
     const hit = pick(e.clientX - r.left, e.clientY - r.top, layout(), width, height);
     onSelect(hit ? toWorld(hit.x, hit.y) : null);
   };
+  const onCtx = (e: React.MouseEvent) => {
+    // do not preventDefault: Radix ContextMenu.Trigger listens for this same event to open the menu
+    const r = canvas.current!.getBoundingClientRect();
+    const hit = pick(e.clientX - r.left, e.clientY - r.top, layout(), width, height);
+    const c = hit ? toWorld(hit.x, hit.y) : null;
+    onSelect(c); onContextMenu?.(c);
+  };
   const onWheel = (e: React.WheelEvent) => { setZoom(z => Math.max(0.4, Math.min(6, z * (e.deltaY < 0 ? 1.15 : 0.87)))); };
 
   return (
     <div ref={wrap} className="relative h-full w-full overflow-hidden rounded-lg border border-border bg-background">
-      <canvas ref={canvas} className="block cursor-crosshair" onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={() => (drag.current = null)} onWheel={onWheel} />
+      <canvas ref={canvas} className="block cursor-crosshair" onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={() => (drag.current = null)} onWheel={onWheel} onContextMenu={onCtx} />
     </div>
   );
 }

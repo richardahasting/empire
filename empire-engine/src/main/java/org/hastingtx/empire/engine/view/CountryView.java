@@ -82,7 +82,7 @@ public record CountryView(
     }
 
     /** Player-facing coordinates: offset from the capital, shortest way round when wrapped. */
-    static Coord relative(World w, Coord capital, Coord at) {
+    public static Coord relative(World w, Coord capital, Coord at) {
         int dx = at.x() - capital.x(), dy = at.y() - capital.y();
         if (w.wrapX()) { if (dx > w.width() / 2) dx -= w.width(); else if (dx < -w.width() / 2) dx += w.width(); }
         if (w.wrapY()) { if (dy > w.height() / 2) dy -= w.height(); else if (dy < -w.height() / 2) dy += w.height(); }

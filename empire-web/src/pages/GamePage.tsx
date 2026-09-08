@@ -6,6 +6,7 @@ import { HexMap, type Layer } from "@/map/HexMap";
 import { Inspector } from "@/game/Inspector";
 import { ConsolePanel } from "@/game/ConsolePanel";
 import { Dashboard } from "@/game/Dashboard";
+import { SectorMenu } from "@/game/SectorMenu";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -78,7 +79,9 @@ export function GamePage() {
       <Dashboard view={view} game={game} />
       {notice && <p className="text-xs text-muted-foreground">{notice}</p>}
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[1fr_22rem]">
-        <div className="min-h-[24rem]"><HexMap view={view} rules={rules} width={game.width} height={game.height} layer={layer} stockCommodity={stock} selected={selected} onSelect={setSelected} /></div>
+        <SectorMenu gameId={gameId} view={view} rules={rules} sector={sector} onCommand={command} busy={busy}>
+          <div className="min-h-[24rem]"><HexMap view={view} rules={rules} width={game.width} height={game.height} layer={layer} stockCommodity={stock} selected={selected} onSelect={setSelected} /></div>
+        </SectorMenu>
         <aside className="flex min-h-0 flex-col gap-3">
           <div className="max-h-[50%] overflow-auto rounded-lg border border-border bg-card p-3"><Inspector sector={sector} view={view} rules={rules} onCommand={command} busy={busy} /></div>
           <div className="min-h-0 flex-1"><ConsolePanel onLine={consoleLine} /></div>

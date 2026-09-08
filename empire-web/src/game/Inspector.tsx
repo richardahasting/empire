@@ -14,7 +14,7 @@ export function Inspector({ sector: s, view, rules, onCommand, busy }: Props) {
   const [thrAmount, setThrAmount] = useState("");
   const [exploreCivs, setExploreCivs] = useState("20");
 
-  if (!s) return <p className="text-sm text-muted-foreground">Click a sector. Unexplored sectors show nothing until you can see them.</p>;
+  if (!s) return <p className="text-sm text-muted-foreground">Click a sector to inspect it. Right-click one you own to move, explore, designate or set thresholds.</p>;
   const rel = `${s.relative.x},${s.relative.y}`;
   if (!s.full) {
     return (
@@ -27,7 +27,7 @@ export function Inspector({ sector: s, view, rules, onCommand, busy }: Props) {
             <Button size="sm" disabled={busy} onClick={() => onCommand({ verb: "explore", x: view.capital.x, y: view.capital.y, x2: s.at.x, y2: s.at.y, amount: Number(exploreCivs) })}>Explore from capital</Button>
           </div>
         )}
-        <p className="text-xs text-muted-foreground">Explore needs an owned neighbour; use the console for a specific source sector (<code>expl x,y x2,y2 N</code>).</p>
+        <p className="text-xs text-muted-foreground">Or right-click an owned neighbour and choose “Explore from here”.</p>
       </div>
     );
   }

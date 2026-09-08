@@ -34,6 +34,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuLabel, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 // ─── Token list (matches shared/tokens.css) ────────────────────────────────
@@ -473,7 +474,24 @@ export default function DesignSystem() {
         <DialogSection />
         <DropdownMenuSection />
         <ThemeToggleSection />
-      </main>
+      
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">ContextMenu</h2>
+        <p className="text-sm text-muted-foreground">Right-click the box. Used by the game map for sector actions.</p>
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <div className="flex h-24 items-center justify-center rounded-[var(--radius)] border border-dashed border-border text-sm text-muted-foreground">right-click here</div>
+          </ContextMenuTrigger>
+          <ContextMenuContent>
+            <ContextMenuLabel>Sector 1,0</ContextMenuLabel>
+            <ContextMenuItem>Move from here…</ContextMenuItem>
+            <ContextMenuItem>Explore from here…</ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem destructive>Clear distribution centre</ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
+      </section>
+</main>
     </div>
   );
 }
