@@ -44,24 +44,31 @@ public final class Routes {
         if (path == null) return new Estimate(false, "no route through your territory from " + from + " to " + to, List.of(), List.of(), 0, 0, 0, 0, null, available, src.mobility());
         int reach = (int) Math.floor(cfg.economy().mobility().manualMoveMaxSectorsPerUpdate().eval(w.country(owner).levels().tech()));
         List<Double> hopCosts = new ArrayList<>();
-        double total = 0, moving = qty, weight = ctx.weightLeaving(commodity, src);
-        Coord holdsAt = null; int hops = 0;
+        boolean srcPays = cfg.distribution().sourcePays();
+        double total = 0, moving = qty, weight = ctx.weightLeaving(commodity, src), srcLeft = src.mobility();
+        Coord holdsAt = null; int hops = 0; boolean stopped = false;
         for (int h = 1; h < path.size(); h++) {
             Sector t = w.sector(path.get(h));
             double unit = weight * ctx.moveCostInto(t);
             double cost = qty * unit;
             hopCosts.add(cost); total += cost;
-            if (holdsAt == null) {
-                if (hops >= reach) { holdsAt = path.get(h - 1); continue; }
-                double can = unit <= 0 ? moving : Math.min(moving, t.mobility() / unit);
-                if (can < moving - 1e-9) { holdsAt = path.get(h - 1); moving = Math.max(0, can); if (can <= 1e-9) { moving = 0; continue; } }
-                hops++;
+            if (stopped) continue;
+            if (hops >= reach) { if (holdsAt == null) holdsAt = path.get(h - 1); stopped = true; continue; }
+            // every hop is checked, even after an earlier choke: what squeezed past one may still choke later
+            double avail = srcPays ? srcLeft : t.mobility();
+            double can = unit <= 0 ? moving : Math.min(moving, avail / unit);
+            if (can < moving - 1e-9) {
+                if (holdsAt == null) holdsAt = path.get(h - 1);
+                moving = Math.max(0, can);
+                if (moving <= 1e-9) { moving = 0; stopped = true; continue; }
             }
+            if (srcPays) srcLeft -= moving * unit;
+            hops++;
         }
-        boolean complete = holdsAt == null;
-        double arrives = complete ? qty : moving;       // moving = what squeezes through past the choke; the rest parks
+        double arrives = stopped ? 0 : moving;          // what reaches the destination this update; the rest parks
         double held = qty - arrives;
-        return new Estimate(true, null, path, hopCosts, total, reach, arrives, held, complete ? null : holdsAt, available, src.mobility());
+        boolean complete = held <= 1e-9;
+        return new Estimate(true, null, path, hopCosts, total, reach, complete ? qty : arrives, complete ? 0 : held, complete ? null : holdsAt, available, src.mobility());
     }
 
     /** A rail shipment: route over rail, per-sector capacity, range per update; hopCosts carry each sector's capacity. */
