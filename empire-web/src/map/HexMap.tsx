@@ -102,17 +102,11 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
         else if (layer === "efficiency") { overlay = p.accent; alpha = 0.05 + 0.7 * (s.efficiency / 100); }
         else if (layer === "mobility") { overlay = p.accent; alpha = 0.05 + 0.7 * Math.min(1, s.mobility / 127); }
         else if (layer === "stock") { overlay = p.accent; alpha = 0.05 + 0.7 * ((s.stock[stockCommodity] ?? 0) / maxStock); }
-        else if (layer === "roads") { if (s.roadLevel > 0 || s.roadTarget > 0) { overlay = p.accent; alpha = 0.1 + 0.6 * (s.roadLevel / 100); } }
+        else if (layer === "roads") { if (s.roadLevel > 0 || s.roadTarget > 0) { overlay = p.accent; alpha = 0.1 + 0.35 * (s.roadLevel / 100); } }
         else if (layer === "rail") { if (s.railLevel > 0 || s.railTarget > 0) { overlay = p.accent; alpha = 0.1 + 0.6 * (s.railLevel / 100); } }
       } else if (s.owner >= 0) { overlay = p.owner(s.owner, false); alpha = 0.45; }
       if (overlay) { ctx.globalAlpha = alpha; ctx.fillStyle = overlay; ctx.fill(); ctx.globalAlpha = 1; }
       ctx.strokeStyle = p.grid; ctx.lineWidth = 1; ctx.stroke();
-      if (l.size >= 11 && s.full) {
-        ctx.fillStyle = p.text; ctx.font = `${Math.max(9, l.size * 0.9)}px ui-monospace, monospace`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        const g = s.at.x === view.capital.x && s.at.y === view.capital.y ? "c" : (typeGlyph[s.designation ?? ""] ?? "?");
-        ctx.fillText(g, cx, cy);
-      }
-      if (Object.keys(s.held).length > 0 && l.size >= 8) { ctx.fillStyle = p.muted; ctx.beginPath(); ctx.arc(cx + l.size * 0.45, cy - l.size * 0.45, Math.max(2, l.size * 0.15), 0, Math.PI * 2); ctx.fill(); }
     }
     if (layer === "roads") {
       // links between adjacent sectors that both have road: a network you can read at a glance
@@ -133,7 +127,6 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
         if (s.roadTarget > s.roadLevel) { ctx.setLineDash([3, 3]); hexPath(ctx, ca.cx, ca.cy, l.size * 0.6); ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]); }
       }
     }
-    if (flows && flows.length) drawFlows(ctx, flows, flowT ?? 1, p, l, toDisplay);
     if (layer === "rail") {
       // track between adjacent rail-capable sectors; a sector with track below the carrying level is flagged red
       const minLevel = rules.rail?.minLevelToCarry ?? 20;
@@ -160,6 +153,28 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
         if (s.railTarget > s.railLevel) { ctx.setLineDash([3, 3]); ctx.strokeStyle = p.muted; hexPath(ctx, ca.cx, ca.cy, l.size * 0.6); ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]); }
       }
     }
+    // Labels, road gauges and held markers go on top of the network lines so a level stays readable.
+    for (let dy = 0; dy < height; dy++) for (let dx = 0; dx < width; dx++) {
+      const wc = toWorld(dx, dy);
+      const s = byCoord.get(`${wc.x},${wc.y}`);
+      if (!s || !s.full) continue;
+      const { cx, cy } = hexCenter(dx, dy, l);
+      if (l.size >= 11) {
+        // on the roads layer the label is the road level itself, where there is one to read
+        const roadLabel = layer === "roads" && s.roadLevel > 0;
+        const g = s.at.x === view.capital.x && s.at.y === view.capital.y ? "c" : (typeGlyph[s.designation ?? ""] ?? "?");
+        ctx.fillStyle = p.text; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.font = `${Math.max(9, l.size * (roadLabel ? (s.roadLevel >= 100 ? 0.55 : 0.7) : 0.9))}px ui-monospace, monospace`;
+        if (roadLabel) {   // halo so the number survives the network lines converging under it
+          ctx.strokeStyle = p.background; ctx.lineWidth = Math.max(2, l.size * 0.18); ctx.lineJoin = "round";
+          ctx.strokeText(s.roadLevel.toFixed(0), cx, cy);
+        }
+        ctx.fillText(roadLabel ? s.roadLevel.toFixed(0) : g, cx, cy);
+      }
+      if (s.roadLevel > 0 || s.roadTarget > 0) drawRoadGauge(ctx, cx, cy, l.size, s.roadLevel, s.roadTarget, p);
+      if (Object.keys(s.held).length > 0 && l.size >= 8) { ctx.fillStyle = p.muted; ctx.beginPath(); ctx.arc(cx + l.size * 0.45, cy - l.size * 0.45, Math.max(2, l.size * 0.15), 0, Math.PI * 2); ctx.fill(); }
+    }
+    if (flows && flows.length) drawFlows(ctx, flows, flowT ?? 1, p, l, toDisplay);
     if (highlightPath && highlightPath.length > 1) {
       ctx.strokeStyle = p.accent; ctx.lineWidth = Math.max(2, l.size * 0.18); ctx.lineCap = "round"; ctx.lineJoin = "round";
       ctx.beginPath();
@@ -221,6 +236,22 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
       )}
     </div>
   );
+}
+
+/**
+ * Road-level gauge at the foot of a hex, drawn on every layer so a road reads as part of the terrain.
+ * A track spans the full 0..100 range, the filled part is the current level, and a hollow extension
+ * marks a standing order not yet paved (level -> target). Levels are percentages (config/schema.yaml).
+ */
+function drawRoadGauge(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, level: number, target: number, p: ReturnType<typeof palette>) {
+  if (size < 8) return;
+  const half = size * 0.42, h = Math.max(2, size * 0.12), y = cy + size * 0.66 - h / 2, x0 = cx - half;
+  const px = (v: number) => (Math.max(0, Math.min(100, v)) / 100) * half * 2;
+  ctx.save();
+  ctx.globalAlpha = 0.35; ctx.fillStyle = p.muted; ctx.fillRect(x0, y, half * 2, h);
+  ctx.globalAlpha = 1; ctx.fillStyle = p.text; ctx.fillRect(x0, y, px(level), h);
+  if (target > level) { ctx.globalAlpha = 0.8; ctx.strokeStyle = p.text; ctx.lineWidth = 1; ctx.strokeRect(x0 + px(level) + 0.5, y + 0.5, Math.max(1, px(target) - px(level) - 1), Math.max(1, h - 1)); }
+  ctx.restore();
 }
 
 /**
