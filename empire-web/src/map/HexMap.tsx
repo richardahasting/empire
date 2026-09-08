@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Coord, CountryView, Rules, SectorView } from "@/api/client";
-import { hexCenter, hexPath, pick, type Layout } from "./hex";
+import { hexCenter, hexPath, neighbourAbs, pick, type Layout } from "./hex";
 import { palette } from "./palette";
 
-export type Layer = "ownership" | "designation" | "efficiency" | "mobility" | "stock";
+export type Layer = "ownership" | "designation" | "efficiency" | "mobility" | "stock" | "roads";
 
 interface Props {
   view: CountryView; rules: Rules; width: number; height: number;
@@ -99,6 +99,7 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
         else if (layer === "efficiency") { overlay = p.accent; alpha = 0.05 + 0.7 * (s.efficiency / 100); }
         else if (layer === "mobility") { overlay = p.accent; alpha = 0.05 + 0.7 * Math.min(1, s.mobility / 127); }
         else if (layer === "stock") { overlay = p.accent; alpha = 0.05 + 0.7 * ((s.stock[stockCommodity] ?? 0) / maxStock); }
+        else if (layer === "roads") { if (s.roadLevel > 0 || s.roadTarget > 0) { overlay = p.accent; alpha = 0.1 + 0.6 * (s.roadLevel / 100); } }
       } else if (s.owner >= 0) { overlay = p.owner(s.owner, false); alpha = 0.45; }
       if (overlay) { ctx.globalAlpha = alpha; ctx.fillStyle = overlay; ctx.fill(); ctx.globalAlpha = 1; }
       ctx.strokeStyle = p.grid; ctx.lineWidth = 1; ctx.stroke();
@@ -108,6 +109,25 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
         ctx.fillText(g, cx, cy);
       }
       if (Object.keys(s.held).length > 0 && l.size >= 8) { ctx.fillStyle = p.muted; ctx.beginPath(); ctx.arc(cx + l.size * 0.45, cy - l.size * 0.45, Math.max(2, l.size * 0.15), 0, Math.PI * 2); ctx.fill(); }
+    }
+    if (layer === "roads") {
+      // links between adjacent sectors that both have road: a network you can read at a glance
+      ctx.strokeStyle = p.text; ctx.lineCap = "round";
+      for (const s of view.sectors) {
+        if (!s.full || s.roadLevel <= 0) continue;
+        const a = toDisplay(s.at); const ca = hexCenter(a.x, a.y, l);
+        for (let d = 0; d < 6; d++) {
+          const nb = neighbourAbs(s.at, d, width, height, view.wrapX, view.wrapY);
+          if (!nb) continue;
+          const o = byCoord.get(`${nb.x},${nb.y}`);
+          if (!o || !o.full || o.roadLevel <= 0) continue;
+          if (o.at.y < s.at.y || (o.at.y === s.at.y && o.at.x < s.at.x)) continue;   // draw each pair once
+          const b = toDisplay(o.at); const cb = hexCenter(b.x, b.y, l);
+          ctx.lineWidth = Math.max(1, l.size * 0.12 * Math.min(s.roadLevel, o.roadLevel) / 100 + 1);
+          ctx.beginPath(); ctx.moveTo(ca.cx, ca.cy); ctx.lineTo(cb.cx, cb.cy); ctx.stroke();
+        }
+        if (s.roadTarget > s.roadLevel) { ctx.setLineDash([3, 3]); hexPath(ctx, ca.cx, ca.cy, l.size * 0.6); ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]); }
+      }
     }
     if (highlightPath && highlightPath.length > 1) {
       ctx.strokeStyle = p.accent; ctx.lineWidth = Math.max(2, l.size * 0.18); ctx.lineCap = "round"; ctx.lineJoin = "round";

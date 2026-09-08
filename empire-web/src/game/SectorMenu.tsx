@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 
-type DialogKind = "move" | "explore" | "designate" | "threshold" | null;
+type DialogKind = "move" | "explore" | "designate" | "threshold" | "road" | null;
 
 export interface PickSpec { verb: "move" | "explore"; from: SectorView; commodity: string; qty: number; supply?: boolean }
 
@@ -57,6 +57,7 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
               <ContextMenuSeparator />
               <ContextMenuItem onSelect={() => setDialog("designate")}>Designate…</ContextMenuItem>
               <ContextMenuItem onSelect={() => setDialog("threshold")}>Set threshold…</ContextMenuItem>
+              <ContextMenuItem onSelect={() => setDialog("road")}>Build road…</ContextMenuItem>
               <ContextMenuSeparator />
               <ContextMenuItem disabled={busy || (s.distCenter?.x === view.capital.x && s.distCenter?.y === view.capital.y)}
                 onSelect={() => void onCommand({ verb: "distribute", x: s.at.x, y: s.at.y, x2: view.capital.x, y2: view.capital.y })}>Distribute to capital</ContextMenuItem>
@@ -70,6 +71,7 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
       {s && owned && dialog === "explore" && <ExploreDialog gameId={gameId} view={view} from={s} targets={adjacentUnowned} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} onPick={(civs, supply) => { setDialog(null); onStartPick({ verb: "explore", from: s, commodity: "civ", qty: civs, supply }); }} />}
       {s && owned && dialog === "designate" && <DesignateDialog view={view} rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "threshold" && <ThresholdDialog view={view} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
+      {s && owned && dialog === "road" && <RoadDialog rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
     </>
   );
 }
@@ -86,7 +88,7 @@ function Attributes({ s, view }: { s: SectorView; view: CountryView }) {
   const held = Object.values(s.held).reduce((a, b) => a + b, 0);
   return (
     <div className="px-2 pb-1 text-xs text-muted-foreground">
-      <div className="text-popover-foreground">{s.designation} · {s.terrain} · eff {s.efficiency.toFixed(0)}% · mob {s.mobility.toFixed(0)}{s.roadLevel > 0 && ` · road ${s.roadLevel.toFixed(0)}`}</div>
+      <div className="text-popover-foreground">{s.designation} · {s.terrain} · eff {s.efficiency.toFixed(0)}% · mob {s.mobility.toFixed(0)}{(s.roadLevel > 0 || s.roadTarget > 0) && ` · road ${s.roadLevel.toFixed(0)}${s.roadTarget > s.roadLevel ? ` → ${s.roadTarget.toFixed(0)}` : ""}`}</div>
       {s.resources && <div>fert {s.resources.fertility} · min {s.resources.minerals} · gold {s.resources.gold} · oil {s.resources.oil} · uran {s.resources.uranium}</div>}
       <div>centre {s.distCenter ? `${view.sectors.find(o => o.at.x === s.distCenter!.x && o.at.y === s.distCenter!.y)?.relative.x ?? "?"},${view.sectors.find(o => o.at.x === s.distCenter!.x && o.at.y === s.distCenter!.y)?.relative.y ?? "?"}` : "none"} · {th} threshold{th === 1 ? "" : "s"}{held > 0 && ` · ${held.toFixed(0)} in transit`}</div>
     </div>
@@ -224,7 +226,10 @@ function DesignateDialog({ view, rules, sector: s, onClose, onCommand, busy }: {
         {t && <p className="text-xs text-muted-foreground">{t.category}{t.produces && ` · produces ${Object.keys(t.produces).join(", ")}`}{t.consumes && ` · consumes ${Object.keys(t.consumes).join(", ")}`}{t.build && ` · builds with ${Object.keys(t.build).join(", ")}`}</p>}
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button disabled={busy || !type || type === s.designation} onClick={async () => { await onCommand({ verb: "designate", x: s.at.x, y: s.at.y, type }); onClose(); }}>Designate</Button>
+          <Button disabled={busy || !type || type === s.designation} onClick={async () => {
+            if (type === "capital" && !window.confirm(`Move your capital to ${s.relative.x},${s.relative.y}? BTUs accrue from the civilians in the capital, and every relative coordinate will shift.`)) return;
+            await onCommand({ verb: "designate", x: s.at.x, y: s.at.y, type }); onClose();
+          }}>Designate</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -250,6 +255,36 @@ function ThresholdDialog({ view, sector: s, onClose, onCommand, busy }: { view: 
           {s.thresholds[commodity] !== undefined && <Button variant="danger" disabled={busy} onClick={async () => { await onCommand({ verb: "threshold", x: s.at.x, y: s.at.y, commodity, clear: true }); onClose(); }}>Clear</Button>}
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button disabled={busy || amount === ""} onClick={async () => { await onCommand({ verb: "threshold", x: s.at.x, y: s.at.y, commodity, amount: Number(amount) }); onClose(); }}>Set</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RoadDialog({ rules, sector: s, onClose, onCommand, busy }: { rules: Rules; sector: SectorView; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean }) {
+  const [target, setTarget] = useState(String(Math.min(100, Math.max(s.roadTarget, Math.ceil(s.roadLevel / 10) * 10 + 20))));
+  const t = Math.max(0, Math.min(100, Number(target) || 0));
+  const r = rules.road;
+  const mult = r?.costMultiplierByTerrain?.[s.terrain] ?? 1;
+  const cap = r?.maxLevelByTerrain?.[s.terrain] ?? 100;
+  const points = Math.max(0, t - s.roadLevel);
+  return (
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Build road at {s.relative.x},{s.relative.y}</DialogTitle><DialogDescription>A standing order. Each update this sector spends its own materials, your cash and its workers to pave toward the target, up to {r?.maxPointsPerUpdate ?? "?"} points per update. Roads cut the mobility cost of everything entering the sector, and decay unless maintained.</DialogDescription></DialogHeader>
+        <div className="grid gap-3 text-sm">
+          <div className="text-xs text-muted-foreground">Now {s.roadLevel.toFixed(0)}{s.roadTarget > 0 ? `, ordered to ${s.roadTarget.toFixed(0)}` : ""} · {s.terrain} caps at {cap} · cost ×{mult}</div>
+          <label>Target level (0 cancels)<Input value={target} onChange={e => setTarget(e.target.value)} inputMode="numeric" autoFocus /></label>
+          {points > 0 && r && (
+            <div className="rounded-md border border-border bg-muted p-2 text-xs">
+              To reach {t}: {Object.entries(r.buildMaterialsPerPoint ?? {}).map(([k, v]) => `${(v * mult * points).toFixed(0)} ${k}`).join(", ")}, {(r.workPerPoint * mult * points).toFixed(0)} work · about {Math.ceil(points / (r.maxPointsPerUpdate || 1))} update{Math.ceil(points / (r.maxPointsPerUpdate || 1)) === 1 ? "" : "s"} if supplied
+              {t > cap && <div className="text-destructive">above the {s.terrain} cap of {cap}</div>}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button disabled={busy || t > cap} onClick={async () => { await onCommand({ verb: "build_road", x: s.at.x, y: s.at.y, amount: t }); onClose(); }}>{t === 0 ? "Cancel order" : "Order"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

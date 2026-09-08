@@ -82,7 +82,7 @@ public final class ApplyStep {
             for (Sector s : w.sectors()) {
                 sb.append(s.at()).append('|').append(s.terrain()).append('|').append(s.elevation()).append('|').append(s.resources()).append('|')
                   .append(s.owner()).append('|').append(s.designation()).append('|').append(f(s.efficiency())).append('|').append(f(s.mobility())).append('|')
-                  .append(f(s.roadLevel())).append('|').append(s.distCenter()).append('|').append(s.sanctuary()).append('|');
+                  .append(f(s.roadLevel())).append('|').append(f(s.roadTarget())).append('|').append(s.distCenter()).append('|').append(s.sanctuary()).append('|');
                 for (int c = 0; c < s.stock().size(); c++) sb.append(f(s.stock().get(c))).append(',');
                 sb.append('|');
                 for (int c = 0; c < s.thresholds().length; c++) sb.append(Double.isNaN(s.thresholds()[c]) ? "-" : f(s.thresholds()[c])).append(',');

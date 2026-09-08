@@ -59,6 +59,33 @@ public final class BuildUpStep implements Step {
                 }
             }
 
+            // road building: a standing order toward road_target, paid in materials, cash and work
+            if (s.roadTarget() > s.roadLevel() + 1e-9) {
+                Double mult = road.costMultiplierByTerrain().get(s.terrain().id());
+                Double cap = road.maxLevelByTerrain().get(s.terrain().id());
+                double ceiling = Math.min(s.roadTarget(), cap == null ? 100 : cap);
+                double points = Math.min(road.maxPointsPerUpdate(), ceiling - s.roadLevel());
+                double m = mult == null ? 1.0 : mult;
+                double work = ctx.workAvailablePost(i);
+                if (road.workPerPoint() > 0) points = Math.min(points, work / (road.workPerPoint() * m));
+                for (var e : road.buildMaterialsPerPoint().entrySet()) {
+                    double per = e.getValue() * m;
+                    if (per <= 0) continue;
+                    if (e.getKey().equals("cash")) points = Math.min(points, cashLeft[cid] / per);
+                    else { int c = ctx.com.index(e.getKey()); points = Math.min(points, (s.stock().get(c) + ctx.led.stock[i][c]) / per); }
+                }
+                if (points > 1e-9) {
+                    for (var e : road.buildMaterialsPerPoint().entrySet()) {
+                        double per = e.getValue() * m;
+                        if (per <= 0) continue;
+                        if (e.getKey().equals("cash")) { cashLeft[cid] -= points * per; ctx.led.cash[cid] -= points * per; }
+                        else ctx.led.consume(i, ctx.com.index(e.getKey()), points * per);
+                    }
+                    ctx.workSpent[i] += points * road.workPerPoint() * m;
+                    ctx.led.road[i] += points;
+                }
+            }
+
             // road maintenance / decay
             if (s.roadLevel() > 0) {
                 double upkeep = s.roadLevel() * road.maintenanceCashPerPointPerUpdate();

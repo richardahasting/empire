@@ -40,6 +40,7 @@ public class Console {
                 case "thresh", "threshold" -> { need(t, 4, "thresh x,y commodity amount"); yield cmd(gameId, a, new Command.Threshold(abs(v, t[1]), t[2], Double.parseDouble(t[3]))); }
                 case "dist", "distribute" -> { need(t, 3, "dist x,y cx,cy|none"); yield cmd(gameId, a, new Command.Distribute(abs(v, t[1]), t[2].equalsIgnoreCase("none") ? null : abs(v, t[2]))); }
                 case "move" -> { need(t, 5, "move commodity from_x,y to_x,y qty"); yield cmd(gameId, a, new Command.Move(abs(v, t[2]), abs(v, t[3]), t[1], Double.parseDouble(t[4]))); }
+                case "road" -> { need(t, 3, "road x,y LEVEL"); yield cmd(gameId, a, new Command.BuildRoad(abs(v, t[1]), Double.parseDouble(t[2]))); }
                 case "expl", "explore" -> { need(t, 4, "expl from_x,y to_x,y civs"); yield cmd(gameId, a, new Command.Explore(abs(v, t[1]), abs(v, t[2]), Double.parseDouble(t[3]))); }
                 default -> new Reply("", false, "unknown command '" + verb + "' (try help)", null);
             };
@@ -117,5 +118,6 @@ public class Console {
             dist x,y cx,cy | none        name a sector's distribution centre
             move COMMODITY x,y x2,y2 N   queue a move for the next update
             expl x,y x2,y2 N             explore into an adjacent unowned sector with N civilians
+            road x,y LEVEL               standing order: pave this sector toward LEVEL (0 cancels)
             """;
 }

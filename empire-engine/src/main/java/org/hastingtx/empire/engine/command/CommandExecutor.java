@@ -33,6 +33,7 @@ public final class CommandExecutor {
             case Command.Distribute d -> distribute(w, c, d);
             case Command.Move m -> move(w, c, m);
             case Command.Explore e -> explore(w, c, e);
+            case Command.BuildRoad br -> buildRoad(w, c, br);
         };
         if (!r.ok()) return r;
         World next = r.world();
@@ -116,6 +117,16 @@ public final class CommandExecutor {
         List<MoveOrder> next = new ArrayList<>(w.pendingMoves());
         next.add(new MoveOrder(c.id(), m.from(), m.to(), ci, m.qty(), w.updateNumber()));
         return new CommandResult(w.withPendingMoves(next), null, 0);
+    }
+
+    private CommandResult buildRoad(World w, Country c, Command.BuildRoad r) {
+        Sector s = owned(w, c, r.sector());
+        if (s == null) return CommandResult.fail(w, "you do not own " + r.sector());
+        if (!s.terrain().isLand()) return CommandResult.fail(w, "cannot pave the sea");
+        if (r.targetLevel() < 0 || r.targetLevel() > 100) return CommandResult.fail(w, "road level is 0..100");
+        Double cap = cfg.infrastructure().road().maxLevelByTerrain().get(s.terrain().id());
+        if (cap != null && r.targetLevel() > cap) return CommandResult.fail(w, s.terrain().id() + " roads top out at " + fmt(cap));
+        return new CommandResult(w.withSector(s.withRoadTarget(r.targetLevel())), null, 0);
     }
 
     private CommandResult explore(World w, Country c, Command.Explore e) {

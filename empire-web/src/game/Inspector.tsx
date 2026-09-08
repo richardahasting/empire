@@ -59,6 +59,15 @@ export function Inspector({ sector: s, view, rules, onCommand, busy }: Props) {
         </tbody>
       </table>
       {short.length > 0 && <p className="text-xs">Short of: <span className="text-destructive">{short.join(", ")}</span></p>}
+      {(() => {
+        const cap = rules.defaultCapacity ?? 9999;
+        const full = view.commodityIds.filter(c => !["civ", "mil", "uw"].includes(c) && (s.stock[c] ?? 0) >= cap * 0.98);
+        const flags: string[] = [];
+        if (!s.distCenter) flags.push("no distribution centre — surplus stays here");
+        else if (Object.keys(s.thresholds).length === 0) flags.push("centre set but no thresholds — nothing flows");
+        if (full.length) flags.push(`at capacity: ${full.join(", ")} (production spoils)`);
+        return flags.length ? <ul className="text-xs text-destructive">{flags.map(f => <li key={f}>{f}</li>)}</ul> : null;
+      })()}
       <p className="text-xs">Distribution centre: {s.distCenter ? `${s.distCenter.x},${s.distCenter.y}` : "none"}
         {" "}<Button size="sm" variant="ghost" disabled={busy} onClick={() => onCommand({ verb: "distribute", x: s.at.x, y: s.at.y, x2: view.capital.x, y2: view.capital.y })}>→ capital</Button>
         {s.distCenter && <Button size="sm" variant="ghost" disabled={busy} onClick={() => onCommand({ verb: "distribute", x: s.at.x, y: s.at.y, clear: true })}>clear</Button>}

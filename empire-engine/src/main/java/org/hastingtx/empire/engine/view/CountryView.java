@@ -41,6 +41,7 @@ public record CountryView(
             double efficiency,
             double mobility,
             double roadLevel,
+            double roadTarget,
             Map<String, Double> stock,
             Map<String, Double> thresholds,
             Coord distCenter,
@@ -68,10 +69,10 @@ public record CountryView(
                 }
                 for (HeldParcel p : s.held()) held.merge(com.id(p.commodity()), p.qty(), Double::sum);
                 views.add(new SectorView(at, rel, true, s.terrain().id(), s.elevation(), s.owner(), s.designation(), s.efficiency(),
-                        s.mobility(), s.roadLevel(), stock, th, s.distCenter(), held, s.resources()));
+                        s.mobility(), s.roadLevel(), s.roadTarget(), stock, th, s.distCenter(), held, s.resources()));
             } else {
                 int owner = s.sanctuary() ? Sector.NOBODY : s.owner();   // sanctuaries are invisible
-                views.add(new SectorView(at, rel, false, s.terrain().id(), s.elevation(), owner, null, 0, 0, 0,
+                views.add(new SectorView(at, rel, false, s.terrain().id(), s.elevation(), owner, null, 0, 0, 0, 0,
                         Map.of(), Map.of(), null, Map.of(), null));
             }
         }
