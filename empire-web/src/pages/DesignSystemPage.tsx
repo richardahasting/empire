@@ -487,7 +487,7 @@ export default function DesignSystem() {
             <ContextMenuItem>Move from here…</ContextMenuItem>
             <ContextMenuItem>Explore from here…</ContextMenuItem>
             <ContextMenuSeparator />
-            <ContextMenuItem destructive>Clear distribution centre</ContextMenuItem>
+            <ContextMenuItem destructive>Stop automatic supply (clear centre)</ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu>
       </section>
