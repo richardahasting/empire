@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api, type CommandRequest, type ConsoleReply, type Coord, type CountryView, type GameSummary, type Outcome, type Projection, type Rules } from "@/api/client";
+import { api, type CommandRequest, type ConsoleReply, type Coord, type CountryView, type GameSummary, type LastUpdate, type Outcome, type Projection, type Rules } from "@/api/client";
+import { COMMODITY_HUES } from "@/map/palette";
 import { useAuth } from "@/api/auth";
 import { HexMap, type Layer } from "@/map/HexMap";
 import { Inspector } from "@/game/Inspector";
@@ -21,6 +22,10 @@ export function GamePage() {
   const [rules, setRules] = useState<Rules | null>(null);
   const [view, setView] = useState<CountryView | null>(null);
   const [projection, setProjection] = useState<Projection | null>(null);
+  const [last, setLast] = useState<LastUpdate | null>(null);
+  const [showFlows, setShowFlows] = useState(true);
+  const [flowT, setFlowT] = useState(0);
+  const [playing, setPlaying] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [selected, setSelected] = useState<Coord | null>(null);
@@ -35,6 +40,21 @@ export function GamePage() {
     } catch (e) { setError((e as Error).message); }
   }, [gameId]);
   useEffect(() => { void load(); }, [load]);
+  // last update's flows, refetched when the update number changes
+  useEffect(() => {
+    if (!view) return;
+    let live = true;
+    api.get<LastUpdate>(`/games/${gameId}/last-update`).then(u => { if (live) setLast(u); }).catch(() => {});
+    return () => { live = false; };
+  }, [gameId, view?.updateNumber]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // the scrubber runs on its own clock: one pass through the update every 4 s
+  useEffect(() => {
+    if (!playing || !showFlows) return;
+    let raf = 0; let t0 = performance.now();
+    const step = (now: number) => { setFlowT(t => (t + (now - t0) / 4000) % 1); t0 = now; raf = requestAnimationFrame(step); };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [playing, showFlows]);
   // projection: recomputed whenever the view changes (your own commands change the outcome)
   useEffect(() => {
     if (!view) return;
@@ -142,6 +162,9 @@ export function GamePage() {
           {layer === "stock" && <Select value={stock} onChange={e => setStock(e.target.value)} className="w-28">{view.commodityIds.map(c => <option key={c}>{c}</option>)}</Select>}
           {view.inSanctuary && <Button size="sm" disabled={busy} onClick={() => command({ verb: "break_sanctuary" })}>Break sanctuary</Button>}
           {me?.admin && <Button size="sm" variant="secondary" disabled={busy} onClick={() => void forceUpdate()}>Run update</Button>}
+          <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={showFlows} onChange={e => setShowFlows(e.target.checked)} /> flows</label>
+          {showFlows && <Button size="sm" variant="ghost" onClick={() => setPlaying(p => !p)}>{playing ? "❚❚" : "▶"}</Button>}
+          {showFlows && <input type="range" min={0} max={1000} value={Math.round(flowT * 1000)} onChange={e => { setPlaying(false); setFlowT(Number(e.target.value) / 1000); }} className="w-28" aria-label="scrub the last update" />}
           <Button size="sm" variant="ghost" onClick={() => void load()}>Refresh</Button>
           <ThemeToggle />
         </div>
@@ -164,7 +187,18 @@ export function GamePage() {
               </div>
             )}
             <HexMap view={view} rules={rules} width={game.width} height={game.height} layer={layer} stockCommodity={stock} selected={selected} onSelect={onMapSelect}
-                    onHover={pick ? (c) => setHover(c) : undefined} highlightPath={highlightPath} tooltip={tooltip} picking={!!pick} />
+                    onHover={pick ? (c) => setHover(c) : undefined} highlightPath={highlightPath} tooltip={tooltip} picking={!!pick}
+                    flows={showFlows && last ? last.flows : undefined} flowT={flowT} />
+            {showFlows && last && last.flows.length > 0 && (
+              <div className="absolute bottom-2 left-2 z-10 flex flex-wrap items-center gap-2 rounded-md border border-border bg-popover/90 px-2 py-1 text-xs">
+                <span className="text-muted-foreground">update {last.updateNumber}:</span>
+                {[...new Set(last.flows.filter(f => f.qtyMoved > 0).map(f => f.commodity))].map(c => (
+                  <span key={c} className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: `oklch(0.7 0.19 ${COMMODITY_HUES[c] ?? 0})` }} />{c}</span>
+                ))}
+                {last.flows.some(f => !f.completed && f.qtyMoved > 0) && <span className="text-muted-foreground">· ✕ = held short</span>}
+                {last.flows.filter(f => f.qtyMoved <= 0).length > 0 && <span className="text-muted-foreground">· {last.flows.filter(f => f.qtyMoved <= 0).length} wanted, nothing to send</span>}
+              </div>
+            )}
           </div>
         </SectorMenu>
         <aside className="flex min-h-0 min-w-0 flex-col gap-3">

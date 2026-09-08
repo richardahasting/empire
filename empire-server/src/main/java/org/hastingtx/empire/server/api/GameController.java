@@ -22,7 +22,8 @@ import java.util.Map;
 public class GameController {
     private final GameService games;
     private final Console console;
-    public GameController(GameService games, Console console) { this.games = games; this.console = console; }
+    private final org.hastingtx.empire.server.persistence.Json json;
+    public GameController(GameService games, Console console, org.hastingtx.empire.server.persistence.Json json) { this.games = games; this.console = console; this.json = json; }
 
     @GetMapping
     public List<GameService.Summary> list(HttpServletRequest req) {
@@ -111,11 +112,28 @@ public class GameController {
         return games.projection(id, AuthInterceptor.current(req));
     }
 
+    public record FlowOut(String kind, String commodity, double qtyPlanned, double qtyMoved, List<Coord> path, int hopsDelivered, boolean completed, String holdReason) {}
+    public record LastUpdate(long updateNumber, long millis, List<Map<String, Object>> events, List<FlowOut> flows) {}
+
+    /** Only this country's own flows and events: what other countries moved is not yours to see. */
     @GetMapping("/{id}/last-update")
-    public Map<String, Object> lastUpdate(@PathVariable long id, HttpServletRequest req) {
-        games.myCountry(id, AuthInterceptor.current(req));
+    @SuppressWarnings("unchecked")
+    public LastUpdate lastUpdate(@PathVariable long id, HttpServletRequest req) {
+        GameService.Game g = games.get(id);
+        int country = games.myCountry(id, AuthInterceptor.current(req));
         LogRepository.UpdateEntry e = games.lastUpdate(id);
-        if (e == null) return Map.of("updateNumber", 0);
-        return Map.of("updateNumber", e.updateNumber(), "stateHash", e.stateHash(), "millis", e.millis(), "events", RawJson.of(e.eventsJson()), "flows", RawJson.of(e.flowsJson()));
+        if (e == null) return new LastUpdate(0, 0, List.of(), List.of());
+        List<Map<String, Object>> events = json.read(e.eventsJson(), List.class);
+        List<Map<String, Object>> flows = json.read(e.flowsJson(), List.class);
+        List<Map<String, Object>> myEvents = events.stream().filter(ev -> ((Number) ev.getOrDefault("country", -1)).intValue() == country || ((Number) ev.getOrDefault("country", -1)).intValue() == -1).toList();
+        List<FlowOut> myFlows = new java.util.ArrayList<>();
+        for (Map<String, Object> f : flows) {
+            if (((Number) f.get("owner")).intValue() != country) continue;
+            List<Map<String, Object>> path = (List<Map<String, Object>>) f.get("path");
+            List<Coord> p = path.stream().map(c -> new Coord(((Number) c.get("x")).intValue(), ((Number) c.get("y")).intValue())).toList();
+            myFlows.add(new FlowOut((String) f.get("kind"), g.com.id(((Number) f.get("commodity")).intValue()), ((Number) f.get("qtyPlanned")).doubleValue(),
+                    ((Number) f.get("qtyMoved")).doubleValue(), p, ((Number) f.get("hopsDelivered")).intValue(), (Boolean) f.get("completed"), (String) f.get("holdReason")));
+        }
+        return new LastUpdate(e.updateNumber(), e.millis(), myEvents, myFlows);
     }
 }

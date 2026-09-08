@@ -83,3 +83,6 @@ export function estimate(gameId: number, q: { verb: "move" | "explore"; x: numbe
   if (q.commodity) p.set("commodity", q.commodity);
   return api.get<Estimate>(`/games/${gameId}/estimate?${p}`);
 }
+
+export interface FlowOut { kind: string; commodity: string; qtyPlanned: number; qtyMoved: number; path: Coord[]; hopsDelivered: number; completed: boolean; holdReason: string | null }
+export interface LastUpdate { updateNumber: number; millis: number; events: Record<string, unknown>[]; flows: FlowOut[] }

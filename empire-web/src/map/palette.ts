@@ -10,6 +10,7 @@ export interface Palette {
   terrain: Record<string, string>;
   owner: (id: number, mine: boolean) => string;
   designation: (category: string) => string;
+  commodity: (id: string) => string;
 }
 
 // Map-only hues, as oklch so they harmonise with the token set. Terrain is deliberately
@@ -24,6 +25,10 @@ const TERRAIN_DARK: Record<string, string> = {
 };
 const OWNER_HUES = [30, 200, 300, 130, 60, 260, 0, 170];
 const CATEGORY_HUES: Record<string, number> = { extraction: 100, manufacturing: 40, infrastructure: 240, social: 300, special: 0 };
+// One hue per commodity, fixed, so a stream reads the same on every map and in the legend.
+export const COMMODITY_HUES: Record<string, number> = {
+  civ: 30, mil: 0, uw: 45, food: 110, iron: 220, dust: 80, bar: 85, oil: 260, pet: 280, shell: 340, gun: 350, lcm: 190, hcm: 205, rad: 130,
+};
 
 export function palette(): Palette {
   const dark = document.documentElement.classList.contains("dark");
@@ -37,5 +42,6 @@ export function palette(): Palette {
     terrain: dark ? TERRAIN_DARK : TERRAIN_LIGHT,
     owner: (id, mine) => mine ? `oklch(${dark ? 0.62 : 0.55} 0.16 ${OWNER_HUES[0]})` : `oklch(${dark ? 0.6 : 0.55} 0.14 ${OWNER_HUES[(id + 1) % OWNER_HUES.length]})`,
     designation: (category) => `oklch(${dark ? 0.7 : 0.5} 0.15 ${CATEGORY_HUES[category] ?? 0})`,
+    commodity: (id) => `oklch(${dark ? 0.8 : 0.55} 0.19 ${COMMODITY_HUES[id] ?? 0})`,
   };
 }

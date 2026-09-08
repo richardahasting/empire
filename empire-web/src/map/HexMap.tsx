@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Coord, CountryView, Rules, SectorView } from "@/api/client";
+import type { Coord, CountryView, FlowOut, Rules, SectorView } from "@/api/client";
 import { hexCenter, hexPath, neighbourAbs, pick, type Layout } from "./hex";
 import { palette } from "./palette";
 
@@ -18,13 +18,16 @@ interface Props {
   tooltip?: string | null;
   /** Targeting mode: crosshair cursor and no drag-to-pan on click. */
   picking?: boolean;
+  /** Last update's flows to animate, and where in the update (0..1) to draw them. */
+  flows?: FlowOut[];
+  flowT?: number;
 }
 
 /**
  * Canvas hex map. Draws only what the view contains (fog of war is the server's job).
  * Coordinates are absolute for drawing; labels show the country-relative form.
  */
-export function HexMap({ view, rules, width, height, layer, stockCommodity, selected, onSelect, onContextMenu, onHover, highlightPath, tooltip, picking }: Props) {
+export function HexMap({ view, rules, width, height, layer, stockCommodity, selected, onSelect, onContextMenu, onHover, highlightPath, tooltip, picking, flows, flowT }: Props) {
   const [mouse, setMouse] = useState<{ x: number; y: number } | null>(null);
   const lastHover = useRef<string | null>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -129,6 +132,7 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
         if (s.roadTarget > s.roadLevel) { ctx.setLineDash([3, 3]); hexPath(ctx, ca.cx, ca.cy, l.size * 0.6); ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]); }
       }
     }
+    if (flows && flows.length) drawFlows(ctx, flows, flowT ?? 1, p, l, toDisplay);
     if (highlightPath && highlightPath.length > 1) {
       ctx.strokeStyle = p.accent; ctx.lineWidth = Math.max(2, l.size * 0.18); ctx.lineCap = "round"; ctx.lineJoin = "round";
       ctx.beginPath();
@@ -142,7 +146,7 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
       const { cx, cy } = hexCenter(d.x, d.y, l);
       hexPath(ctx, cx, cy, l.size - 0.5); ctx.strokeStyle = p.ring; ctx.lineWidth = 3; ctx.stroke();
     }
-  }, [view, byCoord, layer, stockCommodity, selected, width, height, layout, typeCategory, typeGlyph, toWorld, toDisplay, highlightPath]);
+  }, [view, byCoord, layer, stockCommodity, selected, width, height, layout, typeCategory, typeGlyph, toWorld, toDisplay, highlightPath, flows, flowT]);
 
   useEffect(() => {
     const el = wrap.current; if (!el) return;
@@ -190,4 +194,45 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
       )}
     </div>
   );
+}
+
+/**
+ * Flow animation. Each flow is a polyline through hex centres. The delivered part (hopsDelivered
+ * hops) carries a particle stream whose thickness grows with quantity (log scale) and whose colour
+ * is the commodity's. t in 0..1 scrubs the update: particles are spread along the delivered path
+ * and advance with t, so a stalled shipment visibly ends short, with a marker where it holds.
+ */
+function drawFlows(ctx: CanvasRenderingContext2D, flows: FlowOut[], t: number, p: ReturnType<typeof palette>, l: Layout, toDisplay: (c: Coord) => Coord) {
+  ctx.save();
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  for (const f of flows) {
+    if (f.qtyMoved <= 0 || f.path.length < 2) continue;
+    const pts = f.path.map(c => { const d = toDisplay(c); const { cx, cy } = hexCenter(d.x, d.y, l); return { x: cx, y: cy }; });
+    const delivered = Math.min(f.hopsDelivered, pts.length - 1);
+    if (delivered < 1) continue;
+    const width = Math.max(1.5, Math.min(l.size * 0.6, 1.5 + Math.log10(1 + f.qtyMoved) * l.size * 0.12));
+    const colour = p.commodity(f.commodity);
+    // faint full route; the delivered part is what the particles ride
+    ctx.globalAlpha = 0.25; ctx.strokeStyle = colour; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (let i = 1; i <= delivered; i++) ctx.lineTo(pts[i].x, pts[i].y); ctx.stroke();
+    if (!f.completed) {   // hold marker at the last sector reached
+      ctx.globalAlpha = 0.9; ctx.fillStyle = colour;
+      const e = pts[delivered]; ctx.beginPath(); ctx.arc(e.x, e.y, width * 1.2, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = p.text; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(e.x - width * 1.6, e.y - width * 1.6); ctx.lineTo(e.x + width * 1.6, e.y + width * 1.6); ctx.stroke();
+    }
+    // particles: n evenly spaced, each advanced by t along the delivered polyline
+    const segs: number[] = []; let total = 0;
+    for (let i = 0; i < delivered; i++) { const d = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y); segs.push(d); total += d; }
+    const n = Math.max(2, Math.min(12, Math.round(total / (l.size * 0.9))));
+    ctx.globalAlpha = 0.95; ctx.fillStyle = colour;
+    for (let k = 0; k < n; k++) {
+      const u = ((k / n) + t) % 1;           // position along the path, 0..1, rolling with t
+      let dist = u * total, i = 0;
+      while (i < segs.length - 1 && dist > segs[i]) { dist -= segs[i]; i++; }
+      const a = pts[i], b = pts[i + 1], r = segs[i] > 0 ? dist / segs[i] : 0;
+      const x = a.x + (b.x - a.x) * r, y = a.y + (b.y - a.y) * r;
+      ctx.beginPath(); ctx.arc(x, y, width * 0.55, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.restore();
 }
