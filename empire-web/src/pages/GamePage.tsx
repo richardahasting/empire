@@ -105,6 +105,7 @@ export function GamePage() {
   useEffect(() => { estCache.clear(); setEst(null); }, [pick, estCache]);
   useEffect(() => {
     if (!pick || !hover || !view) { setEst(null); return; }
+    if (pick.verb === "distribute") { setEst(null); return; }
     const key = `${hover.x},${hover.y}`;
     const cached = estCache.get(key);
     if (cached) { setEst(cached); return; }
@@ -125,6 +126,11 @@ export function GamePage() {
     if (!pick || !hover || !view) return null;
     const hv = view.sectors.find(s => s.at.x === hover.x && s.at.y === hover.y);
     const where = hv ? `${hv.relative.x},${hv.relative.y}` : "?";
+    if (pick.verb === "distribute") {
+      if (!hv || !hv.full) return `${where}\nnot yours — a centre must be a sector you own`;
+      if (hv.at.x === pick.from.at.x && hv.at.y === pick.from.at.y) return `${where}\nthat is the sector itself`;
+      return `${where} · ${hv.designation}\nclick: surplus from ${pick.from.relative.x},${pick.from.relative.y} goes here, shortages come from here`;
+    }
     if (!est) return `${where}\nestimating…`;
     if (!est.ok) return `${where}\n${est.error ?? "no route"}`;
     // available = the least mobility among the sectors the cargo enters (they pay, per the rules)
@@ -135,6 +141,13 @@ export function GamePage() {
   }, [pick, hover, est, view, byRel]);
   const onMapSelect = useCallback((c: Coord | null) => {
     if (!pick) { setSelected(c); return; }
+    if (pick.verb === "distribute") {
+      const hv = c && view?.sectors.find(s => s.at.x === c.x && s.at.y === c.y);
+      if (!hv || !hv.full || (hv.at.x === pick.from.at.x && hv.at.y === pick.from.at.y)) return;
+      const spec = pick; setPick(null);
+      void command({ verb: "distribute", x: spec.from.at.x, y: spec.from.at.y, x2: c.x, y2: c.y });
+      return;
+    }
     if (!c || !est?.ok || pick.qty <= 0) return;
     const spec = pick; setPick(null);
     if (spec.verb === "move") { void command({ verb: "move", x: spec.from.at.x, y: spec.from.at.y, x2: c.x, y2: c.y, commodity: spec.commodity, amount: spec.qty }); return; }
@@ -176,6 +189,9 @@ export function GamePage() {
           <div className="relative min-h-[24rem] min-w-0">
             {pick && (
               <div className="absolute left-2 top-2 z-10 flex items-center gap-2 rounded-md border border-border bg-popover px-2 py-1 text-xs shadow-md">
+                {pick.verb === "distribute" ? (
+                  <span>Choosing the distribution centre for {pick.from.relative.x},{pick.from.relative.y} — click a sector you own</span>
+                ) : (<>
                 <span>{pick.verb === "move" ? "Moving" : "Exploring with"}</span>
                 <Input value={String(pick.qty)} onChange={e => { const q = Math.max(0, Math.floor(Number(e.target.value) || 0)); setPick({ ...pick, qty: q }); }}
                        inputMode="numeric" className="h-7 w-20 text-xs" aria-label="quantity" />
@@ -183,6 +199,7 @@ export function GamePage() {
                 {pick.commodity === "civ" && pick.from.at.x === view.capital.x && pick.from.at.y === view.capital.y && (pick.from.stock["civ"] ?? 0) - pick.qty < 100 && (
                   <span className="text-destructive">leaves the capital with {Math.max(0, Math.floor((pick.from.stock["civ"] ?? 0) - pick.qty))} civilians — BTUs come from them</span>
                 )}
+                </>)}
                 <Button size="sm" variant="ghost" onClick={() => setPick(null)}>Cancel (Esc)</Button>
               </div>
             )}
