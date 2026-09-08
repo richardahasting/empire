@@ -43,7 +43,7 @@ export interface Levels { tech: number; research: number; education: number; hap
 export interface Resources { fertility: number; minerals: number; gold: number; oil: number; uranium: number }
 export interface SectorView {
   at: Coord; relative: Coord; full: boolean; terrain: string; elevation: number; owner: number;
-  designation: string | null; efficiency: number; mobility: number; roadLevel: number;
+  designation: string | null; efficiency: number; mobility: number; roadLevel: number; roadTarget: number;
   stock: Record<string, number>; thresholds: Record<string, number>; distCenter: Coord | null;
   held: Record<string, number>; resources: Resources | null;
 }
@@ -62,7 +62,8 @@ export interface SectorType {
   terrainRequired: string[] | null; flags: string[] | null;
 }
 export interface Commodity { id: string; name: string; weight: number; priority: number }
-export interface Rules { sectorTypes: SectorType[]; commodities: Commodity[]; etusPerUpdate: number; btuCosts: Record<string, number> }
+export interface RoadRules { buildMaterialsPerPoint: Record<string, number>; workPerPoint: number; maxPointsPerUpdate: number; costMultiplierByTerrain: Record<string, number>; maxLevelByTerrain: Record<string, number>; decayPerUpdate: number; maintenanceCashPerPointPerUpdate: number }
+export interface Rules { sectorTypes: SectorType[]; commodities: Commodity[]; etusPerUpdate: number; btuCosts: Record<string, number>; road?: RoadRules; defaultCapacity?: number }
 export interface Outcome { accepted: boolean; error?: string; btuSpent: number; view: CountryView }
 export interface ConsoleReply { output: string; accepted: boolean; error?: string; view?: CountryView }
 export interface CommandRequest {

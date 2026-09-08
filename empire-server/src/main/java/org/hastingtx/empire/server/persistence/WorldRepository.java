@@ -49,19 +49,19 @@ public class WorldRepository {
         return a.owner() == b.owner() && a.designation().equals(b.designation()) && a.efficiency() == b.efficiency() && a.mobility() == b.mobility()
                 && a.stock().equals(b.stock()) && Arrays.equals(a.thresholds(), b.thresholds()) && Objects.equals(a.distCenter(), b.distCenter())
                 && a.roadLevel() == b.roadLevel() && a.railLevel() == b.railLevel() && a.radarLevel() == b.radarLevel()
-                && a.held().equals(b.held()) && a.sanctuary() == b.sanctuary() && a.terrain() == b.terrain();
+                && a.held().equals(b.held()) && a.sanctuary() == b.sanctuary() && a.terrain() == b.terrain() && a.roadTarget() == b.roadTarget();
     }
 
     private void writeSectors(long gameId, List<Sector> sectors, Commodities com) {
         if (sectors.isEmpty()) return;
         jdbc.batchUpdate("""
                 INSERT INTO sector (game_id, x, y, terrain, elevation, fertility, minerals, gold, oil, uranium, owner, designation, efficiency, mobility,
-                                    road_level, rail_level, radar_level, dist_x, dist_y, sanctuary)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                                    road_level, rail_level, radar_level, dist_x, dist_y, sanctuary, road_target)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT (game_id, x, y) DO UPDATE SET terrain = EXCLUDED.terrain, elevation = EXCLUDED.elevation, fertility = EXCLUDED.fertility,
                     minerals = EXCLUDED.minerals, gold = EXCLUDED.gold, oil = EXCLUDED.oil, uranium = EXCLUDED.uranium, owner = EXCLUDED.owner,
                     designation = EXCLUDED.designation, efficiency = EXCLUDED.efficiency, mobility = EXCLUDED.mobility, road_level = EXCLUDED.road_level,
-                    rail_level = EXCLUDED.rail_level, radar_level = EXCLUDED.radar_level, dist_x = EXCLUDED.dist_x, dist_y = EXCLUDED.dist_y, sanctuary = EXCLUDED.sanctuary""",
+                    rail_level = EXCLUDED.rail_level, radar_level = EXCLUDED.radar_level, dist_x = EXCLUDED.dist_x, dist_y = EXCLUDED.dist_y, sanctuary = EXCLUDED.sanctuary, road_target = EXCLUDED.road_target""",
                 sectors, 500, (PreparedStatement ps, Sector s) -> {
                     Resources r = s.resources();
                     ps.setLong(1, gameId); ps.setInt(2, s.at().x()); ps.setInt(3, s.at().y()); ps.setString(4, s.terrain().id()); ps.setInt(5, s.elevation());
@@ -71,6 +71,7 @@ public class WorldRepository {
                     if (s.distCenter() == null) { ps.setNull(18, java.sql.Types.INTEGER); ps.setNull(19, java.sql.Types.INTEGER); }
                     else { ps.setInt(18, s.distCenter().x()); ps.setInt(19, s.distCenter().y()); }
                     ps.setBoolean(20, s.sanctuary());
+                    ps.setDouble(21, s.roadTarget());
                 });
         List<Object[]> stockRows = new ArrayList<>();
         List<Object[]> parcelRows = new ArrayList<>();
@@ -131,7 +132,7 @@ public class WorldRepository {
             Sector s = Sector.blank(at, Terrain.of(rs.getString("terrain")), rs.getInt("elevation"),
                     new Resources(rs.getInt("fertility"), rs.getInt("minerals"), rs.getInt("gold"), rs.getInt("oil"), rs.getInt("uranium")), n)
                     .withOwner(rs.getInt("owner")).withDesignation(rs.getString("designation"), rs.getDouble("efficiency")).withMobility(rs.getDouble("mobility"))
-                    .withRoadLevel(rs.getDouble("road_level")).withDistCenter(noDist ? null : new Coord(dx, dy)).withSanctuary(rs.getBoolean("sanctuary"));
+                    .withRoadLevel(rs.getDouble("road_level")).withRoadTarget(rs.getDouble("road_target")).withDistCenter(noDist ? null : new Coord(dx, dy)).withSanctuary(rs.getBoolean("sanctuary"));
             sectors[at.y() * g.width() + at.x()] = s;
         }, g.id());
         double[][] stock = new double[sectors.length][n];

@@ -81,6 +81,25 @@ class CalibrationProbesTest {
         assertThat(civ).as("but the population settles at the subsistence limit").isGreaterThanOrEqualTo(240 - 1e-6).isLessThan(400);
     }
 
+    /** A road order is honoured: the level climbs toward the target while lcm, cash and workers last, and never past the terrain cap. */
+    @Test
+    void roadOrderBuildsTheRoad() {
+        GameConfig cfg = TestWorlds.teaching();
+        World w = TestWorlds.disc(cfg, 2, Map.of("civ", 400.0, "food", 2000.0, "lcm", 500.0));
+        Coord at = Hex.stepRaw(TestWorlds.CENTER, 0, 1);
+        w = TestWorlds.own(w, cfg, at, "agribusiness", 80, 100, Map.of("civ", 300.0, "food", 500.0, "lcm", 200.0), Map.of());
+        World control = w;                                            // same world, no road order
+        w = w.withSector(w.sector(at).withRoadTarget(40));
+        double lcmBefore = w.sector(at).stock().get(11);
+        for (int u = 0; u < 8; u++) { w = Update.run(w, cfg, 500 + u).next(); control = Update.run(control, cfg, 500 + u).next(); }
+        double level = w.sector(at).roadLevel();
+        assertThat(level).as("climbed toward the target").isGreaterThan(20).isLessThanOrEqualTo(40 + 1e-9);
+        assertThat(control.sector(at).roadLevel()).as("no order, no road").isZero();
+        assertThat(w.sector(at).stock().get(11)).as("paid in lcm").isLessThan(lcmBefore);
+        assertThat(w.country(0).cash()).as("paid in cash, relative to the control").isLessThan(control.country(0).cash());
+        assertThat(cfg.infrastructure().road().maxLevelByTerrain().get("plains")).isEqualTo(100.0);
+    }
+
     /** Roads rot when nobody pays for them, at the configured rate. */
     @Test
     void unpaidRoadsRot() {

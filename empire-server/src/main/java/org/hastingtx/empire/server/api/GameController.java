@@ -44,12 +44,13 @@ public class GameController {
     public CountryView view(@PathVariable long id, HttpServletRequest req) { return games.view(id, AuthInterceptor.current(req)); }
 
     /** The rulebook the UI needs: sector types and commodities. Public knowledge. */
-    public record Rules(List<SectorTypeCfg> sectorTypes, List<CommodityCfg> commodities, int etusPerUpdate, Map<String, Integer> btuCosts) {}
+    public record Rules(List<SectorTypeCfg> sectorTypes, List<CommodityCfg> commodities, int etusPerUpdate, Map<String, Integer> btuCosts,
+                        org.hastingtx.empire.engine.config.InfrastructureCfg.RoadCfg road, double defaultCapacity) {}
 
     @GetMapping("/{id}/rules")
     public Rules rules(@PathVariable long id) {
         var cfg = games.get(id).cfg;
-        return new Rules(cfg.economy().sectorTypes(), cfg.commodities(), cfg.etus(), cfg.economy().btu().costByCommand());
+        return new Rules(cfg.economy().sectorTypes(), cfg.commodities(), cfg.etus(), cfg.economy().btu().costByCommand(), cfg.infrastructure().road(), cfg.economy().defaultCapacity());
     }
 
     /** One JSON shape for every verb; absolute coordinates. */
@@ -62,6 +63,7 @@ public class GameController {
                 case "distribute" -> new Command.Distribute(at(x, y), Boolean.TRUE.equals(clear) || x2 == null ? null : at(x2, y2));
                 case "move" -> new Command.Move(at(x, y), at(x2, y2), commodity, amount == null ? 0 : amount);
                 case "explore" -> new Command.Explore(at(x, y), at(x2, y2), amount == null ? 0 : amount);
+                case "build_road" -> new Command.BuildRoad(at(x, y), amount == null ? 0 : amount);
                 default -> throw new IllegalArgumentException("unknown verb: " + verb);
             };
         }

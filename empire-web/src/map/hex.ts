@@ -33,3 +33,15 @@ export function pick(px: number, py: number, l: Layout, width: number, height: n
   }
   return best && bd <= (l.size * 1.05) ** 2 ? best : null;
 }
+
+/** Neighbour in direction d (0=E,1=NE,2=NW,3=W,4=SW,5=SE) in odd-r offset coords, honouring wrap; null when off a non-wrapping edge. */
+export function neighbourAbs(c: { x: number; y: number }, d: number, width: number, height: number, wrapX: boolean, wrapY: boolean): { x: number; y: number } | null {
+  const odd = c.y & 1;
+  const even: [number, number][] = [[1, 0], [0, -1], [-1, -1], [-1, 0], [-1, 1], [0, 1]];
+  const oddD: [number, number][] = [[1, 0], [1, -1], [0, -1], [-1, 0], [0, 1], [1, 1]];
+  const [dx, dy] = (odd ? oddD : even)[d];
+  let x = c.x + dx, y = c.y + dy;
+  if (wrapX) x = ((x % width) + width) % width; else if (x < 0 || x >= width) return null;
+  if (wrapY) y = ((y % height) + height) % height; else if (y < 0 || y >= height) return null;
+  return { x, y };
+}

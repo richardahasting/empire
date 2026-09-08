@@ -8,7 +8,7 @@ import org.hastingtx.empire.engine.model.Coord;
  */
 public sealed interface Command permits
         Command.BreakSanctuary, Command.Designate, Command.Threshold, Command.Distribute,
-        Command.Move, Command.Explore {
+        Command.Move, Command.Explore, Command.BuildRoad {
 
     String verb();
 
@@ -24,6 +24,9 @@ public sealed interface Command permits
 
     /** Queue a manual move, executed at the next update under the range-and-hold rule. */
     record Move(Coord from, Coord to, String commodity, double qty) implements Command { public String verb() { return "move"; } }
+
+    /** Standing order: build this sector's road toward {@code targetLevel} (0..100) over the coming updates; 0 cancels. */
+    record BuildRoad(Coord sector, double targetLevel) implements Command { public String verb() { return "build_road"; } }
 
     /** Claim an adjacent unowned land sector by moving civilians into it. Immediate. */
     record Explore(Coord from, Coord to, double civs) implements Command { public String verb() { return "explore"; } }
