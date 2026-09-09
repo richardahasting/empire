@@ -123,6 +123,13 @@ public final class FlowStep implements Step {
         // mobility budgets
         double[] mobBudget = new double[ctx.led.nSectors];
         for (int i = 0; i < ctx.led.nSectors; i++) mobBudget[i] = Math.max(0, ctx.sector(i).mobility() + ctx.led.mobility[i]);
+        // room for people (issue #48): civilians and workers never move into a sector that cannot hold them —
+        // the apply step would truncate them. Room = population cap − people there after this update's births.
+        double[] roomBudget = new double[ctx.led.nSectors];
+        for (int i = 0; i < ctx.led.nSectors; i++) {
+            Sector s = ctx.sector(i);
+            roomBudget[i] = Math.max(0, ctx.maxPopulation(s) - (s.stock().get(ctx.com.civ) + ctx.led.stock[i][ctx.com.civ] + s.stock().get(ctx.com.uw) + ctx.led.stock[i][ctx.com.uw]));
+        }
 
         for (int iter = 0; iter < 50; iter++) {
             boolean changed = false;
@@ -140,6 +147,14 @@ public final class FlowStep implements Step {
                 double f = 1.0;
                 for (int h = 1; h < p.path.size(); h++) { int t = payer(ctx, p, h); if (mobClaim[t] > mobBudget[t] + 1e-9) f = Math.min(f, mobBudget[t] / mobClaim[t]); }
                 if (f < 1.0) { p.claim *= f; changed = true; }
+            }
+            // room at the destination for people
+            double[] roomClaim = new double[ctx.led.nSectors];
+            for (Plan p : plans) if (needsRoom(ctx, p)) roomClaim[ctx.idx(p.path.get(p.path.size() - 1))] += p.claim;
+            for (Plan p : plans) {
+                if (!needsRoom(ctx, p)) continue;
+                int d = ctx.idx(p.path.get(p.path.size() - 1));
+                if (roomClaim[d] > roomBudget[d] + 1e-9) { p.claim *= roomBudget[d] / roomClaim[d]; changed = true; }
             }
             if (!changed) break;
         }
@@ -313,6 +328,9 @@ public final class FlowStep implements Step {
         double bonus = p.kind.equals("move") ? 1.0 : p.kind.equals("deliver") ? ctx.cfg.distribution().deliverMobilityBonusOr1() : ctx.cfg.distribution().mobilityBonusOr1();
         return w * ctx.moveCostInto(ctx.snap.sector(p.path.get(h))) / bonus;
     }
+
+    /** Civilians and workers count against the destination's population cap (mil do not: KNOWN, trunc_people). */
+    private static boolean needsRoom(Ctx ctx, Plan p) { return p.commodity == ctx.com.civ || p.commodity == ctx.com.uw; }
 
     private static boolean mobRoom(Ctx ctx, Plan p, double qty, double[] budget, double[] used) {
         for (int h = 1; h < p.path.size(); h++) { int t = payer(ctx, p, h); if (used[t] + hopCost(ctx, p, qty, h) > budget[t] + 1e-9) return false; }

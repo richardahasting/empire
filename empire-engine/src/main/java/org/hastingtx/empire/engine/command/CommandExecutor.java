@@ -156,6 +156,11 @@ public final class CommandExecutor {
             if (!srcPays && unit[h] > 0 && t.mobility() / unit[h] < moving) { moving = t.mobility() / unit[h]; choke = t.at(); }
         }
         if (srcPays && totalUnit > 0) moving = Math.min(moving, from.mobility() / totalUnit);
+        // people never move into a sector that cannot hold them (issue #48): the update would truncate them
+        boolean people = ci == com.civ || ci == com.uw;
+        double room = people ? Math.max(0, ctx.maxPopulation(to) - (to.stock().get(com.civ) + to.stock().get(com.uw))) : Double.POSITIVE_INFINITY;
+        if (people && room < moving) moving = room;
+        if (people && room <= 0) return CommandResult.fail(w, m.to() + " is full: " + fmt(to.stock().get(com.civ) + to.stock().get(com.uw)) + " people at a limit of " + fmt(ctx.maxPopulation(to)));
         moving = Math.floor(moving * 1000) / 1000;
         if (moving <= 0) return CommandResult.fail(w, srcPays
                 ? "no mobility in " + m.from() + " (has " + fmt(from.mobility()) + "; the route costs " + fmt(totalUnit) + " per unit)"
@@ -172,7 +177,7 @@ public final class CommandExecutor {
         Sector src = next.sector(m.from()), dst = next.sector(m.to());
         next = next.withSector(src.withStock(src.stock().plus(ci, -moving)));
         next = next.withSector(dst.withStock(dst.stock().plus(ci, moving)));
-        String info = moving < m.qty() - 1e-9 ? "moved " + fmt(moving) + " of " + fmt(m.qty()) + " " + m.commodity() + " — " + (srcPays ? "mobility in " + m.from() : "mobility along the route") + " ran out; the rest stayed in " + m.from()
+        String info = moving < m.qty() - 1e-9 ? "moved " + fmt(moving) + " of " + fmt(m.qty()) + " " + m.commodity() + " — " + (people && moving >= room - 1e-9 ? m.to() + " has room for no more" : srcPays ? "mobility in " + m.from() + " ran out" : "mobility along the route ran out") + "; the rest stayed in " + m.from()
                                               : "moved " + fmt(moving) + " " + m.commodity() + " to " + m.to();
         return new CommandResult(next, null, 0, info);
     }
