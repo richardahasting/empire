@@ -161,6 +161,17 @@ public final class CommandExecutor {
         return new CommandResult(w.withShip(ship.withDest(s.dest()).withMission(null, null)), null, 0, "ship #" + s.ship() + " sails for " + s.dest() + ": " + (path.size() - 1) + " hexes, " + eta + (ship.fishing() ? " (fishing mission ended)" : ""));
     }
 
+    /** The harbour, then any dockside warehouse of yours next to it (issue #78). */
+    private List<Sector> dockside(World w, Country c, Sector harbor) {
+        List<Sector> out = new java.util.ArrayList<>();
+        out.add(harbor);
+        for (Coord nb : org.hastingtx.empire.engine.geo.Hex.neighbours(w, harbor.at())) {
+            Sector s = w.sector(nb);
+            if (s.owner() == c.id() && cfg.sectorType(s.designation()).hasFlag("dockside")) out.add(s);
+        }
+        return out;
+    }
+
     private CommandResult load(World w, Country c, Command.Load l) {
         Ship ship = myShip(w, c, l.ship());
         if (ship == null) return CommandResult.fail(w, "no ship #" + l.ship() + " of yours");
@@ -171,11 +182,22 @@ public final class CommandExecutor {
         var cls = cfg.units().ships().shipClass(ship.cls());
         if (!org.hastingtx.empire.engine.update.steps.ShipStep.carries(new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0), cls, ci)) return CommandResult.fail(w, "a " + cls.name() + " cannot carry " + l.commodity());
         double room = cls.hold() - ship.load();
-        double q = Math.min(l.qty(), Math.min(room, h.stock().get(ci)));
         if (l.qty() <= 0) return CommandResult.fail(w, "quantity must be positive");
-        if (q <= 0) return CommandResult.fail(w, room <= 0 ? "the hold is full" : "no " + l.commodity() + " in the harbour");
-        World next = w.withSector(h.withStock(h.stock().plus(ci, -q))).withShip(ship.withStock(ship.stock().plus(ci, q)));
-        return new CommandResult(next, null, 0, "loaded " + fmt(q) + " " + l.commodity() + (q < l.qty() ? " (" + (room < l.qty() ? "hold full" : "all there was") + ")" : ""));
+        double want = Math.min(l.qty(), room), got = 0;
+        World next = w;
+        StringBuilder from = new StringBuilder();
+        for (Sector src : dockside(w, c, h)) {
+            if (want - got <= 0) break;
+            double q = Math.min(want - got, src.stock().get(ci));
+            if (q <= 0) continue;
+            next = next.withSector(next.sector(src.at()).withStock(next.sector(src.at()).stock().plus(ci, -q)));
+            got += q;
+            if (!src.at().equals(h.at())) from.append(from.isEmpty() ? "" : ", ").append(fmt(q)).append(" from the warehouse at ").append(src.at());
+        }
+        if (got <= 0) return CommandResult.fail(w, room <= 0 ? "the hold is full" : "no " + l.commodity() + " in the harbour or a warehouse beside it");
+        next = next.withShip(ship.withStock(ship.stock().plus(ci, got)));
+        double g = got;
+        return new CommandResult(next, null, 0, "loaded " + fmt(g) + " " + l.commodity() + (from.isEmpty() ? "" : " (" + from + ")") + (g < l.qty() ? " (" + (room < l.qty() ? "hold full" : "all there was") + ")" : ""));
     }
 
     private CommandResult unload(World w, Country c, Command.Unload u) {
@@ -186,12 +208,25 @@ public final class CommandExecutor {
         if (!com.has(u.commodity())) return CommandResult.fail(w, "unknown commodity: " + u.commodity());
         int ci = com.index(u.commodity());
         org.hastingtx.empire.engine.update.Ctx ctx = new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0);
-        double room = com.isPerson(ci) ? Math.max(0, ctx.maxPopulation(h) - (h.stock().get(com.civ) + h.stock().get(com.uw))) : Math.max(0, ctx.capacity(h, ci) - h.stock().get(ci));
-        double q = Math.min(u.qty(), Math.min(room, ship.stock().get(ci)));
         if (u.qty() <= 0) return CommandResult.fail(w, "quantity must be positive");
-        if (q <= 0) return CommandResult.fail(w, ship.stock().get(ci) <= 0 ? "no " + u.commodity() + " aboard" : "no room in the harbour");
-        World next = w.withSector(h.withStock(h.stock().plus(ci, q))).withShip(ship.withStock(ship.stock().plus(ci, -q)));
-        return new CommandResult(next, null, 0, "unloaded " + fmt(q) + " " + u.commodity());
+        double want = Math.min(u.qty(), ship.stock().get(ci)), done = 0;
+        World next = w;
+        StringBuilder into = new StringBuilder();
+        for (Sector dst0 : dockside(w, c, h)) {
+            if (want - done <= 0) break;
+            Sector dst = next.sector(dst0.at());
+            double room = com.isPerson(ci) ? Math.max(0, ctx.maxPopulation(dst) - (dst.stock().get(com.civ) + dst.stock().get(com.uw)))
+                                           : Math.max(0, ctx.capacity(dst, ci) - dst.stock().get(ci));
+            double q = Math.min(want - done, room);
+            if (q <= 0) continue;
+            next = next.withSector(dst.withStock(dst.stock().plus(ci, q)));
+            done += q;
+            if (!dst.at().equals(h.at())) into.append(into.isEmpty() ? "" : ", ").append(fmt(q)).append(" into the warehouse at ").append(dst.at());
+        }
+        if (done <= 0) return CommandResult.fail(w, ship.stock().get(ci) <= 0 ? "no " + u.commodity() + " aboard" : "no room in the harbour or a warehouse beside it");
+        next = next.withShip(ship.withStock(ship.stock().plus(ci, -done)));
+        double d = done;
+        return new CommandResult(next, null, 0, "unloaded " + fmt(d) + " " + u.commodity() + (into.isEmpty() ? "" : " (" + into + ")"));
     }
 
     private CommandResult lane(World w, Country c, Command.Lane l) {

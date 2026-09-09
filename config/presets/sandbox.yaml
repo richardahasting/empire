@@ -8,8 +8,8 @@ players:
   starting_cash: 1000000
   starting_levels: { tech: 150, research: 150, education: 150, happiness: 50 }
   starting_commodities:
-    capital:   { civ: 1000, mil: 100, food: 9999, iron: 9999, lcm: 9999, hcm: 9999, oil: 9999, dust: 9999 }
-    sanctuary: { civ: 1000, mil: 100, food: 9999, iron: 9999, lcm: 9999, hcm: 9999, oil: 9999, dust: 9999 }
-economy: { btu: { max: 9999, start: 9999 } }
+    capital:   { civ: 1000, mil: 100, food: 1000, iron: 1000, lcm: 1000, hcm: 1000, oil: 1000, dust: 1000 }
+    sanctuary: { civ: 1000, mil: 100, food: 1000, iron: 1000, lcm: 1000, hcm: 1000, oil: 1000, dust: 1000 }
+economy: { btu: { max: 1000, start: 1000 } }
 units: { enabled: true }
 options: { hidden: false, plague: false, fallout: false }

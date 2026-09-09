@@ -138,6 +138,23 @@ public final class ShipStep implements Step {
     }
     static String label(Ship s) { return "ship #" + s.id() + (s.name() == null || s.name().isBlank() ? "" : " " + s.name()); }
 
+    /**
+     * The sectors a docked ship may work, in a fixed order: its harbour first, then any {@code dockside}
+     * sector of the same country in an adjacent hex — the warehouse next door (issue #78). Neighbour
+     * order is deterministic, so two ships working the same warehouse contend exactly as they already do
+     * over harbour stock, resolved through the ledger in ship-id order.
+     */
+    static List<Integer> dockside(Ctx ctx, Sector harbor, int owner) {
+        List<Integer> out = new ArrayList<>();
+        out.add(ctx.idx(harbor.at()));
+        for (Coord nb : org.hastingtx.empire.engine.geo.Hex.neighbours(ctx.snap, harbor.at())) {
+            int i = ctx.idx(nb);
+            Sector s = ctx.sector(i);
+            if (s.owner() == owner && ctx.type(s).hasFlag("dockside")) out.add(i);
+        }
+        return out;
+    }
+
     /** What a class may carry. */
     public static boolean carries(Ctx ctx, UnitsCfg.ShipClassCfg cls, int c) {
         for (String k : cls.carriesOrEmpty()) {
@@ -149,41 +166,57 @@ public final class ShipStep implements Step {
         return false;
     }
 
-    /** Load the harbour's surplus (above its thresholds) of the wanted commodities, up to the hold. */
+    /** Load surplus (above each sector's thresholds) from the harbour, then any dockside warehouse, up to the hold. */
     private static Ship load(Ctx ctx, Ship ship, UnitsCfg.ShipClassCfg cls, Sector harbor, int hi, List<Integer> wanted, StringBuilder note) {
         double room = cls.hold() - ship.load();
         StringBuilder took = new StringBuilder();
-        for (int c = 0; c < ctx.com.size() && room > 1e-9; c++) {
-            if (!wanted.isEmpty() && !wanted.contains(c)) continue;
-            if (!carries(ctx, cls, c)) continue;
-            double keep = harbor.hasThreshold(c) ? harbor.threshold(c) : 0;
-            double avail = harbor.stock().get(c) + ctx.led.stock[hi][c] - keep;
-            double q = Math.min(room, avail);
-            if (q <= 1e-9) continue;
-            ctx.led.stock[hi][c] -= q; room -= q;
-            ship = ship.withStock(ship.stock().plus(c, q));
-            took.append(took.isEmpty() ? "" : ", ").append(Ledger.q(q)).append(' ').append(ctx.com.id(c));
+        for (int si : dockside(ctx, harbor, ship.owner())) {
+            if (room <= 1e-9) break;
+            Sector src = ctx.sector(si);
+            StringBuilder here = new StringBuilder();
+            for (int c = 0; c < ctx.com.size() && room > 1e-9; c++) {
+                if (!wanted.isEmpty() && !wanted.contains(c)) continue;
+                if (!carries(ctx, cls, c)) continue;
+                double keep = src.hasThreshold(c) ? src.threshold(c) : 0;
+                double avail = src.stock().get(c) + ctx.led.stock[si][c] - keep;
+                double q = Math.min(room, avail);
+                if (q <= 1e-9) continue;
+                ctx.led.stock[si][c] -= q; room -= q;
+                ship = ship.withStock(ship.stock().plus(c, q));
+                here.append(here.isEmpty() ? "" : ", ").append(Ledger.q(q)).append(' ').append(ctx.com.id(c));
+            }
+            if (here.isEmpty()) continue;
+            took.append(took.isEmpty() ? "" : "; ").append(here).append(si == hi ? "" : " from the warehouse at " + src.at());
+            ctx.led.note(si, label(ship) + " loaded " + here);
         }
-        if (!took.isEmpty()) { sep(note).append("loaded ").append(took).append(" at ").append(harbor.at()); ctx.led.note(hi, label(ship) + " loaded " + took); }
+        if (!took.isEmpty()) sep(note).append("loaded ").append(took).append(" at ").append(harbor.at());
         else sep(note).append("nothing to load at ").append(harbor.at());
         return ship;
     }
 
-    /** Unload everything into the harbour, up to its capacity (people up to its population room). */
+    /** Unload into the harbour, then into any dockside warehouse that still has room (issue #78). */
     private static Ship unload(Ctx ctx, Ship ship, Sector harbor, int hi, StringBuilder note) {
         StringBuilder put = new StringBuilder();
         Stocks st = ship.stock();
-        for (int c = 0; c < ctx.com.size(); c++) {
-            double q = st.get(c);
-            if (q <= 1e-9) continue;
-            double room = ctx.com.isPerson(c) ? Math.max(0, ctx.maxPopulation(harbor) - (harbor.stock().get(ctx.com.civ) + ctx.led.stock[hi][ctx.com.civ] + harbor.stock().get(ctx.com.uw) + ctx.led.stock[hi][ctx.com.uw]))
-                                              : Math.max(0, ctx.capacity(harbor, c) - (harbor.stock().get(c) + ctx.led.stock[hi][c]));
-            double u = Math.min(q, room);
-            if (u <= 1e-9) continue;
-            ctx.led.stock[hi][c] += u; st = st.plus(c, -u);
-            put.append(put.isEmpty() ? "" : ", ").append(Ledger.q(u)).append(' ').append(ctx.com.id(c));
+        for (int si : dockside(ctx, harbor, ship.owner())) {
+            Sector dst = ctx.sector(si);
+            StringBuilder here = new StringBuilder();
+            for (int c = 0; c < ctx.com.size(); c++) {
+                double q = st.get(c);
+                if (q <= 1e-9) continue;
+                double room = ctx.com.isPerson(c)
+                        ? Math.max(0, ctx.maxPopulation(dst) - (dst.stock().get(ctx.com.civ) + ctx.led.stock[si][ctx.com.civ] + dst.stock().get(ctx.com.uw) + ctx.led.stock[si][ctx.com.uw]))
+                        : Math.max(0, ctx.capacity(dst, c) - (dst.stock().get(c) + ctx.led.stock[si][c]));
+                double u = Math.min(q, room);
+                if (u <= 1e-9) continue;
+                ctx.led.stock[si][c] += u; st = st.plus(c, -u);
+                here.append(here.isEmpty() ? "" : ", ").append(Ledger.q(u)).append(' ').append(ctx.com.id(c));
+            }
+            if (here.isEmpty()) continue;
+            put.append(put.isEmpty() ? "" : "; ").append(here).append(si == hi ? "" : " into the warehouse at " + dst.at());
+            ctx.led.note(si, label(ship) + " unloaded " + here);
         }
-        if (!put.isEmpty()) { sep(note).append("unloaded ").append(put).append(" at ").append(harbor.at()); ctx.led.note(hi, label(ship) + " unloaded " + put); }
+        if (!put.isEmpty()) sep(note).append("unloaded ").append(put).append(" at ").append(harbor.at());
         return ship.withStock(st);
     }
 }

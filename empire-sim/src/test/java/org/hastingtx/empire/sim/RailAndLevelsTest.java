@@ -29,7 +29,7 @@ class RailAndLevelsTest {
     @Test
     void trainRunsDepotToDepot() {
         GameConfig cfg = TestWorlds.teaching();
-        World w = TestWorlds.disc(cfg, 7, Map.of("civ", 500.0, "food", 5000.0, "iron", 3000.0, "lcm", 500.0));
+        World w = TestWorlds.disc(cfg, 7, Map.of("civ", 500.0, "food", 800.0, "iron", 1000.0, "lcm", 500.0));
         w = w.withCountry(w.country(0).withLevels(new Levels(70, 0, 0, 0)));            // rail needs tech 60
         Coord a = TestWorlds.CENTER, b = Hex.stepRaw(a, 0, 5);
         w = w.withSector(w.sector(a).withDesignation("depot", 100).withRailLevel(100));
@@ -39,12 +39,12 @@ class RailAndLevelsTest {
             w = w.withSector(w.sector(c).withRailLevel(100));
         }
         CommandExecutor exec = new CommandExecutor(cfg);
-        CommandResult r = exec.execute(w, 0, new Command.RailShip(a, b, "iron", 2000));
+        CommandResult r = exec.execute(w, 0, new Command.RailShip(a, b, "iron", 800));
         assertThat(r.ok()).as(r.error()).isTrue();
         assertThat(r.info()).contains("train scheduled");
         UpdateResult u = Update.run(r.world(), cfg, 5);
-        assertThat(u.next().sector(b).stock().get(IRON)).as("iron arrived by rail (range 8 >= 5)").isGreaterThan(1900);
-        assertThat(u.next().sector(a).stock().get(IRON)).isLessThan(3000 - 1900);
+        assertThat(u.next().sector(b).stock().get(IRON)).as("iron arrived by rail (range 8 >= 5)").isGreaterThan(750);
+        assertThat(u.next().sector(a).stock().get(IRON)).isLessThan(1000 - 750);
         assertThat(u.flows()).anyMatch(f -> f.kind().equals("rail") && f.completed());
         assertThat(u.next().country(0).cash()).as("cost by volume").isLessThan(w.country(0).cash() + 100000);
         // mobility (Richard 2026-09-09): rail is a fifth of road — 2000 iron × 0.1 (warehouse packing) × 5 plains hops × 0.2 = 200 by road, 40 over rail-100 hexes
