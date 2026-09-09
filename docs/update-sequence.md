@@ -262,6 +262,14 @@ changes) into the world-visible news feed and per-country telegrams. Nothing
 here mutates state.
 
 ### 12. Apply
+
+**Sector notes** (issue #49). Every step that changes a sector appends a
+plain-language line to that sector's notes in the ledger — "people ate 24
+food", "efficiency +12% using 12 lcm, $12", "made 430 lcm using 430 iron",
+"sent 430 lcm to 4,7 (surplus to centre)", "received 24 food from 4,7",
+"12 civ over the population limit, lost" — in the order the steps ran. They
+ride with the update log and are served per country, relativised, so a
+player can ask any sector what happened to it last update.
 Apply the ledger to the snapshot to produce `next`. Then the invariants:
 - **Conservation**: for every commodity, `Σ next = Σ snapshot + produced −
   consumed − destroyed`, where produced/consumed/destroyed are the ledger's

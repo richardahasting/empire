@@ -33,11 +33,11 @@ public final class ApplyStep {
                 }
                 if (!ctx.com.isPerson(c)) {
                     double cap = ctx.capacity(s, c);
-                    if (q[c] > cap) { led.destroyed[c] += q[c] - cap; led.event("spoilage", s.owner(), s.at(), ctx.com.id(c) + " over capacity in " + s.at(), q[c] - cap); q[c] = cap; }
+                    if (q[c] > cap) { led.destroyed[c] += q[c] - cap; led.event("spoilage", s.owner(), s.at(), ctx.com.id(c) + " over capacity in " + s.at(), q[c] - cap); led.note(i, Ledger.q(q[c] - cap) + " " + ctx.com.id(c) + " over capacity, lost"); q[c] = cap; }
                 } else if (c == ctx.com.civ || c == ctx.com.uw) {
                     // KNOWN (human.c trunc_people): civilians and workers above the sector's population cap are truncated every update
                     double cap = ctx.maxPopulation(s);
-                    if (q[c] > cap + 1e-9) { led.destroyed[c] += q[c] - cap; led.event("overcrowding", s.owner(), s.at(), ctx.com.id(c) + " over the population limit in " + s.at(), q[c] - cap); q[c] = cap; }
+                    if (q[c] > cap + 1e-9) { led.destroyed[c] += q[c] - cap; led.event("overcrowding", s.owner(), s.at(), ctx.com.id(c) + " over the population limit in " + s.at(), q[c] - cap); led.note(i, Ledger.q(q[c] - cap) + " " + ctx.com.id(c) + " over the population limit, lost"); q[c] = cap; }
                 }
             }
             Sector n = s.withStock(Stocks.of(q))
@@ -58,7 +58,9 @@ public final class ApplyStep {
         }
         World out = new World(snap.width(), snap.height(), snap.wrapX(), snap.wrapY(), next, countries, List.of(), snap.updateNumber() + 1, List.of());
         checkConservation(ctx, out);
-        return new UpdateResult(out, List.copyOf(led.events), List.copyOf(led.flows), hash(out));
+        java.util.Map<String, List<String>> notes = new java.util.TreeMap<>();
+        for (var e : led.notes.entrySet()) { Sector s = ctx.sector(e.getKey()); if (s.owned()) notes.put(s.at().x() + "," + s.at().y(), List.copyOf(e.getValue())); }
+        return new UpdateResult(out, List.copyOf(led.events), List.copyOf(led.flows), hash(out), notes);
     }
 
     private static void checkConservation(Ctx ctx, World out) {

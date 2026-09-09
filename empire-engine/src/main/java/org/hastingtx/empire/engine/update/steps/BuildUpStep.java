@@ -6,6 +6,7 @@ import org.hastingtx.empire.engine.config.SectorTypeCfg;
 import org.hastingtx.empire.engine.model.Country;
 import org.hastingtx.empire.engine.model.Sector;
 import org.hastingtx.empire.engine.update.Ctx;
+import org.hastingtx.empire.engine.update.Ledger;
 import org.hastingtx.empire.engine.update.Step;
 
 import java.util.Map;
@@ -54,13 +55,15 @@ public final class BuildUpStep implements Step {
                     }
                 }
                 if (points > 1e-9) {
+                    StringBuilder used = new StringBuilder();
                     for (var e : build.entrySet()) {
                         if (e.getValue() <= 0) continue;
-                        if (e.getKey().equals("cash")) { double cost = points * e.getValue(); cashLeft[cid] -= cost; ctx.led.cash[cid] -= cost; }
-                        else ctx.led.consume(i, ctx.com.index(e.getKey()), points * e.getValue());
+                        if (e.getKey().equals("cash")) { double cost = points * e.getValue(); cashLeft[cid] -= cost; ctx.led.cash[cid] -= cost; used.append(used.isEmpty() ? "" : ", ").append("$").append(Ledger.q(cost)); }
+                        else { ctx.led.consume(i, ctx.com.index(e.getKey()), points * e.getValue()); used.append(used.isEmpty() ? "" : ", ").append(Ledger.q(points * e.getValue())).append(' ').append(e.getKey()); }
                     }
                     ctx.workSpent[i] += points * ec.workPerPoint();
                     ctx.led.efficiency[i] += points;
+                    ctx.led.note(i, "efficiency +" + Ledger.q(points) + "%" + (used.isEmpty() ? "" : " using " + used));
                 }
             }
 
@@ -82,15 +85,17 @@ public final class BuildUpStep implements Step {
                     else { int c = ctx.com.index(e.getKey()); points = Math.min(points, (s.stock().get(c) + ctx.led.stock[i][c]) / per); }
                 }
                 if (points > 1e-9) {
+                    StringBuilder used = new StringBuilder();
                     for (var e : road.buildMaterialsPerPoint().entrySet()) {
                         double per = e.getValue() * m;
                         if (per <= 0) continue;
-                        if (e.getKey().equals("cash")) { cashLeft[cid] -= points * per; ctx.led.cash[cid] -= points * per; }
-                        else ctx.led.consume(i, ctx.com.index(e.getKey()), points * per);
+                        if (e.getKey().equals("cash")) { cashLeft[cid] -= points * per; ctx.led.cash[cid] -= points * per; used.append(used.isEmpty() ? "" : ", ").append("$").append(Ledger.q(points * per)); }
+                        else { ctx.led.consume(i, ctx.com.index(e.getKey()), points * per); used.append(used.isEmpty() ? "" : ", ").append(Ledger.q(points * per)).append(' ').append(e.getKey()); }
                     }
                     ctx.workSpent[i] += points * road.workPerPoint() * m;
                     if (mobPerPoint > 0) ctx.led.mobility[i] -= points * mobPerPoint;
                     ctx.led.road[i] += points;
+                    ctx.led.note(i, "road +" + Ledger.q(points) + " to " + Ledger.q(s.roadLevel() + ctx.led.road[i]) + (used.isEmpty() ? "" : " using " + used));
                 }
             }
 
@@ -113,15 +118,17 @@ public final class BuildUpStep implements Step {
                     else { int c = ctx.com.index(e.getKey()); points = Math.min(points, (s.stock().get(c) + ctx.led.stock[i][c]) / per); }
                 }
                 if (points > 1e-9) {
+                    StringBuilder used = new StringBuilder();
                     for (var e : rail.buildMaterialsPerPoint().entrySet()) {
                         double per = e.getValue() * m;
                         if (per <= 0) continue;
-                        if (e.getKey().equals("cash")) { cashLeft[cid] -= points * per; ctx.led.cash[cid] -= points * per; }
-                        else ctx.led.consume(i, ctx.com.index(e.getKey()), points * per);
+                        if (e.getKey().equals("cash")) { cashLeft[cid] -= points * per; ctx.led.cash[cid] -= points * per; used.append(used.isEmpty() ? "" : ", ").append("$").append(Ledger.q(points * per)); }
+                        else { ctx.led.consume(i, ctx.com.index(e.getKey()), points * per); used.append(used.isEmpty() ? "" : ", ").append(Ledger.q(points * per)).append(' ').append(e.getKey()); }
                     }
                     ctx.workSpent[i] += points * rail.workPerPoint() * m;
                     if (mobPerPoint > 0) ctx.led.mobility[i] -= points * mobPerPoint;
                     ctx.led.rail[i] += points;
+                    ctx.led.note(i, "rail +" + Ledger.q(points) + " to " + Ledger.q(s.railLevel() + ctx.led.rail[i]) + (used.isEmpty() ? "" : " using " + used));
                 }
             }
             if (s.railLevel() > 0) {
@@ -130,6 +137,7 @@ public final class BuildUpStep implements Step {
                 else {
                     ctx.led.rail[i] -= Math.min(s.railLevel(), rail.decayPerUpdate());
                     ctx.led.event("rail_decay", cid, s.at(), "unpaid rail maintenance in " + s.at(), rail.decayPerUpdate());
+                    ctx.led.note(i, "rail decayed " + Ledger.q(Math.min(s.railLevel(), rail.decayPerUpdate())) + ": maintenance unpaid");
                 }
             }
 

@@ -147,7 +147,8 @@ public class GameController {
     }
 
     public record FlowOut(String kind, String commodity, double qtyPlanned, double qtyMoved, List<Coord> path, int hopsDelivered, boolean completed, String holdReason) {}
-    public record LastUpdate(long updateNumber, long millis, List<Map<String, Object>> events, List<FlowOut> flows) {}
+    /** {@code notes}: what happened in each of your sectors, keyed by relative "x,y", in step order (issue #49). */
+    public record LastUpdate(long updateNumber, long millis, List<Map<String, Object>> events, List<FlowOut> flows, Map<String, List<String>> notes) {}
 
     /** Only this country's own flows and events: what other countries moved is not yours to see. */
     @GetMapping("/{id}/last-update")
@@ -156,7 +157,7 @@ public class GameController {
         GameService.Game g = games.get(id);
         int country = games.myCountry(id, AuthInterceptor.current(req));
         LogRepository.UpdateEntry e = games.lastUpdate(id);
-        if (e == null) return new LastUpdate(0, 0, List.of(), List.of());
+        if (e == null) return new LastUpdate(0, 0, List.of(), List.of(), Map.of());
         List<Map<String, Object>> events = json.read(e.eventsJson(), List.class);
         List<Map<String, Object>> flows = json.read(e.flowsJson(), List.class);
         List<Map<String, Object>> myEvents = events.stream().filter(ev -> ((Number) ev.getOrDefault("country", -1)).intValue() == country || ((Number) ev.getOrDefault("country", -1)).intValue() == -1).toList();
@@ -168,6 +169,18 @@ public class GameController {
             myFlows.add(new FlowOut((String) f.get("kind"), g.com.id(((Number) f.get("commodity")).intValue()), ((Number) f.get("qtyPlanned")).doubleValue(),
                     ((Number) f.get("qtyMoved")).doubleValue(), p, ((Number) f.get("hopsDelivered")).intValue(), (Boolean) f.get("completed"), (String) f.get("holdReason")));
         }
-        return new LastUpdate(e.updateNumber(), e.millis(), myEvents, myFlows);
+        Map<String, List<String>> notes = new java.util.LinkedHashMap<>();
+        Coord cap = g.world.country(country).capital();
+        if (e.notesJson() != null) {
+            Map<String, List<String>> all = json.read(e.notesJson(), Map.class);
+            for (var n : all.entrySet()) {
+                String[] xy = n.getKey().split(",");
+                Coord at = new Coord(Integer.parseInt(xy[0]), Integer.parseInt(xy[1]));
+                if (!g.world.inBounds(at) || g.world.sector(at).owner() != country) continue;   // only your own sectors' stories
+                Coord rel = CountryView.relative(g.world, cap, at);
+                notes.put(rel.x() + "," + rel.y(), n.getValue().stream().map(line -> GameService.relativise(g.world, cap, line)).toList());
+            }
+        }
+        return new LastUpdate(e.updateNumber(), e.millis(), myEvents, myFlows, notes);
     }
 }

@@ -15,13 +15,15 @@ interface Props {
   onCommand: (c: CommandRequest) => Promise<void>; busy: boolean; children: ReactNode;
   /** Enter targeting mode: the parent shows estimates as the pointer moves and commits on click. */
   onStartPick: (spec: PickSpec) => void;
+  /** What happened in this sector last update, in order (issue #49). */
+  history?: string[]; historyUpdate?: number;
 }
 
 /**
  * Right-click a sector on the map: every action for that sector, from here. Move and
  * explore show the route and the mobility it would cost before you commit.
  */
-export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, children, onStartPick }: Props) {
+export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, children, onStartPick, history, historyUpdate }: Props) {
   const [dialog, setDialog] = useState<DialogKind>(null);
   const rel = (c: Coord) => `${c.x},${c.y}`;
   const byRel = useMemo(() => { const m = new Map<string, SectorView>(); for (const x of view.sectors) m.set(rel(x.relative), x); return m; }, [view]);
@@ -44,6 +46,12 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
             <>
               <ContextMenuLabel className="font-semibold text-popover-foreground">Sector {rel(s.relative)}</ContextMenuLabel>
               <Attributes s={s} view={view} />
+              {history && history.length > 0 && (
+                <div className="max-h-40 overflow-auto px-2 pb-1 text-xs text-muted-foreground">
+                  <div className="text-popover-foreground">Last update{historyUpdate ? ` (${historyUpdate})` : ""}</div>
+                  <ol className="list-decimal pl-4">{history.map((l, i) => <li key={i}>{l}</li>)}</ol>
+                </div>
+              )}
               <ContextMenuSeparator />
               <ContextMenuLabel>Inventory — click to move</ContextMenuLabel>
               {view.commodityIds.filter(c => (s.stock[c] ?? 0) >= 1).map(c => (
