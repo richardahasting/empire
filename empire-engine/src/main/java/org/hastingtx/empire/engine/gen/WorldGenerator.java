@@ -62,12 +62,13 @@ public final class WorldGenerator {
         // 4. land terrain types, elevation, resources
         List<Sector> sectors = new ArrayList<>(w * h);
         Set<Coord> capitalSet = new HashSet<>(capitals);
+        int[] sea = seaFertility(w, h, rng);
         for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) {
             Coord c = new Coord(x, y);
             Terrain t = terrain[dims.index(c)];
             if (t != Terrain.OCEAN) t = capitalSet.contains(c) ? Terrain.PLAINS : pickLandType(rng);
             int elev = elevation(t, rng);
-            Resources res = t == Terrain.OCEAN ? Resources.NONE : resources(t, rng);
+            Resources res = t == Terrain.OCEAN ? new Resources(sea[dims.index(c)], 0, 0, 0, 0) : resources(t, rng);
             sectors.add(Sector.blank(c, t, elev, res, com.size()));
         }
         World world = new World(w, h, wc.wrapX(), wc.wrapY(), sectors, List.of(), List.of(), 0);
@@ -160,6 +161,26 @@ public final class WorldGenerator {
         List<String> keys = new ArrayList<>(mix.keySet()); Collections.sort(keys);
         for (String k : keys) { u -= mix.get(k); if (u <= 0) return Terrain.of(k); }
         return Terrain.of(keys.get(keys.size() - 1));
+    }
+
+    /**
+     * Fishing grounds (issue #56): the sea is fertile by region — one triangular draw per block of
+     * region_size² hexes, jittered per hex — so boats have somewhere worth going. Deterministic from the rng.
+     */
+    public int[] seaFertility(int w, int h, SplittableRandom rng) {
+        WorldCfg.SeaFertilityCfg sf = cfg.world().resources().seaFertility();
+        int[] out = new int[w * h];
+        if (sf == null) return out;
+        int rs = Math.max(1, sf.regionSize());
+        int rw = (w + rs - 1) / rs, rh = (h + rs - 1) / rs;
+        int[] region = new int[rw * rh];
+        for (int i = 0; i < region.length; i++) region[i] = (int) Math.round(Rng.triangular(rng, sf.triangular().get(0), sf.triangular().get(1), sf.triangular().get(2)));
+        for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) {
+            int base = region[(y / rs) * rw + (x / rs)];
+            int j = sf.jitter() > 0 ? rng.nextInt(2 * sf.jitter() + 1) - sf.jitter() : 0;
+            out[y * w + x] = Math.max(0, Math.min(100, base + j));
+        }
+        return out;
     }
 
     private int elevation(Terrain t, SplittableRandom rng) {

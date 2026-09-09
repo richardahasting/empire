@@ -20,12 +20,15 @@ public final class Ctx {
     public final List<List<Coord>> neighbours;
     /** Work (work-unit·ETUs) spent in step 4, subtracted from step 5's pool. */
     public final double[] workSpent;
+    /** Ships as this update leaves them (the ship step rewrites this list; apply copies it out). */
+    public final List<Ship> ships;
 
     public Ctx(World snap, GameConfig cfg, Commodities com, long seed) {
         this.snap = snap; this.cfg = cfg; this.com = com; this.seed = seed;
         this.etus = cfg.etus();
         this.led = new Ledger(snap, com.size());
         this.workSpent = new double[snap.sectors().size()];
+        this.ships = new ArrayList<>(snap.ships());
         this.neighbours = new ArrayList<>(snap.sectors().size());
         for (Sector s : snap.sectors()) neighbours.add(Hex.neighbours(snap, s.at()));
     }

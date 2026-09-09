@@ -51,9 +51,18 @@ export interface SectorView {
   /** A sanctuary, and whose (owner's name for a foreign sector; null for yours or nobody's). */
   sanctuary: boolean; ownerName: string | null;
 }
+export interface ShipView {
+  id: number; cls: string; name: string; at: Coord; relative: Coord; efficiency: number; stock: Record<string, number>; load: number; hold: number;
+  dest: Coord | null; destRelative: Coord | null; lane: { from: Coord; to: Coord; fromRelative: Coord; toRelative: Coord; cargo: string[]; outbound: boolean } | null;
+  note: string; docked: boolean;
+  /** Tech it was laid at, and how many sea hexes it makes per update now. */
+  tech: number; hexesPerUpdate: number;
+}
 export interface CountryView {
   countryId: number; name: string; updateNumber: number; capital: Coord; wrapX: boolean; wrapY: boolean; width: number; height: number; cash: number; btu: number;
   levels: Levels; inSanctuary: boolean; bankrupt: boolean; commodityIds: string[]; sectors: SectorView[]; otherCountryNames: string[];
+  /** Your ships (issue #56). */
+  ships: ShipView[];
 }
 export interface CountrySeat { id: number; name: string; taken: boolean }
 export interface GameSummary {
@@ -72,7 +81,9 @@ export interface SectorType {
 export interface Commodity { id: string; name: string; weight: number; priority: number; isPerson?: boolean | null }
 export interface RoadRules { buildMaterialsPerPoint: Record<string, number>; workPerPoint: number; maxPointsPerUpdate: number; costMultiplierByTerrain: Record<string, number>; maxLevelByTerrain: Record<string, number>; decayPerUpdate: number; maintenanceCashPerPointPerUpdate: number }
 export interface RailRules { techRequired: number; buildMaterialsPerPoint: Record<string, number>; maxPointsPerUpdate: number; minLevelToCarry: number; capacityPerUpdateAt100: number; cashPer100UnitsShipped: number; maxSectorsPerUpdate: { base: number; perTechPoint: number }; costMultiplierByTerrain: Record<string, number>; maxLevelByTerrain: Record<string, number>; decayPerUpdate: number; maintenanceCashPerPointPerUpdate: number }
-export interface Rules { sectorTypes: SectorType[]; commodities: Commodity[]; etusPerUpdate: number; btuCosts: Record<string, number>; road?: RoadRules; defaultCapacity?: number; rail?: RailRules; productionMinEfficiency?: number; massThresholdMultiplierByType?: Record<string, number> }
+export interface ShipClass { id: string; name: string; glyph: string; role: string; techRequired: number; build: Record<string, number> | null; hold: number; speed: number; fishingRate?: number | null; happinessPerEtu?: number | null; carries?: string[] | null }
+export interface ShipsRules { startEfficiency: number; dockPointsPerUpdate: number; harborMinEfficiency: number; classes: ShipClass[] }
+export interface Rules { sectorTypes: SectorType[]; commodities: Commodity[]; etusPerUpdate: number; btuCosts: Record<string, number>; road?: RoadRules; defaultCapacity?: number; rail?: RailRules; productionMinEfficiency?: number; massThresholdMultiplierByType?: Record<string, number>; ships?: ShipsRules | null }
 export interface Outcome { accepted: boolean; error?: string; btuSpent: number; view: CountryView; info?: string | null }
 export interface ConsoleReply { output: string; accepted: boolean; error?: string; view?: CountryView }
 export interface CommandRequest {
@@ -81,6 +92,8 @@ export interface CommandRequest {
   scope?: string;
   /** deliver: e ne nw w sw se (or "none" to clear). */
   direction?: string;
+  /** ships: which ship; lane cargo; build_ship name. */
+  ship?: number; cargo?: string[]; name?: string;
 }
 
 /** A macro step: a panel command with the sector left blank (issue #47). */
@@ -97,9 +110,10 @@ export interface Estimate {
   ok: boolean; error?: string; path: Coord[]; hopCosts: number[]; totalMobility: number; reach: number;
   arrivesQty: number; heldQty: number; holdsAt: Coord | null; available: number; sourceMobility: number;
 }
-export function estimate(gameId: number, q: { verb: "move" | "explore" | "rail"; x: number; y: number; x2: number; y2: number; commodity?: string; amount: number }): Promise<Estimate> {
+export function estimate(gameId: number, q: { verb: "move" | "explore" | "rail" | "sail"; x: number; y: number; x2: number; y2: number; commodity?: string; amount: number; ship?: number }): Promise<Estimate> {
   const p = new URLSearchParams({ verb: q.verb, x: String(q.x), y: String(q.y), x2: String(q.x2), y2: String(q.y2), amount: String(q.amount) });
   if (q.commodity) p.set("commodity", q.commodity);
+  if (q.ship !== undefined) p.set("ship", String(q.ship));
   return api.get<Estimate>(`/games/${gameId}/estimate?${p}`);
 }
 

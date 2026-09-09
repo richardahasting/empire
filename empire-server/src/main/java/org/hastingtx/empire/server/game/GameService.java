@@ -10,6 +10,7 @@ import org.hastingtx.empire.engine.gen.WorldGenerator;
 import org.hastingtx.empire.engine.model.Commodities;
 import org.hastingtx.empire.engine.model.Coord;
 import org.hastingtx.empire.engine.model.Country;
+import org.hastingtx.empire.engine.model.Sector;
 import org.hastingtx.empire.engine.model.World;
 import org.hastingtx.empire.engine.update.Update;
 import org.hastingtx.empire.engine.update.UpdateResult;
@@ -115,6 +116,26 @@ public class GameService {
             log.info("game {} '{}': rules reloaded from preset {} (config {})", gameId, row.name(), old.preset, l.hash().substring(0, 12));
             return summary(g, a);
         } finally { old.lock.unlock(); }
+    }
+
+    /** Give an existing game's sea its fishing grounds (issue #56): ocean fertility from the generator, deterministic from the game seed. Land is untouched. */
+    public Summary seedSeaFertility(long gameId, Account a) {
+        Game g = get(gameId);
+        g.lock.lock();
+        try {
+            World w = g.world;
+            int[] sea = new WorldGenerator(g.cfg).seaFertility(w.width(), w.height(), new java.util.SplittableRandom(g.seed ^ 0x5EAF00DL));
+            List<Sector> next = new ArrayList<>(w.sectors());
+            for (int i = 0; i < next.size(); i++) {
+                Sector s = next.get(i);
+                if (s.terrain() == org.hastingtx.empire.engine.model.Terrain.OCEAN) next.set(i, s.withTerrain(s.terrain(), s.elevation(), new org.hastingtx.empire.engine.model.Resources(sea[i], 0, 0, 0, 0)));
+            }
+            World after = w.withSectors(next);
+            worlds.saveDiff(gameId, w, after, g.com);
+            g.world = after;
+            log.info("game {}: fishing grounds seeded", gameId);
+            return summary(g, a);
+        } finally { g.lock.unlock(); }
     }
 
     /** "24h", "15m", "90s", "1h30m"; "0" or blank = manual. */
@@ -310,6 +331,12 @@ public class GameService {
             case Command.Move m -> m.from();
             case Command.Explore e -> e.from();
             case Command.RailShip r -> r.from();
+            case Command.BuildShip b -> b.harbor();
+            case Command.Sail s -> null;
+            case Command.Load l -> null;
+            case Command.Unload u -> null;
+            case Command.Lane l -> null;
+            case Command.Scrap s -> null;
             case Command.BreakSanctuary b -> null;
         };
         return at == null ? c.verb() : at.x() + "," + at.y();

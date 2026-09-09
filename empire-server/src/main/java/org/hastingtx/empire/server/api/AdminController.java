@@ -57,6 +57,12 @@ public class AdminController {
         return games.refreshConfig(id, admin(req));
     }
 
+    /** Seed fishing grounds for an existing game (issue #56). */
+    @PostMapping("/games/{id}/sea-fertility")
+    public GameService.Summary seaFertility(@PathVariable long id, HttpServletRequest req) {
+        return games.seedSeaFertility(id, admin(req));
+    }
+
     @PostMapping("/games/{id}/update")
     public Map<String, Object> update(@PathVariable long id, HttpServletRequest req) {
         admin(req);

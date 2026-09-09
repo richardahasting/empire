@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { estimate, type CommandRequest, type Coord, type CountryView, type Estimate, type Macro, type Rules, type SectorView } from "@/api/client";
+import { estimate, type CommandRequest, type Coord, type CountryView, type Estimate, type Macro, type Rules, type SectorView, type ShipView } from "@/api/client";
+import { BuildShipDialog } from "@/game/Fleet";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuLabel, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { describeMacro } from "@/game/Macros";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -7,9 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 
-type DialogKind = "move" | "explore" | "designate" | "threshold" | "deliver" | "road" | "rail" | "railship" | null;
+type DialogKind = "move" | "explore" | "designate" | "threshold" | "deliver" | "road" | "rail" | "railship" | "buildship" | null;
 
-export interface PickSpec { verb: "move" | "explore" | "distribute"; from: SectorView; commodity: string; qty: number; supply?: boolean }
+export interface PickSpec { verb: "move" | "explore" | "distribute" | "sail"; from: SectorView; commodity: string; qty: number; supply?: boolean; /** sail: the ship and where it is now */ ship?: ShipView }
 
 interface Props {
   gameId: number; view: CountryView; rules: Rules; sector: SectorView | null;
@@ -45,7 +46,7 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
         <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
         <ContextMenuContent>
           {!s && <ContextMenuLabel>Unexplored</ContextMenuLabel>}
-          {s && !owned && <ContextMenuLabel>{rel(s.relative)} · {s.terrain}{s.sanctuary ? ` · sanctuary of ${s.ownerName ?? "another country"}` : s.owner >= 0 ? ` · ${s.ownerName ?? "foreign"}` : " · unowned"}</ContextMenuLabel>}
+          {s && !owned && <ContextMenuLabel>{rel(s.relative)} · {s.terrain}{s.terrain === "ocean" && s.resources ? ` · fishing ${s.resources.fertility}` : ""}{s.sanctuary ? ` · sanctuary of ${s.ownerName ?? "another country"}` : s.owner >= 0 ? ` · ${s.ownerName ?? "foreign"}` : s.terrain === "ocean" ? "" : " · unowned"}</ContextMenuLabel>}
           {s && owned && (
             <>
               <ContextMenuLabel className="font-semibold text-popover-foreground">Sector {rel(s.relative)}</ContextMenuLabel>
@@ -73,6 +74,7 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
               <ContextMenuItem onSelect={() => setDialog("road")}>Build road…</ContextMenuItem>
               <ContextMenuItem disabled={view.levels.tech < (rules.rail?.techRequired ?? 60)} onSelect={() => setDialog("rail")}>Build rail…{view.levels.tech < (rules.rail?.techRequired ?? 60) ? ` (tech ${rules.rail?.techRequired ?? 60})` : ""}</ContextMenuItem>
               {isDepot(s, rules) && <ContextMenuItem onSelect={() => setDialog("railship")}>Ship by rail…</ContextMenuItem>}
+              {isHarbor(s, rules) && <ContextMenuItem onSelect={() => setDialog("buildship")}>Build ship…{view.ships.filter(x => x.at.x === s.at.x && x.at.y === s.at.y).length ? ` (${view.ships.filter(x => x.at.x === s.at.x && x.at.y === s.at.y).length} docked)` : ""}</ContextMenuItem>}
               <ContextMenuSeparator />
               <ContextMenuItem onSelect={() => onStartPick({ verb: "distribute", from: s, commodity: "", qty: 0 })}>Send surplus to… (pick the centre on the map)</ContextMenuItem>
               <ContextMenuItem disabled={busy || (s.distCenter?.x === view.capital.x && s.distCenter?.y === view.capital.y)}
@@ -102,6 +104,7 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
       {s && owned && dialog === "deliver" && <DeliverDialog view={view} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "road" && <RoadDialog rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "rail" && <RailDialog rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
+      {s && owned && dialog === "buildship" && <BuildShipDialog view={view} rules={rules} harbor={s} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {s && owned && dialog === "railship" && <RailShipDialog gameId={gameId} view={view} rules={rules} from={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
     </>
   );
@@ -387,6 +390,11 @@ function RoadDialog({ rules, sector: s, onClose, onCommand, busy }: { rules: Rul
       </DialogContent>
     </Dialog>
   );
+}
+
+function isHarbor(s: SectorView, rules: Rules): boolean {
+  const t = rules.sectorTypes.find(x => x.id === s.designation);
+  return !!t && (t.flags ?? []).includes("builds_ships");
 }
 
 function isDepot(s: SectorView, rules: Rules): boolean {
