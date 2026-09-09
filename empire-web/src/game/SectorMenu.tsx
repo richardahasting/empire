@@ -46,7 +46,7 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
         <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
         <ContextMenuContent>
           {!s && <ContextMenuLabel>Unexplored</ContextMenuLabel>}
-          {s && !owned && <ContextMenuLabel>{rel(s.relative)} · {s.terrain}{s.sanctuary ? ` · sanctuary of ${s.ownerName ?? "another country"}` : s.owner >= 0 ? ` · ${s.ownerName ?? "foreign"}` : " · unowned"}</ContextMenuLabel>}
+          {s && !owned && <ContextMenuLabel>{rel(s.relative)} · {s.terrain}{s.terrain === "ocean" && s.resources ? ` · fishing ${s.resources.fertility}` : ""}{s.sanctuary ? ` · sanctuary of ${s.ownerName ?? "another country"}` : s.owner >= 0 ? ` · ${s.ownerName ?? "foreign"}` : s.terrain === "ocean" ? "" : " · unowned"}</ContextMenuLabel>}
           {s && owned && (
             <>
               <ContextMenuLabel className="font-semibold text-popover-foreground">Sector {rel(s.relative)}</ContextMenuLabel>

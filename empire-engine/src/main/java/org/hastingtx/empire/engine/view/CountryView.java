@@ -93,8 +93,10 @@ public record CountryView(
             } else {
                 // a neighbour: terrain and owner only. Sanctuaries are shown as such, with the owner's name (the original marked them 's').
                 String ownerName = s.owned() ? w.country(s.owner()).name() : null;
+                // the sea shows its fishing grounds (issue #56); land keeps its resources to itself until explored
+                Resources res = s.terrain() == Terrain.OCEAN ? new Resources(s.resources().fertility(), 0, 0, 0, 0) : null;
                 views.add(new SectorView(at, rel, false, s.terrain().id(), s.elevation(), s.owner(), null, 0, 0, 0, 0, 0, 0,
-                        Map.of(), Map.of(), null, Map.of(), null, Map.of(), s.sanctuary(), ownerName));
+                        Map.of(), Map.of(), null, Map.of(), res, Map.of(), s.sanctuary(), ownerName));
             }
         }
         List<String> others = new ArrayList<>();

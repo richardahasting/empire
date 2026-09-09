@@ -105,6 +105,7 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
         else if (layer === "roads") { if (s.roadLevel > 0 || s.roadTarget > 0) { overlay = p.accent; alpha = 0.1 + 0.35 * (s.roadLevel / 100); } }
         else if (layer === "rail") { if (s.railLevel > 0 || s.railTarget > 0) { overlay = p.accent; alpha = 0.1 + 0.6 * (s.railLevel / 100); } }
       } else if (s.owner >= 0) { overlay = p.owner(s.owner, false); alpha = 0.45; }
+      else if (s.terrain === "ocean" && s.resources && s.resources.fertility > 0) { overlay = p.accent; alpha = 0.04 + 0.22 * (s.resources.fertility / 100); }   // fishing grounds (issue #56)
       if (overlay) { ctx.globalAlpha = alpha; ctx.fillStyle = overlay; ctx.fill(); ctx.globalAlpha = 1; }
       ctx.strokeStyle = p.grid; ctx.lineWidth = 1; ctx.stroke();
     }
