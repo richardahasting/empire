@@ -32,6 +32,9 @@ public final class Ledger {
     /** Plain-language lines per sector, in the order the steps wrote them (issue #49): "made 430 lcm using 430 iron". */
     public final java.util.Map<Integer, List<String>> notes = new java.util.HashMap<>();
     public void note(int sector, String line) { notes.computeIfAbsent(sector, k -> new ArrayList<>()).add(line); }
+    /** What a sector wanted and did not get this update, by commodity — summarised as its last note (Richard 2026-09-09). */
+    public final java.util.Map<Integer, double[]> shortages = new java.util.HashMap<>();
+    public void shortOf(int sector, int c, double qty) { if (qty > 1e-9) shortages.computeIfAbsent(sector, k -> new double[nCom])[c] += qty; }
     /** Quantities in notes: whole numbers, one decimal below 10, nothing below 0.05. */
     public static String q(double v) { double a = Math.abs(v); return a >= 10 ? String.valueOf(Math.round(v)) : a < 0.05 ? "0" : String.format(java.util.Locale.ROOT, "%.1f", v); }
 

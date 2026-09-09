@@ -58,6 +58,12 @@ public final class ApplyStep {
         }
         World out = new World(snap.width(), snap.height(), snap.wrapX(), snap.wrapY(), next, countries, List.of(), snap.updateNumber() + 1, List.of());
         checkConservation(ctx, out);
+        // the last line of a sector's story: what it wanted and did not get
+        for (var e : led.shortages.entrySet()) {
+            StringBuilder sb = new StringBuilder();
+            for (int c = 0; c < nCom; c++) if (e.getValue()[c] > 0.05) sb.append(sb.isEmpty() ? "" : ", ").append(Ledger.q(e.getValue()[c])).append(' ').append(ctx.com.id(c));
+            if (!sb.isEmpty()) led.note(e.getKey(), "shortage: " + sb);
+        }
         java.util.Map<String, List<String>> notes = new java.util.TreeMap<>();
         for (var e : led.notes.entrySet()) { Sector s = ctx.sector(e.getKey()); if (s.owned()) notes.put(s.at().x() + "," + s.at().y(), List.copyOf(e.getValue())); }
         return new UpdateResult(out, List.copyOf(led.events), List.copyOf(led.flows), hash(out), notes);

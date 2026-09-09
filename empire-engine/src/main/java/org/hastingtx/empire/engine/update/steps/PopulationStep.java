@@ -49,7 +49,7 @@ public final class PopulationStep implements Step {
                 foodLeft = have - demand;
             } else {
                 if (have > 0) ctx.led.consume(i, food, have);
-                if (s.owned()) ctx.led.note(i, "people ate " + Ledger.q(have) + " food; " + Ledger.q(demand - have) + " short");
+                if (s.owned()) { ctx.led.note(i, "people ate " + Ledger.q(have) + " food; " + Ledger.q(demand - have) + " short"); ctx.led.shortOf(i, food, demand - have); }
                 foodLeft = 0;
                 // KNOWN: victims = unfed people beyond what the food covers, at most half; uw starve first, then civ, then mil
                 double shortfall = demand <= 0 ? 0 : 1.0 - have / demand;

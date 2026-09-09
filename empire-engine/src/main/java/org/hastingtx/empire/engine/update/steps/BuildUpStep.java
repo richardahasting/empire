@@ -45,6 +45,7 @@ public final class BuildUpStep implements Step {
                 double work = ctx.workAvailablePost(i) * share;
                 if (ec.workPerPoint() > 0) points = Math.min(points, work / ec.workPerPoint());
                 Map<String, Double> build = t.build();
+                double wanted = points;   // what work and the cap allow, before materials
                 for (var e : build.entrySet()) {
                     if (e.getValue() <= 0) continue;
                     if (e.getKey().equals("cash")) points = Math.min(points, cashLeft[cid] / e.getValue());
@@ -52,6 +53,7 @@ public final class BuildUpStep implements Step {
                         int c = ctx.com.index(e.getKey());
                         double avail = s.stock().get(c) + ctx.led.stock[i][c];
                         points = Math.min(points, avail / e.getValue());
+                        if (avail < wanted * e.getValue()) ctx.led.shortOf(i, c, wanted * e.getValue() - avail);
                     }
                 }
                 if (points > 1e-9) {
@@ -78,11 +80,12 @@ public final class BuildUpStep implements Step {
                 if (road.workPerPoint() > 0) points = Math.min(points, work / (road.workPerPoint() * m));
                 double mobPerPoint = road.mobilityPerPoint() == null ? 0 : road.mobilityPerPoint() * m;
                 if (mobPerPoint > 0) points = Math.min(points, Math.max(0, s.mobility() + ctx.led.mobility[i]) / mobPerPoint);
+                double wantedRoad = points;
                 for (var e : road.buildMaterialsPerPoint().entrySet()) {
                     double per = e.getValue() * m;
                     if (per <= 0) continue;
                     if (e.getKey().equals("cash")) points = Math.min(points, cashLeft[cid] / per);
-                    else { int c = ctx.com.index(e.getKey()); points = Math.min(points, (s.stock().get(c) + ctx.led.stock[i][c]) / per); }
+                    else { int c = ctx.com.index(e.getKey()); double avail = s.stock().get(c) + ctx.led.stock[i][c]; points = Math.min(points, avail / per); if (avail < wantedRoad * per) ctx.led.shortOf(i, c, wantedRoad * per - avail); }
                 }
                 if (points > 1e-9) {
                     StringBuilder used = new StringBuilder();
@@ -111,11 +114,12 @@ public final class BuildUpStep implements Step {
                 if (rail.workPerPoint() > 0) points = Math.min(points, work / (rail.workPerPoint() * m));
                 double mobPerPoint = rail.mobilityPerPoint() == null ? 0 : rail.mobilityPerPoint() * m;
                 if (mobPerPoint > 0) points = Math.min(points, Math.max(0, s.mobility() + ctx.led.mobility[i]) / mobPerPoint);
+                double wantedRail = points;
                 for (var e : rail.buildMaterialsPerPoint().entrySet()) {
                     double per = e.getValue() * m;
                     if (per <= 0) continue;
                     if (e.getKey().equals("cash")) points = Math.min(points, cashLeft[cid] / per);
-                    else { int c = ctx.com.index(e.getKey()); points = Math.min(points, (s.stock().get(c) + ctx.led.stock[i][c]) / per); }
+                    else { int c = ctx.com.index(e.getKey()); double avail = s.stock().get(c) + ctx.led.stock[i][c]; points = Math.min(points, avail / per); if (avail < wantedRail * per) ctx.led.shortOf(i, c, wantedRail * per - avail); }
                 }
                 if (points > 1e-9) {
                     StringBuilder used = new StringBuilder();

@@ -67,6 +67,7 @@ public final class ProductionStep implements Step {
                 if (need <= 0) continue;
                 double avail = Math.max(0, s.stock().get(in) + ctx.led.stock[i][in]);
                 scale = Math.min(scale, avail / need);
+                if (avail < need) ctx.led.shortOf(i, in, need - avail);
             }
             if (scale <= 0) continue;
 
