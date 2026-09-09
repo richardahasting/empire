@@ -325,15 +325,31 @@ public final class CommandExecutor {
     }
 
     private CommandResult buildRail(World w, Country c, Command.BuildRail r) {
-        Sector s = owned(w, c, r.sector());
-        if (s == null) return CommandResult.fail(w, "you do not own " + r.sector());
-        if (!s.terrain().isLand()) return CommandResult.fail(w, "cannot lay rail on the sea");
+        if (!w.inBounds(r.sector())) return CommandResult.fail(w, "out of bounds: " + r.sector());
+        Sector s = w.sector(r.sector());
         var rail = cfg.infrastructure().rail();
+        boolean bridge = s.terrain() == Terrain.OCEAN;
+        if (bridge) {   // issue #60: a rail order on the sea next to your land is a bridge
+            boolean adjacent = false;
+            for (Coord nb : Hex.neighbours(w, r.sector())) { Sector n = w.sector(nb); if (n.owner() == c.id() && n.terrain().isLand()) adjacent = true; }
+            if (!adjacent) return CommandResult.fail(w, r.sector() + " is sea with none of your land beside it; a bridge starts from your shore");
+            if (rail.bridge() != null && c.levels().tech() < rail.bridge().techRequired() && r.targetLevel() > 0) return CommandResult.fail(w, "a bridge needs tech " + rail.bridge().techRequired() + "; you have " + fmt(c.levels().tech()));
+        } else {
+            if (s.owner() != c.id()) return CommandResult.fail(w, "you do not own " + r.sector());
+            if (s.terrain() == Terrain.MOUNTAIN && s.railLevel() <= 1e-9 && rail.tunnel() != null && c.levels().tech() < rail.tunnel().techRequired() && r.targetLevel() > 0)
+                return CommandResult.fail(w, "rail through a mountain is a tunnel; it needs tech " + rail.tunnel().techRequired() + " and you have " + fmt(c.levels().tech()));
+        }
         if (c.levels().tech() < rail.techRequired()) return CommandResult.fail(w, "rail needs tech " + rail.techRequired() + "; you have " + fmt(c.levels().tech()));
         if (r.targetLevel() < 0 || r.targetLevel() > 100) return CommandResult.fail(w, "rail level is 0..100");
         Double cap = rail.maxLevelByTerrain().get(s.terrain().id());
         double target = cap != null && r.targetLevel() > cap ? cap : r.targetLevel();
-        String info = target < r.targetLevel() ? "rail ordered to " + Math.round(target) + ", the " + s.terrain().id() + " cap (" + Math.round(r.targetLevel()) + " asked)" : null;
+        String capped = target < r.targetLevel() ? "rail ordered to " + Math.round(target) + ", the " + s.terrain().id() + " cap (" + Math.round(r.targetLevel()) + " asked)" : null;
+        String crossing = null;
+        if (target > 0 && s.railLevel() <= 1e-9) {
+            var x = bridge ? rail.bridge() : s.terrain() == Terrain.MOUNTAIN ? rail.tunnel() : null;
+            if (x != null) crossing = (bridge ? "a bridge: the first points also pay " : "a tunnel: the first points also pay ") + x.materials().entrySet().stream().map(e -> (e.getKey().equals("cash") ? "$" : "") + Math.round(e.getValue()) + (e.getKey().equals("cash") ? "" : " " + e.getKey())).collect(java.util.stream.Collectors.joining(", ")) + (bridge ? " from your adjacent sector with the most rail" : "");
+        }
+        String info = capped == null ? crossing : crossing == null ? capped : capped + "; " + crossing;
         return new CommandResult(w.withSector(s.withRailTarget(target)), null, 0, info);
     }
 

@@ -105,6 +105,7 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
         else if (layer === "roads") { if (s.roadLevel > 0 || s.roadTarget > 0) { overlay = p.accent; alpha = 0.1 + 0.35 * (s.roadLevel / 100); } }
         else if (layer === "rail") { if (s.railLevel > 0 || s.railTarget > 0) { overlay = p.accent; alpha = 0.1 + 0.6 * (s.railLevel / 100); } }
       } else if (s.owner >= 0) { overlay = p.owner(s.owner, false); alpha = 0.45; }
+      else if (layer === "rail" && s.terrain === "ocean" && (s.railLevel > 0 || s.railTarget > 0)) { overlay = p.accent; alpha = 0.1 + 0.6 * (s.railLevel / 100); }   // a bridge (issue #60)
       else if (s.terrain === "ocean" && s.resources && s.resources.fertility > 0) { overlay = p.accent; alpha = 0.04 + 0.22 * (s.resources.fertility / 100); }   // fishing grounds (issue #56)
       if (overlay) { ctx.globalAlpha = alpha; ctx.fillStyle = overlay; ctx.fill(); ctx.globalAlpha = 1; }
       ctx.strokeStyle = p.grid; ctx.lineWidth = 1; ctx.stroke();
@@ -134,7 +135,7 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
       const depotTypes = new Set(rules.sectorTypes.filter(t => (t.flags ?? []).includes("rail_endpoint")).map(t => t.id));
       ctx.lineCap = "round";
       for (const s of view.sectors) {
-        if (!s.full) continue;
+        if (!s.full && !(s.terrain === "ocean" && (s.railLevel > 0 || s.railTarget > 0))) continue;   // bridges too (issue #60)
         const a = toDisplay(s.at); const ca = hexCenter(a.x, a.y, l);
         if (s.railLevel > 0 && s.railLevel < minLevel) { ctx.strokeStyle = "oklch(0.6 0.22 25)"; ctx.setLineDash([2, 3]); ctx.lineWidth = 2; hexPath(ctx, ca.cx, ca.cy, l.size * 0.55); ctx.stroke(); ctx.setLineDash([]); }
         if (s.railLevel < minLevel) continue;
@@ -142,7 +143,7 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
           const nb = neighbourAbs(s.at, d, width, height, view.wrapX, view.wrapY);
           if (!nb) continue;
           const o = byCoord.get(`${nb.x},${nb.y}`);
-          if (!o || !o.full || o.railLevel < minLevel) continue;
+          if (!o || !(o.full || o.terrain === "ocean") || o.railLevel < minLevel) continue;
           if (o.at.y < s.at.y || (o.at.y === s.at.y && o.at.x < s.at.x)) continue;
           const b = toDisplay(o.at); const cb = hexCenter(b.x, b.y, l);
           ctx.strokeStyle = p.text; ctx.lineWidth = Math.max(2, l.size * 0.14);

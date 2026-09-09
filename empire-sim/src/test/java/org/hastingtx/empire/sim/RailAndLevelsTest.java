@@ -8,6 +8,9 @@ import org.hastingtx.empire.engine.config.GameConfig;
 import org.hastingtx.empire.engine.geo.Hex;
 import org.hastingtx.empire.engine.model.Coord;
 import org.hastingtx.empire.engine.model.Levels;
+import org.hastingtx.empire.engine.model.Resources;
+import org.hastingtx.empire.engine.model.Sector;
+import org.hastingtx.empire.engine.model.Terrain;
 import org.hastingtx.empire.engine.model.World;
 import org.hastingtx.empire.engine.update.Update;
 import org.hastingtx.empire.engine.update.UpdateResult;
@@ -44,12 +47,62 @@ class RailAndLevelsTest {
         assertThat(u.next().sector(a).stock().get(IRON)).isLessThan(3000 - 1900);
         assertThat(u.flows()).anyMatch(f -> f.kind().equals("rail") && f.completed());
         assertThat(u.next().country(0).cash()).as("cost by volume").isLessThan(w.country(0).cash() + 100000);
-        // mobility (Richard 2026-09-09): the depot pays a fifth of the road cost — 2000 iron × 0.1 (warehouse packing) × 5 plains hops × 0.2 = 200 by road, 40 by rail
+        // mobility (Richard 2026-09-09): rail is a fifth of road — 2000 iron × 0.1 (warehouse packing) × 5 plains hops × 0.2 = 200 by road, 40 over rail-100 hexes
         double moved = u.flows().stream().filter(f -> f.kind().equals("rail")).mapToDouble(f -> f.qtyMoved()).sum();
-        double roadCost = moved * 0.1 * 5 * 0.2;
-        assertThat(u.next().sector(a).mobility()).as("depot mobility after the train left").isCloseTo(127 - cfg.infrastructure().rail().mobilityMultiplier() * roadCost, within(1e-6));
-        assertThat(cfg.infrastructure().rail().mobilityMultiplier()).isEqualTo(0.2);
+        double roadCost = moved * 0.1 * 5 * 0.2, railCost = roadCost * 0.2;
+        assertThat(u.next().sector(a).mobility()).as("depot mobility after the train left").isCloseTo(127 - cfg.infrastructure().rail().mobilityMultiplier() * railCost, within(1e-6));
+        assertThat(cfg.infrastructure().rail().mobilityMultiplier() * 0.2).as("trains pay a fifth of road").isCloseTo(0.2, within(1e-9));
         assertThat(u.notes().get(a.x() + "," + a.y())).anyMatch(l -> l.startsWith("train:"));
+    }
+
+    /** Issue #60: a rail order on the sea next to your land is a bridge, paid automatically by the adjacent sector with the most rail. */
+    @Test
+    void aBridgeIsPaidAutomaticallyAndCarriesTrains() {
+        GameConfig cfg = TestWorlds.teaching();
+        World w = TestWorlds.disc(cfg, 7, Map.of("civ", 500.0, "food", 5000.0, "iron", 3000.0, "lcm", 500.0, "hcm", 500.0));
+        w = w.withCountry(w.country(0).withLevels(new Levels(95, 0, 0, 0)));            // bridge needs tech 90
+        Coord a = TestWorlds.CENTER, b = Hex.stepRaw(a, 0, 5), water = Hex.stepRaw(a, 0, 3);
+        w = w.withSector(w.sector(a).withDesignation("depot", 100).withRailLevel(100));
+        for (int k = 1; k <= 5; k++) {
+            Coord c = Hex.stepRaw(a, 0, k);
+            w = TestWorlds.own(w, cfg, c, k == 5 ? "depot" : "agribusiness", 100, 127, Map.of("civ", 100.0, "food", 300.0, "lcm", 400.0, "hcm", 400.0), Map.of());
+            w = w.withSector(w.sector(c).withRailLevel(100));
+        }
+        Sector sea = w.sector(water);
+        w = w.withSector(sea.withOwner(Sector.NOBODY).withDesignation("wilderness", 0).withRailLevel(0).withTerrain(Terrain.OCEAN, 0, new Resources(20, 0, 0, 0, 0)));   // a strait cuts the line
+        CommandExecutor exec = new CommandExecutor(cfg);
+        assertThat(exec.execute(w, 0, new Command.RailShip(a, b, "iron", 100)).error()).contains("no rail line");
+        CommandResult order = exec.execute(w, 0, new Command.BuildRail(water, 100));
+        assertThat(order.error()).as(order.error()).isNull();
+        assertThat(order.info()).contains("bridge").contains("hcm");
+        Coord sponsorAt = Hex.stepRaw(a, 0, 2);   // both banks have rail 100; the lower index sponsors — either way one of them pays
+        double hcmBefore = order.world().sector(sponsorAt).stock().get(12) + order.world().sector(Hex.stepRaw(a, 0, 4)).stock().get(12);
+        World cur = order.world();
+        for (int i = 0; i < 4; i++) cur = Update.run(cur, cfg, 30 + i).next();          // 5 points an update: 20 after four
+        assertThat(cur.sector(water).railLevel()).isCloseTo(20, within(1e-6));
+        double hcmAfter = cur.sector(sponsorAt).stock().get(12) + cur.sector(Hex.stepRaw(a, 0, 4)).stock().get(12);
+        assertThat(hcmBefore - hcmAfter).as("the bridge's 200 hcm plus 20 points × 1 hcm × 3.0 ocean multiplier").isCloseTo(200 + 60, within(1e-6));
+        CommandResult ship = exec.execute(cur, 0, new Command.RailShip(a, b, "iron", 100));
+        assertThat(ship.error()).as(ship.error()).isNull();
+        assertThat(Update.run(ship.world(), cfg, 40).next().sector(b).stock().get(IRON)).isGreaterThan(50);
+        // no tech, no bridge; open sea with no shore of yours, no bridge
+        World lowTech = w.withCountry(w.country(0).withLevels(new Levels(70, 0, 0, 0)));
+        assertThat(exec.execute(lowTech, 0, new Command.BuildRail(water, 100)).error()).contains("bridge needs tech");
+        assertThat(exec.execute(w, 0, new Command.BuildRail(Hex.stepRaw(a, 0, 9), 100)).error()).contains("none of your land beside it");
+    }
+
+    /** Richard 2026-09-09: rail is a road that is cheaper still — its level discounts everything entering the sector. */
+    @Test
+    void railDiscountsEveryMoveIntoTheSector() {
+        GameConfig cfg = TestWorlds.teaching();
+        World w = TestWorlds.disc(cfg, 2, Map.of("civ", 500.0, "food", 5000.0, "iron", 3000.0));
+        Coord c = Hex.stepRaw(TestWorlds.CENTER, 0, 1);
+        w = TestWorlds.own(w, cfg, c, "agribusiness", 100, 127, Map.of("civ", 100.0, "food", 300.0), Map.of());
+        org.hastingtx.empire.engine.update.Ctx plain = new org.hastingtx.empire.engine.update.Ctx(w, cfg, org.hastingtx.empire.engine.model.Commodities.of(cfg), 0);
+        double before = plain.moveCostInto(w.sector(c));
+        World railed = w.withSector(w.sector(c).withRailLevel(100));
+        org.hastingtx.empire.engine.update.Ctx withRail = new org.hastingtx.empire.engine.update.Ctx(railed, cfg, org.hastingtx.empire.engine.model.Commodities.of(cfg), 0);
+        assertThat(withRail.moveCostInto(railed.sector(c))).isCloseTo(before * 0.2, within(1e-9));
     }
 
     /** A gap in the line is refused at issue time and names where the track ends. */

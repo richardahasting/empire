@@ -69,7 +69,11 @@ public final class Ctx {
         if (base == null) return Double.POSITIVE_INFINITY;
         double eff = m.efficiencyDiscount().eval(s.efficiency());
         double road = cfg.infrastructure().road().mobilityDiscountCurve().eval(s.roadLevel());
-        return base * eff * road;
+        // rail is a road that is cheaper still (Richard 2026-09-09: "make rail easy, just like roads, but cheaper"): its level
+        // discounts everything entering the sector on top of the road discount, no train orders needed (issue #60)
+        var rc = cfg.infrastructure().rail().mobilityDiscountCurve();
+        double rail = rc == null ? 1.0 : rc.eval(s.railLevel());
+        return base * eff * road * rail;
     }
 
     public double workAvailable(Sector s) {
@@ -97,8 +101,10 @@ public final class Ctx {
     // ---- rail network (KNOWN-by-spec: contiguous chain of rail-capable sectors between depots) ----
     public boolean railCapable(int i) {
         Sector s = sector(i);
-        return s.owned() && s.terrain().isLand() && s.railLevel() >= cfg.infrastructure().rail().minLevelToCarry();
+        return (s.owned() && s.terrain().isLand() || s.terrain() == Terrain.OCEAN) && s.railLevel() >= cfg.infrastructure().rail().minLevelToCarry();
     }
+    /** A rail hop {@code owner} may use: its own track, or a bridge (rail on the sea belongs to no one in phase 1; issue #60). */
+    public boolean railHop(int i, int owner) { Sector s = sector(i); return railCapable(i) && (s.terrain() == Terrain.OCEAN || s.owner() == owner); }
     public boolean isDepot(int i) {
         Sector s = sector(i);
         Double minEff = cfg.economy().efficiency().productionMinEfficiency();
@@ -117,7 +123,7 @@ public final class Ctx {
             if (u == dst) break;
             for (Coord nb : neighbours.get(u)) {
                 int v = idx(nb);
-                if (prev[v] != -2 || !railCapable(v) || sector(v).owner() != owner) continue;
+                if (prev[v] != -2 || !railHop(v, owner)) continue;
                 prev[v] = u; q.add(v);
             }
         }
@@ -132,7 +138,7 @@ public final class Ctx {
         int src = idx(from);
         if (!railCapable(src) || sector(src).owner() != owner) return seen;
         java.util.ArrayDeque<Integer> q = new java.util.ArrayDeque<>(); q.add(src); seen.add(src);
-        while (!q.isEmpty()) { int u = q.poll(); for (Coord nb : neighbours.get(u)) { int v = idx(nb); if (!seen.contains(v) && railCapable(v) && sector(v).owner() == owner) { seen.add(v); q.add(v); } } }
+        while (!q.isEmpty()) { int u = q.poll(); for (Coord nb : neighbours.get(u)) { int v = idx(nb); if (!seen.contains(v) && railHop(v, owner)) { seen.add(v); q.add(v); } } }
         return seen;
     }
     /** Units a rail sector can carry this update: capacity_at_100 × rail_level/100. Depot efficiency is applied at the endpoints. */

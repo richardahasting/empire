@@ -46,6 +46,11 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
         <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
         <ContextMenuContent>
           {!s && <ContextMenuLabel>Unexplored</ContextMenuLabel>}
+          {s && !owned && s.terrain === "ocean" && shoreOfMine(s, view) && (
+            <ContextMenuItem disabled={view.levels.tech < (rules.rail?.bridge?.techRequired ?? 90)} onSelect={() => setDialog("rail")}>
+              Build bridge…{s.railLevel > 0 || s.railTarget > 0 ? ` (rail ${s.railLevel.toFixed(0)}${s.railTarget > s.railLevel ? ` → ${s.railTarget.toFixed(0)}` : ""})` : ""}{view.levels.tech < (rules.rail?.bridge?.techRequired ?? 90) ? ` (tech ${rules.rail?.bridge?.techRequired ?? 90})` : ""}
+            </ContextMenuItem>
+          )}
           {s && !owned && <ContextMenuLabel>{rel(s.relative)} · {s.terrain}{s.terrain === "ocean" && s.resources ? ` · fishing ${s.resources.fertility}` : ""}{s.sanctuary ? ` · sanctuary of ${s.ownerName ?? "another country"}` : s.owner >= 0 ? ` · ${s.ownerName ?? "foreign"}` : s.terrain === "ocean" ? "" : " · unowned"}</ContextMenuLabel>}
           {s && owned && (
             <>
@@ -103,7 +108,7 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
       {s && owned && dialog === "threshold" && <ThresholdDialog view={view} rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "deliver" && <DeliverDialog view={view} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "road" && <RoadDialog rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
-      {s && owned && dialog === "rail" && <RailDialog rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
+      {s && (owned || s.terrain === "ocean") && dialog === "rail" && <RailDialog rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "buildship" && <BuildShipDialog view={view} rules={rules} harbor={s} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {s && owned && dialog === "railship" && <RailShipDialog gameId={gameId} view={view} rules={rules} from={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
     </>
@@ -392,6 +397,11 @@ function RoadDialog({ rules, sector: s, onClose, onCommand, busy }: { rules: Rul
   );
 }
 
+/** A sea hex with at least one land sector of mine beside it: where a bridge may start (issue #60). */
+function shoreOfMine(s: SectorView, view: CountryView): boolean {
+  return view.sectors.some(o => o.full && o.terrain !== "ocean" && hexDist(o.at, s.at, view, o) === 1);
+}
+
 function isHarbor(s: SectorView, rules: Rules): boolean {
   const t = rules.sectorTypes.find(x => x.id === s.designation);
   return !!t && (t.flags ?? []).includes("builds_ships");
@@ -413,7 +423,9 @@ function RailDialog({ rules, sector: s, onClose, onCommand, busy }: { rules: Rul
   return (
     <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent>
-        <DialogHeader><DialogTitle>Build rail at {s.relative.x},{s.relative.y}</DialogTitle><DialogDescription>A standing order. Rail carries nothing on its own: it works only as a contiguous line of sectors at {r?.minLevelToCarry ?? 20}+ between two depots. Materials, cash and this sector's mobility per point; decays unless maintained.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>{s.terrain === "ocean" ? "Build a bridge at" : "Build rail at"} {s.relative.x},{s.relative.y}</DialogTitle><DialogDescription>{s.terrain === "ocean"
+          ? `A standing order. Your adjacent sector with the most rail sponsors it: its materials, cash and mobility pay per point, and the first points also pay the bridge (${Object.entries(r?.bridge?.materials ?? {}).map(([k, v]) => k === "cash" ? `$${v}` : `${v} ${k}`).join(", ")}). Trains cross it like any track.`
+          : `A standing order. Rail carries nothing on its own: it works only as a contiguous line of sectors at ${r?.minLevelToCarry ?? 20}+ between two depots. Materials, cash and this sector's mobility per point; decays unless maintained.${s.terrain === "mountain" && s.railLevel === 0 ? ` Through a mountain it is a tunnel: the first points also pay ${Object.entries(r?.tunnel?.materials ?? {}).map(([k, v]) => k === "cash" ? `$${v}` : `${v} ${k}`).join(", ")} (tech ${r?.tunnel?.techRequired ?? 120}).` : ""}`}</DialogDescription></DialogHeader>
         <div className="grid gap-3 text-sm">
           <div className="text-xs text-muted-foreground">Now {s.railLevel.toFixed(0)}{s.railTarget > 0 ? `, ordered to ${s.railTarget.toFixed(0)}` : ""} · {s.terrain} caps at {cap} · cost ×{mult}</div>
           <label>Target level (0 cancels)<Input value={target} onChange={e => setTarget(e.target.value)} inputMode="numeric" autoFocus /></label>
