@@ -50,14 +50,14 @@ public class GameController {
     public record Rules(List<SectorTypeCfg> sectorTypes, List<CommodityCfg> commodities, int etusPerUpdate, Map<String, Integer> btuCosts,
                         org.hastingtx.empire.engine.config.InfrastructureCfg.RoadCfg road, double defaultCapacity,
                         org.hastingtx.empire.engine.config.InfrastructureCfg.RailCfg rail, double productionMinEfficiency,
-                        Map<String, Double> massThresholdMultiplierByType) {}
+                        Map<String, Double> massThresholdMultiplierByType, org.hastingtx.empire.engine.config.UnitsCfg.ShipsCfg ships) {}
 
     @GetMapping("/{id}/rules")
     public Rules rules(@PathVariable long id) {
         var cfg = games.get(id).cfg;
         Double minEff = cfg.economy().efficiency().productionMinEfficiency();
         return new Rules(cfg.economy().sectorTypes(), cfg.commodities(), cfg.etus(), cfg.economy().btu().costByCommand(), cfg.infrastructure().road(), cfg.economy().defaultCapacity(),
-                cfg.infrastructure().rail(), minEff == null ? 0 : minEff, cfg.distribution().massThresholdMultiplierByType() == null ? Map.of() : cfg.distribution().massThresholdMultiplierByType());
+                cfg.infrastructure().rail(), minEff == null ? 0 : minEff, cfg.distribution().massThresholdMultiplierByType() == null ? Map.of() : cfg.distribution().massThresholdMultiplierByType(), cfg.units().ships());
     }
 
     /**
@@ -65,7 +65,8 @@ public class GameController {
      * {@link SectorSelector} (relative coordinates) that replaces x,y with many sectors for the
      * per-sector standing orders: designate, threshold, distribute, build_road, build_rail.
      */
-    public record CommandRequest(String verb, Integer x, Integer y, Integer x2, Integer y2, String type, String commodity, Double amount, Boolean clear, String scope, String direction) {
+    public record CommandRequest(String verb, Integer x, Integer y, Integer x2, Integer y2, String type, String commodity, Double amount, Boolean clear, String scope, String direction,
+                                 Long ship, List<String> cargo, String name) {
         boolean isMass() { return scope != null && !scope.isBlank(); }
         Command toCommand() { return toCommand(x == null || y == null ? null : new Coord(x, y)); }
         /** The command for one sector; {@code at} stands in for x,y. */
@@ -86,9 +87,16 @@ public class GameController {
                 case "build_road" -> new Command.BuildRoad(need(at), amount == null ? 0 : amount);
                 case "build_rail" -> new Command.BuildRail(need(at), amount == null ? 0 : amount);
                 case "rail_ship" -> new Command.RailShip(need(at), at(x2, y2), commodity, amount == null ? 0 : amount);
+                case "build_ship" -> new Command.BuildShip(need(at), type, name);
+                case "sail" -> new Command.Sail(needShip(), Boolean.TRUE.equals(clear) || x2 == null ? null : at(x2, y2));
+                case "load" -> new Command.Load(needShip(), commodity, amount == null ? 0 : amount);
+                case "unload" -> new Command.Unload(needShip(), commodity, amount == null ? 0 : amount);
+                case "lane" -> new Command.Lane(needShip(), Boolean.TRUE.equals(clear) || x == null ? null : at(x, y), x2 == null ? null : at(x2, y2), cargo == null ? List.of() : cargo);
+                case "scrap" -> new Command.Scrap(needShip());
                 default -> throw new IllegalArgumentException("unknown verb: " + verb);
             };
         }
+        private long needShip() { if (ship == null) throw new IllegalArgumentException("ship id required"); return ship; }
         private static Coord need(Coord c) {
             if (c == null) throw new IllegalArgumentException("coordinates required");
             return c;
@@ -102,7 +110,7 @@ public class GameController {
 
     @GetMapping("/{id}/estimate")
     public EstimateOut estimate(@PathVariable long id, @RequestParam String verb, @RequestParam int x, @RequestParam int y, @RequestParam int x2, @RequestParam int y2,
-                                @RequestParam(required = false) String commodity, @RequestParam(defaultValue = "0") double amount, HttpServletRequest req) {
+                                @RequestParam(required = false) String commodity, @RequestParam(defaultValue = "0") double amount, @RequestParam(required = false) Long ship, HttpServletRequest req) {
         GameService.Game g = games.get(id);
         int country = games.myCountry(id, AuthInterceptor.current(req));
         Coord from = new Coord(x, y), to = new Coord(x2, y2);
@@ -110,7 +118,8 @@ public class GameController {
             case "move" -> Routes.move(g.world, g.cfg, country, from, to, g.com.index(commodity), amount);
             case "explore" -> Routes.explore(g.world, g.cfg, country, from, to, amount);
             case "rail" -> Routes.rail(g.world, g.cfg, country, from, to, g.com.index(commodity), amount);
-            default -> throw new IllegalArgumentException("verb must be move, explore or rail");
+            case "sail" -> Routes.sail(g.world, g.cfg, country, ship == null ? -1 : ship, to);
+            default -> throw new IllegalArgumentException("verb must be move, explore, rail or sail");
         };
         Coord cap = g.world.country(country).capital();
         List<Coord> rel = e.path().stream().map(c -> CountryView.relative(g.world, cap, c)).toList();

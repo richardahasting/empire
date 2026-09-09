@@ -118,6 +118,19 @@ public final class Routes {
         return new Estimate(true, null, path, caps, cash, range, arrives ? moving : 0, arrives ? qty - moving : moving, arrives ? null : path.get(range), available, 0);
     }
 
+    /** A voyage: hops over sea and your harbours, and how many updates at the ship's speed × efficiency. {@code reach} carries the hexes per update. */
+    public static Estimate sail(World w, GameConfig cfg, int owner, long shipId, Coord to) {
+        Ship ship = w.ship(shipId);
+        if (ship == null || ship.owner() != owner) return Estimate.fail("no ship #" + shipId + " of yours");
+        if (!w.inBounds(to)) return Estimate.fail("out of bounds");
+        List<Coord> path = SeaRoutes.path(w, cfg, owner, ship.at(), to);
+        if (path == null) return Estimate.fail("no sea route to " + to + " (sea and your harbours only)");
+        var cls = cfg.units().ships().shipClass(ship.cls());
+        int perUpdate = (int) Math.floor(cls.speed() * ship.efficiency() / 100.0);
+        double updates = perUpdate <= 0 ? Double.POSITIVE_INFINITY : Math.ceil((path.size() - 1) / (double) perUpdate);
+        return new Estimate(true, null, path, List.of(), updates, perUpdate, ship.load(), 0, null, cls.hold(), ship.efficiency());
+    }
+
     public static Estimate explore(World w, GameConfig cfg, int owner, Coord from, Coord to, double civs) {
         Commodities com = Commodities.of(cfg);
         if (!w.inBounds(from) || !w.inBounds(to)) return Estimate.fail("out of bounds");

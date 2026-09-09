@@ -87,6 +87,9 @@ world:
     gold:        { wilderness: [0,5,40],   plains: [0,2,10],    forest: [0,5,20],   swamp: [0,0,5],    mountain: [10,40,100] }
     oil:         { wilderness: [0,10,60],  plains: [0,15,70],   forest: [0,5,30],   swamp: [10,40,90], mountain: [0,0,10] }
     uranium:     { wilderness: [0,5,40],   plains: [0,2,20],    forest: [0,3,20],   swamp: [0,0,5],    mountain: [5,30,100] }
+    # NEW (Richard 2026-09-09, issue #56): fishing grounds. One draw per region of region_size² sea
+    # hexes, jittered per hex, so "different areas of ocean have different fertility".
+    sea_fertility: { region_size: 4, triangular: [5, 40, 90], jitter: 10 }
 
 # -----------------------------------------------------------------------------
 # SCHEDULE / TIME
@@ -501,9 +504,10 @@ economy:
       category: social
       build: { cash: 1 }
       max_population: 1000
-      produces_level: { happiness: 0.01 }      # KNOWN: 1 lcm -> 1 happiness, $9
-      consumes: { lcm: 1.0 }
-      production_cash_per_unit: 9
+      # NEW (Richard 2026-09-09): "parks should create happy strollers" — happiness from the people who
+      # use it, no materials. Was KNOWN 1 lcm -> 1 happiness, $9; the rate is a GUESS to tune.
+      produces_level: { happiness: 0.005 }
+      production_cash_per_unit: 1        # Richard 2026-09-09: "shouldn't require anything except food and a little cash"
 
   # --- Production curves -----------------------------------------------------
   # Named curves referenced by sector_types.level_effect. Evaluated as
@@ -613,6 +617,12 @@ economy:
       build_road: 1
       build_rail: 2
       rail_ship: 2
+      build_ship: 2
+      sail: 1
+      load: 1
+      unload: 1
+      lane: 1
+      scrap: 1
       scorched_earth_order: 3
       map: 0
       census: 0
@@ -754,6 +764,32 @@ tech:
 units:
   enabled: true
   table: units.yaml
+  # SHIPS — NEW (Richard 2026-09-09, issue #56). A data table gated on tech; every number a GUESS to tune
+  # except where marked. Harbours build them from their own lcm/hcm and cash; a hull leaves the yard at
+  # start_efficiency and fits out while docked. Speed is sea hexes per update at 100%, × efficiency.
+  ships:
+    start_efficiency: 20               # KNOWN: a new hull is 20%
+    dock_points_per_update: 20
+    dock_materials_per_point: { lcm: 1, cash: 2 }
+    harbor_min_efficiency: 60
+    fuel: false                        # phase 1: no petrol
+    crews: false                       # phase 1: no crews
+    auto_unload_in_harbor: true        # a fishing boat home from the grounds lands its catch
+    fishing_food_per_etu_per_fertility_point: 0.1   # rate 1, fertility 50, 60 ETUs, 100% -> 300 food per update
+    classes:
+      - { id: fishing_boat,            name: fishing boat,            glyph: f, role: fishing, tech_required: 0,  build: { lcm: 25, cash: 300 },             hold: 300,  speed: 3, fishing_rate: 1.0 }
+      - { id: industrial_fishing_boat, name: industrial fishing boat, glyph: F, role: fishing, tech_required: 20, build: { lcm: 60, hcm: 30, cash: 1500 },   hold: 1200, speed: 4, fishing_rate: 3.0 }
+      - { id: cargo_ship,              name: cargo ship,              glyph: c, role: cargo,   tech_required: 0,  build: { lcm: 60, hcm: 30, cash: 1000 },   hold: 600,  speed: 3, carries: [all] }
+      - { id: super_cargo,             name: super cargo ship,        glyph: C, role: cargo,   tech_required: 25, build: { lcm: 150, hcm: 100, cash: 4000 }, hold: 2400, speed: 4, carries: [all] }
+      - { id: tanker,                  name: tanker,                  glyph: t, role: tanker,  tech_required: 15, build: { lcm: 80, hcm: 40, cash: 1500 },   hold: 1500, speed: 3, carries: [oil, pet] }
+      - { id: super_tanker,            name: super tanker,            glyph: T, role: tanker,  tech_required: 35, build: { lcm: 200, hcm: 120, cash: 6000 }, hold: 6000, speed: 4, carries: [oil, pet] }
+      - { id: luxury_craft,            name: luxury craft,            glyph: l, role: luxury,  tech_required: 30, build: { lcm: 120, hcm: 40, cash: 5000 },  hold: 100,  speed: 3, happiness_per_etu: 1.0, carries: [civ], upkeep_per_update: { cash: 50 } }
+      # warships need guns, shells and oil in the harbour to lay down (Richard 2026-09-09); fuel per voyage comes with units.ships.fuel
+      - { id: destroyer,               name: destroyer,               glyph: d, role: warship, tech_required: 40, build: { lcm: 100, hcm: 150, gun: 10, shell: 50, oil: 50, cash: 5000 }, hold: 200,  speed: 5 }
+      - { id: frigate,                 name: frigate,                 glyph: g, role: warship, tech_required: 45, build: { lcm: 120, hcm: 200, gun: 15, shell: 80, oil: 80, cash: 7000 }, hold: 300,  speed: 5 }
+      - { id: submarine,               name: submarine,               glyph: s, role: submarine, tech_required: 50, build: { lcm: 100, hcm: 250, gun: 5, shell: 60, oil: 100, cash: 9000 }, hold: 100, speed: 4 }
+      - { id: battleship,              name: battleship,              glyph: b, role: warship, tech_required: 60, build: { lcm: 200, hcm: 600, gun: 40, shell: 200, oil: 200, cash: 20000 }, hold: 500, speed: 4 }
+      - { id: carrier,                 name: aircraft carrier,        glyph: v, role: warship, tech_required: 70, build: { lcm: 300, hcm: 800, gun: 20, shell: 100, oil: 300, cash: 40000 }, hold: 800, speed: 4 }
 
 # -----------------------------------------------------------------------------
 # AGENTS — NEW

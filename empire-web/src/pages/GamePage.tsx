@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, macrosApi, type CommandRequest, type ConsoleReply, type Coord, type CountryView, type GameSummary, type LastUpdate, type Macro, type MacroStep, type Outcome, type Projection, type Rules } from "@/api/client";
 import { MacrosDialog, RecordMacroDialog, RunMacroDialog, stepFromCommand } from "@/game/Macros";
+import { Fleet } from "@/game/Fleet";
 import { COMMODITY_HUES } from "@/map/palette";
 import { useAuth } from "@/api/auth";
 import { HexMap, type Layer } from "@/map/HexMap";
@@ -153,7 +154,8 @@ export function GamePage() {
     const cached = estCache.get(key);
     if (cached) { setEst(cached); return; }
     let live = true;
-    estimate(gameId, { verb: pick.verb, x: pick.from.at.x, y: pick.from.at.y, x2: hover.x, y2: hover.y, commodity: pick.verb === "move" ? pick.commodity : undefined, amount: pick.qty })
+    const origin = pick.ship ? pick.ship.at : pick.from.at;
+    estimate(gameId, { verb: pick.verb, x: origin.x, y: origin.y, x2: hover.x, y2: hover.y, commodity: pick.verb === "move" ? pick.commodity : undefined, amount: pick.qty, ship: pick.ship?.id })
       .then(e => { estCache.set(key, e); if (live) setEst(e); })
       .catch(e => { if (live) setEst({ ok: false, error: (e as Error).message, path: [], hopCosts: [], totalMobility: 0, reach: 0, arrivesQty: 0, heldQty: 0, holdsAt: null, available: 0, sourceMobility: 0 }); });
     return () => { live = false; };
@@ -176,6 +178,7 @@ export function GamePage() {
     }
     if (!est) return `${where}\nestimating…`;
     if (!est.ok) return `${where}\n${est.error ?? "no route"}`;
+    if (pick.verb === "sail") return `${where} · ${est.path.length - 1} hex${est.path.length - 1 === 1 ? "" : "es"}\n${Number.isFinite(est.totalMobility) ? `${est.totalMobility} update${est.totalMobility === 1 ? "" : "s"} at ${est.reach} hexes per update` : "too unfit to sail yet"}\nclick to sail`;
     // available = the sending sector's mobility (it pays the whole route, per the rules)
     const avail = est.sourceMobility;
     const hold = est.heldQty > 0 ? `\nonly ${est.arrivesQty.toFixed(0)} can move now` : "";
@@ -188,6 +191,12 @@ export function GamePage() {
       if (!hv || !hv.full || (hv.at.x === pick.from.at.x && hv.at.y === pick.from.at.y)) return;
       const spec = pick; setPick(null);
       void command({ verb: "distribute", x: spec.from.at.x, y: spec.from.at.y, x2: c.x, y2: c.y });
+      return;
+    }
+    if (pick.verb === "sail") {
+      if (!c || !est?.ok || !pick.ship) return;
+      const spec = pick; setPick(null);
+      void command({ verb: "sail", ship: spec.ship!.id, x2: c.x, y2: c.y });
       return;
     }
     if (!c || !est?.ok || pick.qty <= 0) return;
@@ -242,13 +251,14 @@ export function GamePage() {
                 {pick.verb === "distribute" ? (
                   <span>Choosing the distribution centre for {pick.from.relative.x},{pick.from.relative.y} — click a sector you own</span>
                 ) : (<>
-                <span>{pick.verb === "move" ? "Moving" : "Exploring with"}</span>
-                <Input value={String(pick.qty)} onChange={e => { const q = Math.max(0, Math.floor(Number(e.target.value) || 0)); setPick({ ...pick, qty: q }); }}
+                {pick.verb === "sail" ? <span>Sailing ship #{pick.ship?.id} from {pick.ship ? `${pick.ship.relative.x},${pick.ship.relative.y}` : "?"} — click a sea hex or one of your harbours</span> : <span>{pick.verb === "move" ? "Moving" : "Exploring with"}</span>}
+{pick.verb !== "sail" && (<>                <Input value={String(pick.qty)} onChange={e => { const q = Math.max(0, Math.floor(Number(e.target.value) || 0)); setPick({ ...pick, qty: q }); }}
                        inputMode="numeric" className="h-7 w-20 text-xs" aria-label="quantity" />
                 <span>{pick.verb === "move" ? pick.commodity : "civilians"} <span className="text-muted-foreground">(of {Math.floor(pick.from.stock[pick.commodity] ?? 0)})</span> from {pick.from.relative.x},{pick.from.relative.y} — click a destination</span>
                 {pick.commodity === "civ" && pick.from.at.x === view.capital.x && pick.from.at.y === view.capital.y && (pick.from.stock["civ"] ?? 0) - pick.qty < 100 && (
                   <span className="text-destructive">leaves the capital with {Math.max(0, Math.floor((pick.from.stock["civ"] ?? 0) - pick.qty))} civilians — BTUs come from them</span>
                 )}
+                </>)}
                 </>)}
                 <Button size="sm" variant="ghost" onClick={() => setPick(null)}>Cancel (Esc)</Button>
               </div>
@@ -272,7 +282,8 @@ export function GamePage() {
         {macroDialog === "run" && sector && <RunMacroDialog macros={macros} sectorLabel={`${sector.relative.x},${sector.relative.y}`} designation={sector.designation} onClose={() => setMacroDialog(null)} onRun={(slot, scope) => void runMacro(slot, sector.at, scope)} />}
         {macroDialog === "list" && <MacrosDialog macros={macros} onClose={() => setMacroDialog(null)} onSave={saveMacro} onDelete={deleteMacro} />}
         <aside className="flex min-h-0 min-w-0 flex-col gap-3">
-          <div className="max-h-[50%] overflow-auto rounded-lg border border-border bg-card p-3"><Inspector sector={sector} view={view} rules={rules} onCommand={command} busy={busy} history={sector ? last?.notes?.[`${sector.relative.x},${sector.relative.y}`] : undefined} historyUpdate={last?.updateNumber} /></div>
+          <div className="max-h-[28%] overflow-auto rounded-lg border border-border bg-card p-3"><div className="mb-1 text-xs font-medium">Fleet{view.ships.length ? ` (${view.ships.length})` : ""}</div><Fleet view={view} rules={rules} busy={busy} onCommand={command} onSail={s => setPick({ verb: "sail", from: view.sectors.find(x => x.at.x === s.at.x && x.at.y === s.at.y) ?? view.sectors[0], commodity: "", qty: 1, ship: s })} /></div>
+          <div className="max-h-[40%] overflow-auto rounded-lg border border-border bg-card p-3"><Inspector sector={sector} view={view} rules={rules} onCommand={command} busy={busy} history={sector ? last?.notes?.[`${sector.relative.x},${sector.relative.y}`] : undefined} historyUpdate={last?.updateNumber} /></div>
           <div className="min-h-0 flex-1"><ConsolePanel onLine={consoleLine} /></div>
         </aside>
       </div>

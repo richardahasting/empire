@@ -179,6 +179,18 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
       if (s.roadLevel > 0 || s.roadTarget > 0) drawRoadGauge(ctx, cx, cy, l.size, s.roadLevel, s.roadTarget, p);
       if (Object.keys(s.held).length > 0 && l.size >= 8) { ctx.fillStyle = p.muted; ctx.beginPath(); ctx.arc(cx + l.size * 0.45, cy - l.size * 0.45, Math.max(2, l.size * 0.15), 0, Math.PI * 2); ctx.fill(); }
     }
+    // ships (issue #56): a small disc with the class glyph at the hex's lower right; several in one hex fan out
+    if (view.ships.length && l.size >= 8) {
+      const perHex = new Map<string, number>();
+      for (const sh of view.ships) {
+        const d = toDisplay(sh.at); const { cx, cy } = hexCenter(d.x, d.y, l);
+        const k = `${sh.at.x},${sh.at.y}`; const n = perHex.get(k) ?? 0; perHex.set(k, n + 1);
+        const r = Math.max(4, l.size * 0.28), x = cx + l.size * 0.42 - n * r * 1.6, y = cy + l.size * 0.38;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = p.background; ctx.fill(); ctx.strokeStyle = p.text; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = p.text; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = `${Math.max(8, r * 1.4)}px ui-monospace, monospace`;
+        ctx.fillText(rules.ships?.classes.find(c => c.id === sh.cls)?.glyph ?? "?", x, y + 0.5);
+      }
+    }
     if (flows && flows.length) drawFlows(ctx, flows, flowT ?? 1, p, l, toDisplay);
     if (highlightPath && highlightPath.length > 1) {
       ctx.strokeStyle = p.accent; ctx.lineWidth = Math.max(2, l.size * 0.18); ctx.lineCap = "round"; ctx.lineJoin = "round";

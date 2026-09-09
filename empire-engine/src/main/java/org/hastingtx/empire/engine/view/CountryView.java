@@ -30,7 +30,13 @@ public record CountryView(
         boolean bankrupt,
         List<String> commodityIds,
         List<SectorView> sectors,
-        List<String> otherCountryNames) {
+        List<String> otherCountryNames,
+        /** Your ships (issue #56). */
+        List<ShipView> ships) {
+
+    public record ShipView(long id, String cls, String name, Coord at, Coord relative, double efficiency, Map<String, Double> stock, double load, double hold,
+                           Coord dest, Coord destRelative, LaneView lane, String note, boolean docked) {}
+    public record LaneView(Coord from, Coord to, Coord fromRelative, Coord toRelative, List<String> cargo, boolean outbound) {}
 
     /** {@code full} is true for owned sectors; adjacent unowned sectors expose terrain and owner only. */
     public record SectorView(
@@ -93,8 +99,21 @@ public record CountryView(
         }
         List<String> others = new ArrayList<>();
         for (Country o : w.countries()) if (o.id() != countryId) others.add(o.name());
+        List<ShipView> ships = new ArrayList<>();
+        for (Ship sh : w.ships()) {
+            if (sh.owner() != countryId) continue;
+            Map<String, Double> st = new LinkedHashMap<>();
+            for (int i = 0; i < com.size(); i++) if (sh.stock().get(i) > 1e-9) st.put(com.id(i), sh.stock().get(i));
+            double hold = cfg.units().ships() == null ? 0 : cfg.units().ships().shipClass(sh.cls()).hold();
+            Sector here = w.sector(sh.at());
+            boolean docked = here.owner() == countryId && cfg.sectorType(here.designation()).hasFlag("builds_ships");
+            LaneView lane = sh.lane() == null ? null : new LaneView(sh.lane().from(), sh.lane().to(), relative(w, c.capital(), sh.lane().from()), relative(w, c.capital(), sh.lane().to()),
+                    sh.lane().cargo().stream().map(com::id).toList(), sh.lane().outbound());
+            ships.add(new ShipView(sh.id(), sh.cls(), sh.name(), sh.at(), relative(w, c.capital(), sh.at()), sh.efficiency(), st, sh.load(), hold,
+                    sh.dest(), sh.dest() == null ? null : relative(w, c.capital(), sh.dest()), lane, sh.note(), docked));
+        }
         return new CountryView(countryId, c.name(), w.updateNumber(), c.capital(), w.wrapX(), w.wrapY(), w.width(), w.height(), c.cash(), c.btu(), c.levels(), c.handicap(),
-                c.inSanctuary(), c.bankrupt(), ids, views, others);
+                c.inSanctuary(), c.bankrupt(), ids, views, others, ships);
     }
 
     /** Player-facing coordinates: offset from the capital, shortest way round when wrapped. */

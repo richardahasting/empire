@@ -34,5 +34,10 @@ public record WorldCfg(
             Map<String, List<Integer>> minerals,
             Map<String, List<Integer>> gold,
             Map<String, List<Integer>> oil,
-            Map<String, List<Integer>> uranium) {}
+            Map<String, List<Integer>> uranium,
+            /** Fishing grounds (issue #56): the sea is fertile by region, not by hex. */
+            SeaFertilityCfg seaFertility) {}
+
+    /** Sea fertility: one triangular draw per {@code region_size}×{@code region_size} block, jittered per hex. */
+    public record SeaFertilityCfg(int regionSize, List<Integer> triangular, int jitter) {}
 }

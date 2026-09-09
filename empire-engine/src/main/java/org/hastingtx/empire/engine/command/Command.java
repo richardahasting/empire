@@ -8,7 +8,8 @@ import org.hastingtx.empire.engine.model.Coord;
  */
 public sealed interface Command permits
         Command.BreakSanctuary, Command.Designate, Command.Threshold, Command.Distribute,
-        Command.Move, Command.Explore, Command.BuildRoad, Command.BuildRail, Command.RailShip, Command.Deliver {
+        Command.Move, Command.Explore, Command.BuildRoad, Command.BuildRail, Command.RailShip, Command.Deliver,
+        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap {
 
     String verb();
 
@@ -36,6 +37,20 @@ public sealed interface Command permits
 
     /** Ship by rail between two depots. Connectivity is checked now; the train runs at the update. */
     record RailShip(Coord from, Coord to, String commodity, double qty) implements Command { public String verb() { return "rail_ship"; } }
+
+    // ---- ships (issue #56) ----
+    /** Lay a hull of {@code cls} in your harbour at {@code harbor}; materials and cash are paid now. */
+    record BuildShip(Coord harbor, String cls, String name) implements Command { public String verb() { return "build_ship"; } }
+    /** Sail to a sea hex or one of your harbours; the route is checked now, the voyage runs at the updates. Null dest holds. */
+    record Sail(long ship, Coord dest) implements Command { public String verb() { return "sail"; } }
+    /** Move goods from the harbour the ship is in into its hold. Immediate. */
+    record Load(long ship, String commodity, double qty) implements Command { public String verb() { return "load"; } }
+    /** Move goods from the hold into the harbour the ship is in. Immediate. */
+    record Unload(long ship, String commodity, double qty) implements Command { public String verb() { return "unload"; } }
+    /** Standing order: shuttle between two of your harbours carrying {@code cargo} (empty = whatever it may carry); null from clears. */
+    record Lane(long ship, Coord from, Coord to, java.util.List<String> cargo) implements Command { public String verb() { return "lane"; } }
+    /** Break the ship up in harbour; the hold goes ashore. */
+    record Scrap(long ship) implements Command { public String verb() { return "scrap"; } }
 
     /** Claim an adjacent unowned land sector by moving civilians into it. Immediate. */
     record Explore(Coord from, Coord to, double civs) implements Command { public String verb() { return "explore"; } }

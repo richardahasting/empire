@@ -32,6 +32,12 @@ public final class CommandExecutor {
             case Command.Threshold t -> threshold(w, c, t);
             case Command.Distribute d -> distribute(w, c, d);
             case Command.Deliver d -> deliver(w, c, d);
+            case Command.BuildShip b -> buildShip(w, c, b);
+            case Command.Sail s -> sail(w, c, s);
+            case Command.Load l -> load(w, c, l);
+            case Command.Unload u -> unload(w, c, u);
+            case Command.Lane l -> lane(w, c, l);
+            case Command.Scrap s -> scrap(w, c, s);
             case Command.Move m -> move(w, c, m);
             case Command.Explore e -> explore(w, c, e);
             case Command.BuildRoad br -> buildRoad(w, c, br);
@@ -109,6 +115,114 @@ public final class CommandExecutor {
                     : !t.terrain().isLand() ? "noted, but " + to + " is sea; nothing will move"
                     : d.commodity() + " above " + fmt(d.threshold()) + " goes " + Hex.dirName(d.dir()) + " to " + to + " every update";
         return new CommandResult(w.withSector(s.withDeliver(s.deliver().with(ci, d.dir(), d.threshold()))), null, 0, info);
+    }
+
+    // ---- ships (issue #56) ----
+    private Ship myShip(World w, Country c, long id) { Ship s = w.ship(id); return s != null && s.owner() == c.id() ? s : null; }
+    private boolean harborOf(World w, Country c, Sector s) { return s != null && s.owner() == c.id() && cfg.sectorType(s.designation()).hasFlag("builds_ships"); }
+
+    private CommandResult buildShip(World w, Country c, Command.BuildShip b) {
+        var sc = cfg.units().ships();
+        if (sc == null) return CommandResult.fail(w, "ships are not enabled in this world");
+        Sector h = owned(w, c, b.harbor());
+        if (h == null) return CommandResult.fail(w, "you do not own " + b.harbor());
+        if (!harborOf(w, c, h)) return CommandResult.fail(w, b.harbor() + " is not a harbour");
+        if (h.efficiency() < sc.harborMinEfficiency()) return CommandResult.fail(w, "the harbour at " + b.harbor() + " is " + fmt(h.efficiency()) + "%; it needs " + fmt(sc.harborMinEfficiency()) + "% to lay a hull");
+        if (b.cls() == null || !sc.hasClass(b.cls())) return CommandResult.fail(w, "unknown ship class: " + b.cls());
+        var cls = sc.shipClass(b.cls());
+        if (c.levels().tech() < cls.techRequired()) return CommandResult.fail(w, cls.name() + " needs tech " + cls.techRequired() + "; you have " + fmt(c.levels().tech()));
+        Stocks st = h.stock(); double cash = 0;
+        for (var e : cls.buildOrEmpty().entrySet()) {
+            if (e.getKey().equals("cash")) { cash = e.getValue(); continue; }
+            int ci = com.index(e.getKey());
+            if (st.get(ci) < e.getValue()) return CommandResult.fail(w, "the harbour needs " + fmt(e.getValue()) + " " + e.getKey() + " for a " + cls.name() + "; it has " + fmt(st.get(ci)));
+            st = st.plus(ci, -e.getValue());
+        }
+        if (c.cash() < cash) return CommandResult.fail(w, "a " + cls.name() + " costs $" + fmt(cash) + "; you have $" + fmt(c.cash()));
+        long id = w.nextShipId();
+        Ship ship = new Ship(id, c.id(), cls.id(), b.name() == null ? "" : b.name().trim(), h.at(), sc.startEfficiency(), Stocks.zero(com.size()), null, null, w.updateNumber(), "laid down");
+        List<Ship> ships = new ArrayList<>(w.ships()); ships.add(ship);
+        World next = w.withSector(h.withStock(st)).withCountry(c.withCash(c.cash() - cash)).withShips(ships, id + 1);
+        return new CommandResult(next, null, 0, cls.name() + " #" + id + " laid down at " + b.harbor() + " at " + fmt(sc.startEfficiency()) + "%; it fits out while docked");
+    }
+
+    private CommandResult sail(World w, Country c, Command.Sail s) {
+        Ship ship = myShip(w, c, s.ship());
+        if (ship == null) return CommandResult.fail(w, "no ship #" + s.ship() + " of yours");
+        if (ship.lane() != null) return CommandResult.fail(w, "ship #" + s.ship() + " is on a lane; clear it first");
+        if (s.dest() == null) return new CommandResult(w.withShip(ship.withDest(null)), null, 0, "ship #" + s.ship() + " holds position");
+        if (!w.inBounds(s.dest())) return CommandResult.fail(w, "out of bounds: " + s.dest());
+        List<Coord> path = org.hastingtx.empire.engine.update.SeaRoutes.path(w, cfg, c.id(), ship.at(), s.dest());
+        if (path == null) return CommandResult.fail(w, "no sea route from " + ship.at() + " to " + s.dest() + " (sea and your harbours only)");
+        var cls = cfg.units().ships().shipClass(ship.cls());
+        double perUpdate = Math.max(0, Math.floor(cls.speed() * ship.efficiency() / 100.0));
+        String eta = perUpdate <= 0 ? "it cannot sail until it is fitter" : "about " + (int) Math.ceil((path.size() - 1) / perUpdate) + " update(s)";
+        return new CommandResult(w.withShip(ship.withDest(s.dest())), null, 0, "ship #" + s.ship() + " sails for " + s.dest() + ": " + (path.size() - 1) + " hexes, " + eta);
+    }
+
+    private CommandResult load(World w, Country c, Command.Load l) {
+        Ship ship = myShip(w, c, l.ship());
+        if (ship == null) return CommandResult.fail(w, "no ship #" + l.ship() + " of yours");
+        Sector h = w.sector(ship.at());
+        if (!harborOf(w, c, h)) return CommandResult.fail(w, "ship #" + l.ship() + " is not in one of your harbours");
+        if (!com.has(l.commodity())) return CommandResult.fail(w, "unknown commodity: " + l.commodity());
+        int ci = com.index(l.commodity());
+        var cls = cfg.units().ships().shipClass(ship.cls());
+        if (!org.hastingtx.empire.engine.update.steps.ShipStep.carries(new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0), cls, ci)) return CommandResult.fail(w, "a " + cls.name() + " cannot carry " + l.commodity());
+        double room = cls.hold() - ship.load();
+        double q = Math.min(l.qty(), Math.min(room, h.stock().get(ci)));
+        if (l.qty() <= 0) return CommandResult.fail(w, "quantity must be positive");
+        if (q <= 0) return CommandResult.fail(w, room <= 0 ? "the hold is full" : "no " + l.commodity() + " in the harbour");
+        World next = w.withSector(h.withStock(h.stock().plus(ci, -q))).withShip(ship.withStock(ship.stock().plus(ci, q)));
+        return new CommandResult(next, null, 0, "loaded " + fmt(q) + " " + l.commodity() + (q < l.qty() ? " (" + (room < l.qty() ? "hold full" : "all there was") + ")" : ""));
+    }
+
+    private CommandResult unload(World w, Country c, Command.Unload u) {
+        Ship ship = myShip(w, c, u.ship());
+        if (ship == null) return CommandResult.fail(w, "no ship #" + u.ship() + " of yours");
+        Sector h = w.sector(ship.at());
+        if (!harborOf(w, c, h)) return CommandResult.fail(w, "ship #" + u.ship() + " is not in one of your harbours");
+        if (!com.has(u.commodity())) return CommandResult.fail(w, "unknown commodity: " + u.commodity());
+        int ci = com.index(u.commodity());
+        org.hastingtx.empire.engine.update.Ctx ctx = new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0);
+        double room = com.isPerson(ci) ? Math.max(0, ctx.maxPopulation(h) - (h.stock().get(com.civ) + h.stock().get(com.uw))) : Math.max(0, ctx.capacity(h, ci) - h.stock().get(ci));
+        double q = Math.min(u.qty(), Math.min(room, ship.stock().get(ci)));
+        if (u.qty() <= 0) return CommandResult.fail(w, "quantity must be positive");
+        if (q <= 0) return CommandResult.fail(w, ship.stock().get(ci) <= 0 ? "no " + u.commodity() + " aboard" : "no room in the harbour");
+        World next = w.withSector(h.withStock(h.stock().plus(ci, q))).withShip(ship.withStock(ship.stock().plus(ci, -q)));
+        return new CommandResult(next, null, 0, "unloaded " + fmt(q) + " " + u.commodity());
+    }
+
+    private CommandResult lane(World w, Country c, Command.Lane l) {
+        Ship ship = myShip(w, c, l.ship());
+        if (ship == null) return CommandResult.fail(w, "no ship #" + l.ship() + " of yours");
+        if (l.from() == null) return new CommandResult(w.withShip(ship.withLane(null).withDest(null)), null, 0, "ship #" + l.ship() + " leaves its lane and holds position");
+        if (!harborOf(w, c, w.sector(l.from()))) return CommandResult.fail(w, l.from() + " is not one of your harbours");
+        if (!harborOf(w, c, w.sector(l.to()))) return CommandResult.fail(w, l.to() + " is not one of your harbours");
+        if (l.from().equals(l.to())) return CommandResult.fail(w, "a lane needs two different harbours");
+        if (org.hastingtx.empire.engine.update.SeaRoutes.path(w, cfg, c.id(), l.from(), l.to()) == null) return CommandResult.fail(w, "no sea route between " + l.from() + " and " + l.to());
+        if (org.hastingtx.empire.engine.update.SeaRoutes.path(w, cfg, c.id(), ship.at(), l.from()) == null) return CommandResult.fail(w, "ship #" + l.ship() + " has no sea route to " + l.from());
+        var cls = cfg.units().ships().shipClass(ship.cls());
+        List<Integer> cargo = new ArrayList<>();
+        org.hastingtx.empire.engine.update.Ctx ctx = new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0);
+        if (l.cargo() != null) for (String k : l.cargo()) {
+            if (!com.has(k)) return CommandResult.fail(w, "unknown commodity: " + k);
+            if (!org.hastingtx.empire.engine.update.steps.ShipStep.carries(ctx, cls, com.index(k))) return CommandResult.fail(w, "a " + cls.name() + " cannot carry " + k);
+            cargo.add(com.index(k));
+        }
+        if (cls.carriesOrEmpty().isEmpty()) return CommandResult.fail(w, "a " + cls.name() + " carries no cargo");
+        Ship.Lane lane = new Ship.Lane(l.from(), l.to(), cargo, false);
+        return new CommandResult(w.withShip(ship.withLane(lane).withDest(l.from())), null, 0, "ship #" + l.ship() + " runs " + l.from() + " → " + l.to() + " carrying " + (cargo.isEmpty() ? "whatever it can" : String.join(", ", l.cargo())) + "; heading to " + l.from() + " to load");
+    }
+
+    private CommandResult scrap(World w, Country c, Command.Scrap s) {
+        Ship ship = myShip(w, c, s.ship());
+        if (ship == null) return CommandResult.fail(w, "no ship #" + s.ship() + " of yours");
+        Sector h = w.sector(ship.at());
+        if (!harborOf(w, c, h)) return CommandResult.fail(w, "ship #" + s.ship() + " must be in one of your harbours to be scrapped");
+        Stocks st = h.stock();
+        for (int ci = 0; ci < com.size(); ci++) st = st.plus(ci, ship.stock().get(ci));   // the hold goes ashore (capacity applies at the update)
+        return new CommandResult(w.withSector(h.withStock(st)).withoutShip(ship.id()), null, 0, "ship #" + s.ship() + " scrapped at " + h.at());
     }
 
     private CommandResult distribute(World w, Country c, Command.Distribute d) {

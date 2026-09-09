@@ -56,7 +56,7 @@ public final class ApplyStep {
             countries.add(new Country(c.id(), c.name(), c.capital(), c.cash() + led.cash[c.id()], c.btu() + led.btu[c.id()], lv,
                     c.handicap(), c.inSanctuary(), led.bankruptNext[c.id()], led.plagueLeft[c.id()]));
         }
-        World out = new World(snap.width(), snap.height(), snap.wrapX(), snap.wrapY(), next, countries, List.of(), snap.updateNumber() + 1, List.of());
+        World out = new World(snap.width(), snap.height(), snap.wrapX(), snap.wrapY(), next, countries, List.of(), snap.updateNumber() + 1, List.of(), ctx.ships, snap.nextShipId());
         checkConservation(ctx, out);
         // the last line of a sector's story: what it wanted and did not get
         for (var e : led.shortages.entrySet()) {
@@ -74,6 +74,8 @@ public final class ApplyStep {
         double[] before = new double[nCom], after = new double[nCom];
         for (Sector s : ctx.snap.sectors()) { for (int c = 0; c < nCom; c++) before[c] += s.stock().get(c); for (HeldParcel p : s.held()) before[p.commodity()] += p.qty(); }
         for (Sector s : out.sectors()) { for (int c = 0; c < nCom; c++) after[c] += s.stock().get(c); for (HeldParcel p : s.held()) after[p.commodity()] += p.qty(); }
+        for (Ship sh : ctx.snap.ships()) for (int c = 0; c < nCom; c++) before[c] += sh.stock().get(c);
+        for (Ship sh : out.ships()) for (int c = 0; c < nCom; c++) after[c] += sh.stock().get(c);
         Ledger l = ctx.led;
         for (int c = 0; c < nCom; c++) {
             double expected = before[c] + l.produced[c] + l.grown[c] - l.consumed[c] - l.destroyed[c];
@@ -107,6 +109,13 @@ public final class ApplyStep {
                 sb.append(c.id()).append('|').append(c.name()).append('|').append(c.capital()).append('|').append(f(c.cash())).append('|').append(f(c.btu())).append('|')
                   .append(f(c.levels().tech())).append(',').append(f(c.levels().research())).append(',').append(f(c.levels().education())).append(',').append(f(c.levels().happiness()))
                   .append('|').append(c.inSanctuary()).append('|').append(c.bankrupt()).append('\n');
+            }
+            for (Ship sh : w.ships()) {
+                sb.append("S").append(sh.id()).append('|').append(sh.owner()).append('|').append(sh.cls()).append('|').append(sh.at()).append('|').append(f(sh.efficiency())).append('|').append(sh.dest()).append('|');
+                if (sh.lane() != null) sb.append(sh.lane().from()).append('>').append(sh.lane().to()).append(sh.lane().outbound() ? "o" : "i").append(sh.lane().cargo());
+                sb.append('|');
+                for (int c = 0; c < sh.stock().size(); c++) sb.append(f(sh.stock().get(c))).append(',');
+                sb.append('\n');
             }
             byte[] d = md.digest(sb.toString().getBytes(StandardCharsets.UTF_8));
             StringBuilder hex = new StringBuilder();
