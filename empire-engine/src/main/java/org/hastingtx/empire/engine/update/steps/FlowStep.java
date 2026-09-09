@@ -193,7 +193,11 @@ public final class FlowStep implements Step {
         plans.sort(Comparator.<Plan>comparingInt(p -> p.originIdx).thenComparingInt(p -> p.commodity).thenComparing(p -> p.dest));
         for (Plan p : plans) {
             double qty = p.claim;
-            if (qty <= 0) { ctx.led.flows.add(new Flow(p.kind, p.owner, p.commodity, p.requested, 0, p.path, 0, false, "no allocation")); continue; }
+            if (qty <= 0) {
+                ctx.led.flows.add(new Flow(p.kind, p.owner, p.commodity, p.requested, 0, p.path, 0, false, "no allocation"));
+                if (isPull(ctx, p)) ctx.led.shortOf(ctx.idx(p.dest), p.commodity, p.requested);
+                continue;
+            }
             if (p.fromHeld != null) consumedHeld.add(p.fromHeld);
             int hops = 0; int cur = p.originIdx; String hold = null; double moving = qty;
             for (int h = 1; h < p.path.size(); h++) {
@@ -241,6 +245,8 @@ public final class FlowStep implements Step {
                 }
             }
             if (qty - moving > 1e-9) ctx.led.note(p.originIdx, Ledger.q(qty - moving) + " " + ctx.com.id(p.commodity) + " for " + p.dest + " stayed" + (hold != null ? " — " + hold : ""));
+            // a sector that pulled from its centre and did not get all it asked for is short by the rest
+            if (isPull(ctx, p) && p.requested - (completed ? moving : 0) > 1e-9) ctx.led.shortOf(ctx.idx(p.dest), p.commodity, p.requested - (completed ? moving : 0));
         }
         for (int i = 0; i < ctx.led.nSectors; i++) ctx.led.mobility[i] -= mobSpent[i];
         // held parcels that were not planned (no route) stay put
@@ -342,6 +348,13 @@ public final class FlowStep implements Step {
         double w = ctx.weightLeaving(p.commodity, ctx.sector(p.originIdx));
         double bonus = p.kind.equals("move") ? 1.0 : p.kind.equals("deliver") ? ctx.cfg.distribution().deliverMobilityBonusOr1() : ctx.cfg.distribution().mobilityBonusOr1();
         return w * ctx.moveCostInto(ctx.snap.sector(p.path.get(h))) / bonus;
+    }
+
+    /** A distribution flow from a centre to a sector below its threshold. */
+    private static boolean isPull(Ctx ctx, Plan p) {
+        if (!p.kind.equals("distribution")) return false;
+        Sector dst = ctx.snap.sector(p.dest);
+        return dst.distCenter() != null && dst.distCenter().equals(ctx.sector(p.originIdx).at());
     }
 
     /** Civilians and workers count against the destination's population cap (mil do not: KNOWN, trunc_people). */
