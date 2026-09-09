@@ -48,7 +48,11 @@ public record CountryView(
             Map<String, Double> thresholds,
             Coord distCenter,
             Map<String, Double> held,
-            Resources resources) {}
+            Resources resources,
+            /** Standing delivery orders by commodity (issue #45). */
+            Map<String, Delivery> deliveries) {}
+
+    public record Delivery(String dir, double threshold) {}
 
     public static CountryView of(World w, GameConfig cfg, int countryId) {
         Commodities com = Commodities.of(cfg);
@@ -65,17 +69,19 @@ public record CountryView(
             Coord rel = relative(w, c.capital(), at);
             if (s.owner() == countryId) {
                 Map<String, Double> stock = new LinkedHashMap<>(), th = new LinkedHashMap<>(), held = new LinkedHashMap<>();
+                Map<String, Delivery> deliveries = new LinkedHashMap<>();
                 for (int i = 0; i < com.size(); i++) {
                     stock.put(com.id(i), s.stock().get(i));
                     if (s.hasThreshold(i)) th.put(com.id(i), s.threshold(i));
+                    if (s.deliver().has(i)) deliveries.put(com.id(i), new Delivery(Hex.dirName(s.deliver().dir(i)), s.deliver().threshold(i)));
                 }
                 for (HeldParcel p : s.held()) held.merge(com.id(p.commodity()), p.qty(), Double::sum);
                 views.add(new SectorView(at, rel, true, s.terrain().id(), s.elevation(), s.owner(), s.designation(), s.efficiency(),
-                        s.mobility(), s.roadLevel(), s.roadTarget(), s.railLevel(), s.railTarget(), stock, th, s.distCenter(), held, s.resources()));
+                        s.mobility(), s.roadLevel(), s.roadTarget(), s.railLevel(), s.railTarget(), stock, th, s.distCenter(), held, s.resources(), deliveries));
             } else {
                 int owner = s.sanctuary() ? Sector.NOBODY : s.owner();   // sanctuaries are invisible
                 views.add(new SectorView(at, rel, false, s.terrain().id(), s.elevation(), owner, null, 0, 0, 0, 0, 0, 0,
-                        Map.of(), Map.of(), null, Map.of(), null));
+                        Map.of(), Map.of(), null, Map.of(), null, Map.of()));
             }
         }
         List<String> others = new ArrayList<>();

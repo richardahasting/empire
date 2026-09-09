@@ -10,6 +10,7 @@ import org.hastingtx.empire.sim.Sim;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -53,7 +54,7 @@ class SectorSelectorTest {
         // a view in which the capital's sector is a warehouse
         SectorView cap = MINE.stream().filter(x -> x.at().equals(V.capital())).findFirst().orElseThrow();
         SectorView wh = new SectorView(cap.at(), cap.relative(), true, cap.terrain(), cap.elevation(), cap.owner(), "warehouse", cap.efficiency(), cap.mobility(),
-                cap.roadLevel(), cap.roadTarget(), cap.railLevel(), cap.railTarget(), cap.stock(), cap.thresholds(), cap.distCenter(), cap.held(), cap.resources());
+                cap.roadLevel(), cap.roadTarget(), cap.railLevel(), cap.railTarget(), cap.stock(), cap.thresholds(), cap.distCenter(), cap.held(), cap.resources(), Map.of());
         CountryView v2 = new CountryView(V.countryId(), V.name(), V.updateNumber(), V.capital(), V.wrapX(), V.wrapY(), V.cash(), V.btu(), V.levels(), V.handicap(),
                 V.inSanctuary(), V.bankrupt(), V.commodityIds(), List.of(wh), V.otherCountryNames());
         assertThat(SectorSelector.massThreshold(v2, CFG, cap.at(), "food", 400)).isEqualTo(4000.0);

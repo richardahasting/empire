@@ -57,6 +57,7 @@ final class TestWorlds {
             List<HeldParcel> held = new ArrayList<>();
             for (HeldParcel p : s.held()) held.add(new HeldParcel(p.commodity(), p.qty(), p.owner(), Hex.rotate(p.origin(), center, k), Hex.rotate(p.dest(), center, k), p.issuedUpdate()));
             r = r.withHeld(held);
+            r = r.withDeliver(s.deliver().rotated(k));
             out.set(w.index(to), r);
         }
         List<Country> cs = new ArrayList<>();

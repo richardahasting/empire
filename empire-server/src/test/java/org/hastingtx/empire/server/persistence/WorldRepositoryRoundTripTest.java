@@ -4,6 +4,7 @@ import org.hastingtx.empire.agents.scripted.ScriptedAgent;
 import org.hastingtx.empire.config.ConfigLoader;
 import org.hastingtx.empire.engine.config.GameConfig;
 import org.hastingtx.empire.engine.model.Commodities;
+import org.hastingtx.empire.engine.model.Coord;
 import org.hastingtx.empire.engine.model.Sector;
 import org.hastingtx.empire.engine.model.World;
 import org.hastingtx.empire.engine.update.steps.ApplyStep;
@@ -42,12 +43,16 @@ class WorldRepositoryRoundTripTest {
         World w0 = sim.newWorld(List.of("A", "B"), 11);
         World played = sim.run(w0, 5, 11, id -> new ScriptedAgent()).world();   // parcels, thresholds, dist centres, moves exist by now
         Commodities com = Commodities.of(cfg);
+        // a deliver order too (issue #45): direction and threshold must survive the round trip
+        Coord cap = played.country(0).capital();
+        played = played.withSector(played.sector(cap).withDeliver(played.sector(cap).deliver().with(com.index("food"), 2, 250)));
 
         gameId = games.create("roundtrip-test", "teaching", new ConfigLoader().toYaml(l.raw()), l.hash(), 11, played.width(), played.height(), played.wrapX(), played.wrapY(), null);
         worlds.saveAll(gameId, played, com);
         World loaded = worlds.load(games.find(gameId).orElseThrow(), cfg);
         assertThat(ApplyStep.hash(loaded)).isEqualTo(ApplyStep.hash(played));
         assertThat(loaded.pendingMoves()).isEqualTo(played.pendingMoves());
+        for (int i = 0; i < played.sectors().size(); i++) assertThat(loaded.sectors().get(i).deliver()).as("deliver orders at %d", i).isEqualTo(played.sectors().get(i).deliver());
 
         // diff save: one more update, only changed rows written, still identical
         World next = sim.run(loaded, 1, 12, id -> new ScriptedAgent()).world();

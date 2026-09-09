@@ -8,7 +8,7 @@ import org.hastingtx.empire.engine.model.Coord;
  */
 public sealed interface Command permits
         Command.BreakSanctuary, Command.Designate, Command.Threshold, Command.Distribute,
-        Command.Move, Command.Explore, Command.BuildRoad, Command.BuildRail, Command.RailShip {
+        Command.Move, Command.Explore, Command.BuildRoad, Command.BuildRail, Command.RailShip, Command.Deliver {
 
     String verb();
 
@@ -18,6 +18,9 @@ public sealed interface Command permits
 
     /** Set (or clear with a negative amount) the distribution threshold for one commodity. */
     record Threshold(Coord sector, String commodity, double amount) implements Command { public String verb() { return "threshold"; } }
+
+    /** Standing delivery order (KNOWN: deliver.c): above {@code threshold}, push {@code commodity} one hex in {@code dir} (0..5, see Hex.DIR_NAMES) every update; null dir clears. */
+    record Deliver(Coord sector, String commodity, Integer dir, double threshold) implements Command { public String verb() { return "deliver"; } }
 
     /** Name a sector's distribution centre; null clears it. */
     record Distribute(Coord sector, Coord center) implements Command { public String verb() { return "distribute"; } }

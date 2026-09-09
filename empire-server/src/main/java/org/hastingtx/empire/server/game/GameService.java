@@ -303,6 +303,7 @@ public class GameService {
             case Command.Designate d -> d.sector();
             case Command.Threshold t -> t.sector();
             case Command.Distribute d -> d.sector();
+            case Command.Deliver d -> d.sector();
             case Command.BuildRoad r -> r.sector();
             case Command.BuildRail r -> r.sector();
             case Command.Move m -> m.from();

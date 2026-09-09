@@ -606,6 +606,7 @@ economy:
       designate: 1
       distribute: 1
       threshold: 1
+      deliver: 1
       explore: 2
       telegram: 1
       announce: 1
@@ -644,6 +645,12 @@ distribution:
   # or a rectangle) is multiplied for these designations — a warehouse is where the stock lives, so
   # it gets ×10. A single sector or `*:warehouse` takes the number as typed. Clearing is unaffected.
   mass_threshold_multiplier_by_type: { warehouse: 10, city: 10 }
+  # Deliver orders (KNOWN: deliver.c; Richard 2026-09-09, issue #45): per sector and commodity, a
+  # direction and a threshold. Every update whatever is above the threshold moves one hex that way,
+  # the sender paying mobility, if that hex is yours. The receiver applies its own orders at the
+  # next update, so a chain advances one hop per update and never depends on scan order.
+  # GUESS: the original charged deliveries the plain move cost; ours gets the distribution discount.
+  deliver_mobility_bonus: 10
   # null = continuous quantities (allocation is exactly proportional and therefore exactly
   # direction-symmetric). Set e.g. 1.0 to ship whole units; the last indivisible unit then
   # goes by commodity priority, then seeded RNG — which is deliberately NOT rotation-symmetric.

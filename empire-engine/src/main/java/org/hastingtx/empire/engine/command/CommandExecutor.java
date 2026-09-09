@@ -31,6 +31,7 @@ public final class CommandExecutor {
             case Command.Designate d -> designate(w, c, d);
             case Command.Threshold t -> threshold(w, c, t);
             case Command.Distribute d -> distribute(w, c, d);
+            case Command.Deliver d -> deliver(w, c, d);
             case Command.Move m -> move(w, c, m);
             case Command.Explore e -> explore(w, c, e);
             case Command.BuildRoad br -> buildRoad(w, c, br);
@@ -90,6 +91,24 @@ public final class CommandExecutor {
         double[] th = s.thresholds().clone();
         th[com.index(t.commodity())] = t.amount() < 0 ? Double.NaN : t.amount();
         return new CommandResult(w.withSector(s.withThresholds(th)), null, 0);
+    }
+
+    /** A standing order; validated now, executed at every update by the flow step. Issue #45. */
+    private CommandResult deliver(World w, Country c, Command.Deliver d) {
+        Sector s = owned(w, c, d.sector());
+        if (s == null) return CommandResult.fail(w, "you do not own " + d.sector());
+        if (!com.has(d.commodity())) return CommandResult.fail(w, "unknown commodity: " + d.commodity());
+        int ci = com.index(d.commodity());
+        if (d.dir() == null) return new CommandResult(w.withSector(s.withDeliver(s.deliver().without(ci))), null, 0, s.deliver().has(ci) ? "delivery of " + d.commodity() + " from " + d.sector() + " cleared" : "no delivery of " + d.commodity() + " was set at " + d.sector());
+        if (d.dir() < 0 || d.dir() > 5) return CommandResult.fail(w, "direction is e, ne, nw, w, sw or se");
+        if (d.threshold() < 0) return CommandResult.fail(w, "threshold must be 0 or more");
+        Coord to = Hex.normalise(w, Hex.stepRaw(s.at(), d.dir()));
+        if (to == null) return CommandResult.fail(w, "nothing lies " + Hex.dirName(d.dir()) + " of " + d.sector());
+        Sector t = w.sector(to);
+        String info = t.owner() != c.id() ? "noted, but nothing moves until you own " + to
+                    : !t.terrain().isLand() ? "noted, but " + to + " is sea; nothing will move"
+                    : d.commodity() + " above " + fmt(d.threshold()) + " goes " + Hex.dirName(d.dir()) + " to " + to + " every update";
+        return new CommandResult(w.withSector(s.withDeliver(s.deliver().with(ci, d.dir(), d.threshold()))), null, 0, info);
     }
 
     private CommandResult distribute(World w, Country c, Command.Distribute d) {

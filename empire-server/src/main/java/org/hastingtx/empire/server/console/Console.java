@@ -44,6 +44,15 @@ public class Console {
                     yield many(gameId, a, v, cfg, t[1], at -> new Command.Threshold(at, t[2], mixed ? SectorSelector.massThreshold(v, cfg, at, t[2], n) : n), mixed && n >= 0 ? SectorSelector.massThresholdNote(cfg) : null);
                 }
                 case "dist", "distribute" -> { need(t, 3, "dist SECTOR cx,cy|none"); Coord ctr = t[2].equalsIgnoreCase("none") ? null : abs(v, t[2]); yield many(gameId, a, v, cfg, t[1], at -> new Command.Distribute(at, ctr)); }
+                case "deliver", "del" -> {
+                    need(t, 4, "deliver COMMODITY SECTOR DIR N   (DIR e ne nw w sw se, or none to clear)");
+                    boolean clear = t[3].equalsIgnoreCase("none") || t[3].equalsIgnoreCase("off");
+                    if (!clear) need(t, 5, "deliver COMMODITY SECTOR DIR N");
+                    int dir = clear ? -1 : org.hastingtx.empire.engine.geo.Hex.parseDir(t[3]);
+                    if (!clear && dir < 0) throw new IllegalArgumentException("direction is e, ne, nw, w, sw, se (or the original's j u y g b n) — got '" + t[3] + "'");
+                    double thr = clear ? 0 : Double.parseDouble(t[4]);
+                    yield many(gameId, a, v, cfg, t[2], at -> new Command.Deliver(at, t[1], clear ? null : dir, thr));
+                }
                 case "move" -> { need(t, 5, "move commodity from_x,y to_x,y qty"); yield cmd(gameId, a, new Command.Move(abs(v, t[2]), abs(v, t[3]), t[1], Double.parseDouble(t[4]))); }
                 case "rail" -> { need(t, 3, "rail SECTOR LEVEL"); double lvl = Double.parseDouble(t[2]); yield many(gameId, a, v, cfg, t[1], at -> new Command.BuildRail(at, lvl)); }
                 case "railship", "train" -> { need(t, 5, "railship COMMODITY from_x,y to_x,y qty"); yield cmd(gameId, a, new Command.RailShip(abs(v, t[2]), abs(v, t[3]), t[1], Double.parseDouble(t[4]))); }
@@ -132,6 +141,7 @@ public class Console {
             des SECTOR TYPE              designate (agribusiness, mine, light_manufacturing, warehouse, ...)
             thresh SECTOR COMMODITY N    set a distribution threshold (negative clears)
             dist SECTOR cx,cy | none     name a sector's distribution centre
+            deliver COMMODITY SECTOR DIR N   standing order: above N, push it one hex DIR (e ne nw w sw se) every update; DIR none clears
             move COMMODITY x,y x2,y2 N   move now; the sending sector pays the route's mobility now
             expl x,y x2,y2 N             explore into an adjacent unowned sector with N civilians
             road SECTOR LEVEL            standing order: pave toward LEVEL (0 cancels)

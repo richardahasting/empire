@@ -14,7 +14,10 @@ public record DistributionCfg(
         /** Distribution moves goods this many times cheaper than a hand move (KNOWN: IMPORT/EXPORT_BONUS 10). */
         Double mobilityBonus,
         /** A threshold set on a mixed selection (`*` or a rectangle) is multiplied by this for sectors of the given type; absent = 1. Issue #40. */
-        Map<String, Double> massThresholdMultiplierByType) {
+        Map<String, Double> massThresholdMultiplierByType,
+        /** Deliver orders (issue #45) move goods this many times cheaper than a hand move; absent = same as mobility_bonus. */
+        Double deliverMobilityBonus) {
+    public double deliverMobilityBonusOr1() { return deliverMobilityBonus == null ? mobilityBonusOr1() : deliverMobilityBonus <= 0 ? 1.0 : deliverMobilityBonus; }
     /** ×1 unless the designation is listed. */
     public double massThresholdMultiplier(String designation) {
         if (massThresholdMultiplierByType == null || designation == null) return 1.0;
