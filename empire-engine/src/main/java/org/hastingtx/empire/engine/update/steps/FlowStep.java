@@ -310,6 +310,17 @@ public final class FlowStep implements Step {
             // depot efficiency at the endpoints scales what actually gets through (spec: capacity scales with depot efficiency)
             double effScale = Math.min(ctx.sector(ctx.idx(t.path.get(0))).efficiency(), ctx.sector(ctx.idx(t.dest)).efficiency()) / 100.0;
             double moving = Math.min(qty, t.from == null ? qty : t.qty) * (t.from == null ? Math.max(0.01, effScale) : 1.0);
+            // mobility (Richard 2026-09-09): the sending sector pays a fraction of the road cost of this update's hops; trains from one depot take turns in order
+            String mobHold = null;
+            if (rail.mobilityMultiplier() != null && rail.mobilityMultiplier() > 0 && moving > 1e-9) {
+                double unit = 0;
+                for (int h = 1; h <= hops; h++) unit += ctx.moveCostInto(ctx.sector(ctx.idx(t.path.get(h))));
+                unit *= rail.mobilityMultiplier() * ctx.weightLeaving(t.commodity, ctx.sector(t.originIdx));
+                double budget = Math.max(0, ctx.sector(t.originIdx).mobility() + ctx.led.mobility[t.originIdx]);
+                if (unit > 0 && budget / unit < moving) { moving = Math.floor(budget / unit * 1000) / 1000; mobHold = "mobility exhausted in " + ctx.sector(t.originIdx).at(); }
+                if (moving > 1e-9) ctx.led.mobility[t.originIdx] -= moving * unit;
+            }
+            if (moving <= 1e-9) { ctx.led.flows.add(new Flow("rail", t.owner, t.commodity, t.qty, 0, t.path, 0, false, mobHold != null ? mobHold : "nothing to move")); if (t.from != null) addHeld(newHeld, t.originIdx, t.from); continue; }
             if (t.from == null) ctx.led.toHeld(t.originIdx, t.commodity, moving);   // leaves stock; becomes cargo
             double leftover = t.qty - moving;
             if (t.from != null && leftover > 1e-9) addHeld(newHeld, t.originIdx, t.from.withQty(leftover));
@@ -317,7 +328,9 @@ public final class FlowStep implements Step {
             else addHeld(newHeld, stopIdx, new HeldParcel(t.commodity, moving, t.owner, t.path.get(0), t.dest, ctx.snap.updateNumber(), "rail"));
             double cash = rail.cashPer100UnitsShipped() * moving / 100.0;
             ctx.led.cash[t.owner] -= cash;
-            ctx.led.flows.add(new Flow("rail", t.owner, t.commodity, t.qty, moving, t.path, hops, arrives, arrives ? null : "range exhausted at " + t.path.get(hops)));
+            ctx.led.flows.add(new Flow("rail", t.owner, t.commodity, t.qty, moving, t.path, hops, arrives, arrives ? (mobHold != null && moving < t.qty - 1e-9 ? mobHold : null) : "range exhausted at " + t.path.get(hops)));
+            ctx.led.note(t.originIdx, "train: " + Ledger.q(moving) + " " + ctx.com.id(t.commodity) + (arrives ? " arrived at " + t.dest : " left for " + t.dest + ", holding at " + t.path.get(hops)) + (mobHold != null ? " (" + mobHold + ")" : ""));
+            if (arrives && stopIdx != t.originIdx) ctx.led.note(stopIdx, "train: received " + Ledger.q(moving) + " " + ctx.com.id(t.commodity) + " from " + t.path.get(0));
         }
     }
 
