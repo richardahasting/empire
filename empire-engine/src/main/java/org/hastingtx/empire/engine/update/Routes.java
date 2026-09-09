@@ -125,6 +125,7 @@ public final class Routes {
         if (src.owner() != owner) return Estimate.fail("you do not own " + from);
         if (!Hex.neighbours(w, from).contains(to)) return Estimate.fail(to + " is not adjacent to " + from);
         if (!dst.terrain().isLand()) return Estimate.fail(to + " is ocean");
+        if (dst.sanctuary()) return Estimate.fail(to + " is another country's sanctuary; no one may enter until they break sanctuary");
         if (dst.owned()) return Estimate.fail(to + " is already owned");
         double available = src.stock().get(com.civ);
         Ctx ctx = new Ctx(w, cfg, com, 0);

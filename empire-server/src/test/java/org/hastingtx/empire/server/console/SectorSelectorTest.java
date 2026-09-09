@@ -55,7 +55,7 @@ class SectorSelectorTest {
         SectorView cap = MINE.stream().filter(x -> x.at().equals(V.capital())).findFirst().orElseThrow();
         SectorView wh = new SectorView(cap.at(), cap.relative(), true, cap.terrain(), cap.elevation(), cap.owner(), "warehouse", cap.efficiency(), cap.mobility(),
                 cap.roadLevel(), cap.roadTarget(), cap.railLevel(), cap.railTarget(), cap.stock(), cap.thresholds(), cap.distCenter(), cap.held(), cap.resources(), Map.of());
-        CountryView v2 = new CountryView(V.countryId(), V.name(), V.updateNumber(), V.capital(), V.wrapX(), V.wrapY(), V.cash(), V.btu(), V.levels(), V.handicap(),
+        CountryView v2 = new CountryView(V.countryId(), V.name(), V.updateNumber(), V.capital(), V.wrapX(), V.wrapY(), V.width(), V.height(), V.cash(), V.btu(), V.levels(), V.handicap(),
                 V.inSanctuary(), V.bankrupt(), V.commodityIds(), List.of(wh), V.otherCountryNames());
         assertThat(SectorSelector.massThreshold(v2, CFG, cap.at(), "food", 400)).isEqualTo(4000.0);
         assertThat(SectorSelector.massThreshold(v2, CFG, cap.at(), "hcm", 400)).isEqualTo(4000.0);

@@ -19,6 +19,9 @@ public record CountryView(
         Coord capital,
         boolean wrapX,
         boolean wrapY,
+        /** Grid size, so a client can reason about adjacency across the wrap (issue #54). */
+        int width,
+        int height,
         double cash,
         double btu,
         Levels levels,
@@ -86,7 +89,7 @@ public record CountryView(
         }
         List<String> others = new ArrayList<>();
         for (Country o : w.countries()) if (o.id() != countryId) others.add(o.name());
-        return new CountryView(countryId, c.name(), w.updateNumber(), c.capital(), w.wrapX(), w.wrapY(), c.cash(), c.btu(), c.levels(), c.handicap(),
+        return new CountryView(countryId, c.name(), w.updateNumber(), c.capital(), w.wrapX(), w.wrapY(), w.width(), w.height(), c.cash(), c.btu(), c.levels(), c.handicap(),
                 c.inSanctuary(), c.bankrupt(), ids, views, others);
     }
 
