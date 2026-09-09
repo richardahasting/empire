@@ -25,7 +25,8 @@ export function Fleet({ view, rules, busy, onCommand, onSail }: Props) {
   return (
     <div className="space-y-2 text-xs">
       {view.ships.map(s => {
-        const going = s.lane ? `lane ${rel(s.lane.fromRelative)} ${s.lane.outbound ? "→" : "←"} ${rel(s.lane.toRelative)}${s.lane.cargo.length ? ` (${s.lane.cargo.join(", ")})` : ""}` : s.destRelative ? `to ${rel(s.destRelative)}` : s.docked ? "in harbour" : "holding";
+        const going = s.lane ? `lane ${rel(s.lane.fromRelative)} ${s.lane.outbound ? "→" : "←"} ${rel(s.lane.toRelative)}${s.lane.cargo.length ? ` (${s.lane.cargo.join(", ")})` : ""}` : s.mission === "fish" ? `fishing from ${rel(s.homeRelative)}${s.destRelative ? ` → ${rel(s.destRelative)}` : ""}` : s.destRelative ? `to ${rel(s.destRelative)}` : s.docked ? "in harbour" : "holding";
+        const fisher = !!rules.ships?.classes.find(c => c.id === s.cls)?.fishingRate;
         const cargo = Object.entries(s.stock).map(([c, q]) => `${Math.floor(q)} ${c}`).join(", ");
         return (
           <div key={s.id} className="rounded-md border border-border p-2">
@@ -37,6 +38,9 @@ export function Fleet({ view, rules, busy, onCommand, onSail }: Props) {
             <div className="text-muted-foreground">{going}{s.note ? ` · ${s.note}` : ""}</div>
             <div className="mt-1 flex flex-wrap gap-1">
               <Button size="sm" variant="secondary" disabled={busy || !!s.lane} onClick={() => onSail(s)}>Sail…</Button>
+              {fisher && (s.mission === "fish"
+                ? <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: "fish", ship: s.id, clear: true })}>Stop fishing</Button>
+                : <Button size="sm" variant="secondary" disabled={busy || !s.docked} title={s.docked ? "roam the grounds near this harbour, fish, land the catch here, repeat" : "give the order while docked in the home harbour"} onClick={() => void onCommand({ verb: "fish", ship: s.id, x: s.at.x, y: s.at.y })}>Fish from here</Button>)}
               {s.dest && !s.lane && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: "sail", ship: s.id, clear: true })}>Hold</Button>}
               <Button size="sm" variant="ghost" disabled={busy || !s.docked} onClick={() => setDialog({ kind: "load", ship: s })}>Load…</Button>
               <Button size="sm" variant="ghost" disabled={busy || !s.docked || s.load <= 0} onClick={() => setDialog({ kind: "unload", ship: s })}>Unload…</Button>

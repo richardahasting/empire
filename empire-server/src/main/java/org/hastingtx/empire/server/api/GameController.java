@@ -93,6 +93,7 @@ public class GameController {
                 case "unload" -> new Command.Unload(needShip(), commodity, amount == null ? 0 : amount);
                 case "lane" -> new Command.Lane(needShip(), Boolean.TRUE.equals(clear) || x == null ? null : at(x, y), x2 == null ? null : at(x2, y2), cargo == null ? List.of() : cargo);
                 case "scrap" -> new Command.Scrap(needShip());
+                case "fish" -> new Command.Fish(needShip(), x == null || y == null ? null : at(x, y), Boolean.TRUE.equals(clear));
                 default -> throw new IllegalArgumentException("unknown verb: " + verb);
             };
         }

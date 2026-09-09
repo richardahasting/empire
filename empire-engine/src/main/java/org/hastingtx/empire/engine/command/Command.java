@@ -9,7 +9,7 @@ import org.hastingtx.empire.engine.model.Coord;
 public sealed interface Command permits
         Command.BreakSanctuary, Command.Designate, Command.Threshold, Command.Distribute,
         Command.Move, Command.Explore, Command.BuildRoad, Command.BuildRail, Command.RailShip, Command.Deliver,
-        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap {
+        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish {
 
     String verb();
 
@@ -49,6 +49,9 @@ public sealed interface Command permits
     record Unload(long ship, String commodity, double qty) implements Command { public String verb() { return "unload"; } }
     /** Standing order: shuttle between two of your harbours carrying {@code cargo} (empty = whatever it may carry); null from clears. */
     record Lane(long ship, Coord from, Coord to, java.util.List<String> cargo) implements Command { public String verb() { return "lane"; } }
+    /** Fishing mission: roam the grounds near {@code home} (null = the harbour it is in), fish, land the catch there, repeat. {@code off} clears. */
+    record Fish(long ship, Coord home, boolean off) implements Command { public String verb() { return "fish"; } }
+
     /** Break the ship up in harbour; the hold goes ashore. */
     record Scrap(long ship) implements Command { public String verb() { return "scrap"; } }
 

@@ -121,6 +121,8 @@ public class WorldRepository {
         }
     }
 
+    private static Coord homeOf(java.sql.ResultSet rs) throws java.sql.SQLException { int hx = rs.getInt("home_x"); if (rs.wasNull()) return null; return new Coord(hx, rs.getInt("home_y")); }
+
     /** Few ships, so the whole fleet is rewritten whenever any of it changed. */
     private void writeShips(long gameId, World w, Commodities com) {
         jdbc.update("DELETE FROM ship WHERE game_id = ?", gameId);
@@ -132,10 +134,10 @@ public class WorldRepository {
             rows.add(new Object[] {gameId, s.id(), s.owner(), s.cls(), s.name() == null ? "" : s.name(), s.at().x(), s.at().y(), s.efficiency(),
                     s.dest() == null ? null : s.dest().x(), s.dest() == null ? null : s.dest().y(),
                     l == null ? null : l.from().x(), l == null ? null : l.from().y(), l == null ? null : l.to().x(), l == null ? null : l.to().y(),
-                    l == null ? null : l.cargo().stream().map(com::id).collect(java.util.stream.Collectors.joining(",")), l != null && l.outbound(), s.built(), s.note() == null ? "" : s.note(), s.tech()});
+                    l == null ? null : l.cargo().stream().map(com::id).collect(java.util.stream.Collectors.joining(",")), l != null && l.outbound(), s.built(), s.note() == null ? "" : s.note(), s.tech(), s.mission(), s.home() == null ? null : s.home().x(), s.home() == null ? null : s.home().y()});
             for (int c = 0; c < com.size(); c++) if (s.stock().get(c) > 0) stock.add(new Object[] {gameId, s.id(), com.id(c), s.stock().get(c)});
         }
-        jdbc.batchUpdate("INSERT INTO ship (game_id, id, owner, class, name, x, y, efficiency, dest_x, dest_y, lane_from_x, lane_from_y, lane_to_x, lane_to_y, lane_cargo, lane_outbound, built, note, tech) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows);
+        jdbc.batchUpdate("INSERT INTO ship (game_id, id, owner, class, name, x, y, efficiency, dest_x, dest_y, lane_from_x, lane_from_y, lane_to_x, lane_to_y, lane_cargo, lane_outbound, built, note, tech, mission, home_x, home_y) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows);
         if (!stock.isEmpty()) jdbc.batchUpdate("INSERT INTO ship_stock (game_id, ship_id, commodity, qty) VALUES (?,?,?,?)", stock);
     }
 
@@ -218,7 +220,7 @@ public class WorldRepository {
             }
             double[] st = shipStock.getOrDefault(id, new double[n]);
             return new Ship(id, rs.getInt("owner"), rs.getString("class"), rs.getString("name"), new Coord(rs.getInt("x"), rs.getInt("y")), rs.getDouble("efficiency"),
-                    Stocks.of(st), noDest ? null : new Coord(dx, dy), lane, rs.getLong("built"), rs.getString("note"), rs.getDouble("tech"));
+                    Stocks.of(st), noDest ? null : new Coord(dx, dy), lane, rs.getLong("built"), rs.getString("note"), rs.getDouble("tech"), rs.getString("mission"), homeOf(rs));
         }, g.id());
         Long nextShip = jdbc.queryForObject("SELECT next_ship_id FROM game WHERE id = ?", Long.class, g.id());
         return new World(g.width(), g.height(), g.wrapX(), g.wrapY(), list, countries, moves, g.updateNumber(), rail, ships, nextShip == null ? 1 : nextShip);

@@ -57,6 +57,8 @@ export interface ShipView {
   note: string; docked: boolean;
   /** Tech it was laid at, and how many sea hexes it makes per update now. */
   tech: number; hexesPerUpdate: number;
+  /** "fish": roaming the grounds near homeRelative, landing the catch there. */
+  mission: string | null; homeRelative: Coord | null;
 }
 export interface CountryView {
   countryId: number; name: string; updateNumber: number; capital: Coord; wrapX: boolean; wrapY: boolean; width: number; height: number; cash: number; btu: number;

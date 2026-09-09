@@ -74,6 +74,17 @@ public final class ShipStep implements Step {
                     ship = ship.withLane(lane.turned(false));
                 }
                 ship = ship.withDest(ship.lane().target());
+            } else if (ship.fishing() && ship.home() != null) {
+                // the fishing mission: land the catch at home, then roam the grounds; turn for home when the hold fills
+                var fc = sc.fishingOrDefault();
+                if (ship.at().equals(ship.home()) && ship.load() > 0) ship = unload(ctx, ship, here, hi, note);
+                boolean full = ship.load() >= cls.hold() * fc.returnWhenHoldFraction() - 1e-9;
+                if (full) { if (!ship.home().equals(ship.dest())) sep(note).append("hold ").append(Ledger.q(100 * ship.load() / cls.hold())).append("% full, heading home to ").append(ship.home()); ship = ship.withDest(ship.home()); }
+                else if (ship.dest() == null || ship.at().equals(ship.dest()) || ship.dest().equals(ship.home())) {
+                    Coord next = pickGrounds(ctx, ship, fc);
+                    if (next == null) { sep(note).append("no fishing grounds within ").append(fc.radius()).append(" of ").append(ship.home()); ship = ship.withDest(null); }
+                    else ship = ship.withDest(next);
+                }
             } else if (docked && sc.autoUnloadInHarbor() && cls.fishingRateOr0() > 0 && ship.load() > 0) {
                 ship = unload(ctx, ship, here, hi, note);   // a fishing boat home from the grounds lands its catch
             }
@@ -101,6 +112,30 @@ public final class ShipStep implements Step {
     }
 
     private static StringBuilder sep(StringBuilder sb) { if (!sb.isEmpty()) sb.append("; "); return sb; }
+
+    /**
+     * The next cast: a sea hex within {@code wander_hops} of the boat (or, from home, anywhere in the
+     * grounds) and within {@code radius} of home, drawn with probability ∝ fertility + 1 from a seeded
+     * stream per ship and update — a random path that still favours rich water.
+     */
+    static Coord pickGrounds(Ctx ctx, Ship ship, UnitsCfg.ShipsCfg.FishingCfg fc) {
+        java.util.SplittableRandom rng = org.hastingtx.empire.engine.update.Rng.stream("fishing:" + ship.id() + ":" + ctx.snap.updateNumber(), ctx.seed);
+        boolean atHome = ship.at().equals(ship.home());
+        int hops = atHome ? fc.radius() : fc.wanderHops();
+        List<Coord> cands = new ArrayList<>(); List<Double> weights = new ArrayList<>(); double total = 0;
+        for (Sector s : ctx.snap.sectors()) {
+            if (s.terrain() != Terrain.OCEAN || s.at().equals(ship.at())) continue;
+            if (org.hastingtx.empire.engine.geo.Hex.distance(ctx.snap, s.at(), ship.home()) > fc.radius()) continue;
+            if (org.hastingtx.empire.engine.geo.Hex.distance(ctx.snap, s.at(), ship.at()) > hops) continue;
+            if (SeaRoutes.path(ctx.snap, ctx.cfg, ship.owner(), ship.at(), s.at()) == null) continue;
+            double wgt = s.resources().fertility() + 1.0;
+            cands.add(s.at()); weights.add(wgt); total += wgt;
+        }
+        if (cands.isEmpty()) return null;
+        double r = rng.nextDouble() * total;
+        for (int i = 0; i < cands.size(); i++) { r -= weights.get(i); if (r <= 0) return cands.get(i); }
+        return cands.get(cands.size() - 1);
+    }
     static String label(Ship s) { return "ship #" + s.id() + (s.name() == null || s.name().isBlank() ? "" : " " + s.name()); }
 
     /** What a class may carry. */

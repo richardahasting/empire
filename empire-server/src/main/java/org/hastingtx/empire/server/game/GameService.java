@@ -337,6 +337,7 @@ public class GameService {
             case Command.Unload u -> null;
             case Command.Lane l -> null;
             case Command.Scrap s -> null;
+            case Command.Fish f -> null;
             case Command.BreakSanctuary b -> null;
         };
         return at == null ? c.verb() : at.x() + "," + at.y();
