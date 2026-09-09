@@ -31,6 +31,7 @@ public class WorldRepository {
         writeMoves(gameId, w.pendingMoves(), com);
         writeRail(gameId, w.pendingRail(), com);
         writeShips(gameId, w, com);
+        writeContacts(gameId, w);
         jdbc.update("UPDATE game SET update_number = ? WHERE id = ?", w.updateNumber(), gameId);
     }
 
@@ -46,6 +47,7 @@ public class WorldRepository {
         if (!after.pendingMoves().equals(before.pendingMoves())) writeMoves(gameId, after.pendingMoves(), com);
         if (!after.pendingRail().equals(before.pendingRail())) writeRail(gameId, after.pendingRail(), com);
         if (!after.ships().equals(before.ships()) || after.nextShipId() != before.nextShipId()) writeShips(gameId, after, com);
+        if (!after.contacts().equals(before.contacts())) writeContacts(gameId, after);
         jdbc.update("UPDATE game SET update_number = ? WHERE id = ?", after.updateNumber(), gameId);
     }
 
@@ -141,6 +143,16 @@ public class WorldRepository {
         if (!stock.isEmpty()) jdbc.batchUpdate("INSERT INTO ship_stock (game_id, ship_id, commodity, qty) VALUES (?,?,?,?)", stock);
     }
 
+    /** Few contacts, so they are rewritten whenever any of them changed. */
+    private void writeContacts(long gameId, World w) {
+        jdbc.update("DELETE FROM contact WHERE game_id = ?", gameId);
+        if (w.contacts().isEmpty()) return;
+        List<Object[]> rows = new ArrayList<>();
+        for (Contact c : w.contacts())
+            rows.add(new Object[] {gameId, c.owner(), c.shipId(), c.targetOwner(), c.cls(), c.at().x(), c.at().y(), c.seenUpdate(), c.confidence()});
+        jdbc.batchUpdate("INSERT INTO contact (game_id, owner, ship_id, target_owner, class, x, y, seen_update, confidence) VALUES (?,?,?,?,?,?,?,?,?)", rows);
+    }
+
     private void writeRail(long gameId, List<RailOrder> orders, Commodities com) {
         jdbc.update("DELETE FROM rail_order WHERE game_id = ?", gameId);
         List<Object[]> rows = new ArrayList<>();
@@ -223,6 +235,9 @@ public class WorldRepository {
                     Stocks.of(st), noDest ? null : new Coord(dx, dy), lane, rs.getLong("built"), rs.getString("note"), rs.getDouble("tech"), rs.getString("mission"), homeOf(rs));
         }, g.id());
         Long nextShip = jdbc.queryForObject("SELECT next_ship_id FROM game WHERE id = ?", Long.class, g.id());
-        return new World(g.width(), g.height(), g.wrapX(), g.wrapY(), list, countries, moves, g.updateNumber(), rail, ships, nextShip == null ? 1 : nextShip);
+        List<Contact> contacts = jdbc.query("SELECT * FROM contact WHERE game_id = ? ORDER BY owner, ship_id", (rs, i) ->
+                new Contact(rs.getInt("owner"), rs.getLong("ship_id"), rs.getInt("target_owner"), rs.getString("class"),
+                        new Coord(rs.getInt("x"), rs.getInt("y")), rs.getLong("seen_update"), rs.getDouble("confidence")), g.id());
+        return new World(g.width(), g.height(), g.wrapX(), g.wrapY(), list, countries, moves, g.updateNumber(), rail, ships, nextShip == null ? 1 : nextShip, contacts);
     }
 }

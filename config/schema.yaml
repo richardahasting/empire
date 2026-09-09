@@ -753,7 +753,9 @@ detection:
     sigmoid_midpoint: 0.85
     radar_level_build: { lcm: 2.0, hcm: 1.0, cash: 20, max_points_per_update: 5, decay_per_update: 0.5 }
   # Signature multiplies p; >1 easier to see.
-  target_signature: { army: 1.8, fleet: 2.0, single_unit: 0.6, plane: 0.8, held_cargo: 0.2, sector: 1.0 }
+  # submarine: NEW (issue #75) — a boat that runs quiet is the thing radar struggles with, and the
+  # reason detection exists at all. GUESS, and the main dial for how dangerous submarines feel.
+  target_signature: { army: 1.8, fleet: 2.0, single_unit: 0.6, plane: 0.8, held_cargo: 0.2, sector: 1.0, submarine: 0.15 }
   masking_by_terrain: { forest: 0.7, mountain: 0.8, swamp: 0.9 }   # multiplier on p for targets IN that terrain
   contact_staleness_updates: 3            # after this many updates a contact is "stale", then removed
   contact_confidence_bands: { firm: 0.8, probable: 0.4 }           # UI rendering thresholds

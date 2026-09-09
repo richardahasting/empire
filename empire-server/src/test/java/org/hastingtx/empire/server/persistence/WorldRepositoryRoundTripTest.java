@@ -46,12 +46,15 @@ class WorldRepositoryRoundTripTest {
         // a deliver order too (issue #45): direction and threshold must survive the round trip
         Coord cap = played.country(0).capital();
         played = played.withSector(played.sector(cap).withDeliver(played.sector(cap).deliver().with(com.index("food"), 2, 250)));
+        // a detection contact too (issue #75): it is in the state hash, so a dropped column fails here
+        played = played.withContacts(List.of(new org.hastingtx.empire.engine.model.Contact(0, 7, 1, "submarine", cap, played.updateNumber(), 0.42)));
 
         gameId = games.create("roundtrip-test", "teaching", new ConfigLoader().toYaml(l.raw()), l.hash(), 11, played.width(), played.height(), played.wrapX(), played.wrapY(), null);
         worlds.saveAll(gameId, played, com);
         World loaded = worlds.load(games.find(gameId).orElseThrow(), cfg);
         assertThat(ApplyStep.hash(loaded)).isEqualTo(ApplyStep.hash(played));
         assertThat(loaded.pendingMoves()).isEqualTo(played.pendingMoves());
+        assertThat(loaded.contacts()).isEqualTo(played.contacts());
         for (int i = 0; i < played.sectors().size(); i++) assertThat(loaded.sectors().get(i).deliver()).as("deliver orders at %d", i).isEqualTo(played.sectors().get(i).deliver());
 
         // diff save: one more update, only changed rows written, still identical
