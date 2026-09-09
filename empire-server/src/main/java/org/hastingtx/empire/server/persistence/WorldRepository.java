@@ -54,7 +54,7 @@ public class WorldRepository {
                 && a.stock().equals(b.stock()) && Arrays.equals(a.thresholds(), b.thresholds()) && Objects.equals(a.distCenter(), b.distCenter())
                 && a.roadLevel() == b.roadLevel() && a.railLevel() == b.railLevel() && a.radarLevel() == b.radarLevel()
                 && a.held().equals(b.held()) && a.sanctuary() == b.sanctuary() && a.terrain() == b.terrain() && a.roadTarget() == b.roadTarget() && a.railTarget() == b.railTarget()
-                && a.deliver().equals(b.deliver());
+                && a.deliver().equals(b.deliver()) && a.resources().equals(b.resources()) && a.elevation() == b.elevation();
     }
 
     private void writeSectors(long gameId, List<Sector> sectors, Commodities com) {
