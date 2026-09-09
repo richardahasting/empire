@@ -48,6 +48,8 @@ export interface SectorView {
   held: Record<string, number>; resources: Resources | null;
   /** Standing delivery orders by commodity: above threshold, one hex in dir (e ne nw w sw se) every update. */
   deliveries: Record<string, { dir: string; threshold: number }>;
+  /** A sanctuary, and whose (owner's name for a foreign sector; null for yours or nobody's). */
+  sanctuary: boolean; ownerName: string | null;
 }
 export interface CountryView {
   countryId: number; name: string; updateNumber: number; capital: Coord; wrapX: boolean; wrapY: boolean; width: number; height: number; cash: number; btu: number;

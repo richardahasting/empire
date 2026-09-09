@@ -157,8 +157,13 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
     for (let dy = 0; dy < height; dy++) for (let dx = 0; dx < width; dx++) {
       const wc = toWorld(dx, dy);
       const s = byCoord.get(`${wc.x},${wc.y}`);
-      if (!s || !s.full) continue;
+      if (!s) continue;
       const { cx, cy } = hexCenter(dx, dy, l);
+      if (!s.full) {
+        // a neighbour that is somebody's sanctuary is marked as such (the original's 's')
+        if (s.sanctuary && l.size >= 11) { ctx.fillStyle = p.text; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = `${Math.max(9, l.size * 0.7)}px ui-monospace, monospace`; ctx.fillText("s", cx, cy); }
+        continue;
+      }
       if (l.size >= 11) {
         // on the roads layer the label is the road level itself, where there is one to read
         const roadLabel = layer === "roads" && s.roadLevel > 0;

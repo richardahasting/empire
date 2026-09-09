@@ -20,7 +20,7 @@ export function Inspector({ sector: s, view, rules, onCommand, busy, history, hi
     return (
       <div className="space-y-2 text-sm">
         <h3 className="font-semibold">Sector {rel}</h3>
-        <p>{s.terrain}{s.owner >= 0 ? ` — held by ${view.otherCountryNames.length ? "another country" : "someone"}` : " — unowned"}</p>
+        <p>{s.terrain}{s.sanctuary ? ` — sanctuary of ${s.ownerName ?? "another country"}. No one may enter until they break sanctuary.` : s.owner >= 0 ? ` — held by ${s.ownerName ?? "another country"}` : " — unowned"}</p>
         {s.owner < 0 && s.terrain !== "ocean" && (
           <div className="flex items-end gap-2">
             <label className="text-xs">civilians<Input value={exploreCivs} onChange={e => setExploreCivs(e.target.value)} className="w-20" /></label>
