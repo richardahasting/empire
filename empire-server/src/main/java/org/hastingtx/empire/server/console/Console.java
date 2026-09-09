@@ -46,6 +46,7 @@ public class Console {
                 }
                 case "dist", "distribute" -> { need(t, 3, "dist SECTOR cx,cy|none"); Coord ctr = t[2].equalsIgnoreCase("none") ? null : abs(v, t[2]); yield many(gameId, a, v, cfg, t[1], at -> new Command.Distribute(at, ctr)); }
                 case "ships", "fleet" -> new Reply(fleet(v, cfg), true, null, null);
+                case "contacts", "radar" -> new Reply(contacts(v), true, null, null);
                 case "build" -> { need(t, 3, "build HARBOUR CLASS [name]"); yield cmd(gameId, a, new Command.BuildShip(abs(v, t[1]), t[2], t.length > 3 ? String.join(" ", Arrays.copyOfRange(t, 3, t.length)) : null)); }
                 case "sail" -> { need(t, 3, "sail SHIP x,y | sail SHIP hold"); yield cmd(gameId, a, new Command.Sail(Long.parseLong(t[1].replace("#", "")), t[2].equalsIgnoreCase("hold") ? null : abs(v, t[2]))); }
                 case "load" -> { need(t, 4, "load SHIP COMMODITY N"); yield cmd(gameId, a, new Command.Load(Long.parseLong(t[1].replace("#", "")), t[2], Double.parseDouble(t[3]))); }
@@ -165,6 +166,16 @@ public class Console {
     }
     private static String rel(Coord c) { return c.x() + "," + c.y(); }
 
+    /** What radar and the lookouts have: where a ship was last seen, not where it is now (issue #75). */
+    static String contacts(CountryView v) {
+        if (v.contacts().isEmpty()) return "no contacts — nothing of anyone else's is on the plot";
+        StringBuilder sb = new StringBuilder(String.format("%-8s %-10s %-24s %-9s %s%n", "at", "country", "class", "band", "seen"));
+        for (var c : v.contacts())
+            sb.append(String.format("%-8s %-10s %-24s %-9s %s%n", rel(c.relative()), c.ownerName() == null ? "?" : c.ownerName(),
+                    c.cls() == null ? "?" : c.cls(), c.band(), c.age() == 0 ? "this update" : c.age() + (c.age() == 1 ? " update ago" : " updates ago")));
+        return sb.toString();
+    }
+
     static String census(CountryView v) {
         StringBuilder sb = new StringBuilder(String.format("%-8s %-3s %-4s %4s %4s %6s %6s %6s %6s %6s %6s%n", "sect", "des", "eff", "mob", "road", "civ", "mil", "food", "iron", "lcm", "hcm"));
         for (SectorView s : v.sectors()) {
@@ -187,6 +198,7 @@ public class Console {
             deliver COMMODITY SECTOR DIR N   standing order: above N, push it one hex DIR (e ne nw w sw se) every update; DIR none clears
             macro                        list your macros (recorded from the map); macro run N SECTOR runs one
             ships                        your fleet: where each ship is, its load, where it is going, what it did
+            contacts                     other people's ships your radar and lookouts have seen, and how long ago
             build HARBOUR CLASS [name]   lay a hull in your harbour (fishing_boat, cargo_ship, tanker, luxury_craft, ...; tech gates apply)
             sail SHIP x,y | hold         sail to a sea hex or one of your harbours (speed × efficiency hexes per update)
             load/unload SHIP COMMODITY N in your harbour only

@@ -9,6 +9,13 @@ milestone; the issue carries the detail, this page carries the order.
 
 1. **Ships phase 3 — warships and submarines** (#68). Detection, combat,
    missions, harbour defence. The core of the milestone; everything below feeds it.
+   Too big for one branch, so it lands in three, in this order (Richard 2026-09-09):
+   **detection** (#75) — radar and lookouts find enemy ships, contacts age and go
+   stale; then **combat** — engagement, simultaneous resolution, sinking, capture of
+   cargo, with battle damage carried on the hull's existing efficiency so a harbour
+   repairs what a battle broke; then **missions** — patrol, escort, blockade,
+   interdiction and harbour defence. A warship fights when its mission says to, not
+   on sight, so the fishing fleet never blunders into a war.
 2. **Fuel** (#65). Petrol per hex, tanks, refuelling in harbour and from tankers.
    Gives refineries a purpose and makes tankers matter. Changes the whole economy,
    so it lands early, before balance work.

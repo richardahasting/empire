@@ -56,7 +56,7 @@ public final class ApplyStep {
             countries.add(new Country(c.id(), c.name(), c.capital(), c.cash() + led.cash[c.id()], c.btu() + led.btu[c.id()], lv,
                     c.handicap(), c.inSanctuary(), led.bankruptNext[c.id()], led.plagueLeft[c.id()]));
         }
-        World out = new World(snap.width(), snap.height(), snap.wrapX(), snap.wrapY(), next, countries, List.of(), snap.updateNumber() + 1, List.of(), ctx.ships, snap.nextShipId());
+        World out = new World(snap.width(), snap.height(), snap.wrapX(), snap.wrapY(), next, countries, List.of(), snap.updateNumber() + 1, List.of(), ctx.ships, snap.nextShipId(), ctx.contacts);
         checkConservation(ctx, out);
         // the last line of a sector's story: what it wanted and did not get
         for (var e : led.shortages.entrySet()) {
@@ -109,6 +109,10 @@ public final class ApplyStep {
                 sb.append(c.id()).append('|').append(c.name()).append('|').append(c.capital()).append('|').append(f(c.cash())).append('|').append(f(c.btu())).append('|')
                   .append(f(c.levels().tech())).append(',').append(f(c.levels().research())).append(',').append(f(c.levels().education())).append(',').append(f(c.levels().happiness()))
                   .append('|').append(c.inSanctuary()).append('|').append(c.bankrupt()).append('\n');
+            }
+            for (Contact ct : w.contacts()) {
+                sb.append("K").append(ct.owner()).append('|').append(ct.shipId()).append('|').append(ct.targetOwner()).append('|').append(ct.cls())
+                  .append('|').append(ct.at()).append('|').append(ct.seenUpdate()).append('|').append(f(ct.confidence())).append('\n');
             }
             for (Ship sh : w.ships()) {
                 sb.append("S").append(sh.id()).append('|').append(sh.owner()).append('|').append(sh.cls()).append('|').append(sh.at()).append('|').append(f(sh.efficiency())).append('|').append(sh.dest()).append('|');

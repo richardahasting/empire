@@ -32,10 +32,19 @@ public record CountryView(
         List<SectorView> sectors,
         List<String> otherCountryNames,
         /** Your ships (issue #56). */
-        List<ShipView> ships) {
+        List<ShipView> ships,
+        /** What your radar and lookouts have seen of other people's ships (issue #75). */
+        List<ContactView> contacts) {
 
     public record ShipView(long id, String cls, String name, Coord at, Coord relative, double efficiency, Map<String, Double> stock, double load, double hold,
                            Coord dest, Coord destRelative, LaneView lane, String note, boolean docked, double tech, int hexesPerUpdate, String mission, Coord homeRelative) {}
+    /**
+     * A sighting as its holder is allowed to read it. {@code band} is firm | probable | faint and
+     * {@code age} is updates since the sighting, so a stale mark can be drawn dimmer. Anything the
+     * band does not warrant is null — see {@link #reveal}.
+     */
+    public record ContactView(Coord at, Coord relative, String band, long age, double confidence, String cls, String ownerName) {}
+
     public record LaneView(Coord from, Coord to, Coord fromRelative, Coord toRelative, List<String> cargo, boolean outbound) {}
 
     /** {@code full} is true for owned sectors; adjacent unowned sectors expose terrain and owner only. */
@@ -122,8 +131,29 @@ public record CountryView(
             ships.add(new ShipView(sh.id(), sh.cls(), sh.name(), sh.at(), relative(w, c.capital(), sh.at()), sh.efficiency(), st, sh.load(), hold,
                     sh.dest(), sh.dest() == null ? null : relative(w, c.capital(), sh.dest()), lane, sh.note(), docked, sh.tech(), hexes, sh.mission(), sh.home() == null ? null : relative(w, c.capital(), sh.home())));
         }
+        List<ContactView> contacts = new ArrayList<>();
+        if (cfg.detection() != null) for (Contact ct : w.contactsOf(countryId)) {
+            String band = cfg.detection().band(ct.confidence());
+            contacts.add(reveal(w, cfg, c.capital(), ct, band, w.updateNumber() - ct.seenUpdate()));
+        }
         return new CountryView(countryId, c.name(), w.updateNumber(), c.capital(), w.wrapX(), w.wrapY(), w.width(), w.height(), c.cash(), c.btu(), c.levels(), c.handicap(),
-                c.inSanctuary(), c.bankrupt(), ids, views, others, ships);
+                c.inSanctuary(), c.bankrupt(), ids, views, others, ships, contacts);
+    }
+
+    /**
+     * What a sighting is allowed to tell its holder, by confidence band.
+     *
+     * <p>TODO(richard, issue #75): decide the disclosure rule. This placeholder reveals everything at
+     * every band, which makes a faint contact read exactly like a firm one and gives submarines
+     * nothing to hide behind. The bands are firm (p >= 0.8), probable (p >= 0.4) and faint below that.
+     *
+     * @param ct   the true sighting
+     * @param band firm | probable | faint
+     * @param age  updates since it was made (0 = seen this update)
+     */
+    static ContactView reveal(World w, GameConfig cfg, Coord capital, Contact ct, String band, long age) {
+        String ownerName = w.country(ct.targetOwner()).name();
+        return new ContactView(ct.at(), relative(w, capital, ct.at()), band, age, ct.confidence(), ct.cls(), ownerName);
     }
 
     /** Player-facing coordinates: offset from the capital, shortest way round when wrapped. */
