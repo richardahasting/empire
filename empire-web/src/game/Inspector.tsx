@@ -5,10 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 
-interface Props { sector: SectorView | null; view: CountryView; rules: Rules; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean }
+interface Props { sector: SectorView | null; view: CountryView; rules: Rules; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean; history?: string[]; historyUpdate?: number }
 
-/** Click a sector: what it is, what it holds, what it is short of, and the panel actions. */
-export function Inspector({ sector: s, view, rules, onCommand, busy }: Props) {
+/** Click a sector: what it is, what it holds, what it is short of, what happened last update, and the panel actions. */
+export function Inspector({ sector: s, view, rules, onCommand, busy, history, historyUpdate }: Props) {
   const [des, setDes] = useState("");
   const [thrCommodity, setThrCommodity] = useState("food");
   const [thrAmount, setThrAmount] = useState("");
@@ -60,6 +60,12 @@ export function Inspector({ sector: s, view, rules, onCommand, busy }: Props) {
         </tbody>
       </table>
       {short.length > 0 && <p className="text-xs">Short of: <span className="text-destructive">{short.join(", ")}</span></p>}
+      {history && history.length > 0 && (
+        <div className="text-xs">
+          <div className="font-medium">Last update{historyUpdate ? ` (${historyUpdate})` : ""}</div>
+          <ol className="list-decimal pl-4 text-muted-foreground">{history.map((l, i) => <li key={i}>{l}</li>)}</ol>
+        </div>
+      )}
       {(() => {
         const cap = rules.defaultCapacity ?? 9999;
         const full = view.commodityIds.filter(c => !["civ", "mil", "uw"].includes(c) && (s.stock[c] ?? 0) >= cap * 0.98);

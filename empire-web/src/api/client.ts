@@ -92,4 +92,4 @@ export function estimate(gameId: number, q: { verb: "move" | "explore" | "rail";
 }
 
 export interface FlowOut { kind: string; commodity: string; qtyPlanned: number; qtyMoved: number; path: Coord[]; hopsDelivered: number; completed: boolean; holdReason: string | null }
-export interface LastUpdate { updateNumber: number; millis: number; events: Record<string, unknown>[]; flows: FlowOut[] }
+export interface LastUpdate { updateNumber: number; millis: number; events: Record<string, unknown>[]; flows: FlowOut[]; notes: Record<string, string[]> }

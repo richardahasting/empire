@@ -5,6 +5,7 @@ import org.hastingtx.empire.engine.geo.Hex;
 import org.hastingtx.empire.engine.model.*;
 import org.hastingtx.empire.engine.update.Ctx;
 import org.hastingtx.empire.engine.update.Flow;
+import org.hastingtx.empire.engine.update.Ledger;
 import org.hastingtx.empire.engine.update.Rng;
 import org.hastingtx.empire.engine.update.Step;
 
@@ -226,6 +227,20 @@ public final class FlowStep implements Step {
             if (p.fromHeld != null && qty < p.fromHeld.qty() - 1e-9) // partial claim of a held parcel: the rest stays put
                 addHeld(newHeld, p.originIdx, p.fromHeld.withQty(p.fromHeld.qty() - qty));
             ctx.led.flows.add(new Flow(p.kind, p.owner, p.commodity, p.requested, qty, p.path, hops, completed, hold));
+            // the story, at both ends (issue #49)
+            String what = Ledger.q(moving) + " " + ctx.com.id(p.commodity);
+            String verb = switch (p.kind) { case "deliver" -> "delivered"; case "move" -> "moved"; case "resume" -> "forwarded"; default -> "sent"; };
+            if (moving > 0) {
+                Coord from = ctx.sector(p.originIdx).at(), to = ctx.sector(cur).at();
+                if (completed) {
+                    ctx.led.note(p.originIdx, verb + " " + what + " to " + to + (p.kind.equals("distribution") && p.dest.equals(ctx.sector(p.originIdx).distCenter()) ? " (surplus to centre)" : ""));
+                    ctx.led.note(cur, "received " + what + " from " + from + (p.kind.equals("distribution") && !p.dest.equals(ctx.sector(p.originIdx).distCenter()) ? " (supply from centre)" : ""));
+                } else {
+                    ctx.led.note(p.originIdx, what + " bound for " + p.dest + " held at " + to + (hold != null ? " — " + hold : ""));
+                    if (cur != p.originIdx) ctx.led.note(cur, "holding " + what + " bound for " + p.dest + " from " + from);
+                }
+            }
+            if (qty - moving > 1e-9) ctx.led.note(p.originIdx, Ledger.q(qty - moving) + " " + ctx.com.id(p.commodity) + " for " + p.dest + " stayed" + (hold != null ? " — " + hold : ""));
         }
         for (int i = 0; i < ctx.led.nSectors; i++) ctx.led.mobility[i] -= mobSpent[i];
         // held parcels that were not planned (no route) stay put

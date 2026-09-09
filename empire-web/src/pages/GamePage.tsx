@@ -184,7 +184,7 @@ export function GamePage() {
       <Dashboard view={view} game={game} projection={projection} />
       {notice && <p className="text-xs text-muted-foreground">{notice}</p>}
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <SectorMenu gameId={gameId} view={view} rules={rules} sector={sector} onCommand={command} busy={busy} onStartPick={setPick}>
+        <SectorMenu gameId={gameId} view={view} rules={rules} sector={sector} onCommand={command} busy={busy} onStartPick={setPick} history={sector ? last?.notes?.[`${sector.relative.x},${sector.relative.y}`] : undefined} historyUpdate={last?.updateNumber}>
           <div className="relative min-h-[24rem] min-w-0">
             {pick && (
               <div className="absolute left-2 top-2 z-10 flex items-center gap-2 rounded-md border border-border bg-popover px-2 py-1 text-xs shadow-md">
@@ -218,7 +218,7 @@ export function GamePage() {
           </div>
         </SectorMenu>
         <aside className="flex min-h-0 min-w-0 flex-col gap-3">
-          <div className="max-h-[50%] overflow-auto rounded-lg border border-border bg-card p-3"><Inspector sector={sector} view={view} rules={rules} onCommand={command} busy={busy} /></div>
+          <div className="max-h-[50%] overflow-auto rounded-lg border border-border bg-card p-3"><Inspector sector={sector} view={view} rules={rules} onCommand={command} busy={busy} history={sector ? last?.notes?.[`${sector.relative.x},${sector.relative.y}`] : undefined} historyUpdate={last?.updateNumber} /></div>
           <div className="min-h-0 flex-1"><ConsolePanel onLine={consoleLine} /></div>
         </aside>
       </div>

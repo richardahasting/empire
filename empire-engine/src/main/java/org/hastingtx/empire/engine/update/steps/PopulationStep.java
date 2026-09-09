@@ -5,6 +5,7 @@ import org.hastingtx.empire.engine.config.SectorTypeCfg;
 import org.hastingtx.empire.engine.model.Coord;
 import org.hastingtx.empire.engine.model.Sector;
 import org.hastingtx.empire.engine.update.Ctx;
+import org.hastingtx.empire.engine.update.Ledger;
 import org.hastingtx.empire.engine.update.Rng;
 import org.hastingtx.empire.engine.update.Step;
 
@@ -44,10 +45,11 @@ public final class PopulationStep implements Step {
             double have = s.stock().get(food);
             double foodLeft;
             if (have >= demand) {
-                if (demand > 0) ctx.led.consume(i, food, demand);
+                if (demand > 0) { ctx.led.consume(i, food, demand); if (s.owned()) ctx.led.note(i, "people ate " + Ledger.q(demand) + " food"); }
                 foodLeft = have - demand;
             } else {
                 if (have > 0) ctx.led.consume(i, food, have);
+                if (s.owned()) ctx.led.note(i, "people ate " + Ledger.q(have) + " food; " + Ledger.q(demand - have) + " short");
                 foodLeft = 0;
                 // KNOWN: victims = unfed people beyond what the food covers, at most half; uw starve first, then civ, then mil
                 double shortfall = demand <= 0 ? 0 : 1.0 - have / demand;
@@ -67,7 +69,7 @@ public final class PopulationStep implements Step {
                 if (dMil > 0) ctx.led.die(i, mil, dMil);
                 if (dUw > 0) ctx.led.die(i, uw, dUw);
                 nCiv -= dCiv; nMil -= dMil; nUw -= dUw;
-                if (s.owned() && dCiv + dMil + dUw > 0) ctx.led.event("starvation", s.owner(), s.at(), "starvation in " + s.at(), dCiv + dMil + dUw);
+                if (s.owned() && dCiv + dMil + dUw > 0) { ctx.led.event("starvation", s.owner(), s.at(), "starvation in " + s.at(), dCiv + dMil + dUw); ctx.led.note(i, Ledger.q(dCiv + dMil + dUw) + " starved"); }
             }
 
             // 2. births, bounded by ceiling and by food
@@ -88,6 +90,7 @@ public final class PopulationStep implements Step {
                     if (bc > 0) ctx.led.grow(i, civ, bc);
                     if (bu > 0) ctx.led.grow(i, uw, bu);
                     nCiv += bc; nUw += bu;
+                    if (bc + bu >= 0.05) ctx.led.note(i, "population +" + Ledger.q(bc + bu) + (fromStock > 0 && p.foodPerBirth() > 0 ? " (births ate " + Ledger.q(Math.min(foodLeft, fromStock * p.foodPerBirth())) + " food)" : ""));
                 }
             }
 
@@ -102,6 +105,7 @@ public final class PopulationStep implements Step {
                     ctx.led.die(i, civ, nCiv * mort);
                     if (nUw > 0) ctx.led.die(i, uw, nUw * mort);
                     ctx.led.event("plague", s.owner(), s.at(), "plague in " + s.at(), (nCiv + nUw) * mort);
+                    ctx.led.note(i, "plague killed " + Ledger.q((nCiv + nUw) * mort));
                 }
             }
         }

@@ -4,6 +4,7 @@ import org.hastingtx.empire.engine.config.SectorTypeCfg;
 import org.hastingtx.empire.engine.model.Country;
 import org.hastingtx.empire.engine.model.Sector;
 import org.hastingtx.empire.engine.update.Ctx;
+import org.hastingtx.empire.engine.update.Ledger;
 import org.hastingtx.empire.engine.update.Step;
 
 import java.util.Map;
@@ -13,6 +14,7 @@ import java.util.Map;
  * consumed in proportion to what was actually produced, so conservation is exact.
  */
 public final class ProductionStep implements Step {
+    private static final String[] LEVEL_NAMES = {"tech", "research", "education", "happiness"};
     public String name() { return "production"; }
 
     private static final String[] LEVELS = {"tech", "research", "education", "happiness"};
@@ -69,15 +71,17 @@ public final class ProductionStep implements Step {
             if (scale <= 0) continue;
 
             double producedTotal = 0;
-            for (int ci = 0; ci < want.length; ci++) if (want[ci] > 0) { ctx.led.produce(i, ci, want[ci] * scale); producedTotal += want[ci] * scale; }
-            for (int li = 0; li < 4; li++) if (wantLevel[li] > 0) { ctx.led.level[c.id()][li] += wantLevel[li] * scale; producedTotal += wantLevel[li] * scale; }
+            StringBuilder made = new StringBuilder(), used = new StringBuilder();
+            for (int ci = 0; ci < want.length; ci++) if (want[ci] > 0) { ctx.led.produce(i, ci, want[ci] * scale); producedTotal += want[ci] * scale; made.append(made.isEmpty() ? "" : ", ").append(Ledger.q(want[ci] * scale)).append(' ').append(ctx.com.id(ci)); }
+            for (int li = 0; li < 4; li++) if (wantLevel[li] > 0) { ctx.led.level[c.id()][li] += wantLevel[li] * scale; producedTotal += wantLevel[li] * scale; made.append(made.isEmpty() ? "" : ", ").append(Ledger.q(wantLevel[li] * scale)).append(' ').append(LEVEL_NAMES[li]); }
             for (var e : consumes.entrySet()) {
                 int in = ctx.com.index(e.getKey());
                 double q = producedTotal * e.getValue();
-                if (q > 0) ctx.led.consume(i, in, q);
+                if (q > 0) { ctx.led.consume(i, in, q); used.append(used.isEmpty() ? "" : ", ").append(Ledger.q(q)).append(' ').append(e.getKey()); }
             }
             double cashPer = t.productionCashPerUnitOr0();
-            if (cashPer > 0) ctx.led.cash[c.id()] -= cashPer * producedTotal;   // KNOWN: guns $30, shells $3, tech $300...
+            if (cashPer > 0) { ctx.led.cash[c.id()] -= cashPer * producedTotal; used.append(used.isEmpty() ? "" : ", ").append('$').append(Ledger.q(cashPer * producedTotal)); }   // KNOWN: guns $30, shells $3, tech $300...
+            if (!made.isEmpty()) ctx.led.note(i, "made " + made + (used.isEmpty() ? "" : " using " + used) + (scale < 1 - 1e-9 ? " (short of inputs)" : ""));
         }
     }
 

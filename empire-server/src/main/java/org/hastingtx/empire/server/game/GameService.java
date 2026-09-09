@@ -182,7 +182,7 @@ public class GameService {
             UpdateResult r = Update.run(g.world, g.cfg, seed);
             long ms = (System.nanoTime() - t0) / 1_000_000;
             worlds.saveDiff(gameId, g.world, r.next(), g.com);
-            logs.update(gameId, n, seed, r.stateHash(), r.events(), r.flows(), ms);
+            logs.update(gameId, n, seed, r.stateHash(), r.events(), r.flows(), ms, r.notes());
             g.world = r.next();
             log.info("game {} update {} in {} ms, hash {}", gameId, n, ms, r.stateHash().substring(0, 12));
             return r;
