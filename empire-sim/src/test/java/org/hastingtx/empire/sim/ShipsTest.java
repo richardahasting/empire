@@ -35,9 +35,23 @@ class ShipsTest {
         w = w.withSector(sea.withTerrain(Terrain.OCEAN, 0, new Resources(60, 0, 0, 0, 0)));
         return w;
     }
-    private static World withShip(World w, String cls, Coord at, double eff) {
-        Ship s = new Ship(w.nextShipId(), 0, cls, "", at, eff, Stocks.zero(COM.size()), null, null, 0, "");
+    private static World withShip(World w, String cls, Coord at, double eff) { return withShip(w, cls, at, eff, 0); }
+    private static World withShip(World w, String cls, Coord at, double eff, double tech) {
+        Ship s = new Ship(w.nextShipId(), 0, cls, "", at, eff, Stocks.zero(COM.size()), null, null, 0, "", tech);
         return w.withShips(List.of(s), s.id() + 1);
+    }
+
+    @Test
+    void speedScalesWithTheTechTheHullWasLaidAt() {
+        // cargo ship: speed 3; at tech 100 the multiplier is 2.0, so 6 hexes an update
+        World w = withShip(world(), "cargo_ship", HARBOR_E, 100, 100);
+        Coord far = Hex.stepRaw(CAP, 0, 8);
+        CommandResult r = new CommandExecutor(CFG).execute(w, 0, new Command.Sail(1, far));
+        assertThat(r.error()).isNull();
+        World n1 = Update.run(r.world(), CFG, 1).next();
+        assertThat(Hex.distanceRaw(n1.ship(1).at(), HARBOR_E)).isEqualTo(6);
+        assertThat(CFG.units().ships().range(CFG.units().ships().shipClass("cargo_ship"), 0, 100)).isEqualTo(3);
+        assertThat(CFG.units().ships().range(CFG.units().ships().shipClass("cargo_ship"), 300, 100)).isEqualTo(7);   // capped at ×2.5
     }
 
     @Test

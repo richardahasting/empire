@@ -140,7 +140,7 @@ public final class CommandExecutor {
         }
         if (c.cash() < cash) return CommandResult.fail(w, "a " + cls.name() + " costs $" + fmt(cash) + "; you have $" + fmt(c.cash()));
         long id = w.nextShipId();
-        Ship ship = new Ship(id, c.id(), cls.id(), b.name() == null ? "" : b.name().trim(), h.at(), sc.startEfficiency(), Stocks.zero(com.size()), null, null, w.updateNumber(), "laid down");
+        Ship ship = new Ship(id, c.id(), cls.id(), b.name() == null ? "" : b.name().trim(), h.at(), sc.startEfficiency(), Stocks.zero(com.size()), null, null, w.updateNumber(), "laid down", c.levels().tech());
         List<Ship> ships = new ArrayList<>(w.ships()); ships.add(ship);
         World next = w.withSector(h.withStock(st)).withCountry(c.withCash(c.cash() - cash)).withShips(ships, id + 1);
         return new CommandResult(next, null, 0, cls.name() + " #" + id + " laid down at " + b.harbor() + " at " + fmt(sc.startEfficiency()) + "%; it fits out while docked");
@@ -155,7 +155,7 @@ public final class CommandExecutor {
         List<Coord> path = org.hastingtx.empire.engine.update.SeaRoutes.path(w, cfg, c.id(), ship.at(), s.dest());
         if (path == null) return CommandResult.fail(w, "no sea route from " + ship.at() + " to " + s.dest() + " (sea and your harbours only)");
         var cls = cfg.units().ships().shipClass(ship.cls());
-        double perUpdate = Math.max(0, Math.floor(cls.speed() * ship.efficiency() / 100.0));
+        double perUpdate = cfg.units().ships().range(cls, ship.tech(), ship.efficiency());
         String eta = perUpdate <= 0 ? "it cannot sail until it is fitter" : "about " + (int) Math.ceil((path.size() - 1) / perUpdate) + " update(s)";
         return new CommandResult(w.withShip(ship.withDest(s.dest())), null, 0, "ship #" + s.ship() + " sails for " + s.dest() + ": " + (path.size() - 1) + " hexes, " + eta);
     }

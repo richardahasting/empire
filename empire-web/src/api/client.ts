@@ -55,6 +55,8 @@ export interface ShipView {
   id: number; cls: string; name: string; at: Coord; relative: Coord; efficiency: number; stock: Record<string, number>; load: number; hold: number;
   dest: Coord | null; destRelative: Coord | null; lane: { from: Coord; to: Coord; fromRelative: Coord; toRelative: Coord; cargo: string[]; outbound: boolean } | null;
   note: string; docked: boolean;
+  /** Tech it was laid at, and how many sea hexes it makes per update now. */
+  tech: number; hexesPerUpdate: number;
 }
 export interface CountryView {
   countryId: number; name: string; updateNumber: number; capital: Coord; wrapX: boolean; wrapY: boolean; width: number; height: number; cash: number; btu: number;

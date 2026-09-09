@@ -20,7 +20,16 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
             boolean autoUnloadInHarbor,
             /** Food a fishing boat of rate 1 at 100% makes per ETU per point of sea fertility. */
             double fishingFoodPerEtuPerFertilityPoint,
+            /** Speed multiplier from the ship's tech: at_0 + per_tech_point × tech, capped at max. */
+            SpeedTech speedTechMultiplier,
             List<ShipClassCfg> classes) {
+        public record SpeedTech(double at0, double perTechPoint, double max) {}
+        public double speedFactor(double tech) {
+            if (speedTechMultiplier == null) return 1.0;
+            return Math.min(speedTechMultiplier.max(), speedTechMultiplier.at0() + speedTechMultiplier.perTechPoint() * tech);
+        }
+        /** Sea hexes per update for a ship of this class, tech and efficiency. */
+        public int range(ShipClassCfg cls, double tech, double efficiency) { return (int) Math.floor(cls.speed() * speedFactor(tech) * efficiency / 100.0); }
         public ShipClassCfg shipClass(String id) {
             for (ShipClassCfg c : classes) if (c.id().equals(id)) return c;
             throw new IllegalArgumentException("unknown ship class: " + id);

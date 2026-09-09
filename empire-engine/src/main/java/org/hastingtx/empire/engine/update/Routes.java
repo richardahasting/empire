@@ -126,7 +126,7 @@ public final class Routes {
         List<Coord> path = SeaRoutes.path(w, cfg, owner, ship.at(), to);
         if (path == null) return Estimate.fail("no sea route to " + to + " (sea and your harbours only)");
         var cls = cfg.units().ships().shipClass(ship.cls());
-        int perUpdate = (int) Math.floor(cls.speed() * ship.efficiency() / 100.0);
+        int perUpdate = cfg.units().ships().range(cls, ship.tech(), ship.efficiency());
         double updates = perUpdate <= 0 ? Double.POSITIVE_INFINITY : Math.ceil((path.size() - 1) / (double) perUpdate);
         return new Estimate(true, null, path, List.of(), updates, perUpdate, ship.load(), 0, null, cls.hold(), ship.efficiency());
     }

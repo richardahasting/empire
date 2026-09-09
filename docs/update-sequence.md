@@ -120,7 +120,7 @@ output_cap   = work_avail * produces[c] * (eff/100) * resource_gate/100 * level_
 input_cap    = min over consumes: stock[input] / consumes[input]
 produced     = min(output_cap, input_cap, capacity_remaining)
 ```
-Inputs are consumed in proportion; output is added. Level-producing sectors
+Every producer carries a `level_effect` tech curve (Richard 2026-09-09: "tech level adjusts every production value"); the original gated only some products on tech. Inputs are consumed in proportion; output is added. Level-producing sectors
 (`produces_level`) add to the **country** level in the ledger, scaled by the
 education/research cross-curves. Enlistment converts civ → mil. Nothing in
 this step moves anything between sectors. (**KNOWN:** the three-way min is

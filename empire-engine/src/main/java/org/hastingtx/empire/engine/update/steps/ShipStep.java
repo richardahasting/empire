@@ -82,7 +82,7 @@ public final class ShipStep implements Step {
                 List<Coord> path = SeaRoutes.path(ctx.snap, ctx.cfg, ship.owner(), ship.at(), ship.dest());
                 if (path == null) sep(note).append("no sea route to ").append(ship.dest());
                 else {
-                    int range = (int) Math.floor(cls.speed() * eff);
+                    int range = sc.range(cls, ship.tech(), ship.efficiency());
                     int hops = Math.min(range, path.size() - 1);
                     if (hops <= 0) sep(note).append("too unfit to sail (").append(Ledger.q(ship.efficiency())).append("%)");
                     else {

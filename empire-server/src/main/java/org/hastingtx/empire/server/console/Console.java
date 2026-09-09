@@ -155,10 +155,10 @@ public class Console {
     /** One line per ship, relative coordinates. */
     static String fleet(CountryView v, GameConfig cfg) {
         if (v.ships().isEmpty()) return "no ships — build one in a harbour: build x,y fishing_boat";
-        StringBuilder sb = new StringBuilder(String.format("%-4s %-24s %-8s %5s %-11s %-18s %s%n", "id", "class", "at", "eff", "load/hold", "going", "last update"));
+        StringBuilder sb = new StringBuilder(String.format("%-4s %-24s %-8s %5s %5s %-11s %-18s %s%n", "id", "class", "at", "eff", "speed", "load/hold", "going", "last update"));
         for (var s : v.ships()) {
             String going = s.lane() != null ? "lane " + rel(s.lane().fromRelative()) + (s.lane().outbound() ? " → " : " ← ") + rel(s.lane().toRelative()) : s.destRelative() != null ? "to " + rel(s.destRelative()) : s.docked() ? "in harbour" : "holding";
-            sb.append(String.format("%-4d %-24s %-8s %5.0f %-11s %-18s %s%n", s.id(), s.cls() + (s.name() == null || s.name().isBlank() ? "" : " " + s.name()), rel(s.relative()), s.efficiency(), (int) s.load() + "/" + (int) s.hold(), going, s.note()));
+            sb.append(String.format("%-4d %-24s %-8s %5.0f %5d %-11s %-18s %s%n", s.id(), s.cls() + (s.name() == null || s.name().isBlank() ? "" : " " + s.name()), rel(s.relative()), s.efficiency(), s.hexesPerUpdate(), (int) s.load() + "/" + (int) s.hold(), going, s.note()));
         }
         return sb.toString();
     }
