@@ -564,7 +564,7 @@ economy:
     # Cost to move ONE weight-unit of commodity INTO a sector, before road discount.
     # KNOWN (sect.config mob0/mob1): every designated land sector 0.4 at 0% efficiency, 0.2 at 100%;
     # wilderness 0.4/0.4 (never improves); mountain 2.4/1.2. Forest and swamp are ours (GUESS).
-    move_cost_by_terrain: { wilderness: 0.4, plains: 0.4, forest: 0.6, swamp: 0.8, mountain: 2.4 }
+    move_cost_by_terrain: { wilderness: 0.4, plains: 0.4, forest: 0.6, swamp: 0.8, mountain: 2.4, ocean: 0.4 }   # ocean: a bridge deck, for trains (issue #60)
     efficiency_discount: { at_0: 1.0, at_100: 0.5, curve: linear }   # KNOWN: linear mob0 -> mob1
     # Manual move (the `move` command) per-update range — NEW range-and-hold rule
     manual_move_max_sectors_per_update: { base: 100, per_tech_point: 0 }   # KNOWN: the original had no reach limit; mobility is the limit
@@ -707,17 +707,25 @@ infrastructure:
     cost_per_shipment: by_volume            # by_volume | by_distance (never)
     cash_per_100_units_shipped: 2
     # NEW (Richard 2026-09-09): "Rail is cheap to move on, especially sheer tonnage — 1/5 the price of
-    # mob." A train pays the sending depot's mobility at this fraction of the road cost of the hops it
-    # makes this update (terrain × efficiency × road discount, as a hand move would pay). Was free.
-    mobility_multiplier: 0.2
+    # mob." A train pays the sending depot's mobility at this fraction of the cost of the hops it makes
+    # this update. The hops are rail hexes, whose mobility_discount_curve already makes them a fifth of
+    # road, so 1.0 here means trains pay exactly what any flow over rail pays; lower it to favour trains.
+    mobility_multiplier: 1.0
+    # NEW (Richard 2026-09-09): "make rail easy, just like roads, but cheaper." Rail level discounts the
+    # mobility cost of anything entering the sector, on top of the road discount — distribution, deliver
+    # orders and hand moves all ride the rails without an order. Trains remain the bulk option.
+    mobility_discount_curve: { type: linear, at_0: 1.0, at_100: 0.2 }
     max_sectors_per_update: { base: 8, per_tech_point: 0.05 }
     decay_per_update: 1.0
     maintenance_cash_per_point_per_update: 0.20
     severed_route_behavior: strand_in_place
     combat_damage_fraction: 0.50
-    cost_multiplier_by_terrain: { wilderness: 1.2, plains: 1.0, forest: 1.8, swamp: 4.0, mountain: 5.0 }
-    max_level_by_terrain:       { wilderness: 100, plains: 100, forest: 80, swamp: 40, mountain: 50 }
-    # Crossing water/mountain needs a bridge/tunnel: extra one-time cost.
+    cost_multiplier_by_terrain: { wilderness: 1.2, plains: 1.0, forest: 1.8, swamp: 4.0, mountain: 5.0, ocean: 3.0 }
+    max_level_by_terrain:       { wilderness: 100, plains: 100, forest: 80, swamp: 40, mountain: 50, ocean: 100 }
+    # Crossing water/mountain needs a bridge/tunnel: extra one-time cost, paid automatically with the
+    # first rail points (Richard 2026-09-09, issue #60: "make them work automatically"). A rail order
+    # on a sea hex next to your land is a bridge, sponsored by your adjacent sector with the most rail;
+    # a rail order on a mountain of yours is a tunnel, paid by the sector itself.
     bridge: { tech_required: 90, materials: { hcm: 200, lcm: 50, cash: 2000 } }
     tunnel: { tech_required: 120, materials: { hcm: 400, lcm: 50, cash: 5000 } }
 

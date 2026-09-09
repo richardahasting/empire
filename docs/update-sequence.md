@@ -111,6 +111,22 @@ population. Step 4 spends from it (`work_per_point` per efficiency point) and
 step 5 gets the remainder. Production rates in config are per work-unit per
 ETU, so step 5 multiplies by the pool directly, not by `etus` again.
 
+**Rail as a road** (Richard 2026-09-09: "just like roads, but cheaper"). A
+sector's rail level discounts the mobility cost of everything entering it
+(`rail.mobility_discount_curve`, ×0.2 at 100) on top of the road discount, so
+distribution, deliver orders and hand moves ride the rails with no order.
+Trains between depots remain the bulk option.
+
+**Bridges and tunnels** (issue #60). A rail order on a sea hex next to a
+country's land is a bridge: the adjacent sector of that country with the most
+rail sponsors it — its stock, mobility and treasury pay per point — and the
+first points also pay `rail.bridge.materials`, all or nothing (the sponsor's
+history says "waiting for the bridge's materials" until it can). Rail on a
+mountain pays `rail.tunnel.materials` with its first points the same way.
+Both are tech-gated at order time. A bridged sea hex is track for anyone
+whose line reaches it; its upkeep falls on the sponsor's country and it
+decays unpaid.
+
 ### 5. Production
 Per sector with a producing designation **at or above
 `efficiency.production_min_efficiency` (60, KNOWN)**:
@@ -217,10 +233,11 @@ update (`capacity_per_update_at_100 × rail_level/100`) shared proportionally;
 what leaves is scaled by the lower endpoint depot's efficiency. A train
 advances up to `max_sectors_per_update` and **holds on the rail sector it
 reached** as a `HeldParcel` of mode `rail`, visible and capturable. Cash is
-charged by volume. A train pays the sending depot's mobility at
-`rail.mobility_multiplier` (0.2) of the road cost of the hops it makes this
-update — "rail is 1/5 the price of mob" (Richard 2026-09-09); trains leaving
-one depot take turns in issue order.
+charged by volume. A train pays the sending depot's mobility for the hops it
+makes this update × `rail.mobility_multiplier` (1.0) — rail hexes already
+cost a fifth of road through `rail.mobility_discount_curve`, so "rail is 1/5
+the price of mob" (Richard 2026-09-09) holds for trains and flows alike;
+trains leaving one depot take turns in issue order.
 
 
 ### 7c. Ships (**NEW**, issue #56; runs after road and rail flows)

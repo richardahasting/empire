@@ -3,8 +3,10 @@ package org.hastingtx.empire.engine.update.steps;
 import org.hastingtx.empire.engine.config.EconomyCfg;
 import org.hastingtx.empire.engine.config.InfrastructureCfg;
 import org.hastingtx.empire.engine.config.SectorTypeCfg;
+import org.hastingtx.empire.engine.model.Coord;
 import org.hastingtx.empire.engine.model.Country;
 import org.hastingtx.empire.engine.model.Sector;
+import org.hastingtx.empire.engine.model.Terrain;
 import org.hastingtx.empire.engine.update.Ctx;
 import org.hastingtx.empire.engine.update.Ledger;
 import org.hastingtx.empire.engine.update.Step;
@@ -30,6 +32,7 @@ public final class BuildUpStep implements Step {
             SectorTypeCfg t = ctx.type(s);
             if (!s.owned()) {
                 if (s.efficiency() > 0 && !t.hasFlag("undesignated")) ctx.led.efficiency[i] -= Math.min(s.efficiency(), ec.decayPerUpdateIfUnowned());
+                if (s.terrain() == Terrain.OCEAN) bridge(ctx, i, cashLeft);   // a bridge under construction or in service (issue #60)
                 continue;
             }
             int cid = s.owner();
@@ -102,39 +105,11 @@ public final class BuildUpStep implements Step {
                 }
             }
 
-            // rail building: a standing order, needs the tech, paid in lcm + hcm + cash + mobility per point (KNOWN infra.config)
+            // rail building: a standing order, needs the tech, paid in lcm + hcm + cash + mobility per point (KNOWN infra.config);
+            // a mountain's first points also pay the tunnel (issue #60)
             InfrastructureCfg.RailCfg rail = ctx.cfg.infrastructure().rail();
-            if (s.railTarget() > s.railLevel() + 1e-9 && ctx.country(cid).levels().tech() >= rail.techRequired()) {
-                Double mult = rail.costMultiplierByTerrain().get(s.terrain().id());
-                Double cap = rail.maxLevelByTerrain().get(s.terrain().id());
-                double ceiling = Math.min(s.railTarget(), cap == null ? 100 : cap);
-                double points = Math.min(rail.maxPointsPerUpdate(), ceiling - s.railLevel());
-                double m = mult == null ? 1.0 : mult;
-                double work = ctx.workAvailablePost(i);
-                if (rail.workPerPoint() > 0) points = Math.min(points, work / (rail.workPerPoint() * m));
-                double mobPerPoint = rail.mobilityPerPoint() == null ? 0 : rail.mobilityPerPoint() * m;
-                if (mobPerPoint > 0) points = Math.min(points, Math.max(0, s.mobility() + ctx.led.mobility[i]) / mobPerPoint);
-                double wantedRail = points;
-                for (var e : rail.buildMaterialsPerPoint().entrySet()) {
-                    double per = e.getValue() * m;
-                    if (per <= 0) continue;
-                    if (e.getKey().equals("cash")) points = Math.min(points, cashLeft[cid] / per);
-                    else { int c = ctx.com.index(e.getKey()); double avail = s.stock().get(c) + ctx.led.stock[i][c]; points = Math.min(points, avail / per); if (avail < wantedRail * per) ctx.led.shortOf(i, c, wantedRail * per - avail); }
-                }
-                if (points > 1e-9) {
-                    StringBuilder used = new StringBuilder();
-                    for (var e : rail.buildMaterialsPerPoint().entrySet()) {
-                        double per = e.getValue() * m;
-                        if (per <= 0) continue;
-                        if (e.getKey().equals("cash")) { cashLeft[cid] -= points * per; ctx.led.cash[cid] -= points * per; used.append(used.isEmpty() ? "" : ", ").append("$").append(Ledger.q(points * per)); }
-                        else { ctx.led.consume(i, ctx.com.index(e.getKey()), points * per); used.append(used.isEmpty() ? "" : ", ").append(Ledger.q(points * per)).append(' ').append(e.getKey()); }
-                    }
-                    ctx.workSpent[i] += points * rail.workPerPoint() * m;
-                    if (mobPerPoint > 0) ctx.led.mobility[i] -= points * mobPerPoint;
-                    ctx.led.rail[i] += points;
-                    ctx.led.note(i, "rail +" + Ledger.q(points) + " to " + Ledger.q(s.railLevel() + ctx.led.rail[i]) + (used.isEmpty() ? "" : " using " + used));
-                }
-            }
+            if (s.railTarget() > s.railLevel() + 1e-9 && ctx.country(cid).levels().tech() >= rail.techRequired())
+                buildRail(ctx, i, i, cid, cashLeft, s.terrain() == Terrain.MOUNTAIN && s.railLevel() <= 1e-9 ? rail.tunnel() : null, "rail");
             if (s.railLevel() > 0) {
                 double upkeep = s.railLevel() * rail.maintenanceCashPerPointPerUpdate();
                 if (cashLeft[cid] >= upkeep) { cashLeft[cid] -= upkeep; ctx.led.cash[cid] -= upkeep; }
@@ -154,6 +129,95 @@ public final class BuildUpStep implements Step {
                     ctx.led.event("road_decay", cid, s.at(), "unpaid road maintenance in " + s.at(), road.decayPerUpdate());
                 }
             }
+        }
+    }
+
+    /**
+     * Rail points on sector {@code i}, paid by sector {@code payer} of country {@code cid}. With a
+     * {@code crossing} (bridge or tunnel) the first points also pay its one-time materials, all or
+     * nothing. Returns the points built.
+     */
+    static double buildRail(Ctx ctx, int i, int payer, int cid, double[] cashLeft, InfrastructureCfg.RailCfg.Crossing crossing, String what) {
+        Sector s = ctx.sector(i), p = ctx.sector(payer);
+        InfrastructureCfg.RailCfg rail = ctx.cfg.infrastructure().rail();
+        Double mult = rail.costMultiplierByTerrain().get(s.terrain().id());
+        Double cap = rail.maxLevelByTerrain().get(s.terrain().id());
+        double ceiling = Math.min(s.railTarget(), cap == null ? 100 : cap);
+        double points = Math.min(rail.maxPointsPerUpdate(), ceiling - s.railLevel());
+        double m = mult == null ? 1.0 : mult;
+        double work = ctx.workAvailablePost(payer);
+        if (rail.workPerPoint() > 0) points = Math.min(points, work / (rail.workPerPoint() * m));
+        double mobPerPoint = rail.mobilityPerPoint() == null ? 0 : rail.mobilityPerPoint() * m;
+        if (mobPerPoint > 0) points = Math.min(points, Math.max(0, p.mobility() + ctx.led.mobility[payer]) / mobPerPoint);
+        if (crossing != null && ctx.country(cid).levels().tech() < crossing.techRequired()) return 0;
+        // the crossing's one-time cost: all of it or none of it
+        double crossCash = 0;
+        if (crossing != null && points > 1e-9) {
+            boolean ok = true;
+            for (var e : crossing.materials().entrySet()) {
+                if (e.getKey().equals("cash")) { crossCash = e.getValue(); if (cashLeft[cid] < e.getValue()) ok = false; }
+                else { int c = ctx.com.index(e.getKey()); double avail = p.stock().get(c) + ctx.led.stock[payer][c]; if (avail < e.getValue()) { ok = false; ctx.led.shortOf(payer, c, e.getValue() - avail); } }
+            }
+            if (!ok) { ctx.led.note(payer, what + " at " + s.at() + ": waiting for the " + (s.terrain() == Terrain.OCEAN ? "bridge" : "tunnel") + "'s materials"); return 0; }
+        }
+        double wanted = points;
+        for (var e : rail.buildMaterialsPerPoint().entrySet()) {
+            double per = e.getValue() * m;
+            if (per <= 0) continue;
+            if (e.getKey().equals("cash")) points = Math.min(points, Math.max(0, cashLeft[cid] - crossCash) / per);
+            else {
+                int c = ctx.com.index(e.getKey());
+                double reserved = crossing == null ? 0 : crossing.materials().getOrDefault(e.getKey(), 0.0);
+                double avail = p.stock().get(c) + ctx.led.stock[payer][c] - reserved;
+                points = Math.min(points, Math.max(0, avail) / per);
+                if (avail < wanted * per) ctx.led.shortOf(payer, c, wanted * per - avail);
+            }
+        }
+        if (points <= 1e-9) return 0;
+        StringBuilder used = new StringBuilder();
+        if (crossing != null) {
+            for (var e : crossing.materials().entrySet()) {
+                if (e.getKey().equals("cash")) { cashLeft[cid] -= e.getValue(); ctx.led.cash[cid] -= e.getValue(); used.append(used.isEmpty() ? "" : ", ").append('$').append(Ledger.q(e.getValue())); }
+                else { ctx.led.consume(payer, ctx.com.index(e.getKey()), e.getValue()); used.append(used.isEmpty() ? "" : ", ").append(Ledger.q(e.getValue())).append(' ').append(e.getKey()); }
+            }
+            used.append(" for the ").append(s.terrain() == Terrain.OCEAN ? "bridge" : "tunnel");
+        }
+        for (var e : rail.buildMaterialsPerPoint().entrySet()) {
+            double per = e.getValue() * m;
+            if (per <= 0) continue;
+            if (e.getKey().equals("cash")) { cashLeft[cid] -= points * per; ctx.led.cash[cid] -= points * per; used.append(used.isEmpty() ? "" : ", ").append("$").append(Ledger.q(points * per)); }
+            else { ctx.led.consume(payer, ctx.com.index(e.getKey()), points * per); used.append(used.isEmpty() ? "" : ", ").append(Ledger.q(points * per)).append(' ').append(e.getKey()); }
+        }
+        ctx.workSpent[payer] += points * rail.workPerPoint() * m;
+        if (mobPerPoint > 0) ctx.led.mobility[payer] -= points * mobPerPoint;
+        ctx.led.rail[i] += points;
+        ctx.led.note(payer, what + (payer == i ? "" : " at " + s.at()) + " +" + Ledger.q(points) + " to " + Ledger.q(s.railLevel() + ctx.led.rail[i]) + (used.isEmpty() ? "" : " using " + used));
+        return points;
+    }
+
+    /**
+     * A bridge (issue #60): rail on a sea hex, sponsored by the adjacent land sector with the most rail
+     * (ties by index) of whichever country owns it. The sponsor's stock, mobility and treasury pay;
+     * unpaid maintenance decays it like any track.
+     */
+    static void bridge(Ctx ctx, int i, double[] cashLeft) {
+        Sector s = ctx.sector(i);
+        if (s.railTarget() <= 1e-9 && s.railLevel() <= 1e-9) return;
+        int sponsor = -1; double best = -1;
+        for (Coord nb : ctx.neighbours.get(i)) {
+            int j = ctx.idx(nb); Sector n = ctx.sector(j);
+            if (!n.owned() || !n.terrain().isLand()) continue;
+            if (n.railLevel() > best) { best = n.railLevel(); sponsor = j; }
+        }
+        if (sponsor < 0) return;
+        int cid = ctx.sector(sponsor).owner();
+        InfrastructureCfg.RailCfg rail = ctx.cfg.infrastructure().rail();
+        if (s.railTarget() > s.railLevel() + 1e-9 && ctx.country(cid).levels().tech() >= rail.techRequired())
+            buildRail(ctx, i, sponsor, cid, cashLeft, s.railLevel() <= 1e-9 ? rail.bridge() : null, "bridge");
+        if (s.railLevel() > 0) {
+            double upkeep = s.railLevel() * rail.maintenanceCashPerPointPerUpdate();
+            if (cashLeft[cid] >= upkeep) { cashLeft[cid] -= upkeep; ctx.led.cash[cid] -= upkeep; }
+            else { ctx.led.rail[i] -= Math.min(s.railLevel(), rail.decayPerUpdate()); ctx.led.note(sponsor, "bridge at " + s.at() + " decayed " + Ledger.q(Math.min(s.railLevel(), rail.decayPerUpdate())) + ": maintenance unpaid"); }
         }
     }
 }

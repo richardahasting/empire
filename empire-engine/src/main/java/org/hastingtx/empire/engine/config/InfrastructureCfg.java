@@ -30,6 +30,8 @@ public record InfrastructureCfg(RoadCfg road, RailCfg rail) {
             double cashPer100UnitsShipped,
             /** Trains pay the sending depot's mobility at this fraction of what the same route would cost by road (Richard 2026-09-09: "rail is 1/5 the price of mob"); absent = free. */
             Double mobilityMultiplier,
+            /** Rail level discounts the mobility cost of anything entering the sector, on top of the road discount (Richard 2026-09-09: "just like roads, but cheaper"). */
+            CurveCfg mobilityDiscountCurve,
             EconomyCfg.TechScaled maxSectorsPerUpdate,
             double decayPerUpdate,
             double maintenanceCashPerPointPerUpdate,
