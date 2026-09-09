@@ -38,6 +38,7 @@ public final class CommandExecutor {
             case Command.Unload u -> unload(w, c, u);
             case Command.Lane l -> lane(w, c, l);
             case Command.Scrap s -> scrap(w, c, s);
+            case Command.Fish f -> fish(w, c, f);
             case Command.Move m -> move(w, c, m);
             case Command.Explore e -> explore(w, c, e);
             case Command.BuildRoad br -> buildRoad(w, c, br);
@@ -140,7 +141,7 @@ public final class CommandExecutor {
         }
         if (c.cash() < cash) return CommandResult.fail(w, "a " + cls.name() + " costs $" + fmt(cash) + "; you have $" + fmt(c.cash()));
         long id = w.nextShipId();
-        Ship ship = new Ship(id, c.id(), cls.id(), b.name() == null ? "" : b.name().trim(), h.at(), sc.startEfficiency(), Stocks.zero(com.size()), null, null, w.updateNumber(), "laid down", c.levels().tech());
+        Ship ship = new Ship(id, c.id(), cls.id(), b.name() == null ? "" : b.name().trim(), h.at(), sc.startEfficiency(), Stocks.zero(com.size()), null, null, w.updateNumber(), "laid down", c.levels().tech(), null, null);
         List<Ship> ships = new ArrayList<>(w.ships()); ships.add(ship);
         World next = w.withSector(h.withStock(st)).withCountry(c.withCash(c.cash() - cash)).withShips(ships, id + 1);
         return new CommandResult(next, null, 0, cls.name() + " #" + id + " laid down at " + b.harbor() + " at " + fmt(sc.startEfficiency()) + "%; it fits out while docked");
@@ -150,14 +151,14 @@ public final class CommandExecutor {
         Ship ship = myShip(w, c, s.ship());
         if (ship == null) return CommandResult.fail(w, "no ship #" + s.ship() + " of yours");
         if (ship.lane() != null) return CommandResult.fail(w, "ship #" + s.ship() + " is on a lane; clear it first");
-        if (s.dest() == null) return new CommandResult(w.withShip(ship.withDest(null)), null, 0, "ship #" + s.ship() + " holds position");
+        if (s.dest() == null) return new CommandResult(w.withShip(ship.withDest(null).withMission(null, null)), null, 0, "ship #" + s.ship() + " holds position");
         if (!w.inBounds(s.dest())) return CommandResult.fail(w, "out of bounds: " + s.dest());
         List<Coord> path = org.hastingtx.empire.engine.update.SeaRoutes.path(w, cfg, c.id(), ship.at(), s.dest());
         if (path == null) return CommandResult.fail(w, "no sea route from " + ship.at() + " to " + s.dest() + " (sea and your harbours only)");
         var cls = cfg.units().ships().shipClass(ship.cls());
         double perUpdate = cfg.units().ships().range(cls, ship.tech(), ship.efficiency());
         String eta = perUpdate <= 0 ? "it cannot sail until it is fitter" : "about " + (int) Math.ceil((path.size() - 1) / perUpdate) + " update(s)";
-        return new CommandResult(w.withShip(ship.withDest(s.dest())), null, 0, "ship #" + s.ship() + " sails for " + s.dest() + ": " + (path.size() - 1) + " hexes, " + eta);
+        return new CommandResult(w.withShip(ship.withDest(s.dest()).withMission(null, null)), null, 0, "ship #" + s.ship() + " sails for " + s.dest() + ": " + (path.size() - 1) + " hexes, " + eta + (ship.fishing() ? " (fishing mission ended)" : ""));
     }
 
     private CommandResult load(World w, Country c, Command.Load l) {
@@ -212,7 +213,22 @@ public final class CommandExecutor {
         }
         if (cls.carriesOrEmpty().isEmpty()) return CommandResult.fail(w, "a " + cls.name() + " carries no cargo");
         Ship.Lane lane = new Ship.Lane(l.from(), l.to(), cargo, false);
-        return new CommandResult(w.withShip(ship.withLane(lane).withDest(l.from())), null, 0, "ship #" + l.ship() + " runs " + l.from() + " → " + l.to() + " carrying " + (cargo.isEmpty() ? "whatever it can" : String.join(", ", l.cargo())) + "; heading to " + l.from() + " to load");
+        return new CommandResult(w.withShip(ship.withLane(lane).withDest(l.from()).withMission(null, null)), null, 0, "ship #" + l.ship() + " runs " + l.from() + " → " + l.to() + " carrying " + (cargo.isEmpty() ? "whatever it can" : String.join(", ", l.cargo())) + "; heading to " + l.from() + " to load");
+    }
+
+    private CommandResult fish(World w, Country c, Command.Fish f) {
+        Ship ship = myShip(w, c, f.ship());
+        if (ship == null) return CommandResult.fail(w, "no ship #" + f.ship() + " of yours");
+        if (f.off()) return new CommandResult(w.withShip(ship.withMission(null, null).withDest(null)), null, 0, "ship #" + f.ship() + " stops fishing and holds position");
+        var cls = cfg.units().ships().shipClass(ship.cls());
+        if (cls.fishingRateOr0() <= 0) return CommandResult.fail(w, "a " + cls.name() + " does not fish");
+        Coord home = f.home() != null ? f.home() : harborOf(w, c, w.sector(ship.at())) ? ship.at() : null;
+        if (home == null) return CommandResult.fail(w, "name a home harbour, or give the order while the boat is in one");
+        if (!harborOf(w, c, w.sector(home))) return CommandResult.fail(w, home + " is not one of your harbours");
+        if (org.hastingtx.empire.engine.update.SeaRoutes.path(w, cfg, c.id(), ship.at(), home) == null) return CommandResult.fail(w, "ship #" + f.ship() + " has no sea route to " + home);
+        var fc = cfg.units().ships().fishingOrDefault();
+        return new CommandResult(w.withShip(ship.withMission(Ship.FISH, home).withLane(null).withDest(null)), null, 0,
+                "ship #" + f.ship() + " fishes the grounds within " + fc.radius() + " of " + home + " and lands the catch there");
     }
 
     private CommandResult scrap(World w, Country c, Command.Scrap s) {

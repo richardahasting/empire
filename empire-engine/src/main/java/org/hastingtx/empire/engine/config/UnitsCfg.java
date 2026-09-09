@@ -22,7 +22,11 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
             double fishingFoodPerEtuPerFertilityPoint,
             /** Speed multiplier from the ship's tech: at_0 + per_tech_point × tech, capped at max. */
             SpeedTech speedTechMultiplier,
+            /** The fishing mission: how far from home a boat roams, how far it hops between casts, when it turns for home. */
+            FishingCfg fishing,
             List<ShipClassCfg> classes) {
+        public record FishingCfg(int radius, int wanderHops, double returnWhenHoldFraction) {}
+        public FishingCfg fishingOrDefault() { return fishing == null ? new FishingCfg(6, 2, 0.9) : fishing; }
         public record SpeedTech(double at0, double perTechPoint, double max) {}
         public double speedFactor(double tech) {
             if (speedTechMultiplier == null) return 1.0;

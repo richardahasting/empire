@@ -37,7 +37,7 @@ class ShipsTest {
     }
     private static World withShip(World w, String cls, Coord at, double eff) { return withShip(w, cls, at, eff, 0); }
     private static World withShip(World w, String cls, Coord at, double eff, double tech) {
-        Ship s = new Ship(w.nextShipId(), 0, cls, "", at, eff, Stocks.zero(COM.size()), null, null, 0, "", tech);
+        Ship s = new Ship(w.nextShipId(), 0, cls, "", at, eff, Stocks.zero(COM.size()), null, null, 0, "", tech, null, null);
         return w.withShips(List.of(s), s.id() + 1);
     }
 
@@ -152,6 +152,38 @@ class ShipsTest {
         assertThat(u.next().ships().get(0).note()).contains("cruised");
         World docked = withShip(world(), "luxury_craft", HARBOR_E, 100);
         assertThat(Update.run(docked, CFG, 1).next().country(0).levels().happiness()).isCloseTo(0, within(1e-9));
+    }
+
+    @Test
+    void aFishingMissionRoamsFishesLandsAndGoesOutAgain() {
+        World w = withShip(world(), "fishing_boat", HARBOR_E, 100);
+        for (int d = 0; d < 6; d++) for (int k = 1; k <= 3; k++) {
+            Coord c = Hex.stepRaw(HARBOR_E, d, k);
+            if (w.inBounds(c) && w.sector(c).terrain() == Terrain.OCEAN) w = w.withSector(w.sector(c).withTerrain(Terrain.OCEAN, 0, new Resources(40 + 10 * (d % 3), 0, 0, 0, 0)));
+        }
+        CommandResult r = new CommandExecutor(CFG).execute(w, 0, new Command.Fish(1, null, false));
+        assertThat(r.error()).isNull();
+        assertThat(r.world().ship(1).fishing()).isTrue();
+        assertThat(r.world().ship(1).home()).isEqualTo(HARBOR_E);
+        World cur = r.world();
+        double foodBefore = cur.sector(HARBOR_E).stock().get(FOOD);
+        int landings = 0, casts = 0, maxDist = 0;
+        for (int i = 0; i < 12; i++) {
+            cur = Update.run(cur, CFG, 20 + i).next();
+            Ship s = cur.ship(1);
+            maxDist = Math.max(maxDist, Hex.distanceRaw(s.at(), HARBOR_E));
+            if (s.note().contains("fished")) casts++;
+            if (s.note().contains("unloaded")) landings++;
+        }
+        assertThat(casts).isGreaterThan(2);
+        assertThat(landings).isGreaterThanOrEqualTo(1);
+        assertThat(maxDist).isLessThanOrEqualTo(CFG.units().ships().fishingOrDefault().radius());
+        assertThat(cur.sector(HARBOR_E).stock().get(FOOD)).isGreaterThan(foodBefore);
+        assertThat(cur.ship(1).fishing()).isTrue();
+        assertThat(new CommandExecutor(CFG).execute(cur, 0, new Command.Sail(1, SEA_E)).world().ship(1).fishing()).isFalse();
+        assertThat(new CommandExecutor(CFG).execute(cur, 0, new Command.Fish(1, null, true)).world().ship(1).fishing()).isFalse();
+        World cargo = withShip(world(), "cargo_ship", HARBOR_E, 100);
+        assertThat(new CommandExecutor(CFG).execute(cargo, 0, new Command.Fish(1, null, false)).error()).contains("does not fish");
     }
 
     @Test
