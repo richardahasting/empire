@@ -243,6 +243,7 @@ public final class CommandExecutor {
         Sector to = w.sector(e.to());
         if (!Hex.neighbours(w, e.from()).contains(e.to())) return CommandResult.fail(w, e.to() + " is not adjacent to " + e.from());
         if (!to.terrain().isLand()) return CommandResult.fail(w, e.to() + " is ocean");
+        if (to.sanctuary()) return CommandResult.fail(w, e.to() + " is another country's sanctuary; no one may enter until they break sanctuary");
         if (to.owned()) return CommandResult.fail(w, e.to() + " is already owned");
         if (e.civs() < 1) return CommandResult.fail(w, "need at least one civilian");
         if (from.stock().get(com.civ) < e.civs()) return CommandResult.fail(w, "only " + fmt(from.stock().get(com.civ)) + " civilians in " + e.from());

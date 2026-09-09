@@ -45,7 +45,7 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
         <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
         <ContextMenuContent>
           {!s && <ContextMenuLabel>Unexplored</ContextMenuLabel>}
-          {s && !owned && <ContextMenuLabel>{rel(s.relative)} · {s.terrain}{s.owner >= 0 ? " · foreign" : " · unowned"}</ContextMenuLabel>}
+          {s && !owned && <ContextMenuLabel>{rel(s.relative)} · {s.terrain}{s.sanctuary ? ` · sanctuary of ${s.ownerName ?? "another country"}` : s.owner >= 0 ? ` · ${s.ownerName ?? "foreign"}` : " · unowned"}</ContextMenuLabel>}
           {s && owned && (
             <>
               <ContextMenuLabel className="font-semibold text-popover-foreground">Sector {rel(s.relative)}</ContextMenuLabel>
@@ -126,11 +126,14 @@ function Attributes({ s, view }: { s: SectorView; view: CountryView }) {
   );
 }
 
-/** Hex distance between two sectors via their relative coordinates (odd-r offset, parity from absolute y). */
-function hexDist(a: Coord, b: Coord, _v: CountryView, _o: SectorView): number {
+/** Hex distance between two absolute sectors (odd-r offset), the shortest way round on a wrapping axis (issue #54). */
+function hexDist(a: Coord, b: Coord, v: CountryView, _o: SectorView): number {
   const cube = (c: Coord) => { const q = c.x - (c.y - (c.y & 1)) / 2; const r = c.y; return [q, r, -q - r]; };
-  const [aq, ar, as] = cube(a), [bq, br, bs] = cube(b);
-  return (Math.abs(aq - bq) + Math.abs(ar - br) + Math.abs(as - bs)) / 2;
+  const dist = (p: Coord, q: Coord) => { const [aq, ar, as] = cube(p), [bq, br, bs] = cube(q); return (Math.abs(aq - bq) + Math.abs(ar - br) + Math.abs(as - bs)) / 2; };
+  let best = Infinity;
+  for (const kx of v.wrapX ? [-1, 0, 1] : [0]) for (const ky of v.wrapY ? [-1, 0, 1] : [0])
+    best = Math.min(best, dist(a, { x: b.x + kx * v.width, y: b.y + ky * v.height }));   // height is even in every preset, so row parity survives the shift
+  return best;
 }
 
 function EstimateView({ e, unit }: { e: Estimate | null; unit: string }) {

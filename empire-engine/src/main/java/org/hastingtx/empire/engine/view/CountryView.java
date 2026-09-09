@@ -19,6 +19,9 @@ public record CountryView(
         Coord capital,
         boolean wrapX,
         boolean wrapY,
+        /** Grid size, so a client can reason about adjacency across the wrap (issue #54). */
+        int width,
+        int height,
         double cash,
         double btu,
         Levels levels,
@@ -50,7 +53,10 @@ public record CountryView(
             Map<String, Double> held,
             Resources resources,
             /** Standing delivery orders by commodity (issue #45). */
-            Map<String, Delivery> deliveries) {}
+            Map<String, Delivery> deliveries,
+            /** A sanctuary, and whose (owner's name for a foreign sector, null for yours or nobody's). Issue #54. */
+            boolean sanctuary,
+            String ownerName) {}
 
     public record Delivery(String dir, double threshold) {}
 
@@ -77,16 +83,17 @@ public record CountryView(
                 }
                 for (HeldParcel p : s.held()) held.merge(com.id(p.commodity()), p.qty(), Double::sum);
                 views.add(new SectorView(at, rel, true, s.terrain().id(), s.elevation(), s.owner(), s.designation(), s.efficiency(),
-                        s.mobility(), s.roadLevel(), s.roadTarget(), s.railLevel(), s.railTarget(), stock, th, s.distCenter(), held, s.resources(), deliveries));
+                        s.mobility(), s.roadLevel(), s.roadTarget(), s.railLevel(), s.railTarget(), stock, th, s.distCenter(), held, s.resources(), deliveries, s.sanctuary(), null));
             } else {
-                int owner = s.sanctuary() ? Sector.NOBODY : s.owner();   // sanctuaries are invisible
-                views.add(new SectorView(at, rel, false, s.terrain().id(), s.elevation(), owner, null, 0, 0, 0, 0, 0, 0,
-                        Map.of(), Map.of(), null, Map.of(), null, Map.of()));
+                // a neighbour: terrain and owner only. Sanctuaries are shown as such, with the owner's name (the original marked them 's').
+                String ownerName = s.owned() ? w.country(s.owner()).name() : null;
+                views.add(new SectorView(at, rel, false, s.terrain().id(), s.elevation(), s.owner(), null, 0, 0, 0, 0, 0, 0,
+                        Map.of(), Map.of(), null, Map.of(), null, Map.of(), s.sanctuary(), ownerName));
             }
         }
         List<String> others = new ArrayList<>();
         for (Country o : w.countries()) if (o.id() != countryId) others.add(o.name());
-        return new CountryView(countryId, c.name(), w.updateNumber(), c.capital(), w.wrapX(), w.wrapY(), c.cash(), c.btu(), c.levels(), c.handicap(),
+        return new CountryView(countryId, c.name(), w.updateNumber(), c.capital(), w.wrapX(), w.wrapY(), w.width(), w.height(), c.cash(), c.btu(), c.levels(), c.handicap(),
                 c.inSanctuary(), c.bankrupt(), ids, views, others);
     }
 

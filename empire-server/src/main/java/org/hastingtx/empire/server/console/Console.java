@@ -130,7 +130,7 @@ public class Console {
                 if (s == null) g = ' ';
                 else if (s.full()) g = cfg.sectorType(s.designation()).glyph().charAt(0);
                 else if (s.terrain().equals("ocean")) g = '.';
-                else if (s.owner() >= 0) g = '?';
+                else if (s.owner() >= 0) g = s.sanctuary() ? 's' : '?';
                 else g = '-';
                 sb.append(g).append(' ');
             }
