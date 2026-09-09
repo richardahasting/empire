@@ -217,7 +217,10 @@ update (`capacity_per_update_at_100 × rail_level/100`) shared proportionally;
 what leaves is scaled by the lower endpoint depot's efficiency. A train
 advances up to `max_sectors_per_update` and **holds on the rail sector it
 reached** as a `HeldParcel` of mode `rail`, visible and capturable. Cash is
-charged by volume. Rail moves spend no mobility.
+charged by volume. A train pays the sending depot's mobility at
+`rail.mobility_multiplier` (0.2) of the road cost of the hops it makes this
+update — "rail is 1/5 the price of mob" (Richard 2026-09-09); trains leaving
+one depot take turns in issue order.
 
 
 ### 7c. Ships (**NEW**, issue #56; runs after road and rail flows)

@@ -705,6 +705,10 @@ infrastructure:
     capacity_per_update_at_100: 5000        # weight-units per line per update, x depot eff
     cost_per_shipment: by_volume            # by_volume | by_distance (never)
     cash_per_100_units_shipped: 2
+    # NEW (Richard 2026-09-09): "Rail is cheap to move on, especially sheer tonnage — 1/5 the price of
+    # mob." A train pays the sending depot's mobility at this fraction of the road cost of the hops it
+    # makes this update (terrain × efficiency × road discount, as a hand move would pay). Was free.
+    mobility_multiplier: 0.2
     max_sectors_per_update: { base: 8, per_tech_point: 0.05 }
     decay_per_update: 1.0
     maintenance_cash_per_point_per_update: 0.20

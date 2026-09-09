@@ -28,6 +28,8 @@ public record InfrastructureCfg(RoadCfg road, RailCfg rail) {
             double capacityPerUpdateAt100,
             String costPerShipment,
             double cashPer100UnitsShipped,
+            /** Trains pay the sending depot's mobility at this fraction of what the same route would cost by road (Richard 2026-09-09: "rail is 1/5 the price of mob"); absent = free. */
+            Double mobilityMultiplier,
             EconomyCfg.TechScaled maxSectorsPerUpdate,
             double decayPerUpdate,
             double maintenanceCashPerPointPerUpdate,

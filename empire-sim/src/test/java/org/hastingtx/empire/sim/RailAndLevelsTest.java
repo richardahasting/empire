@@ -44,6 +44,12 @@ class RailAndLevelsTest {
         assertThat(u.next().sector(a).stock().get(IRON)).isLessThan(3000 - 1900);
         assertThat(u.flows()).anyMatch(f -> f.kind().equals("rail") && f.completed());
         assertThat(u.next().country(0).cash()).as("cost by volume").isLessThan(w.country(0).cash() + 100000);
+        // mobility (Richard 2026-09-09): the depot pays a fifth of the road cost — 2000 iron × 0.1 (warehouse packing) × 5 plains hops × 0.2 = 200 by road, 40 by rail
+        double moved = u.flows().stream().filter(f -> f.kind().equals("rail")).mapToDouble(f -> f.qtyMoved()).sum();
+        double roadCost = moved * 0.1 * 5 * 0.2;
+        assertThat(u.next().sector(a).mobility()).as("depot mobility after the train left").isCloseTo(127 - cfg.infrastructure().rail().mobilityMultiplier() * roadCost, within(1e-6));
+        assertThat(cfg.infrastructure().rail().mobilityMultiplier()).isEqualTo(0.2);
+        assertThat(u.notes().get(a.x() + "," + a.y())).anyMatch(l -> l.startsWith("train:"));
     }
 
     /** A gap in the line is refused at issue time and names where the track ends. */
