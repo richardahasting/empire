@@ -24,7 +24,10 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
             SpeedTech speedTechMultiplier,
             /** The fishing mission: how far from home a boat roams, how far it hops between casts, when it turns for home. */
             FishingCfg fishing,
+            /** How far a ship sees, in hexes, unless its class says otherwise (issue #62: "the fog is lifted"). */
+            Integer sight,
             List<ShipClassCfg> classes) {
+        public int sightOf(ShipClassCfg cls) { return cls.sight() != null ? cls.sight() : sight != null ? sight : 2; }
         public record FishingCfg(int radius, int wanderHops, double returnWhenHoldFraction) {}
         public FishingCfg fishingOrDefault() { return fishing == null ? new FishingCfg(6, 2, 0.9) : fishing; }
         public record SpeedTech(double at0, double perTechPoint, double max) {}
@@ -58,7 +61,9 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
             Double happinessPerEtu,
             /** What it may carry: commodity ids, or "all" / "goods" / "people". Empty = nothing. */
             List<String> carries,
-            Map<String, Double> upkeepPerUpdate) {
+            Map<String, Double> upkeepPerUpdate,
+            /** Sight radius in hexes; null = the fleet default. */
+            Integer sight) {
         public double fishingRateOr0() { return fishingRate == null ? 0 : fishingRate; }
         public double happinessOr0() { return happinessPerEtu == null ? 0 : happinessPerEtu; }
         public List<String> carriesOrEmpty() { return carries == null ? List.of() : carries; }

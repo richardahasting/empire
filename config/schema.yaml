@@ -802,6 +802,9 @@ units:
     # harbour, unload, repeat"): roam within radius of home, hop up to wander_hops between casts
     # (richer water more likely), turn for home when the hold is this full. GUESS.
     fishing: { radius: 6, wander_hops: 2, return_when_hold_fraction: 0.9 }
+    # Sight (Richard 2026-09-09: "if a boat travels, you can now see what is around the boat — the fog is
+    # lifted"): everything within this many hexes of a ship is in its owner's view while it is there.
+    sight: 2
     classes:
       - { id: fishing_boat,            name: fishing boat,            glyph: f, role: fishing, tech_required: 0,  build: { lcm: 25, cash: 300 },             hold: 300,  speed: 3, fishing_rate: 1.0 }
       - { id: industrial_fishing_boat, name: industrial fishing boat, glyph: F, role: fishing, tech_required: 20, build: { lcm: 60, hcm: 30, cash: 1500 },   hold: 1200, speed: 4, fishing_rate: 3.0 }
@@ -811,11 +814,11 @@ units:
       - { id: super_tanker,            name: super tanker,            glyph: T, role: tanker,  tech_required: 35, build: { lcm: 200, hcm: 120, cash: 6000 }, hold: 6000, speed: 4, carries: [oil, pet] }
       - { id: luxury_craft,            name: luxury craft,            glyph: l, role: luxury,  tech_required: 30, build: { lcm: 120, hcm: 40, cash: 5000 },  hold: 100,  speed: 3, happiness_per_etu: 1.0, carries: [civ], upkeep_per_update: { cash: 50 } }
       # warships need guns, shells and oil in the harbour to lay down (Richard 2026-09-09); fuel per voyage comes with units.ships.fuel
-      - { id: destroyer,               name: destroyer,               glyph: d, role: warship, tech_required: 40, build: { lcm: 100, hcm: 150, gun: 10, shell: 50, oil: 50, cash: 5000 }, hold: 200,  speed: 5 }
-      - { id: frigate,                 name: frigate,                 glyph: g, role: warship, tech_required: 45, build: { lcm: 120, hcm: 200, gun: 15, shell: 80, oil: 80, cash: 7000 }, hold: 300,  speed: 5 }
+      - { id: destroyer,               name: destroyer,               glyph: d, role: warship, tech_required: 40, build: { lcm: 100, hcm: 150, gun: 10, shell: 50, oil: 50, cash: 5000 }, hold: 200,  speed: 5, sight: 3 }
+      - { id: frigate,                 name: frigate,                 glyph: g, role: warship, tech_required: 45, build: { lcm: 120, hcm: 200, gun: 15, shell: 80, oil: 80, cash: 7000 }, hold: 300,  speed: 5, sight: 3 }
       - { id: submarine,               name: submarine,               glyph: s, role: submarine, tech_required: 50, build: { lcm: 100, hcm: 250, gun: 5, shell: 60, oil: 100, cash: 9000 }, hold: 100, speed: 4 }
       - { id: battleship,              name: battleship,              glyph: b, role: warship, tech_required: 60, build: { lcm: 200, hcm: 600, gun: 40, shell: 200, oil: 200, cash: 20000 }, hold: 500, speed: 4 }
-      - { id: carrier,                 name: aircraft carrier,        glyph: v, role: warship, tech_required: 70, build: { lcm: 300, hcm: 800, gun: 20, shell: 100, oil: 300, cash: 40000 }, hold: 800, speed: 4 }
+      - { id: carrier,                 name: aircraft carrier,        glyph: v, role: warship, tech_required: 70, build: { lcm: 300, hcm: 800, gun: 20, shell: 100, oil: 300, cash: 40000 }, hold: 800, speed: 4, sight: 4 }
 
 # -----------------------------------------------------------------------------
 # AGENTS — NEW
