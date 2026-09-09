@@ -306,7 +306,7 @@ World creation wizard driven by the config file; add/remove countries before sta
 3. **M2** — Distribution, thresholds, mobility, roads, budget. Scheduled updates. Flow visualization.
 4. **M3** — Multiplayer: fog of war, contact, telegrams, announcements, BTUs, handicaps, admin tools. HeuristicAgent and the LlmAgent adapter; tournament mode.
 5. **M4** — Tech, research, education, happiness; sector efficiency build-up; rail networks and depots; the full sector type table.
-6. **M5** — Units, combat, missions.
+6. **M5** — Units, combat, missions. Plan and order of work: `docs/m5-plan.md`.
 
 Do not begin a milestone until the previous one's tests pass and a human has played it.
 
