@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { estimate, type CommandRequest, type Coord, type CountryView, type Estimate, type Rules, type SectorView } from "@/api/client";
+import { estimate, type CommandRequest, type Coord, type CountryView, type Estimate, type Macro, type Rules, type SectorView } from "@/api/client";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuLabel, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { describeMacro } from "@/game/Macros";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,13 +18,16 @@ interface Props {
   onStartPick: (spec: PickSpec) => void;
   /** What happened in this sector last update, in order (issue #49). */
   history?: string[]; historyUpdate?: number;
+  /** Macros (issue #47): the ten slots, whether one is recording, and the actions. */
+  macros?: Macro[]; recording?: boolean;
+  onRecordMacro?: () => void; onStopRecording?: () => void; onRunMacro?: (slot: number, at: Coord) => void; onRunMacroDialog?: () => void; onOpenMacros?: () => void;
 }
 
 /**
  * Right-click a sector on the map: every action for that sector, from here. Move and
  * explore show the route and the mobility it would cost before you commit.
  */
-export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, children, onStartPick, history, historyUpdate }: Props) {
+export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, children, onStartPick, history, historyUpdate, macros = [], recording, onRecordMacro, onStopRecording, onRunMacro, onRunMacroDialog, onOpenMacros }: Props) {
   const [dialog, setDialog] = useState<DialogKind>(null);
   const rel = (c: Coord) => `${c.x},${c.y}`;
   const byRel = useMemo(() => { const m = new Map<string, SectorView>(); for (const x of view.sectors) m.set(rel(x.relative), x); return m; }, [view]);
@@ -74,6 +78,18 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
               <ContextMenuItem disabled={busy || (s.distCenter?.x === view.capital.x && s.distCenter?.y === view.capital.y)}
                 onSelect={() => void onCommand({ verb: "distribute", x: s.at.x, y: s.at.y, x2: view.capital.x, y2: view.capital.y })}>Supply from the capital (set centre)</ContextMenuItem>
               {s.distCenter && <ContextMenuItem destructive disabled={busy} onSelect={() => void onCommand({ verb: "distribute", x: s.at.x, y: s.at.y, clear: true })}>Stop automatic supply (clear centre)</ContextMenuItem>}
+              <ContextMenuSeparator />
+              <ContextMenuLabel>Macros{macros.length ? " — click to run here" : ""}</ContextMenuLabel>
+              {macros.map(m => (
+                <ContextMenuItem key={m.slot} disabled={busy} title={describeMacro(m)} onSelect={() => onRunMacro?.(m.slot, s.at)}>
+                  <span className="mr-2 font-mono text-xs text-muted-foreground">{m.slot === 10 ? "0" : m.slot}</span>{m.name}
+                  <span className="ml-2 truncate text-xs text-muted-foreground">{describeMacro(m)}</span>
+                </ContextMenuItem>
+              ))}
+              {macros.length > 0 && <ContextMenuItem disabled={busy} onSelect={() => onRunMacroDialog?.()}>Run a macro on many sectors…</ContextMenuItem>}
+              {recording ? <ContextMenuItem destructive onSelect={() => onStopRecording?.()}>Stop recording</ContextMenuItem>
+                         : <ContextMenuItem onSelect={() => onRecordMacro?.()}>Record macro…</ContextMenuItem>}
+              <ContextMenuItem onSelect={() => onOpenMacros?.()}>Macros… (see what each key does)</ContextMenuItem>
             </>
           )}
         </ContextMenuContent>

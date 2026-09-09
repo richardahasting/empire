@@ -263,7 +263,8 @@ public class GameService {
 
     /** As above; {@code note} (e.g. "warehouse ×10") is appended to the summary when given. */
     public Outcome commandAll(long gameId, Account a, List<Command> cmds, String source, String note) {
-        if (cmds.size() == 1) return command(gameId, a, cmds.get(0), source);
+        if (cmds.isEmpty()) throw new IllegalArgumentException("nothing to do");
+        if (cmds.size() == 1 && note == null) return command(gameId, a, cmds.get(0), source);
         Game g = get(gameId);
         int country = myCountry(gameId, a);
         if (!"running".equals(g.status)) throw new IllegalArgumentException("game is " + g.status);
@@ -282,7 +283,7 @@ public class GameService {
                 skipped.add(relativise(before, cap, sectorOf(cmd) + ": " + r.error()));
             }
             if (applied > 0) { worlds.saveDiff(gameId, before, cur, g.com); g.world = cur; }
-            StringBuilder sb = new StringBuilder("applied to " + applied + " of " + cmds.size() + " sectors");
+            StringBuilder sb = new StringBuilder("applied " + applied + " of " + cmds.size() + (cmds.size() == 1 ? " command" : " commands"));
             if (!skipped.isEmpty()) {
                 sb.append("; skipped ").append(skipped.size()).append(" — ").append(String.join("; ", skipped.subList(0, Math.min(4, skipped.size()))));
                 if (skipped.size() > 4) sb.append("; …");

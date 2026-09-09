@@ -20,7 +20,8 @@ import java.util.*;
 @Service
 public class Console {
     private final GameService games;
-    public Console(GameService games) { this.games = games; }
+    private final org.hastingtx.empire.server.macro.MacroRepository macros;
+    public Console(GameService games, org.hastingtx.empire.server.macro.MacroRepository macros) { this.games = games; this.macros = macros; }
 
     public record Reply(String output, boolean accepted, String error, CountryView view) {}
 
@@ -44,6 +45,22 @@ public class Console {
                     yield many(gameId, a, v, cfg, t[1], at -> new Command.Threshold(at, t[2], mixed ? SectorSelector.massThreshold(v, cfg, at, t[2], n) : n), mixed && n >= 0 ? SectorSelector.massThresholdNote(cfg) : null);
                 }
                 case "dist", "distribute" -> { need(t, 3, "dist SECTOR cx,cy|none"); Coord ctr = t[2].equalsIgnoreCase("none") ? null : abs(v, t[2]); yield many(gameId, a, v, cfg, t[1], at -> new Command.Distribute(at, ctr)); }
+                case "macro", "macros" -> {
+                    var mine = macros.list(a.id());
+                    if (t.length >= 3 && t[1].equalsIgnoreCase("run")) {
+                        need(t, 4, "macro run N SECTOR");
+                        int slot = Integer.parseInt(t[2]);
+                        var m = macros.find(a.id(), slot).orElseThrow(() -> new IllegalArgumentException("no macro in slot " + slot));
+                        boolean mixed = SectorSelector.isMixed(t[3]);
+                        List<Command> cmds = new ArrayList<>();
+                        for (Coord at : SectorSelector.expand(v, cfg, t[3])) cmds.addAll(org.hastingtx.empire.server.macro.Macros.expand(m.steps(), v, cfg, at, mixed));
+                        yield reply(games.commandAll(gameId, a, cmds, "console", "macro " + slot + " '" + m.name() + "'"));
+                    }
+                    if (mine.isEmpty()) yield new Reply("no macros yet — record one from a sector's right-click menu", true, null, null);
+                    StringBuilder sb = new StringBuilder();
+                    for (var m : mine) sb.append(String.format("%2d  %-20s %s%n", m.slot(), m.name(), org.hastingtx.empire.server.macro.Macros.describe(m.steps())));
+                    yield new Reply(sb.toString(), true, null, null);
+                }
                 case "deliver", "del" -> {
                     need(t, 4, "deliver COMMODITY SECTOR DIR N   (DIR e ne nw w sw se, or none to clear)");
                     boolean clear = t[3].equalsIgnoreCase("none") || t[3].equalsIgnoreCase("off");
@@ -142,6 +159,7 @@ public class Console {
             thresh SECTOR COMMODITY N    set a distribution threshold (negative clears)
             dist SECTOR cx,cy | none     name a sector's distribution centre
             deliver COMMODITY SECTOR DIR N   standing order: above N, push it one hex DIR (e ne nw w sw se) every update; DIR none clears
+            macro                        list your macros (recorded from the map); macro run N SECTOR runs one
             move COMMODITY x,y x2,y2 N   move now; the sending sector pays the route's mobility now
             expl x,y x2,y2 N             explore into an adjacent unowned sector with N civilians
             road SECTOR LEVEL            standing order: pave toward LEVEL (0 cancels)
