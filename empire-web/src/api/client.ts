@@ -46,6 +46,8 @@ export interface SectorView {
   designation: string | null; efficiency: number; mobility: number; roadLevel: number; roadTarget: number; railLevel: number; railTarget: number;
   stock: Record<string, number>; thresholds: Record<string, number>; distCenter: Coord | null;
   held: Record<string, number>; resources: Resources | null;
+  /** Standing delivery orders by commodity: above threshold, one hex in dir (e ne nw w sw se) every update. */
+  deliveries: Record<string, { dir: string; threshold: number }>;
 }
 export interface CountryView {
   countryId: number; name: string; updateNumber: number; capital: Coord; wrapX: boolean; wrapY: boolean; cash: number; btu: number;
@@ -75,6 +77,8 @@ export interface CommandRequest {
   verb: string; x?: number; y?: number; x2?: number; y2?: number; type?: string; commodity?: string; amount?: number; clear?: boolean;
   /** Many sectors instead of x,y: "*" (all mine), "*:TYPE" (one designation), "x1:x2,y1:y2" (a rectangle, relative). Standing orders only. */
   scope?: string;
+  /** deliver: e ne nw w sw se (or "none" to clear). */
+  direction?: string;
 }
 
 export interface Estimate {

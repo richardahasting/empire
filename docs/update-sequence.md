@@ -131,6 +131,13 @@ This is the step that replaces the scan-order loop. Build a demand list from
 the snapshot **plus the ledger so far** (so a sector that just produced food
 offers it; one that just ate wants it):
 
+- **Deliver orders** (KNOWN: deliver.c; issue #45). For every sector with a
+  standing order for a commodity, if its post-production stock is above the
+  order's threshold and the hex in the order's direction is the same country's
+  land, plan a one-hop flow of the excess there. The receiver's own orders act
+  at the *next* update, so a chain advances one hop per update — the price of
+  not depending on scan order. Mobility: the sender pays, ÷
+  `distribution.deliver_mobility_bonus`.
 - **Distribution.** For every sector with a distribution centre, for every
   commodity: if `stock < threshold`, it is a **sink** for `threshold − stock`
   from the centre; if `stock > threshold`, it is a **source** of

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 
-type DialogKind = "move" | "explore" | "designate" | "threshold" | "road" | "rail" | "railship" | null;
+type DialogKind = "move" | "explore" | "designate" | "threshold" | "deliver" | "road" | "rail" | "railship" | null;
 
 export interface PickSpec { verb: "move" | "explore" | "distribute"; from: SectorView; commodity: string; qty: number; supply?: boolean }
 
@@ -57,6 +57,7 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
               <ContextMenuSeparator />
               <ContextMenuItem onSelect={() => setDialog("designate")}>Designate…</ContextMenuItem>
               <ContextMenuItem onSelect={() => setDialog("threshold")}>Set threshold…</ContextMenuItem>
+              <ContextMenuItem onSelect={() => setDialog("deliver")}>Deliver to a neighbour…{Object.keys(s.deliveries).length ? ` (${Object.keys(s.deliveries).length} set)` : ""}</ContextMenuItem>
               <ContextMenuItem onSelect={() => setDialog("road")}>Build road…</ContextMenuItem>
               <ContextMenuItem disabled={view.levels.tech < (rules.rail?.techRequired ?? 60)} onSelect={() => setDialog("rail")}>Build rail…{view.levels.tech < (rules.rail?.techRequired ?? 60) ? ` (tech ${rules.rail?.techRequired ?? 60})` : ""}</ContextMenuItem>
               {isDepot(s, rules) && <ContextMenuItem onSelect={() => setDialog("railship")}>Ship by rail…</ContextMenuItem>}
@@ -74,6 +75,7 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
       {s && owned && dialog === "explore" && <ExploreDialog gameId={gameId} view={view} from={s} targets={adjacentUnowned} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} onPick={(civs, supply) => { setDialog(null); onStartPick({ verb: "explore", from: s, commodity: "civ", qty: civs, supply }); }} />}
       {s && owned && dialog === "designate" && <DesignateDialog view={view} rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "threshold" && <ThresholdDialog view={view} rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
+      {s && owned && dialog === "deliver" && <DeliverDialog view={view} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "road" && <RoadDialog rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "rail" && <RailDialog rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "railship" && <RailShipDialog gameId={gameId} view={view} rules={rules} from={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
@@ -95,7 +97,7 @@ function Attributes({ s, view }: { s: SectorView; view: CountryView }) {
     <div className="px-2 pb-1 text-xs text-muted-foreground">
       <div className="text-popover-foreground">{s.designation} · {s.terrain} · eff {s.efficiency.toFixed(0)}% · mob {s.mobility.toFixed(0)}{(s.roadLevel > 0 || s.roadTarget > 0) && ` · road ${s.roadLevel.toFixed(0)}${s.roadTarget > s.roadLevel ? ` → ${s.roadTarget.toFixed(0)}` : ""}`}{(s.railLevel > 0 || s.railTarget > 0) && ` · rail ${s.railLevel.toFixed(0)}${s.railTarget > s.railLevel ? ` → ${s.railTarget.toFixed(0)}` : ""}`}</div>
       {s.resources && <div>fert {s.resources.fertility} · min {s.resources.minerals} · gold {s.resources.gold} · oil {s.resources.oil} · uran {s.resources.uranium}</div>}
-      <div>centre {s.distCenter ? `${view.sectors.find(o => o.at.x === s.distCenter!.x && o.at.y === s.distCenter!.y)?.relative.x ?? "?"},${view.sectors.find(o => o.at.x === s.distCenter!.x && o.at.y === s.distCenter!.y)?.relative.y ?? "?"}` : "none"} · {th} threshold{th === 1 ? "" : "s"}{held > 0 && ` · ${held.toFixed(0)} in transit`}</div>
+      <div>{Object.keys(s.deliveries).length > 0 && `deliver ${Object.entries(s.deliveries).map(([c, d]) => `${c}→${d.dir}>${d.threshold}`).join(" ")} · `}centre {s.distCenter ? `${view.sectors.find(o => o.at.x === s.distCenter!.x && o.at.y === s.distCenter!.y)?.relative.x ?? "?"},${view.sectors.find(o => o.at.x === s.distCenter!.x && o.at.y === s.distCenter!.y)?.relative.y ?? "?"}` : "none"} · {th} threshold{th === 1 ? "" : "s"}{held > 0 && ` · ${held.toFixed(0)} in transit`}</div>
     </div>
   );
 }
@@ -282,6 +284,45 @@ function ThresholdDialog({ view, rules, sector: s, onClose, onCommand, busy }: {
           {(scope || s.thresholds[commodity] !== undefined) && <Button variant="danger" disabled={busy} onClick={async () => { await onCommand({ verb: "threshold", x: s.at.x, y: s.at.y, commodity, clear: true, scope: scope || undefined }); onClose(); }}>Clear</Button>}
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button disabled={busy || amount === ""} onClick={async () => { await onCommand({ verb: "threshold", x: s.at.x, y: s.at.y, commodity, amount: Number(amount), scope: scope || undefined }); onClose(); }}>Set</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const DIRECTIONS: [string, string][] = [["e", "east"], ["ne", "north-east"], ["nw", "north-west"], ["w", "west"], ["sw", "south-west"], ["se", "south-east"]];
+
+/** The original's deliver: a standing order per commodity — above the threshold, one hex that way, every update (issue #45). */
+function DeliverDialog({ view, sector: s, onClose, onCommand, busy }: { view: CountryView; sector: SectorView; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean }) {
+  const existing = Object.keys(s.deliveries);
+  const [commodity, setCommodity] = useState(existing[0] ?? view.commodityIds.find(c => !["civ", "mil", "uw"].includes(c) && (s.stock[c] ?? 0) > 0) ?? "food");
+  const [dir, setDir] = useState(s.deliveries[commodity]?.dir ?? "e");
+  const [threshold, setThreshold] = useState(s.deliveries[commodity] ? String(s.deliveries[commodity].threshold) : "0");
+  const [scope, setScope] = useState("");
+  const pick = (c: string) => { setCommodity(c); const d = s.deliveries[c]; if (d) { setDir(d.dir); setThreshold(String(d.threshold)); } };
+  const n = Number(threshold);
+  return (
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Deliver from {s.relative.x},{s.relative.y}</DialogTitle><DialogDescription>A standing order, as in the original. Every update, whatever is above the threshold moves one hex in that direction, this sector paying the mobility, if that hex is yours. The receiving sector applies its own orders at the next update, so a chain advances one hop per update.</DialogDescription></DialogHeader>
+        <div className="grid gap-3 text-sm">
+          <label>Commodity
+            <Select value={commodity} onChange={e => pick(e.target.value)}>
+              {view.commodityIds.map(c => <option key={c} value={c}>{c} (stock {(s.stock[c] ?? 0).toFixed(0)}{s.deliveries[c] ? `, delivering ${s.deliveries[c].dir} above ${s.deliveries[c].threshold}` : ""})</option>)}
+            </Select>
+          </label>
+          <label>Direction
+            <Select value={dir} onChange={e => setDir(e.target.value)}>
+              {DIRECTIONS.map(([id, name]) => <option key={id} value={id}>{name} ({id})</option>)}
+            </Select>
+          </label>
+          <label>Keep this much here (threshold)<Input value={threshold} onChange={e => setThreshold(e.target.value)} inputMode="numeric" autoFocus /></label>
+          <ScopeSelect s={s} scope={scope} setScope={setScope} />
+        </div>
+        <DialogFooter>
+          {(scope || s.deliveries[commodity]) && <Button variant="danger" disabled={busy} onClick={async () => { await onCommand({ verb: "deliver", x: s.at.x, y: s.at.y, commodity, clear: true, scope: scope || undefined }); onClose(); }}>Clear</Button>}
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button disabled={busy || !(n >= 0)} onClick={async () => { await onCommand({ verb: "deliver", x: s.at.x, y: s.at.y, commodity, direction: dir, amount: n, scope: scope || undefined }); onClose(); }}>Set</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -37,6 +37,21 @@ public final class Hex {
 
     public static Cube dir(int d) { int[] v = DIRS[d]; return new Cube(v[0], v[1], v[2]); }
 
+    /** Direction names in index order, and the original's keys (KNOWN: "juygbn" — j east, u north-east, y north-west, g west, b south-west, n south-east). */
+    public static final String[] DIR_NAMES = {"e", "ne", "nw", "w", "sw", "se"};
+    private static final String ORIGINAL_KEYS = "juygbn";
+
+    public static String dirName(int d) { return DIR_NAMES[d]; }
+
+    /** 0..5 for a name ("ne", "north-east", "NE") or an original key ("u"); -1 if neither. */
+    public static int parseDir(String s) {
+        if (s == null) return -1;
+        String t = s.trim().toLowerCase(java.util.Locale.ROOT).replace("-", "").replace("north", "n").replace("south", "s").replace("east", "e").replace("west", "w");
+        for (int d = 0; d < 6; d++) if (DIR_NAMES[d].equals(t)) return d;
+        if (t.length() == 1) { int k = ORIGINAL_KEYS.indexOf(t.charAt(0)); if (k >= 0) return k; }
+        return -1;
+    }
+
     /** Unwrapped neighbour in direction d (may be out of bounds). */
     public static Coord stepRaw(Coord c, int d) { return toOffset(toCube(c).plus(dir(d))); }
 

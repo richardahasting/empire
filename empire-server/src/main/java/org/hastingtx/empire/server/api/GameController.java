@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.hastingtx.empire.engine.command.Command;
 import org.hastingtx.empire.engine.config.CommodityCfg;
 import org.hastingtx.empire.engine.config.SectorTypeCfg;
+import org.hastingtx.empire.engine.geo.Hex;
 import org.hastingtx.empire.engine.model.Coord;
 import org.hastingtx.empire.engine.update.Routes;
 import org.hastingtx.empire.engine.view.CountryView;
@@ -64,7 +65,7 @@ public class GameController {
      * {@link SectorSelector} (relative coordinates) that replaces x,y with many sectors for the
      * per-sector standing orders: designate, threshold, distribute, build_road, build_rail.
      */
-    public record CommandRequest(String verb, Integer x, Integer y, Integer x2, Integer y2, String type, String commodity, Double amount, Boolean clear, String scope) {
+    public record CommandRequest(String verb, Integer x, Integer y, Integer x2, Integer y2, String type, String commodity, Double amount, Boolean clear, String scope, String direction) {
         boolean isMass() { return scope != null && !scope.isBlank(); }
         Command toCommand() { return toCommand(x == null || y == null ? null : new Coord(x, y)); }
         /** The command for one sector; {@code at} stands in for x,y. */
@@ -74,6 +75,12 @@ public class GameController {
                 case "designate" -> new Command.Designate(need(at), type);
                 case "threshold" -> new Command.Threshold(need(at), commodity, Boolean.TRUE.equals(clear) ? -1 : amount == null ? 0 : amount);
                 case "distribute" -> new Command.Distribute(need(at), Boolean.TRUE.equals(clear) || x2 == null ? null : at(x2, y2));
+                case "deliver" -> {
+                    boolean off = Boolean.TRUE.equals(clear) || direction == null || direction.isBlank() || direction.equalsIgnoreCase("none");
+                    int d = off ? -1 : Hex.parseDir(direction);
+                    if (!off && d < 0) throw new IllegalArgumentException("direction is e, ne, nw, w, sw or se");
+                    yield new Command.Deliver(need(at), commodity, off ? null : d, amount == null ? 0 : amount);
+                }
                 case "move" -> new Command.Move(need(at), at(x2, y2), commodity, amount == null ? 0 : amount);
                 case "explore" -> new Command.Explore(need(at), at(x2, y2), amount == null ? 0 : amount);
                 case "build_road" -> new Command.BuildRoad(need(at), amount == null ? 0 : amount);
@@ -116,7 +123,7 @@ public class GameController {
         Account a = AuthInterceptor.current(req);
         if (!r.isMass()) return games.command(id, a, r.toCommand(), "panel");
         switch (r.verb() == null ? "" : r.verb()) {
-            case "designate", "threshold", "distribute", "build_road", "build_rail" -> { }
+            case "designate", "threshold", "distribute", "deliver", "build_road", "build_rail" -> { }
             default -> throw new IllegalArgumentException(r.verb() + " applies to one sector at a time");
         }
         CountryView v = games.view(id, a);

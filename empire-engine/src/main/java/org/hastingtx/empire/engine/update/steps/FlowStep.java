@@ -1,6 +1,7 @@
 package org.hastingtx.empire.engine.update.steps;
 
 import org.hastingtx.empire.engine.config.DistributionCfg;
+import org.hastingtx.empire.engine.geo.Hex;
 import org.hastingtx.empire.engine.model.*;
 import org.hastingtx.empire.engine.update.Ctx;
 import org.hastingtx.empire.engine.update.Flow;
@@ -59,6 +60,22 @@ public final class FlowStep implements Step {
                 }
             }
         }
+        // deliver orders (KNOWN: deliver.c): above the threshold, one hex that way, if that hex is yours (issue #45)
+        for (int i = 0; i < ctx.led.nSectors; i++) {
+            Sector s = ctx.sector(i);
+            if (!s.owned() || s.deliver().count() == 0) continue;
+            for (int c = 0; c < ctx.com.size(); c++) {
+                if (!s.deliver().has(c)) continue;
+                double post = s.stock().get(c) + ctx.led.stock[i][c];
+                double thr = s.deliver().threshold(c);
+                if (post <= thr + 1e-9) continue;
+                Coord to = Hex.normalise(ctx.snap, Hex.stepRaw(s.at(), s.deliver().dir(c)));
+                if (to == null) continue;
+                Sector t = ctx.snap.sector(to);
+                if (t.owner() != s.owner() || !t.terrain().isLand()) continue;
+                plans.add(new Plan("deliver", s.owner(), c, i, to, List.of(s.at(), to), null, floorQ(post - thr, quantum)));
+            }
+        }
         // held parcels resume
         List<HeldParcel> heldRefs = new ArrayList<>();
         Map<HeldParcel, Integer> heldAt = new IdentityHashMap<>();
@@ -90,13 +107,17 @@ public final class FlowStep implements Step {
             else {
                 p.sourceKey = p.originIdx;
                 long key = ((long) p.originIdx << 8) | p.commodity;
-                if (!sourceBudget.containsKey(key)) {
-                    Sector src = ctx.sector(p.originIdx);
-                    double post = src.stock().get(p.commodity) + ctx.led.stock[p.originIdx][p.commodity];
-                    // a distribution centre keeps its own threshold; a plain source keeps nothing
-                    double keep = p.kind.equals("distribution") && src.hasThreshold(p.commodity) && !p.dest.equals(src.distCenter()) ? src.threshold(p.commodity) : 0;
-                    sourceBudget.put(key, Math.max(0, post - keep));
-                }
+                Sector src = ctx.sector(p.originIdx);
+                double post = src.stock().get(p.commodity) + ctx.led.stock[p.originIdx][p.commodity];
+                // every order keeps its own threshold (a centre supplying others keeps the centre's; a source pushing to its
+                // centre keeps its own, which its request already respects); where a deliver order and a distribution
+                // threshold draw on one stock, the stricter keep bounds them both
+                double keep = switch (p.kind) {
+                    case "distribution" -> src.hasThreshold(p.commodity) ? src.threshold(p.commodity) : 0;
+                    case "deliver" -> src.deliver().has(p.commodity) ? src.deliver().threshold(p.commodity) : 0;
+                    default -> 0;
+                };
+                sourceBudget.merge(key, Math.max(0, post - keep), Math::min);
             }
         }
         // mobility budgets
@@ -289,7 +310,7 @@ public final class FlowStep implements Step {
     /** Mobility per unit for hop h: packed weight (leaving the origin) × cost into the entered sector, ÷ the distribution bonus. */
     private static double unitCost(Ctx ctx, Plan p, int h) {
         double w = ctx.weightLeaving(p.commodity, ctx.sector(p.originIdx));
-        double bonus = p.kind.equals("move") ? 1.0 : ctx.cfg.distribution().mobilityBonusOr1();
+        double bonus = p.kind.equals("move") ? 1.0 : p.kind.equals("deliver") ? ctx.cfg.distribution().deliverMobilityBonusOr1() : ctx.cfg.distribution().mobilityBonusOr1();
         return w * ctx.moveCostInto(ctx.snap.sector(p.path.get(h))) / bonus;
     }
 

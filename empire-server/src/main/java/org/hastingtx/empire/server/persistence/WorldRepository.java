@@ -51,7 +51,8 @@ public class WorldRepository {
         return a.owner() == b.owner() && a.designation().equals(b.designation()) && a.efficiency() == b.efficiency() && a.mobility() == b.mobility()
                 && a.stock().equals(b.stock()) && Arrays.equals(a.thresholds(), b.thresholds()) && Objects.equals(a.distCenter(), b.distCenter())
                 && a.roadLevel() == b.roadLevel() && a.railLevel() == b.railLevel() && a.radarLevel() == b.radarLevel()
-                && a.held().equals(b.held()) && a.sanctuary() == b.sanctuary() && a.terrain() == b.terrain() && a.roadTarget() == b.roadTarget() && a.railTarget() == b.railTarget();
+                && a.held().equals(b.held()) && a.sanctuary() == b.sanctuary() && a.terrain() == b.terrain() && a.roadTarget() == b.roadTarget() && a.railTarget() == b.railTarget()
+                && a.deliver().equals(b.deliver());
     }
 
     private void writeSectors(long gameId, List<Sector> sectors, Commodities com) {
@@ -81,14 +82,15 @@ public class WorldRepository {
         for (Sector s : sectors) {
             for (int c = 0; c < com.size(); c++) {
                 double th = s.thresholds()[c];
-                stockRows.add(new Object[] {gameId, s.at().x(), s.at().y(), com.id(c), s.stock().get(c), Double.isNaN(th) ? null : th});
+                boolean dl = s.deliver().has(c);
+                stockRows.add(new Object[] {gameId, s.at().x(), s.at().y(), com.id(c), s.stock().get(c), Double.isNaN(th) ? null : th, dl ? s.deliver().dir(c) : null, dl ? s.deliver().threshold(c) : null});
             }
             for (HeldParcel p : s.held())
                 parcelRows.add(new Object[] {gameId, s.at().x(), s.at().y(), com.id(p.commodity()), p.qty(), p.owner(), p.origin().x(), p.origin().y(), p.dest().x(), p.dest().y(), p.issuedUpdate(), p.mode()});
         }
         jdbc.batchUpdate("""
-                INSERT INTO sector_stock (game_id, x, y, commodity, qty, threshold) VALUES (?,?,?,?,?,?)
-                ON CONFLICT (game_id, x, y, commodity) DO UPDATE SET qty = EXCLUDED.qty, threshold = EXCLUDED.threshold""", stockRows);
+                INSERT INTO sector_stock (game_id, x, y, commodity, qty, threshold, deliver_dir, deliver_threshold) VALUES (?,?,?,?,?,?,?,?)
+                ON CONFLICT (game_id, x, y, commodity) DO UPDATE SET qty = EXCLUDED.qty, threshold = EXCLUDED.threshold, deliver_dir = EXCLUDED.deliver_dir, deliver_threshold = EXCLUDED.deliver_threshold""", stockRows);
         List<Object[]> keys = new ArrayList<>();
         for (Sector s : sectors) keys.add(new Object[] {gameId, s.at().x(), s.at().y()});
         jdbc.batchUpdate("DELETE FROM held_parcel WHERE game_id = ? AND x = ? AND y = ?", keys);
@@ -148,11 +150,14 @@ public class WorldRepository {
         double[][] stock = new double[sectors.length][n];
         double[][] th = new double[sectors.length][n];
         for (double[] row : th) Arrays.fill(row, Double.NaN);
-        jdbc.query("SELECT x, y, commodity, qty, threshold FROM sector_stock WHERE game_id = ?", rs -> {
+        DeliverOrders[] dl = new DeliverOrders[sectors.length];
+        jdbc.query("SELECT x, y, commodity, qty, threshold, deliver_dir, deliver_threshold FROM sector_stock WHERE game_id = ?", rs -> {
             int i = rs.getInt("y") * g.width() + rs.getInt("x");
             int c = com.index(rs.getString("commodity"));
             stock[i][c] = rs.getDouble("qty");
             double t = rs.getDouble("threshold"); if (!rs.wasNull()) th[i][c] = t;
+            int d = rs.getInt("deliver_dir");
+            if (!rs.wasNull()) { if (dl[i] == null) dl[i] = DeliverOrders.none(n); dl[i] = dl[i].with(c, d, rs.getDouble("deliver_threshold")); }
         }, g.id());
         Map<Integer, List<HeldParcel>> held = new HashMap<>();
         jdbc.query("SELECT * FROM held_parcel WHERE game_id = ? ORDER BY id", rs -> {
@@ -164,6 +169,7 @@ public class WorldRepository {
         for (int i = 0; i < sectors.length; i++) {
             if (sectors[i] == null) throw new IllegalStateException("game " + g.id() + " missing sector " + i);
             Sector s = sectors[i].withStock(Stocks.of(stock[i])).withThresholds(th[i]);
+            if (dl[i] != null) s = s.withDeliver(dl[i]);
             if (held.containsKey(i)) s = s.withHeld(held.get(i));
             list.add(s);
         }

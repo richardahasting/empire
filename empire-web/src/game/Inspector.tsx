@@ -47,12 +47,13 @@ export function Inspector({ sector: s, view, rules, onCommand, busy }: Props) {
       </div>
       {s.resources && <p className="text-xs text-muted-foreground">fert {s.resources.fertility} · min {s.resources.minerals} · gold {s.resources.gold} · oil {s.resources.oil} · uran {s.resources.uranium}</p>}
       <table className="w-full text-xs">
-        <thead><tr className="text-muted-foreground"><th className="text-left">commodity</th><th className="text-right">stock</th><th className="text-right">threshold</th><th className="text-right">in transit</th></tr></thead>
+        <thead><tr className="text-muted-foreground"><th className="text-left">commodity</th><th className="text-right">stock</th><th className="text-right">threshold</th><th className="text-right">deliver</th><th className="text-right">in transit</th></tr></thead>
         <tbody>
           {view.commodityIds.map(c => (
-            <tr key={c} className={(s.stock[c] ?? 0) === 0 && s.thresholds[c] === undefined && !s.held[c] ? "text-muted-foreground/60" : ""}>
+            <tr key={c} className={(s.stock[c] ?? 0) === 0 && s.thresholds[c] === undefined && !s.held[c] && !s.deliveries[c] ? "text-muted-foreground/60" : ""}>
               <td>{c}</td><td className="text-right tabular-nums">{fmt(s.stock[c])}</td>
               <td className="text-right tabular-nums">{s.thresholds[c] !== undefined ? fmt(s.thresholds[c]) : "—"}</td>
+              <td className="text-right tabular-nums" title={s.deliveries[c] ? `above ${fmt(s.deliveries[c].threshold)}, one hex ${s.deliveries[c].dir} every update` : undefined}>{s.deliveries[c] ? `→${s.deliveries[c].dir} >${fmt(s.deliveries[c].threshold)}` : ""}</td>
               <td className="text-right tabular-nums">{s.held[c] ? fmt(s.held[c]) : ""}</td>
             </tr>
           ))}
