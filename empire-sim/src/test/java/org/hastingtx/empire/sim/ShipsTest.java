@@ -187,6 +187,18 @@ class ShipsTest {
     }
 
     @Test
+    void aShipLiftsTheFogAroundIt() {
+        World w = withShip(world(), "cargo_ship", Hex.stepRaw(CAP, 0, 6), 100);       // four hexes beyond the disc's rim
+        org.hastingtx.empire.engine.view.CountryView v = org.hastingtx.empire.engine.view.CountryView.of(w, CFG, 0);
+        Coord farSea = Hex.stepRaw(CAP, 0, 8);                                        // two hexes past the ship: in its sight of 2
+        Coord beyond = Hex.stepRaw(CAP, 0, 9);
+        assertThat(v.sectors()).anyMatch(s -> s.at().equals(farSea));
+        assertThat(v.sectors()).noneMatch(s -> s.at().equals(beyond));
+        org.hastingtx.empire.engine.view.CountryView none = org.hastingtx.empire.engine.view.CountryView.of(world(), CFG, 0);
+        assertThat(none.sectors()).noneMatch(s -> s.at().equals(farSea));
+    }
+
+    @Test
     void theSeaIsFertileByRegion() {
         World w = new Sim(CFG).newWorld(List.of("P", "Q"), 5);
         long fertile = w.sectors().stream().filter(s -> s.terrain() == Terrain.OCEAN && s.resources().fertility() > 0).count();

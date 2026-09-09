@@ -74,6 +74,12 @@ public record CountryView(
 
         Set<Coord> visible = new TreeSet<>();
         for (Sector s : w.ownedBy(countryId)) { visible.add(s.at()); visible.addAll(Hex.neighbours(w, s.at())); }
+        // a ship lifts the fog around it (issue #62): everything within its class's sight is in view while it is there
+        if (cfg.units().ships() != null) for (Ship sh : w.ships()) {
+            if (sh.owner() != countryId) continue;
+            int sight = cfg.units().ships().sightOf(cfg.units().ships().shipClass(sh.cls()));
+            for (Sector s : w.sectors()) if (Hex.distance(w, s.at(), sh.at()) <= sight) visible.add(s.at());
+        }
 
         List<SectorView> views = new ArrayList<>();
         for (Coord at : visible) {
