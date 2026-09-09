@@ -163,9 +163,11 @@ public final class CommandExecutor {
         if (s == null) return CommandResult.fail(w, "you do not own " + r.sector());
         if (!s.terrain().isLand()) return CommandResult.fail(w, "cannot pave the sea");
         if (r.targetLevel() < 0 || r.targetLevel() > 100) return CommandResult.fail(w, "road level is 0..100");
+        // Above the terrain's cap the order is the cap, not a refusal (Richard 2026-09-08, issue #43): "road * 100" paves every sector as far as it can go.
         Double cap = cfg.infrastructure().road().maxLevelByTerrain().get(s.terrain().id());
-        if (cap != null && r.targetLevel() > cap) return CommandResult.fail(w, s.terrain().id() + " roads top out at " + fmt(cap));
-        return new CommandResult(w.withSector(s.withRoadTarget(r.targetLevel())), null, 0);
+        double target = cap != null && r.targetLevel() > cap ? cap : r.targetLevel();
+        String info = target < r.targetLevel() ? "road ordered to " + Math.round(target) + ", the " + s.terrain().id() + " cap (" + Math.round(r.targetLevel()) + " asked)" : null;
+        return new CommandResult(w.withSector(s.withRoadTarget(target)), null, 0, info);
     }
 
     private CommandResult buildRail(World w, Country c, Command.BuildRail r) {
@@ -176,8 +178,9 @@ public final class CommandExecutor {
         if (c.levels().tech() < rail.techRequired()) return CommandResult.fail(w, "rail needs tech " + rail.techRequired() + "; you have " + fmt(c.levels().tech()));
         if (r.targetLevel() < 0 || r.targetLevel() > 100) return CommandResult.fail(w, "rail level is 0..100");
         Double cap = rail.maxLevelByTerrain().get(s.terrain().id());
-        if (cap != null && r.targetLevel() > cap) return CommandResult.fail(w, s.terrain().id() + " rail tops out at " + fmt(cap));
-        return new CommandResult(w.withSector(s.withRailTarget(r.targetLevel())), null, 0);
+        double target = cap != null && r.targetLevel() > cap ? cap : r.targetLevel();
+        String info = target < r.targetLevel() ? "rail ordered to " + Math.round(target) + ", the " + s.terrain().id() + " cap (" + Math.round(r.targetLevel()) + " asked)" : null;
+        return new CommandResult(w.withSector(s.withRailTarget(target)), null, 0, info);
     }
 
     /** Validated at issue time: both ends are working depots and a contiguous line joins them, or the reply names where it breaks. */

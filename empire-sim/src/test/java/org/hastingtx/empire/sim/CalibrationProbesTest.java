@@ -101,6 +101,25 @@ class CalibrationProbesTest {
         assertThat(cfg.infrastructure().road().maxLevelByTerrain().get("plains")).isEqualTo(100.0);
     }
 
+    /** Issue #43: a road order above the terrain cap becomes an order for the cap, with a note, not a refusal. */
+    @Test
+    void roadOrderAboveTheTerrainCapIsCappedNotRefused() {
+        GameConfig cfg = TestWorlds.teaching();
+        World w = TestWorlds.disc(cfg, 2, Map.of("civ", 300.0, "food", 1000.0));
+        Coord at = Hex.stepRaw(TestWorlds.CENTER, 0, 1);
+        w = TestWorlds.own(w, cfg, at, "agribusiness", 100, 100, Map.of("civ", 200.0, "food", 100.0), Map.of());
+        Sector s = w.sector(at);
+        w = w.withSector(s.withTerrain(org.hastingtx.empire.engine.model.Terrain.MOUNTAIN, s.elevation(), s.resources()));
+        double cap = cfg.infrastructure().road().maxLevelByTerrain().get("mountain");
+        assertThat(cap).isLessThan(100);
+        var r = new org.hastingtx.empire.engine.command.CommandExecutor(cfg).execute(w, 0, new org.hastingtx.empire.engine.command.Command.BuildRoad(at, 100));
+        assertThat(r.ok()).as(r.error()).isTrue();
+        assertThat(r.world().sector(at).roadTarget()).isEqualTo(cap);
+        assertThat(r.info()).contains("mountain cap").contains("100 asked");
+        var ok = new org.hastingtx.empire.engine.command.CommandExecutor(cfg).execute(w, 0, new org.hastingtx.empire.engine.command.Command.BuildRoad(at, cap));
+        assertThat(ok.info()).as("an order at the cap needs no note").isNull();
+    }
+
     /** A manual move is immediate: the goods land now, the sending sector pays mobility now, and its mobility caps the quantity. */
     @Test
     void manualMoveIsImmediate() {

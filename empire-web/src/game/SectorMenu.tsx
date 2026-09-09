@@ -306,15 +306,15 @@ function RoadDialog({ rules, sector: s, onClose, onCommand, busy }: { rules: Rul
           {points > 0 && r && (
             <div className="rounded-md border border-border bg-muted p-2 text-xs">
               To reach {t}: {Object.entries(r.buildMaterialsPerPoint ?? {}).map(([k, v]) => `${(v * mult * points).toFixed(0)} ${k}`).join(", ")}, {(r.workPerPoint * mult * points).toFixed(0)} work · about {Math.ceil(points / (r.maxPointsPerUpdate || 1))} update{Math.ceil(points / (r.maxPointsPerUpdate || 1)) === 1 ? "" : "s"} if supplied
-              {t > cap && <div className="text-destructive">above the {s.terrain} cap of {cap}</div>}
+              {t > cap && <div className="text-muted-foreground">{s.terrain} caps at {cap}: the order will be {cap}</div>}
             </div>
           )}
           <ScopeSelect s={s} scope={scope} setScope={setScope} />
-          {scope && <p className="text-xs text-muted-foreground">Sectors whose terrain caps below {t} are skipped; the reply says which.</p>}
+          {scope && <p className="text-xs text-muted-foreground">Sectors whose terrain caps below {t} are ordered to their cap; the reply says which.</p>}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button disabled={busy || (!scope && t > cap)} onClick={async () => { await onCommand({ verb: "build_road", x: s.at.x, y: s.at.y, amount: t, scope: scope || undefined }); onClose(); }}>{t === 0 ? "Cancel order" : "Order"}</Button>
+          <Button disabled={busy} onClick={async () => { await onCommand({ verb: "build_road", x: s.at.x, y: s.at.y, amount: t, scope: scope || undefined }); onClose(); }}>{t === 0 ? "Cancel order" : "Order"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -344,14 +344,14 @@ function RailDialog({ rules, sector: s, onClose, onCommand, busy }: { rules: Rul
           {points > 0 && r && (
             <div className="rounded-md border border-border bg-muted p-2 text-xs">
               To reach {t}: {Object.entries(r.buildMaterialsPerPoint ?? {}).map(([k, v]) => `${(v * mult * points).toFixed(0)} ${k}`).join(", ")}, {(mult * points).toFixed(0)} mobility · about {Math.ceil(points / (r.maxPointsPerUpdate || 1))} update{Math.ceil(points / (r.maxPointsPerUpdate || 1)) === 1 ? "" : "s"} if supplied
-              {t > cap && <div className="text-destructive">above the {s.terrain} cap of {cap}</div>}
+              {t > cap && <div className="text-muted-foreground">{s.terrain} caps at {cap}: the order will be {cap}</div>}
             </div>
           )}
           <ScopeSelect s={s} scope={scope} setScope={setScope} />
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button disabled={busy || (!scope && t > cap)} onClick={async () => { await onCommand({ verb: "build_rail", x: s.at.x, y: s.at.y, amount: t, scope: scope || undefined }); onClose(); }}>{t === 0 ? "Cancel order" : "Order"}</Button>
+          <Button disabled={busy} onClick={async () => { await onCommand({ verb: "build_rail", x: s.at.x, y: s.at.y, amount: t, scope: scope || undefined }); onClose(); }}>{t === 0 ? "Cancel order" : "Order"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
