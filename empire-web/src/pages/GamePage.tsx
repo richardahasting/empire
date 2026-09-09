@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api, type CommandRequest, type ConsoleReply, type Coord, type CountryView, type GameSummary, type LastUpdate, type Outcome, type Projection, type Rules } from "@/api/client";
+import { api, macrosApi, type CommandRequest, type ConsoleReply, type Coord, type CountryView, type GameSummary, type LastUpdate, type Macro, type MacroStep, type Outcome, type Projection, type Rules } from "@/api/client";
+import { MacrosDialog, RecordMacroDialog, RunMacroDialog, stepFromCommand } from "@/game/Macros";
 import { COMMODITY_HUES } from "@/map/palette";
 import { useAuth } from "@/api/auth";
 import { HexMap, type Layer } from "@/map/HexMap";
@@ -32,6 +33,11 @@ export function GamePage() {
   const [layer, setLayer] = useState<Layer>("designation");
   const [stock, setStock] = useState("food");
   const [busy, setBusy] = useState(false);
+  // macros (issue #47): per account; recording captures panel commands until stopped
+  const [macros, setMacros] = useState<Macro[]>([]);
+  const [recording, setRecording] = useState<{ slot: number; name: string; steps: MacroStep[] } | null>(null);
+  const [macroDialog, setMacroDialog] = useState<null | "record" | "run" | "list">(null);
+  useEffect(() => { macrosApi.list().then(setMacros).catch(() => {}); }, []);
 
   const load = useCallback(async () => {
     try {
@@ -82,8 +88,45 @@ export function GamePage() {
       const o = await api.post<Outcome>(`/games/${gameId}/command`, c);
       setView(o.view);
       setNotice(o.accepted ? `${c.verb}: ${o.info ?? "ok"} (${o.btuSpent} BTU)` : `${c.verb}: ${o.error}`);
+      if (o.accepted && recording && view) { const step = stepFromCommand(c, view); if (step) setRecording(r => r ? { ...r, steps: [...r.steps, step] } : r); }
     } catch (e) { setNotice((e as Error).message); } finally { setBusy(false); }
-  }, [gameId]);
+  }, [gameId, recording, view]);
+
+  const saveMacro = useCallback(async (m: Macro) => {
+    try { const saved = await macrosApi.save(m); setMacros(ms => [...ms.filter(x => x.slot !== saved.slot), saved].sort((a, b) => a.slot - b.slot)); setNotice(`macro ${saved.slot === 10 ? 0 : saved.slot} "${saved.name}" saved: ${saved.steps.length} step${saved.steps.length === 1 ? "" : "s"}`); }
+    catch (e) { setNotice((e as Error).message); }
+  }, []);
+  const deleteMacro = useCallback(async (slot: number) => {
+    try { await macrosApi.remove(slot); setMacros(ms => ms.filter(x => x.slot !== slot)); } catch (e) { setNotice((e as Error).message); }
+  }, []);
+  const stopRecording = useCallback(async () => {
+    if (!recording) return;
+    const r = recording; setRecording(null);
+    if (r.steps.length === 0) { setNotice(`macro "${r.name}" discarded: nothing was recorded`); return; }
+    await saveMacro({ slot: r.slot, name: r.name, steps: r.steps });
+  }, [recording, saveMacro]);
+  const runMacro = useCallback(async (slot: number, at: Coord | null, scope?: string) => {
+    const m = macros.find(x => x.slot === slot);
+    if (!m) { setNotice(`no macro in slot ${slot === 10 ? 0 : slot}`); return; }
+    setBusy(true); setNotice(null);
+    try {
+      const o = await macrosApi.run(gameId, slot, at, scope);
+      setView(o.view);
+      setNotice(o.accepted ? `macro "${m.name}": ${o.info ?? "ok"} (${o.btuSpent} BTU)` : `macro "${m.name}": ${o.error}`);
+    } catch (e) { setNotice((e as Error).message); } finally { setBusy(false); }
+  }, [gameId, macros]);
+  // digit keys run macro slots on the selected sector, when nothing is being typed
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)) return;
+      if (e.ctrlKey || e.metaKey || e.altKey || !/^[0-9]$/.test(e.key)) return;
+      if (!selected || busy) return;
+      e.preventDefault();
+      void runMacro(e.key === "0" ? 10 : Number(e.key), selected);
+    };
+    window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey);
+  }, [selected, busy, runMacro]);
 
   const consoleLine = useCallback(async (line: string) => {
     const r = await api.post<ConsoleReply>(`/games/${gameId}/console`, { line });
@@ -184,8 +227,16 @@ export function GamePage() {
       <Dashboard view={view} game={game} projection={projection} />
       {notice && <p className="text-xs text-muted-foreground">{notice}</p>}
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <SectorMenu gameId={gameId} view={view} rules={rules} sector={sector} onCommand={command} busy={busy} onStartPick={setPick} history={sector ? last?.notes?.[`${sector.relative.x},${sector.relative.y}`] : undefined} historyUpdate={last?.updateNumber}>
+        <SectorMenu gameId={gameId} view={view} rules={rules} sector={sector} onCommand={command} busy={busy} onStartPick={setPick} history={sector ? last?.notes?.[`${sector.relative.x},${sector.relative.y}`] : undefined} historyUpdate={last?.updateNumber}
+          macros={macros} recording={!!recording} onRecordMacro={() => setMacroDialog("record")} onStopRecording={() => void stopRecording()} onRunMacro={(slot, at) => void runMacro(slot, at)} onRunMacroDialog={() => setMacroDialog("run")} onOpenMacros={() => setMacroDialog("list")}>
           <div className="relative min-h-[24rem] min-w-0">
+            {recording && !pick && (
+              <div className="absolute left-2 top-2 z-10 flex items-center gap-2 rounded-md border border-destructive bg-popover px-2 py-1 text-xs shadow-md">
+                <span className="inline-block h-2 w-2 rounded-full bg-destructive" aria-hidden />
+                <span>Recording macro {recording.slot === 10 ? 0 : recording.slot} "{recording.name}" — {recording.steps.length} step{recording.steps.length === 1 ? "" : "s"}. Play as usual; the sector is left blank.</span>
+                <Button size="sm" variant="secondary" onClick={() => void stopRecording()}>Stop</Button>
+              </div>
+            )}
             {pick && (
               <div className="absolute left-2 top-2 z-10 flex items-center gap-2 rounded-md border border-border bg-popover px-2 py-1 text-xs shadow-md">
                 {pick.verb === "distribute" ? (
@@ -217,6 +268,9 @@ export function GamePage() {
             )}
           </div>
         </SectorMenu>
+        {macroDialog === "record" && <RecordMacroDialog macros={macros} onClose={() => setMacroDialog(null)} onStart={(slot, name) => setRecording({ slot, name, steps: [] })} />}
+        {macroDialog === "run" && sector && <RunMacroDialog macros={macros} sectorLabel={`${sector.relative.x},${sector.relative.y}`} designation={sector.designation} onClose={() => setMacroDialog(null)} onRun={(slot, scope) => void runMacro(slot, sector.at, scope)} />}
+        {macroDialog === "list" && <MacrosDialog macros={macros} onClose={() => setMacroDialog(null)} onSave={saveMacro} onDelete={deleteMacro} />}
         <aside className="flex min-h-0 min-w-0 flex-col gap-3">
           <div className="max-h-[50%] overflow-auto rounded-lg border border-border bg-card p-3"><Inspector sector={sector} view={view} rules={rules} onCommand={command} busy={busy} history={sector ? last?.notes?.[`${sector.relative.x},${sector.relative.y}`] : undefined} historyUpdate={last?.updateNumber} /></div>
           <div className="min-h-0 flex-1"><ConsolePanel onLine={consoleLine} /></div>

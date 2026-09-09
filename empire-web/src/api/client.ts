@@ -33,7 +33,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 
 export const api = {
   get: <T,>(path: string) => call<T>("GET", path),
-  post: <T,>(path: string, body?: unknown) => call<T>("POST", path, body ?? {}),
+  post: <T,>(path: string, body?: unknown, method: "POST" | "PUT" | "DELETE" = "POST") => call<T>(method, path, body ?? {}),
 };
 
 // ---- shapes (mirror the server records) ----
@@ -80,6 +80,16 @@ export interface CommandRequest {
   /** deliver: e ne nw w sw se (or "none" to clear). */
   direction?: string;
 }
+
+/** A macro step: a panel command with the sector left blank (issue #47). */
+export interface MacroStep { verb: string; commodity?: string; amount?: number; clear?: boolean; type?: string; direction?: string; center?: "capital" | { dx: number; dy: number } }
+export interface Macro { slot: number; name: string; steps: MacroStep[]; summary?: string }
+export const macrosApi = {
+  list: () => api.get<Macro[]>("/macros"),
+  save: (m: Macro) => api.post<Macro>(`/macros/${m.slot}`, { name: m.name, steps: m.steps }, "PUT"),
+  remove: (slot: number) => api.post<{ slot: number }>(`/macros/${slot}`, {}, "DELETE"),
+  run: (gameId: number, slot: number, at: Coord | null, scope?: string) => api.post<Outcome>(`/games/${gameId}/macros/${slot}/run`, { x: at?.x, y: at?.y, scope: scope || undefined }),
+};
 
 export interface Estimate {
   ok: boolean; error?: string; path: Coord[]; hopCosts: number[]; totalMobility: number; reach: number;
