@@ -15,16 +15,15 @@ public final class MoneyStep implements Step {
         double[] income = new double[ctx.led.nCountries], expense = new double[ctx.led.nCountries];
         boolean interest = ctx.cfg.options().interest() && ctx.com.has("bar");
         int bar = interest ? ctx.com.index("bar") : -1;
-        for (int i = 0; i < ctx.led.nSectors; i++) {
+        for (int i : ctx.owned) {          // issue #87: the owned list, not the map
             Sector s = ctx.sector(i);
-            if (!s.owned()) continue;
             int c = s.owner();
-            double civ = Math.max(0, s.stock().get(ctx.com.civ) + ctx.led.stock[i][ctx.com.civ]);
-            double uw = Math.max(0, s.stock().get(ctx.com.uw) + ctx.led.stock[i][ctx.com.uw]);
-            double mil = Math.max(0, s.stock().get(ctx.com.mil) + ctx.led.stock[i][ctx.com.mil]);
+            double civ = Math.max(0, s.stock().get(ctx.com.civ) + ctx.led.st(i, ctx.com.civ));
+            double uw = Math.max(0, s.stock().get(ctx.com.uw) + ctx.led.st(i, ctx.com.uw));
+            double mil = Math.max(0, s.stock().get(ctx.com.mil) + ctx.led.st(i, ctx.com.mil));
             income[c] += (civ * m.taxPerCivPerEtu() + uw * m.taxPerUwPerEtu()) * ctx.etus;
             expense[c] += mil * m.payPerMilPerEtu() * ctx.etus;
-            if (interest && ctx.type(s).hasFlag("interest_bearing")) income[c] += Math.max(0, s.stock().get(bar) + ctx.led.stock[i][bar]) * m.bankInterestPerBarPerEtu() * ctx.etus;
+            if (interest && ctx.type(s).hasFlag("interest_bearing")) income[c] += Math.max(0, s.stock().get(bar) + ctx.led.st(i, bar)) * m.bankInterestPerBarPerEtu() * ctx.etus;
         }
         for (Country c : ctx.snap.countries()) {
             ctx.led.cash[c.id()] += income[c.id()] - expense[c.id()];

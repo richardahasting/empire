@@ -35,7 +35,7 @@ public final class ShipStep implements Step {
                 for (var e : sc.dockMaterialsPerPoint().entrySet()) {
                     if (e.getValue() <= 0) continue;
                     if (e.getKey().equals("cash")) points = Math.min(points, Math.max(0, ctx.country(ship.owner()).cash() + ctx.led.cash[ship.owner()]) / e.getValue());
-                    else { int c = ctx.com.index(e.getKey()); double avail = here.stock().get(c) + ctx.led.stock[hi][c]; points = Math.min(points, avail / e.getValue()); if (avail < sc.dockPointsPerUpdate() * e.getValue()) ctx.led.shortOf(hi, c, sc.dockPointsPerUpdate() * e.getValue() - avail); }
+                    else { int c = ctx.com.index(e.getKey()); double avail = here.stock().get(c) + ctx.led.st(hi, c); points = Math.min(points, avail / e.getValue()); if (avail < sc.dockPointsPerUpdate() * e.getValue()) ctx.led.shortOf(hi, c, sc.dockPointsPerUpdate() * e.getValue() - avail); }
                 }
                 if (points > 1e-9) {
                     for (var e : sc.dockMaterialsPerPoint().entrySet()) {
@@ -179,7 +179,7 @@ public final class ShipStep implements Step {
                 if (!wanted.isEmpty() && !wanted.contains(c)) continue;
                 if (!carries(ctx, cls, c)) continue;
                 double keep = src.hasThreshold(c) ? src.threshold(c) : 0;
-                double avail = src.stock().get(c) + ctx.led.stock[si][c] - keep;
+                double avail = src.stock().get(c) + ctx.led.st(si, c) - keep;
                 double q = Math.min(room, avail);
                 if (q <= 1e-9) continue;
                 q = ctx.led.toShip(si, c, q);              // whole units both sides, or the two disagree (issue #77)
@@ -208,8 +208,8 @@ public final class ShipStep implements Step {
                 double q = st.get(c);
                 if (q <= 1e-9) continue;
                 double room = ctx.com.isPerson(c)
-                        ? Math.max(0, ctx.maxPopulation(dst) - (dst.stock().get(ctx.com.civ) + ctx.led.stock[si][ctx.com.civ] + dst.stock().get(ctx.com.uw) + ctx.led.stock[si][ctx.com.uw]))
-                        : Math.max(0, ctx.capacity(dst, c) - (dst.stock().get(c) + ctx.led.stock[si][c]));
+                        ? Math.max(0, ctx.maxPopulation(dst) - (dst.stock().get(ctx.com.civ) + ctx.led.st(si, ctx.com.civ) + dst.stock().get(ctx.com.uw) + ctx.led.st(si, ctx.com.uw)))
+                        : Math.max(0, ctx.capacity(dst, c) - (dst.stock().get(c) + ctx.led.st(si, c)));
                 double u = Math.min(q, room);
                 if (u <= 1e-9) continue;
                 u = ctx.led.fromShip(si, c, u);

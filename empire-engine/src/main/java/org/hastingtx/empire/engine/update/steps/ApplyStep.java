@@ -22,13 +22,23 @@ public final class ApplyStep {
         double mobMax = ctx.cfg.economy().mobility().sectorMax();
 
         List<Sector> next = new ArrayList<>(led.nSectors);
+        // Sectors this step actually rebuilt, for the conservation check below.
+        int[] rebuilt = new int[led.nSectors];
+        int nRebuilt = 0;
         for (int i = 0; i < led.nSectors; i++) {
             Sector s = ctx.sector(i);
+            // Issue #87: an unowned sector the ledger did not touch cannot have changed. Its stock, its
+            // designation and therefore its caps are all exactly what the last apply left, so there is
+            // nothing to add, nothing to truncate, and no reason to build a new object for it. Owned
+            // sectors always take the full path even when untouched, because a designation command
+            // between updates can change a cap and leave stock above it.
+            if (!s.owned() && untouched(led, i, nCom)) { next.add(s); continue; }
+            rebuilt[nRebuilt++] = i;
             // Whole units throughout (issue #77): the snapshot is integral, every delta is integral, so
             // the result is integral and conservation below can be checked by equality rather than tolerance.
             int[] q = new int[nCom];
             for (int c = 0; c < nCom; c++) {
-                q[c] = (int) s.stock().get(c) + led.stock[i][c];
+                q[c] = (int) s.stock().get(c) + led.st(i, c);
                 if (q[c] < 0) throw new IllegalStateException("negative stock of " + ctx.com.id(c) + " at " + s.at() + ": " + q[c]);
                 if (!ctx.com.isPerson(c)) {
                     int cap = (int) Math.floor(ctx.capacity(s, c));   // a whole cap, or the stored value and the spoilage tally disagree (issue #77)
@@ -56,7 +66,7 @@ public final class ApplyStep {
                     c.handicap(), c.inSanctuary(), led.bankruptNext[c.id()], led.plagueLeft[c.id()]));
         }
         World out = new World(snap.width(), snap.height(), snap.wrapX(), snap.wrapY(), next, countries, List.of(), snap.updateNumber() + 1, List.of(), ctx.ships, snap.nextShipId(), ctx.contacts);
-        checkConservation(ctx, out);
+        checkConservation(ctx, out, rebuilt, nRebuilt);
         // the last line of a sector's story: what it wanted and did not get
         for (var e : led.shortages.entrySet()) {
             StringBuilder sb = new StringBuilder();
@@ -68,17 +78,34 @@ public final class ApplyStep {
         return new UpdateResult(out, List.copyOf(led.events), List.copyOf(led.flows), UpdateResult.lazyHash(out), notes);
     }
 
+    /** Nothing in the ledger moved this sector: no stock, no level, no change to its parcels. */
+    private static boolean untouched(Ledger led, int i, int nCom) {
+        if (led.heldNext[i] != null) return false;
+        if (led.efficiency[i] != 0 || led.mobility[i] != 0 || led.road[i] != 0 || led.rail[i] != 0) return false;
+        int base = i * nCom;
+        for (int c = 0; c < nCom; c++) if (led.stock[base + c] != 0) return false;
+        return true;
+    }
+
     /**
      * Exact (issue #77, rule 7). Every quantity in the world is a whole number and every entry in the
      * ledger is a whole number, so the books balance to the unit or they do not balance. The old
      * {@code 1e-6} relative tolerance was there to absorb floating-point drift that can no longer occur;
      * keeping it would have hidden a real one-unit leak in a large world.
      */
-    private static void checkConservation(Ctx ctx, World out) {
+    private static void checkConservation(Ctx ctx, World out, int[] rebuilt, int nRebuilt) {
         int nCom = ctx.com.size();
         long[] before = new long[nCom], after = new long[nCom];
-        for (Sector s : ctx.snap.sectors()) { for (int c = 0; c < nCom; c++) before[c] += (long) s.stock().get(c); for (HeldParcel p : s.held()) before[p.commodity()] += (long) p.qty(); }
-        for (Sector s : out.sectors()) { for (int c = 0; c < nCom; c++) after[c] += (long) s.stock().get(c); for (HeldParcel p : s.held()) after[p.commodity()] += (long) p.qty(); }
+        // Only the sectors the apply step rebuilt (issue #87). A sector it skipped is the identical
+        // object in both worlds, so it adds the same amount to both sides and cancels — leaving it out
+        // does not weaken the equality, it just stops summing half a million zeroes twice.
+        for (int k = 0; k < nRebuilt; k++) {
+            int i = rebuilt[k];
+            Sector b = ctx.snap.sectors().get(i), a = out.sectors().get(i);
+            for (int c = 0; c < nCom; c++) { before[c] += (long) b.stock().get(c); after[c] += (long) a.stock().get(c); }
+            for (HeldParcel p : b.held()) before[p.commodity()] += (long) p.qty();
+            for (HeldParcel p : a.held()) after[p.commodity()] += (long) p.qty();
+        }
         for (Ship sh : ctx.snap.ships()) for (int c = 0; c < nCom; c++) before[c] += (long) sh.stock().get(c);
         for (Ship sh : out.ships()) for (int c = 0; c < nCom; c++) after[c] += (long) sh.stock().get(c);
         Ledger l = ctx.led;
@@ -86,15 +113,16 @@ public final class ApplyStep {
             long expected = before[c] + l.produced[c] + l.grown[c] - l.consumed[c] - l.destroyed[c];
             if (after[c] == expected) continue;
             if (Boolean.getBoolean("empire.conserve.debug")) {
-                for (int i = 0; i < ctx.snap.sectors().size(); i++) {
+                for (int k = 0; k < nRebuilt; k++) {
+                    int i = rebuilt[k];
                     long b = (long) ctx.snap.sectors().get(i).stock().get(c), a = (long) out.sectors().get(i).stock().get(c);
                     long bh = 0, ah = 0;
                     for (HeldParcel p : ctx.snap.sectors().get(i).held()) if (p.commodity() == c) bh += (long) p.qty();
                     for (HeldParcel p : out.sectors().get(i).held()) if (p.commodity() == c) ah += (long) p.qty();
-                    long d = (a + ah) - (b + bh) - l.stock[i][c];
+                    long d = (a + ah) - (b + bh) - l.st(i, c);
                     if (d != 0)
                         System.err.printf("CONSERVE %s at %s: before=%d+%d after=%d+%d delta=%d mismatch=%d%n",
-                                ctx.com.id(c), ctx.snap.sectors().get(i).at(), b, bh, a, ah, l.stock[i][c], d);
+                                ctx.com.id(c), ctx.snap.sectors().get(i).at(), b, bh, a, ah, l.st(i, c), d);
                 }
             }
             throw new IllegalStateException(String.format(Locale.ROOT, "conservation violated for %s: before=%d produced=%d grown=%d consumed=%d destroyed=%d expected=%d after=%d (out by %d)",

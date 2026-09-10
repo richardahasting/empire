@@ -83,6 +83,27 @@ public final class Hex {
         return out;
     }
 
+    /**
+     * The sector index of {@code (x, y)}'s neighbour in direction {@code d}, or -1 if the world does not
+     * wrap that way and there is none. Allocation-free (issue #87).
+     *
+     * <p>{@link #neighbours} builds a list, two {@link Cube}s and two {@link Coord}s per direction —
+     * about thirty objects a sector, which is sixteen million allocations to tabulate a 512x1024 world
+     * and was two thirds of the cost of setting up an update. This is the same arithmetic written out,
+     * expression for expression, so it rounds identically on negative coordinates.
+     */
+    public static int neighbourIndex(World w, int x, int y, int d) {
+        int[] v = DIRS[d];
+        int q = x - (y - (y & 1)) / 2;                 // toCube
+        int nq = q + v[0], nr = y + v[1];              // plus(dir)
+        int nx = nq + (nr - (nr & 1)) / 2, ny = nr;    // toOffset
+        if (w.wrapY()) ny = Math.floorMod(ny, w.height());
+        else if (ny < 0 || ny >= w.height()) return -1;
+        if (w.wrapX()) nx = Math.floorMod(nx, w.width());
+        else if (nx < 0 || nx >= w.width()) return -1;
+        return ny * w.width() + nx;
+    }
+
     /** Hex distance ignoring wrap. */
     public static int distanceRaw(Coord a, Coord b) { return toCube(a).minus(toCube(b)).length(); }
 

@@ -28,6 +28,53 @@ public final class Ctx {
 
     public static final int DIRS = 6;
 
+    /**
+     * Sector indices worth visiting, ascending (issue #87).
+     *
+     * <p>An update is O(map) doing O(owned) work: at 512x1024 with forty countries three updates in,
+     * 350 sectors of 524,288 are owned and the rest are ocean and wilderness that every step already
+     * skips with a {@code continue}. These lists let a step iterate what matters instead of walking
+     * past half a million hexes ten times over.
+     *
+     * <p><b>Ascending order is load-bearing.</b> The build-up step spends a country's cash in canonical
+     * sector order until the treasury runs dry, and the state hash follows from it, so visiting an
+     * index list must reproduce the order a full walk would have. Sorted by construction: the scan runs
+     * from 0 upward.
+     *
+     * <p>Derived once per update rather than carried on {@code Country}. The scan costs 1.13 ms — 0.13%
+     * of an update — and a stored index would be a second source of truth for who owns what, needing to
+     * be kept in step on explore, capture and abandonment and carried through save and load.
+     */
+    public final int[] owned;
+
+    /**
+     * Sectors holding people. The population step keys on people rather than ownership, which is the
+     * right predicate — population should follow people, not flags — and will matter when a sector can
+     * hold people while changing hands.
+     */
+    public final int[] populated;
+
+    /** Sectors holding parcels in transit. Needed to clear a sector whose parcels have all left. */
+    public final int[] withHeld;
+
+    /**
+     * Unowned sectors that still have something happening: an abandoned sector whose efficiency is
+     * rotting, or a sea hex carrying a bridge or an order for one. Both are bounded worklists, not the
+     * map.
+     */
+    public final int[] activeUnowned;
+
+    /**
+     * {@link #owned} and {@link #activeUnowned} merged, ascending — every sector an update can act on.
+     *
+     * <p>Two reasons it is one list rather than two loops. The build-up step spends a country's cash as
+     * it walks, so running all the unowned sectors before all the owned ones would change which sector
+     * gets the last of the treasury. And a rail hop may cross a bridge, which is a sea hex belonging to
+     * nobody (#60), so anything indexed by "a sector that can pay mobility" has to include unowned sea
+     * carrying track.
+     */
+    public final int[] ownedOrActive;
+
     /** Sector index of {@code i}'s {@code k}th neighbour, or -1 if there is none. */
     public int neighbour(int i, int k) { return neighbours[i * DIRS + k]; }
     /** Sector type by designation, built once (issue #82): GameConfig.sectorType is a linear string scan. */
@@ -49,12 +96,84 @@ public final class Ctx {
         this.typeIndex = new java.util.HashMap<>();
         for (SectorTypeCfg t : cfg.economy().sectorTypes()) typeIndex.put(t.id(), t);
         int n = snap.sectors().size();
-        this.neighbours = new int[n * DIRS];
-        java.util.Arrays.fill(this.neighbours, -1);
+
+        // One ascending pass builds every worklist (issue #87). Ascending is what keeps the update
+        // deterministic: a step iterating these visits sectors in the order a full walk would have.
+        int nOwned = 0, nPop = 0, nHeld = 0, nActive = 0, nBoth = 0;
+        int[] ownedBuf = new int[n], popBuf = new int[n], heldBuf = new int[n], activeBuf = new int[n], bothBuf = new int[n];
+        int civ = com.civ, mil = com.mil, uw = com.uw;
         for (int i = 0; i < n; i++) {
-            List<Coord> nb = Hex.neighbours(snap, snap.sectors().get(i).at());
-            for (int k = 0; k < nb.size(); k++) this.neighbours[i * DIRS + k] = snap.index(nb.get(k));
+            Sector s = snap.sectors().get(i);
+            boolean own = s.owned();
+            if (own) ownedBuf[nOwned++] = i;
+            if (s.stock().get(civ) + s.stock().get(mil) + s.stock().get(uw) > 0) popBuf[nPop++] = i;
+            if (!s.held().isEmpty()) heldBuf[nHeld++] = i;
+            // an abandoned sector still rotting, or a sea hex with a bridge on it or ordered
+            boolean active = !own && (s.efficiency() > 0 || (s.isOcean() && (s.railLevel() > 0 || s.railTarget() > 0)));
+            if (active) activeBuf[nActive++] = i;
+            if (own || active) bothBuf[nBoth++] = i;
         }
+        this.owned = java.util.Arrays.copyOf(ownedBuf, nOwned);
+        this.populated = java.util.Arrays.copyOf(popBuf, nPop);
+        this.withHeld = java.util.Arrays.copyOf(heldBuf, nHeld);
+        this.activeUnowned = java.util.Arrays.copyOf(activeBuf, nActive);
+        this.ownedOrActive = java.util.Arrays.copyOf(bothBuf, nBoth);
+
+        // Direction-indexed, -1 where there is none. Iterating 0..5 and skipping -1 visits the same
+        // neighbours in the same order as walking the packed list Hex.neighbours used to return.
+        this.neighbours = org.hastingtx.empire.engine.geo.NeighbourTable.of(snap);
+
+    }
+
+    /**
+     * Scratch for a graph search over the map, reused across calls (issue #87).
+     *
+     * <p>{@link org.hastingtx.empire.engine.update.steps.FlowStep#path} allocated three arrays the size
+     * of the world every time it ran, and it runs once per plan — four hundred times in an update at
+     * 512x1024, which is 2.6 GB allocated and filled to search a few hundred owned sectors. The arrays
+     * live here instead, and each search resets only the entries it touched: the search never leaves
+     * its owner's territory, so that is a few hundred writes rather than a million and a half.
+     *
+     * <p>One of these belongs to one search at a time. The update is sequential today; a nation-sharded
+     * update would hold one per thread.
+     */
+    public static final class PathScratch {
+        public final double[] dist;
+        public final int[] prev;
+        public final boolean[] done;
+        private final int[] touched;
+        private int nTouched;
+
+        PathScratch(int n) {
+            dist = new double[n];
+            prev = new int[n];
+            done = new boolean[n];
+            touched = new int[n];
+            java.util.Arrays.fill(dist, Double.POSITIVE_INFINITY);
+            java.util.Arrays.fill(prev, -1);
+        }
+
+        /**
+         * Record that {@code i} has been written, so {@link #reset} knows to put it back. Call this
+         * exactly once per node, on its first write — the list is sized for one entry per sector, and
+         * recording a node again on every edge relaxation would overrun it in a world one country owns
+         * outright.
+         */
+        public void touch(int i) { touched[nTouched++] = i; }
+
+        /** Back to all-infinite, all-unvisited, in time proportional to what the search actually saw. */
+        public void reset() {
+            for (int k = 0; k < nTouched; k++) { int i = touched[k]; dist[i] = Double.POSITIVE_INFINITY; prev[i] = -1; done[i] = false; }
+            nTouched = 0;
+        }
+    }
+
+    private PathScratch pathScratch;
+
+    /** The shared search scratch, cleared and ready. */
+    public PathScratch pathScratch() {
+        if (pathScratch == null) pathScratch = new PathScratch(snap.sectors().size());
+        return pathScratch;
     }
 
     public int idx(Coord c) { return snap.index(c); }
@@ -119,9 +238,9 @@ public final class Ctx {
         Sector s = sector(i);
         EconomyCfg.WorkCfg w = cfg.economy().work();
         double happiness = s.owned() ? country(s.owner()).levels().happiness() : 0;
-        double civ = s.stock().get(com.civ) + led.stock[i][com.civ];
-        double uw = s.stock().get(com.uw) + led.stock[i][com.uw];
-        double mil = s.stock().get(com.mil) + led.stock[i][com.mil];
+        double civ = s.stock().get(com.civ) + led.st(i, com.civ);
+        double uw = s.stock().get(com.uw) + led.st(i, com.uw);
+        double mil = s.stock().get(com.mil) + led.st(i, com.mil);
         double raw = Math.max(0, civ) * w.perCiv() + Math.max(0, uw) * w.perUw() + Math.max(0, mil) * w.perMil();
         return raw * etus * w.happinessEffectCurve().eval(happiness) - workSpent[i];
     }

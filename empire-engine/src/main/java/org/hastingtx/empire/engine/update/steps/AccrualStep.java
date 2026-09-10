@@ -12,9 +12,8 @@ public final class AccrualStep implements Step {
 
     public void run(Ctx ctx) {
         EconomyCfg.MobilityCfg m = ctx.cfg.economy().mobility();
-        for (int i = 0; i < ctx.led.nSectors; i++) {
+        for (int i : ctx.owned) {          // issue #87: the owned list, not the map
             Sector s = ctx.sector(i);
-            if (!s.owned()) continue;
             Country c = ctx.country(s.owner());
             double gain = m.sectorAccrualPerEtu() * ctx.etus * m.accrualFactor(s.efficiency());
             gain *= c.handicap().mobility();

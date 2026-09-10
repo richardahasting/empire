@@ -42,15 +42,15 @@ public final class FlowStep implements Step {
 
         // --- 6. plan -------------------------------------------------------------------
         // distribution
-        for (int i = 0; i < ctx.led.nSectors; i++) {
+        for (int i : ctx.owned) {          // issue #87
             Sector s = ctx.sector(i);
-            if (!s.owned() || s.distCenter() == null || s.distCenter().equals(s.at())) continue;
+            if (s.distCenter() == null || s.distCenter().equals(s.at())) continue;
             Sector ctr = ctx.snap.sector(s.distCenter());
             if (ctr.owner() != s.owner()) continue;
             int ci = ctx.idx(ctr.at());
             for (int c = 0; c < ctx.com.size(); c++) {
                 if (!s.hasThreshold(c)) continue;
-                double post = s.stock().get(c) + ctx.led.stock[i][c];
+                double post = s.stock().get(c) + ctx.led.st(i, c);
                 double thr = s.threshold(c);
                 if (post < thr - 1e-9) {
                     List<Coord> path = path(ctx, ctr.at(), s.at(), s.owner(), dc);
@@ -62,12 +62,12 @@ public final class FlowStep implements Step {
             }
         }
         // deliver orders (KNOWN: deliver.c): above the threshold, one hex that way, if that hex is yours (issue #45)
-        for (int i = 0; i < ctx.led.nSectors; i++) {
+        for (int i : ctx.owned) {          // issue #87
             Sector s = ctx.sector(i);
-            if (!s.owned() || s.deliver().count() == 0) continue;
+            if (s.deliver().count() == 0) continue;
             for (int c = 0; c < ctx.com.size(); c++) {
                 if (!s.deliver().has(c)) continue;
-                double post = s.stock().get(c) + ctx.led.stock[i][c];
+                double post = s.stock().get(c) + ctx.led.st(i, c);
                 double thr = s.deliver().threshold(c);
                 if (post <= thr + 1e-9) continue;
                 Coord to = Hex.normalise(ctx.snap, Hex.stepRaw(s.at(), s.deliver().dir(c)));
@@ -80,7 +80,7 @@ public final class FlowStep implements Step {
         // held parcels resume
         List<HeldParcel> heldRefs = new ArrayList<>();
         Map<HeldParcel, Integer> heldAt = new IdentityHashMap<>();
-        for (int i = 0; i < ctx.led.nSectors; i++) {
+        for (int i : ctx.withHeld) {       // issue #87: only sectors actually holding parcels
             for (HeldParcel p : ctx.sector(i).held()) {
                 heldRefs.add(p); heldAt.put(p, i);
                 if (p.rail()) continue;   // trains are handled by the rail pass
@@ -98,7 +98,7 @@ public final class FlowStep implements Step {
             List<Coord> p = path.size() - 1 > reach ? new ArrayList<>(path.subList(0, reach + 1)) : path;
             plans.add(new Plan("move", m.owner(), m.commodity(), fi, m.to(), p, null, floorQ(m.qty(), quantum)));
         }
-        if (plans.isEmpty()) { Map<Integer, List<HeldParcel>> nh = new HashMap<>(); for (int i = 0; i < ctx.led.nSectors; i++) for (HeldParcel p : ctx.sector(i).held()) addHeld(nh, i, p); railPass(ctx, nh); carryHeld(ctx, nh); return; }
+        if (plans.isEmpty()) { Map<Integer, List<HeldParcel>> nh = new HashMap<>(); for (int i : ctx.withHeld) for (HeldParcel p : ctx.sector(i).held()) addHeld(nh, i, p); railPass(ctx, nh); carryHeld(ctx, nh); return; }
 
         // --- 7. resolve contention ------------------------------------------------------
         // source budgets
@@ -109,7 +109,7 @@ public final class FlowStep implements Step {
                 p.sourceKey = p.originIdx;
                 long key = ((long) p.originIdx << 8) | p.commodity;
                 Sector src = ctx.sector(p.originIdx);
-                double post = src.stock().get(p.commodity) + ctx.led.stock[p.originIdx][p.commodity];
+                double post = src.stock().get(p.commodity) + ctx.led.st(p.originIdx, p.commodity);
                 // every order keeps its own threshold (a centre supplying others keeps the centre's; a source pushing to its
                 // centre keeps its own, which its request already respects); where a deliver order and a distribution
                 // threshold draw on one stock, the stricter keep bounds them both
@@ -123,13 +123,15 @@ public final class FlowStep implements Step {
         }
         // mobility budgets
         double[] mobBudget = new double[ctx.led.nSectors];
-        for (int i = 0; i < ctx.led.nSectors; i++) mobBudget[i] = Math.max(0, ctx.sector(i).mobility() + ctx.led.mobility[i]);
+        // Only a sector that can pay is ever indexed here: paths run through their owner's territory,
+        // and a rail path may cross a bridge, which is unowned sea (issue #87).
+        for (int i : ctx.ownedOrActive) mobBudget[i] = Math.max(0, ctx.sector(i).mobility() + ctx.led.mobility[i]);
         // room for people (issue #48): civilians and workers never move into a sector that cannot hold them —
         // the apply step would truncate them. Room = population cap − people there after this update's births.
         double[] roomBudget = new double[ctx.led.nSectors];
-        for (int i = 0; i < ctx.led.nSectors; i++) {
+        for (int i : ctx.ownedOrActive) {   // issue #87: people only ever arrive somewhere owned
             Sector s = ctx.sector(i);
-            roomBudget[i] = Math.max(0, ctx.maxPopulation(s) - (s.stock().get(ctx.com.civ) + ctx.led.stock[i][ctx.com.civ] + s.stock().get(ctx.com.uw) + ctx.led.stock[i][ctx.com.uw]));
+            roomBudget[i] = Math.max(0, ctx.maxPopulation(s) - (s.stock().get(ctx.com.civ) + ctx.led.st(i, ctx.com.civ) + s.stock().get(ctx.com.uw) + ctx.led.st(i, ctx.com.uw)));
         }
 
         for (int iter = 0; iter < 50; iter++) {
@@ -274,7 +276,7 @@ public final class FlowStep implements Step {
             // a sector that pulled from its centre and did not get all it asked for is short by the rest
             if (isPull(ctx, p) && p.requested - (completed ? moving : 0) > 1e-9) ctx.led.shortOf(ctx.idx(p.dest), p.commodity, p.requested - (completed ? moving : 0));
         }
-        for (int i = 0; i < ctx.led.nSectors; i++) ctx.led.mobility[i] -= mobSpent[i];
+        for (int i : ctx.ownedOrActive) ctx.led.mobility[i] -= mobSpent[i];   // issue #87: only these were charged
         // held parcels that were not planned (no route) stay put
         for (HeldParcel p : heldRefs) if (!consumedHeld.contains(p)) addHeld(newHeld, heldAt.get(p), p);
         railPass(ctx, newHeld);
@@ -295,7 +297,7 @@ public final class FlowStep implements Step {
             List<Coord> path = ctx.railPath(o.from(), o.to(), o.owner());
             if (path == null) { ctx.led.event("rail_severed", o.owner(), o.from(), "no rail line from " + o.from() + " to " + o.to() + " any more; shipment cancelled", o.qty()); continue; }
             int fi = ctx.idx(o.from());
-            double avail = ctx.sector(fi).stock().get(o.commodity()) + ctx.led.stock[fi][o.commodity()];
+            double avail = ctx.sector(fi).stock().get(o.commodity()) + ctx.led.st(fi, o.commodity());
             trains.add(new Train(o.owner(), o.commodity(), Math.max(0, Math.min(o.qty(), avail)), fi, o.to(), path, null));
         }
         // trains already on the line: they were removed from newHeld's carry-over by the road pass only if planned there; rail parcels were never planned there, so take them out now
@@ -312,7 +314,7 @@ public final class FlowStep implements Step {
         if (trains.isEmpty()) return;
         // capacity contention per rail sector entered, proportional
         double[] cap = new double[ctx.led.nSectors];
-        for (int i = 0; i < ctx.led.nSectors; i++) cap[i] = ctx.railCapable(i) ? ctx.railCapacity(i) : 0;
+        for (int i : ctx.ownedOrActive) cap[i] = ctx.railCapable(i) ? ctx.railCapacity(i) : 0;   // issue #87
         double[] claim = new double[trains.size()];
         for (int k = 0; k < trains.size(); k++) claim[k] = trains.get(k).qty();
         for (int iter = 0; iter < 50; iter++) {
@@ -387,8 +389,18 @@ public final class FlowStep implements Step {
         }
     }
 
+    /**
+     * Write the sectors whose parcels changed, and only those (issue #87). This used to assign every
+     * entry in the world — {@code getOrDefault(i, List.of())} across half a million sectors — which
+     * defeated the apply step's unchanged test and made every sector look touched. A sector that had
+     * parcels and has none now still needs an explicit empty list; one that never had any and has none
+     * stays null.
+     */
     private static void carryHeld(Ctx ctx, Map<Integer, List<HeldParcel>> newHeld) {
-        for (int i = 0; i < ctx.led.nSectors; i++) ctx.led.heldNext[i] = newHeld.getOrDefault(i, List.of());
+        int total = 0;
+        for (var e : newHeld.entrySet()) { ctx.led.heldNext[e.getKey()] = e.getValue(); total += e.getValue().size(); }
+        for (int i : ctx.withHeld) if (!newHeld.containsKey(i)) ctx.led.heldNext[i] = List.of();
+        ctx.led.heldTotal = total;
     }
 
     /** Parcels with the same commodity, owner and destination merge, keeping the earliest issue. */
@@ -453,35 +465,45 @@ public final class FlowStep implements Step {
     public static List<Coord> path(Ctx ctx, Coord from, Coord to, int owner, DistributionCfg dc) {
         if (from.equals(to)) return List.of(from);
         boolean hops = "fewest_hops".equals(dc.pathCost());
-        int n = ctx.led.nSectors;
-        double[] dist = new double[n]; Arrays.fill(dist, Double.POSITIVE_INFINITY);
-        int[] prev = new int[n]; Arrays.fill(prev, -1);
-        int src = ctx.idx(from), dst = ctx.idx(to);
-        dist[src] = 0;
-        // keys are (index, dist-bits) snapshots; stale entries are skipped via done[]
-        PriorityQueue<long[]> q = new PriorityQueue<>((a, b) -> { int c = Double.compare(Double.longBitsToDouble(a[1]), Double.longBitsToDouble(b[1])); return c != 0 ? c : Long.compare(a[0], b[0]); });
-        q.add(new long[] {src, Double.doubleToLongBits(0)});
-        boolean[] done = new boolean[n];
-        while (!q.isEmpty()) {
-            long[] top = q.poll();
-            int u = (int) top[0];
-            if (done[u]) continue;
-            done[u] = true;
-            if (u == dst) break;
-            for (int k = 0; k < Ctx.DIRS; k++) {
-                int v = ctx.neighbour(u, k);
-                if (v < 0) continue;
-                Sector sv = ctx.sector(v);
-                if (sv.owner() != owner || !sv.isLand()) continue;
-                double w = hops ? 1.0 : ctx.moveCostInto(sv);
-                if (Double.isInfinite(w)) continue;
-                double nd = dist[u] + w;
-                if (nd < dist[v] - 1e-12) { dist[v] = nd; prev[v] = u; q.add(new long[] {v, Double.doubleToLongBits(nd)}); }
+        // Scratch is reused and reset sparsely (issue #87): the search never leaves the owner's
+        // territory, so it touches a few hundred entries, not the world.
+        Ctx.PathScratch sc = ctx.pathScratch();
+        double[] dist = sc.dist;
+        int[] prev = sc.prev;
+        boolean[] done = sc.done;
+        try {
+            int src = ctx.idx(from), dst = ctx.idx(to);
+            dist[src] = 0; sc.touch(src);
+            // keys are (index, dist-bits) snapshots; stale entries are skipped via done[]
+            PriorityQueue<long[]> q = new PriorityQueue<>((a, b) -> { int c = Double.compare(Double.longBitsToDouble(a[1]), Double.longBitsToDouble(b[1])); return c != 0 ? c : Long.compare(a[0], b[0]); });
+            q.add(new long[] {src, Double.doubleToLongBits(0)});
+            while (!q.isEmpty()) {
+                long[] top = q.poll();
+                int u = (int) top[0];
+                if (done[u]) continue;
+                done[u] = true;   // u was touched when its dist was first set; do not record it twice
+                if (u == dst) break;
+                for (int k = 0; k < Ctx.DIRS; k++) {
+                    int v = ctx.neighbour(u, k);
+                    if (v < 0) continue;
+                    Sector sv = ctx.sector(v);
+                    if (sv.owner() != owner || !sv.isLand()) continue;
+                    double w = hops ? 1.0 : ctx.moveCostInto(sv);
+                    if (Double.isInfinite(w)) continue;
+                    double nd = dist[u] + w;
+                    if (nd < dist[v] - 1e-12) {
+                        if (Double.isInfinite(dist[v])) sc.touch(v);   // first write only
+                        dist[v] = nd; prev[v] = u;
+                        q.add(new long[] {v, Double.doubleToLongBits(nd)});
+                    }
+                }
             }
+            if (Double.isInfinite(dist[dst])) return null;
+            LinkedList<Coord> out = new LinkedList<>();
+            for (int v = dst; v != -1; v = prev[v]) out.addFirst(ctx.sector(v).at());
+            return out;
+        } finally {
+            sc.reset();
         }
-        if (Double.isInfinite(dist[dst])) return null;
-        LinkedList<Coord> out = new LinkedList<>();
-        for (int v = dst; v != -1; v = prev[v]) out.addFirst(ctx.sector(v).at());
-        return out;
     }
 }
