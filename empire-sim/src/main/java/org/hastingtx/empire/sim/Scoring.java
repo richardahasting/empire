@@ -13,10 +13,18 @@ public final class Scoring {
     private Scoring() {}
 
     public static double score(GameConfig cfg, World w, Country c) {
-        Map<String, Double> wt = cfg.units().enabled() ? cfg.scoring().weightsWithUnits() : cfg.scoring().weights();
         Commodities com = Commodities.of(cfg);
         double civ = 0, eff = 0; int terr = 0;
         for (Sector s : w.sectors()) if (s.owner() == c.id()) { civ += s.stock().get(com.civ); eff += s.efficiency(); terr++; }
+        return score(cfg, c, terr, civ, eff);
+    }
+
+    /**
+     * The same score from totals the caller already has. The sim tallies every country in one pass over
+     * the sectors, so scoring must not walk them again (issue #89).
+     */
+    public static double score(GameConfig cfg, Country c, int terr, double civ, double eff) {
+        Map<String, Double> wt = cfg.units().enabled() ? cfg.scoring().weightsWithUnits() : cfg.scoring().weights();
         double survival = terr > 0 && civ > 0 ? 1 : 0;
         return civ * wt.getOrDefault("civilians", 0.0) + eff * wt.getOrDefault("total_efficiency", 0.0) + c.levels().tech() * wt.getOrDefault("tech", 0.0)
                 + c.cash() * wt.getOrDefault("treasury", 0.0) + terr * wt.getOrDefault("territory", 0.0) + survival * wt.getOrDefault("survival", 0.0);

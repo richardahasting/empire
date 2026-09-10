@@ -77,25 +77,44 @@ public final class Sim {
             events.addAll(ur.events());
             since = new ArrayList<>(ur.events());
             lastFlows = ur.flows();
-            for (Country c : w.countries()) rows.add(row(w, c, ur, accepted[c.id()], rejected[c.id()]));
+            rows.addAll(rows(w, ur, accepted, rejected));
         }
         return new Result(w, rows, hashes, events, turns, lastFlows);
     }
 
-    private Row row(World w, Country c, UpdateResult ur, int acc, int rej) {
-        int sectors = 0, held = 0; double civ = 0, mil = 0, uw = 0, food = 0, iron = 0, lcm = 0, eff = 0;
+    /**
+     * A row per country, from one pass over the sectors rather than one pass per country.
+     *
+     * <p>This was {@code row(w, c, ...)} called for each country, and each call walked the whole world
+     * — plus {@link Scoring#score} walking it again. At forty countries on a 512x1024 map that is
+     * eighty scans of half a million sectors an update, which was several seconds and, once the update
+     * itself came down (issues #87, #89), most of what a sim cycle cost. It is harness bookkeeping, not
+     * a rule, and it now costs one scan.
+     */
+    private List<Row> rows(World w, UpdateResult ur, int[] acc, int[] rej) {
+        int n = w.countries().size();
+        int[] sectors = new int[n], held = new int[n];
+        double[] civ = new double[n], mil = new double[n], uw = new double[n], food = new double[n],
+                 iron = new double[n], lcm = new double[n], eff = new double[n];
         int iIron = com.has("iron") ? com.index("iron") : -1, iLcm = com.has("lcm") ? com.index("lcm") : -1;
         for (Sector s : w.sectors()) {
-            if (s.owner() != c.id()) continue;
-            sectors++; held += s.held().size(); eff += s.efficiency();
-            civ += s.stock().get(com.civ); mil += s.stock().get(com.mil); uw += s.stock().get(com.uw); food += s.stock().get(com.food);
-            if (iIron >= 0) iron += s.stock().get(iIron);
-            if (iLcm >= 0) lcm += s.stock().get(iLcm);
+            int o = s.owner();
+            if (o < 0) continue;
+            sectors[o]++; held[o] += s.held().size(); eff[o] += s.efficiency();
+            civ[o] += s.stock().get(com.civ); mil[o] += s.stock().get(com.mil); uw[o] += s.stock().get(com.uw); food[o] += s.stock().get(com.food);
+            if (iIron >= 0) iron[o] += s.stock().get(iIron);
+            if (iLcm >= 0) lcm[o] += s.stock().get(iLcm);
         }
-        int done = 0, holds = 0;
-        for (Flow f : ur.flows()) if (f.owner() == c.id()) { if (f.completed()) done++; else holds++; }
-        return new Row(w.updateNumber(), c.id(), c.name(), sectors, civ, mil, uw, food, iron, lcm, c.cash(), c.btu(), eff,
-                c.levels().tech(), c.levels().research(), c.levels().education(), c.levels().happiness(), held, done, holds, acc, rej,
-                Scoring.score(cfg, w, c));
+        int[] done = new int[n], holds = new int[n];
+        for (Flow f : ur.flows()) if (f.owner() >= 0) { if (f.completed()) done[f.owner()]++; else holds[f.owner()]++; }
+
+        List<Row> out = new ArrayList<>(n);
+        for (Country c : w.countries()) {
+            int i = c.id();
+            out.add(new Row(w.updateNumber(), i, c.name(), sectors[i], civ[i], mil[i], uw[i], food[i], iron[i], lcm[i], c.cash(), c.btu(), eff[i],
+                    c.levels().tech(), c.levels().research(), c.levels().education(), c.levels().happiness(), held[i], done[i], holds[i], acc[i], rej[i],
+                    Scoring.score(cfg, c, sectors[i], civ[i], eff[i])));
+        }
+        return out;
     }
 }
