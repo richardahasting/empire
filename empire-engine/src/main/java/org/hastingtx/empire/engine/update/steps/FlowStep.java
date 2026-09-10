@@ -303,23 +303,48 @@ public final class FlowStep implements Step {
             Train t = trains.get(k);
             double qty = claim[k];
             if (qty <= 1e-9) { ctx.led.flows.add(new Flow("rail", t.owner, t.commodity, t.qty, 0, t.path, 0, false, "line at capacity")); continue; }
-            int range = (int) Math.floor(rail.maxSectorsPerUpdate().eval(ctx.country(t.owner).levels().tech()));
-            int hops = Math.min(range, t.path.size() - 1);
-            int stopIdx = ctx.idx(t.path.get(hops));
-            boolean arrives = hops == t.path.size() - 1;
-            // depot efficiency at the endpoints scales what actually gets through (spec: capacity scales with depot efficiency)
+            // endpoint efficiency scales what actually gets through
             double effScale = Math.min(ctx.sector(ctx.idx(t.path.get(0))).efficiency(), ctx.sector(ctx.idx(t.dest)).efficiency()) / 100.0;
             double moving = Math.min(qty, t.from == null ? qty : t.qty) * (t.from == null ? Math.max(0.01, effScale) : 1.0);
-            // mobility (Richard 2026-09-09): the sending sector pays a fraction of the road cost of this update's hops; trains from one depot take turns in order
+
+            // How far it gets is what its mobility pays for (Richard 2026-09-09, issue #79): walk the line
+            // hop by hop and stop at the last one the sending sector can afford. Rail level already prices a
+            // hop through moveCostInto, so the track a player laid is what decides the reach -- rail 100 costs
+            // a fifth of rail 0 and carries a train five times as far. max_sectors_per_update survives only as
+            // a ceiling so a pathological path cannot run away.
+            int ceiling = (int) Math.floor(rail.maxSectorsPerUpdate().eval(ctx.country(t.owner).levels().tech()));
+            int maxHops = Math.min(ceiling, t.path.size() - 1);
+            double mult = rail.mobilityMultiplier() == null ? 0 : rail.mobilityMultiplier();
+            double perUnitWeight = mult * ctx.weightLeaving(t.commodity, ctx.sector(t.originIdx));
+            double budget = Math.max(0, ctx.sector(t.originIdx).mobility() + ctx.led.mobility[t.originIdx]);
+            int hops = 0;
+            double spend = 0;
             String mobHold = null;
-            if (rail.mobilityMultiplier() != null && rail.mobilityMultiplier() > 0 && moving > 1e-9) {
-                double unit = 0;
-                for (int h = 1; h <= hops; h++) unit += ctx.moveCostInto(ctx.sector(ctx.idx(t.path.get(h))));
-                unit *= rail.mobilityMultiplier() * ctx.weightLeaving(t.commodity, ctx.sector(t.originIdx));
-                double budget = Math.max(0, ctx.sector(t.originIdx).mobility() + ctx.led.mobility[t.originIdx]);
-                if (unit > 0 && budget / unit < moving) { moving = Math.floor(budget / unit * 1000) / 1000; mobHold = "mobility exhausted in " + ctx.sector(t.originIdx).at(); }
-                if (moving > 1e-9) ctx.led.mobility[t.originIdx] -= moving * unit;
+            if (perUnitWeight <= 0 || moving <= 1e-9) {
+                hops = maxHops;                                  // rail costs no mobility here: run to the ceiling
+            } else {
+                double perUnit = 0;
+                for (int h = 1; h <= maxHops; h++) {
+                    perUnit += ctx.moveCostInto(ctx.sector(ctx.idx(t.path.get(h))));
+                    double cost = perUnit * perUnitWeight * moving;
+                    if (cost > budget + 1e-9) break;
+                    hops = h; spend = cost;
+                }
+                if (hops == 0 && maxHops > 0) {
+                    // it cannot afford the whole load even one hop: move what the budget carries, one hop, so a
+                    // train always makes progress instead of standing still for ever
+                    double unit1 = ctx.moveCostInto(ctx.sector(ctx.idx(t.path.get(1)))) * perUnitWeight;
+                    double afford = unit1 > 0 ? Math.floor(budget / unit1 * 1000) / 1000 : moving;
+                    mobHold = "mobility exhausted in " + ctx.sector(t.originIdx).at();
+                    if (afford > 1e-9) { moving = Math.min(moving, afford); hops = 1; spend = moving * unit1; }
+                    else moving = 0;
+                } else if (hops < t.path.size() - 1) {
+                    mobHold = "mobility carried it " + hops + (hops == 1 ? " hex" : " hexes") + " from " + ctx.sector(t.originIdx).at();
+                }
             }
+            if (spend > 0) ctx.led.mobility[t.originIdx] -= spend;
+            int stopIdx = ctx.idx(t.path.get(hops));
+            boolean arrives = hops == t.path.size() - 1;
             if (moving <= 1e-9) { ctx.led.flows.add(new Flow("rail", t.owner, t.commodity, t.qty, 0, t.path, 0, false, mobHold != null ? mobHold : "nothing to move")); if (t.from != null) addHeld(newHeld, t.originIdx, t.from); continue; }
             if (t.from == null) ctx.led.toHeld(t.originIdx, t.commodity, moving);   // leaves stock; becomes cargo
             double leftover = t.qty - moving;

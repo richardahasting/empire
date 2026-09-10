@@ -26,15 +26,21 @@ class ShipsTest {
     private static final Coord SEA_E = Hex.stepRaw(CAP, 0, 3);
 
     private static World world() {
-        World w = TestWorlds.disc(CFG, 2, Map.of("civ", 500.0, "food", 2000.0));
+        World w = TestWorlds.disc(CFG, 2, Map.of("civ", 500.0, "food", 400.0));
         w = w.withCountry(w.country(0).withCash(100000));
         for (Coord h : new Coord[] {HARBOR_E, HARBOR_W})
-            w = TestWorlds.own(w, CFG, h, "harbor", 100, 127, Map.of("civ", 500.0, "food", 1000.0, "lcm", 500.0, "hcm", 200.0), Map.of("food", 200.0));
+            w = TestWorlds.own(w, CFG, h, "harbor", 100, 127, Map.of("civ", 500.0, "food", 300.0, "lcm", 500.0, "hcm", 200.0), Map.of("food", 200.0));
         // fishing grounds east of the eastern harbour
         Sector sea = w.sector(SEA_E);
         w = w.withSector(sea.withTerrain(Terrain.OCEAN, 0, new Resources(60, 0, 0, 0, 0)));
         return w;
     }
+    /** Set one sector's food, for tests that need a full or an empty harbour under the 1000 cap. */
+    private static World stockFood(World w, Coord at, double food) {
+        Sector s = w.sector(at);
+        return w.withSector(s.withStock(s.stock().with(COM.food, food)));
+    }
+
     private static World withShip(World w, String cls, Coord at, double eff) { return withShip(w, cls, at, eff, 0); }
     private static World withShip(World w, String cls, Coord at, double eff, double tech) {
         Ship s = new Ship(w.nextShipId(), 0, cls, "", at, eff, Stocks.zero(COM.size()), null, null, 0, "", tech, null, null);
@@ -109,7 +115,9 @@ class ShipsTest {
 
     @Test
     void aLaneShuttlesSurplusBetweenTwoHarbours() {
-        World w = withShip(world(), "cargo_ship", HARBOR_E, 100);
+        // a lane moves surplus from a full harbour to an empty one; under the 1000 cap the
+        // destination must have room for the hold (issue #77)
+        World w = stockFood(stockFood(withShip(world(), "cargo_ship", HARBOR_E, 100), HARBOR_E, 800), HARBOR_W, 100);
         CommandResult r = new CommandExecutor(CFG).execute(w, 0, new Command.Lane(1, HARBOR_E, HARBOR_W, List.of("food")));
         assertThat(r.error()).as(r.error()).isNull();
         World cur = r.world();
@@ -129,7 +137,7 @@ class ShipsTest {
 
     @Test
     void loadAndUnloadOnlyInYourHarbourWithinTheHold() {
-        World w = withShip(world(), "cargo_ship", HARBOR_E, 100);
+        World w = stockFood(withShip(world(), "cargo_ship", HARBOR_E, 100), HARBOR_E, 800);
         CommandExecutor ex = new CommandExecutor(CFG);
         CommandResult l = ex.execute(w, 0, new Command.Load(1, "food", 1000));
         assertThat(l.error()).isNull();
@@ -205,5 +213,45 @@ class ShipsTest {
         long ocean = w.sectors().stream().filter(s -> s.terrain() == Terrain.OCEAN).count();
         assertThat(fertile).isGreaterThan(ocean / 2);
         assertThat(w.sectors().stream().filter(s -> s.terrain() == Terrain.OCEAN).mapToInt(s -> s.resources().fertility()).distinct().count()).isGreaterThan(3);
+    }
+
+    // ---- issue #78: a harbour reaches the warehouse next door ----
+
+    /** Own {@code at} as a warehouse of country {@code owner}, with the given stock. */
+    private static World warehouse(World w, Coord at, int owner, double food) {
+        Sector s = w.sector(at).withOwner(owner).withDesignation("warehouse", 100).withMobility(127);
+        return w.withSector(s.withStock(s.stock().with(COM.food, food)));
+    }
+
+    @Test
+    void aShipUnloadsPastAFullHarbourIntoTheWarehouseNextDoor() {
+        Coord shed = Hex.stepRaw(HARBOR_E, 3, 1);                       // a land hex beside the harbour
+        World w = warehouse(stockFood(withShip(world(), "cargo_ship", HARBOR_E, 100), HARBOR_E, 10000), shed, 0, 0);
+        w = w.withShip(w.ship(1).withStock(w.ship(1).stock().with(COM.food, 500)));
+        double shedBefore = w.sector(shed).stock().get(FOOD);
+
+        World after = Update.run(new CommandExecutor(CFG).execute(w, 0, new Command.Unload(1, "food", 500)).world(), CFG, 1).next();
+        assertThat(after.sector(shed).stock().get(FOOD)).as("spilled into the warehouse").isGreaterThan(shedBefore);
+        assertThat(after.ship(1).stock().get(FOOD)).isLessThan(500);
+    }
+
+    @Test
+    void aShipLoadsAHoldTheHarbourAloneCannotFill() {
+        Coord shed = Hex.stepRaw(HARBOR_E, 3, 1);
+        World w = warehouse(stockFood(withShip(world(), "cargo_ship", HARBOR_E, 100), HARBOR_E, 250), shed, 0, 900);
+        CommandResult r = new CommandExecutor(CFG).execute(w, 0, new Command.Load(1, "food", 600));
+        assertThat(r.error()).as(r.error()).isNull();
+        assertThat(r.world().ship(1).stock().get(FOOD)).as("harbour plus warehouse fills the hold").isCloseTo(600, within(1e-9));
+        assertThat(r.info()).contains("warehouse");
+    }
+
+    @Test
+    void aShipNeverReachesANeighboursWarehouseNorOneTooFarAway() {
+        Coord theirs = Hex.stepRaw(HARBOR_E, 3, 1);
+        Coord distant = Hex.stepRaw(HARBOR_E, 3, 3);                    // owned by us, but not adjacent
+        World w = warehouse(warehouse(stockFood(withShip(world(), "cargo_ship", HARBOR_E, 100), HARBOR_E, 250), theirs, 1, 900), distant, 0, 900);
+        CommandResult r = new CommandExecutor(CFG).execute(w, 0, new Command.Load(1, "food", 600));
+        // only the harbour's own 250 above a 200 threshold is reachable: not a foreign shed, not a distant one
+        assertThat(r.world().ship(1).stock().get(FOOD)).isCloseTo(250, within(1e-9));
     }
 }
