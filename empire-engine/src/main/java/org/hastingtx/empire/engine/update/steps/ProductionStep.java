@@ -20,9 +20,8 @@ public final class ProductionStep implements Step {
     private static final String[] LEVELS = {"tech", "research", "education", "happiness"};
 
     public void run(Ctx ctx) {
-        for (int i = 0; i < ctx.led.nSectors; i++) {
+        for (int i : ctx.owned) {          // issue #87: the owned list, not the map
             Sector s = ctx.sector(i);
-            if (!s.owned()) continue;
             SectorTypeCfg t = ctx.type(s);
             if (t.produces().isEmpty() && t.producesLevel().isEmpty()) continue;
             Country c = ctx.country(s.owner());
@@ -46,7 +45,7 @@ public final class ProductionStep implements Step {
                 int ci = ctx.com.index(e.getKey());
                 double w = unit * e.getValue();
                 double room = ctx.com.isPerson(ci) ? Math.max(0, ctx.maxPopulation(s) - people(ctx, i))
-                                                  : Math.max(0, ctx.capacity(s, ci) - (s.stock().get(ci) + ctx.led.stock[i][ci]));
+                                                  : Math.max(0, ctx.capacity(s, ci) - (s.stock().get(ci) + ctx.led.st(i, ci)));
                 want[ci] = Math.min(w, room);
                 totalWant += want[ci];
             }
@@ -65,7 +64,7 @@ public final class ProductionStep implements Step {
                 int in = ctx.com.index(e.getKey());
                 double need = totalWant * e.getValue();
                 if (need <= 0) continue;
-                double avail = Math.max(0, s.stock().get(in) + ctx.led.stock[i][in]);
+                double avail = Math.max(0, s.stock().get(in) + ctx.led.st(i, in));
                 scale = Math.min(scale, avail / need);
                 if (avail < need) ctx.led.shortOf(i, in, need - avail);
             }
@@ -88,7 +87,7 @@ public final class ProductionStep implements Step {
 
     private static double people(Ctx ctx, int i) {
         Sector s = ctx.sector(i);
-        return s.stock().get(ctx.com.civ) + ctx.led.stock[i][ctx.com.civ] + s.stock().get(ctx.com.uw) + ctx.led.stock[i][ctx.com.uw];
+        return s.stock().get(ctx.com.civ) + ctx.led.st(i, ctx.com.civ) + s.stock().get(ctx.com.uw) + ctx.led.st(i, ctx.com.uw);
     }
 
     static int levelIndex(String id) {

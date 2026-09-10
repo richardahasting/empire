@@ -15,11 +15,18 @@ public final class Ledger {
     public final int nSectors, nCom, nCountries;
 
     /**
-     * [sector][commodity]. Deltas, so signed and free to go negative or transiently past the cap —
-     * {@code int} rather than {@code short} for that reason (issue #77). At a million sectors this is
-     * 43 MB an update rather than 86, and it is allocated fresh every update.
+     * Stock deltas, flat: {@code stock[sector * nCom + commodity]}. Read with {@link #st}.
+     *
+     * <p>Signed and free to go negative or transiently past the cap — {@code int} rather than
+     * {@code short} for that reason (issue #77). Flat rather than {@code int[nSectors][nCom]} because
+     * the ragged form is one small array object per sector: half a million allocations and 8 MB of
+     * object headers, 20 ms of an update that is now 60 (issue #87). One allocation of the same numbers
+     * costs 2 ms.
      */
-    public final int[][] stock;
+    public final int[] stock;
+
+    /** This update's delta to commodity {@code c} in sector {@code i}. */
+    public int st(int i, int c) { return stock[i * nCom + c]; }
     public final double[] efficiency, mobility, road, rail;
     public final double[] cash, btu;
     public final double[][] level;       // [country][tech, research, education, happiness]
@@ -32,8 +39,18 @@ public final class Ledger {
      */
     public final long[] produced, consumed, destroyed, grown, transferNet;
 
-    /** Replacement held-parcel lists; null entry = unchanged from snapshot. */
+    /**
+     * Replacement held-parcel lists; null entry = unchanged from snapshot. Sparse, and it matters
+     * (issue #87): the flow step used to fill every entry, which meant the apply step's
+     * {@code heldNext[i] != null} test — written precisely to skip untouched sectors — never once fired.
+     */
     public final List<HeldParcel>[] heldNext;
+
+    /**
+     * Parcels in the world after this update. Counted by the flow step, which knows the whole set,
+     * because {@link #heldNext} is sparse and no longer sums to it.
+     */
+    public int heldTotal;
 
     public final List<Event> events = new ArrayList<>();
     public final List<Flow> flows = new ArrayList<>();
@@ -51,7 +68,7 @@ public final class Ledger {
         this.nSectors = snap.sectors().size();
         this.nCom = nCom;
         this.nCountries = snap.countries().size();
-        stock = new int[nSectors][nCom];
+        stock = new int[nSectors * nCom];
         efficiency = new double[nSectors]; mobility = new double[nSectors]; road = new double[nSectors]; rail = new double[nSectors];
         cash = new double[nCountries]; btu = new double[nCountries];
         level = new double[nCountries][4];
@@ -82,27 +99,27 @@ public final class Ledger {
      */
     public static double taken(double qty) { return Math.floor(qty); }
 
-    public double produce(int sector, int c, double qty) { int q = (int) whole(qty); stock[sector][c] += q; produced[c] += q; return q; }
-    public double consume(int sector, int c, double qty) { int q = (int) taken(qty); stock[sector][c] -= q; consumed[c] += q; return q; }
-    public double destroy(int sector, int c, double qty) { int q = (int) taken(qty); stock[sector][c] -= q; destroyed[c] += q; return q; }
-    public double grow(int sector, int c, double qty) { int q = (int) whole(qty); stock[sector][c] += q; grown[c] += q; return q; }
+    public double produce(int sector, int c, double qty) { int q = (int) whole(qty); stock[sector * nCom + c] += q; produced[c] += q; return q; }
+    public double consume(int sector, int c, double qty) { int q = (int) taken(qty); stock[sector * nCom + c] -= q; consumed[c] += q; return q; }
+    public double destroy(int sector, int c, double qty) { int q = (int) taken(qty); stock[sector * nCom + c] -= q; destroyed[c] += q; return q; }
+    public double grow(int sector, int c, double qty) { int q = (int) whole(qty); stock[sector * nCom + c] += q; grown[c] += q; return q; }
     /** Negative growth (starvation, plague) is a death: tallied as destroyed. */
-    public double die(int sector, int c, double qty) { int q = (int) taken(qty); stock[sector][c] -= q; destroyed[c] += q; return q; }
+    public double die(int sector, int c, double qty) { int q = (int) taken(qty); stock[sector * nCom + c] -= q; destroyed[c] += q; return q; }
 
     /** Move qty of c out of sector {@code from} into sector {@code to}. Sums to zero by construction. */
-    public double transfer(int from, int to, int c, double qty) { int q = (int) taken(qty); stock[from][c] -= q; stock[to][c] += q; return q; }
+    public double transfer(int from, int to, int c, double qty) { int q = (int) taken(qty); stock[from * nCom + c] -= q; stock[to * nCom + c] += q; return q; }
     /** Stock leaves a sector into a held parcel (still in the world, not in any stock). */
-    public double toHeld(int from, int c, double qty) { int q = (int) taken(qty); stock[from][c] -= q; transferNet[c] -= q; return q; }
+    public double toHeld(int from, int c, double qty) { int q = (int) taken(qty); stock[from * nCom + c] -= q; transferNet[c] -= q; return q; }
     /** Held parcel arrives into a sector's stock. */
-    public double fromHeld(int to, int c, double qty) { int q = (int) taken(qty); stock[to][c] += q; transferNet[c] += q; return q; }
+    public double fromHeld(int to, int c, double qty) { int q = (int) taken(qty); stock[to * nCom + c] += q; transferNet[c] += q; return q; }
 
     /**
      * Stock crosses between a sector and a ship's hold. A ship's stock is counted in the conservation
      * sum exactly like a sector's, so this is a plain move with nothing to tally — but it still has to
      * go through here, or the sector's delta stops being a whole number (issue #77).
      */
-    public double toShip(int from, int c, double qty) { int q = (int) taken(qty); stock[from][c] -= q; return q; }
-    public double fromShip(int to, int c, double qty) { int q = (int) taken(qty); stock[to][c] += q; return q; }
+    public double toShip(int from, int c, double qty) { int q = (int) taken(qty); stock[from * nCom + c] -= q; return q; }
+    public double fromShip(int to, int c, double qty) { int q = (int) taken(qty); stock[to * nCom + c] += q; return q; }
 
     /** A ship makes something at sea (fishing). Tallied as produced; the hold is not a sector. */
     public double produceAtSea(int c, double qty) { int q = (int) whole(qty); produced[c] += q; return q; }

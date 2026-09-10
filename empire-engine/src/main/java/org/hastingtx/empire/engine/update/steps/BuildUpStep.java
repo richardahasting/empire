@@ -36,7 +36,10 @@ public final class BuildUpStep implements Step {
         double[] cashLeft = new double[ctx.led.nCountries];
         for (Country c : ctx.snap.countries()) cashLeft[c.id()] = Math.max(0, c.cash() + ctx.led.cash[c.id()]);
 
-        for (int i = 0; i < ctx.led.nSectors; i++) {
+        // issue #87: owned sectors and the unowned ones still doing something (rotting, or carrying a
+        // bridge), interleaved in index order — this loop spends the treasury as it walks, so splitting
+        // it into two passes would change which sector gets the last of the money.
+        for (int i : ctx.ownedOrActive) {
             Sector s = ctx.sector(i);
             SectorTypeCfg t = ctx.type(s);
             if (!s.owned()) {
@@ -63,7 +66,7 @@ public final class BuildUpStep implements Step {
                     if (e.getKey().equals("cash")) points = Math.min(points, cashLeft[cid] / e.getValue());
                     else {
                         int c = ctx.com.index(e.getKey());
-                        double avail = s.stock().get(c) + ctx.led.stock[i][c];
+                        double avail = s.stock().get(c) + ctx.led.st(i, c);
                         points = Math.min(points, avail / e.getValue());
                         if (avail < wanted * e.getValue()) ctx.led.shortOf(i, c, wanted * e.getValue() - avail);
                     }
@@ -98,7 +101,7 @@ public final class BuildUpStep implements Step {
                     double per = e.getValue() * m;
                     if (per <= 0) continue;
                     if (e.getKey().equals("cash")) points = Math.min(points, cashLeft[cid] / per);
-                    else { int c = ctx.com.index(e.getKey()); double avail = s.stock().get(c) + ctx.led.stock[i][c]; points = Math.min(points, avail / per); if (avail < wantedRoad * per) ctx.led.shortOf(i, c, wantedRoad * per - avail); }
+                    else { int c = ctx.com.index(e.getKey()); double avail = s.stock().get(c) + ctx.led.st(i, c); points = Math.min(points, avail / per); if (avail < wantedRoad * per) ctx.led.shortOf(i, c, wantedRoad * per - avail); }
                 }
                 points = whole(points);
                 if (points > 0) {
@@ -167,7 +170,7 @@ public final class BuildUpStep implements Step {
             boolean ok = true;
             for (var e : crossing.materials().entrySet()) {
                 if (e.getKey().equals("cash")) { crossCash = e.getValue(); if (cashLeft[cid] < e.getValue()) ok = false; }
-                else { int c = ctx.com.index(e.getKey()); double avail = p.stock().get(c) + ctx.led.stock[payer][c]; if (avail < e.getValue()) { ok = false; ctx.led.shortOf(payer, c, e.getValue() - avail); } }
+                else { int c = ctx.com.index(e.getKey()); double avail = p.stock().get(c) + ctx.led.st(payer, c); if (avail < e.getValue()) { ok = false; ctx.led.shortOf(payer, c, e.getValue() - avail); } }
             }
             if (!ok) { ctx.led.note(payer, what + " at " + s.at() + ": waiting for the " + (s.terrain() == Terrain.OCEAN ? "bridge" : "tunnel") + "'s materials"); return 0; }
         }
@@ -179,7 +182,7 @@ public final class BuildUpStep implements Step {
             else {
                 int c = ctx.com.index(e.getKey());
                 double reserved = crossing == null ? 0 : crossing.materials().getOrDefault(e.getKey(), 0.0);
-                double avail = p.stock().get(c) + ctx.led.stock[payer][c] - reserved;
+                double avail = p.stock().get(c) + ctx.led.st(payer, c) - reserved;
                 points = Math.min(points, Math.max(0, avail) / per);
                 if (avail < wanted * per) ctx.led.shortOf(payer, c, wanted * per - avail);
             }

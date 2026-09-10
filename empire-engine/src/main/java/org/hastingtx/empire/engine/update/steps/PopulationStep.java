@@ -23,10 +23,10 @@ public final class PopulationStep implements Step {
         // one pass for the whole world, not one pass per populated sector (issue #82)
         java.util.Map<Integer, java.util.List<Sector>> mitigators = plagueOn ? mitigatorsByOwner(ctx) : java.util.Map.of();
 
-        for (int i = 0; i < ctx.led.nSectors; i++) {
+        // issue #87: sectors holding people, which is this step's own predicate — not ownership
+        for (int i : ctx.populated) {
             Sector s = ctx.sector(i);
             double nCiv = s.stock().get(civ), nMil = s.stock().get(mil), nUw = s.stock().get(uw);
-            if (nCiv + nMil + nUw <= 0) continue;
 
             // 1. eating. The first `limit` people live off the land (subsistence); only the rest draw on stock.
             EconomyCfg.PopulationCfg.SubsistenceCfg sub = p.subsistenceOrNone();

@@ -109,6 +109,55 @@ Rules that came with it, all Richard's, all in the issue:
 Golden hashes moved, as the issue said they would: the teaching 3×20 golden was
 regenerated deliberately.
 
+## And then the update stopped walking the map (#87)
+
+Packing the sectors made a second problem visible: at 512x1024 with forty countries,
+three updates in, **350 sectors of 524,288 are owned**. Every step already skipped the
+rest — the work was scoped right all along. The update was simply walking past 523,938
+irrelevant hexes ten times over and rebuilding every one of them.
+
+| Step | Before | After |
+|---|---|---|
+| ctx | 59 ms | 15–33 ms |
+| accrual, buildup, production, money, levels | 19 ms | ~0 |
+| population | 8 ms | 4 ms |
+| flow | 520 ms | ~20 ms |
+| apply | 300 ms | ~25 ms |
+| **update** | **~900 ms** | **~78 ms** |
+
+The largest world the generator will make, 1024×2048 = 2,097,152 sectors, updates in
+**~280 ms**.
+
+**The golden hash did not change.** That was the acceptance test, not a nuisance:
+iterating a sorted index of owned sectors has to visit them in the same order a full
+walk did, or the treasury runs dry on a different sector.
+
+What it took, in descending order of value:
+
+- **`FlowStep.path` allocated three world-sized arrays per call**, four hundred calls an
+  update — 2.6 GB allocated and filled to search a few hundred sectors. The scratch is
+  reused and reset by what it touched. Alone: flow 520 ms → 43 ms.
+- **The neighbour table was rebuilt every update** though it depends only on the map's
+  shape. Cached in `NeighbourTable`, and built with allocation-free arithmetic
+  (`Hex.neighbourIndex`) instead of ~30 objects a sector.
+- **`Ctx` builds the worklists** — owned, populated, withHeld, activeUnowned — in one
+  ascending pass costing 1.13 ms. Ascending is load-bearing.
+- **`FlowStep.carryHeld` wrote `heldNext` for every sector**, so `ApplyStep`'s
+  "unchanged" guard had never once fired in the life of the code.
+- **`ApplyStep` reuses untouched sectors**, and conservation sums only what it rebuilt —
+  a skipped sector adds the same amount to both sides and cancels.
+
+### Where the time is now
+
+The update is no longer the bottleneck and parallelising it would be premature. Per
+update cycle at 512x1024 with forty scripted agents: **agent turns ~12 s, command
+execution ~7 s, the update 0.08 s.** Command execution is almost all
+`World.withSector`, which copies the 524,288-entry sector list *twice* — once in
+`new ArrayList<>(sectors)` and again in the record's compact constructor — at **10 ms a
+call**. That is the next thing worth fixing, and sharding by nation is the natural way
+to fix it: a country's commands touch only its own sectors, so its thread can hold a
+small overlay and the merge is O(changes).
+
 ## Not done, and deliberately
 
 - **`held` is still a `List<HeldParcel>`.** An empty list is a shared singleton, so it

@@ -20,9 +20,9 @@ public final class LevelsStep implements Step {
         EconomyCfg.LevelsCfg lc = ctx.cfg.economy().levels();
         int n = ctx.led.nCountries;
         double[] civs = new double[n];
-        for (int i = 0; i < ctx.led.nSectors; i++) {
+        for (int i : ctx.owned) {          // issue #87: the owned list, not the map
             Sector s = ctx.sector(i);
-            if (s.owned()) civs[s.owner()] += Math.max(0, s.stock().get(ctx.com.civ) + ctx.led.stock[i][ctx.com.civ]);
+            civs[s.owner()] += Math.max(0, s.stock().get(ctx.com.civ) + ctx.led.st(i, ctx.com.civ));
         }
         double[] newTech = new double[n], newRes = new double[n];
         for (Country c : ctx.snap.countries()) {
