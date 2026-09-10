@@ -85,9 +85,8 @@ public class WorldRepository {
         List<Object[]> parcelRows = new ArrayList<>();
         for (Sector s : sectors) {
             for (int c = 0; c < com.size(); c++) {
-                double th = s.thresholds()[c];
                 boolean dl = s.deliver().has(c);
-                stockRows.add(new Object[] {gameId, s.at().x(), s.at().y(), com.id(c), s.stock().get(c), Double.isNaN(th) ? null : th, dl ? s.deliver().dir(c) : null, dl ? s.deliver().threshold(c) : null});
+                stockRows.add(new Object[] {gameId, s.at().x(), s.at().y(), com.id(c), s.stock().get(c), s.hasThreshold(c) ? s.threshold(c) : null, dl ? s.deliver().dir(c) : null, dl ? s.deliver().threshold(c) : null});
             }
             for (HeldParcel p : s.held())
                 parcelRows.add(new Object[] {gameId, s.at().x(), s.at().y(), com.id(p.commodity()), p.qty(), p.owner(), p.origin().x(), p.origin().y(), p.dest().x(), p.dest().y(), p.issuedUpdate(), p.mode()});

@@ -30,7 +30,7 @@ public final class PopulationStep implements Step {
 
             // 1. eating. The first `limit` people live off the land (subsistence); only the rest draw on stock.
             EconomyCfg.PopulationCfg.SubsistenceCfg sub = p.subsistenceOrNone();
-            double limit = s.terrain().isLand() ? sub.limit(s.resources().fertility()) : 0;
+            double limit = s.isLand() ? sub.limit(s.fertility()) : 0;
             double fCiv = 0, fUw = 0, fMil = 0;   // fed by foraging, by class, in the configured order
             for (String who : sub.appliesTo()) {
                 if (limit <= 0) break;
