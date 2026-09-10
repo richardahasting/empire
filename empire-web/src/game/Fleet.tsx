@@ -33,7 +33,7 @@ export function Fleet({ view, rules, busy, onCommand, onSail }: Props) {
             <div className="flex flex-wrap items-baseline gap-x-2">
               <span className="font-mono">#{s.id}</span>
               <span className="font-medium">{className(rules, s.cls)}{s.name ? ` “${s.name}”` : ""}</span>
-              <span className="text-muted-foreground">at {rel(s.relative)} · {s.efficiency.toFixed(0)}% · {s.hexesPerUpdate} hex{s.hexesPerUpdate === 1 ? "" : "es"}/update (tech {s.tech.toFixed(0)}) · {Math.floor(s.load)}/{s.hold}{cargo ? ` (${cargo})` : ""}</span>
+              <span className="text-muted-foreground">at {rel(s.relative)} · {s.efficiency.toFixed(0)}% · {s.hexesPerUpdate} hex{s.hexesPerUpdate === 1 ? "" : "es"}/update (tech {s.tech.toFixed(0)}) · {Math.floor(s.load)}/{s.hold}{cargo ? ` (${cargo})` : ""}{s.tank > 0 ? <> · <span className={s.fuel < s.tank * 0.15 ? "text-destructive" : undefined}>fuel {Math.floor(s.fuel)}/{s.tank}</span></> : null}</span>
             </div>
             <div className="text-muted-foreground">{going}{s.note ? ` · ${s.note}` : ""}</div>
             <div className="mt-1 flex flex-wrap gap-1">

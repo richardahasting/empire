@@ -41,7 +41,9 @@ public record CountryView(
         List<TrainView> trains) {
 
     public record ShipView(long id, String cls, String name, Coord at, Coord relative, double efficiency, Map<String, Double> stock, double load, double hold,
-                           Coord dest, Coord destRelative, LaneView lane, String note, boolean docked, double tech, int hexesPerUpdate, String mission, Coord homeRelative) {}
+                           Coord dest, Coord destRelative, LaneView lane, String note, boolean docked, double tech, int hexesPerUpdate, String mission, Coord homeRelative,
+                           /** What is in the tank and what it holds (issue #65); both 0 when fuel is off. */
+                           double fuel, double tank) {}
     /**
      * A sighting as its holder is allowed to read it. {@code band} is firm | probable | faint and
      * {@code age} is updates since the sighting, so a stale mark can be drawn dimmer. Anything the
@@ -160,7 +162,8 @@ public record CountryView(
                     sh.lane().cargo().stream().map(com::id).toList(), sh.lane().outbound());
             int hexes = cfg.units().ships() == null ? 0 : cfg.units().ships().range(cfg.units().ships().shipClass(sh.cls()), sh.tech(), sh.efficiency());
             ships.add(new ShipView(sh.id(), sh.cls(), sh.name(), sh.at(), relative(w, c.capital(), sh.at()), sh.efficiency(), st, sh.load(), hold,
-                    sh.dest(), sh.dest() == null ? null : relative(w, c.capital(), sh.dest()), lane, sh.note(), docked, sh.tech(), hexes, sh.mission(), sh.home() == null ? null : relative(w, c.capital(), sh.home())));
+                    sh.dest(), sh.dest() == null ? null : relative(w, c.capital(), sh.dest()), lane, sh.note(), docked, sh.tech(), hexes, sh.mission(), sh.home() == null ? null : relative(w, c.capital(), sh.home()),
+                    sh.fuel(), cfg.units().ships() != null && cfg.units().ships().fuel() ? cfg.units().ships().shipClass(sh.cls()).tankOr0() : 0));
         }
         List<ContactView> contacts = new ArrayList<>();
         if (cfg.detection() != null) for (Contact ct : w.contactsOf(countryId)) {

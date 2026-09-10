@@ -42,8 +42,13 @@ class ShipsTest {
     }
 
     private static World withShip(World w, String cls, Coord at, double eff) { return withShip(w, cls, at, eff, 0); }
+    /**
+     * A hull with a full tank. These tests are about speed, lanes and fishing; fuel has its own test
+     * (issue #65), and a dry tank would hold every ship here at the quay and prove nothing.
+     */
     private static World withShip(World w, String cls, Coord at, double eff, double tech) {
-        Ship s = new Ship(w.nextShipId(), 0, cls, "", at, eff, Stocks.zero(COM.size()), null, null, 0, "", tech, null, null);
+        double tank = CFG.units().ships().shipClass(cls).tankOr0();
+        Ship s = new Ship(w.nextShipId(), 0, cls, "", at, eff, Stocks.zero(COM.size()), null, null, 0, "", tech, null, null, tank);
         return w.withShips(List.of(s), s.id() + 1);
     }
 
