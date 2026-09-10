@@ -248,9 +248,11 @@ public class GameService {
             UpdateResult r = Update.run(g.world, g.cfg, seed);
             long ms = (System.nanoTime() - t0) / 1_000_000;
             worlds.saveDiff(gameId, g.world, r.next(), g.com);
-            logs.update(gameId, n, seed, r.stateHash(), r.events(), r.flows(), ms, r.notes());
+            // only pay for the hash if this game asked for it (issue #82); it is lazy, so not asking costs nothing
+            String stateHash = g.cfg.options().stateHash() ? r.stateHash() : null;
+            logs.update(gameId, n, seed, stateHash, r.events(), r.flows(), ms, r.notes());
             g.world = r.next();
-            log.info("game {} update {} in {} ms, hash {}", gameId, n, ms, r.stateHash().substring(0, 12));
+            log.info("game {} update {} in {} ms{}", gameId, n, ms, stateHash == null ? "" : ", hash " + stateHash.substring(0, 12));
             return r;
         } finally { g.lock.unlock(); }
     }
