@@ -8,18 +8,18 @@ import java.util.concurrent.ConcurrentHashMap;
  * Above {@code threshold[c]}, whatever is there moves one hex in direction {@code dir[c]} at the
  * update; {@code NONE} means no order. Directions index {@link org.hastingtx.empire.engine.geo.Hex#DIR_NAMES}.
  *
- * <p>Held narrow (issue #77): a direction is one of six, so a byte; a threshold is a quantity, so a
- * short, exact — byte scaling would make {@code deliver food 100} mean something else. 228 bytes a
- * sector becomes about 100, and a sector with no orders at all — most of a large world — shares the
+ * <p>Held narrow (issue #77): a direction is one of six, so a byte; a threshold is a quantity, so an
+ * int, exact — byte scaling would make {@code deliver food 100} mean something else, and a short would
+ * stop short of a warehouse's 100,000 (issue #91). 228 bytes a sector becomes about 150, and a sector with no orders at all — most of a large world — shares the
  * canonical empty instance and costs only the reference.
  */
 public final class DeliverOrders {
     public static final int NONE = -1;
 
     private final byte[] dir;
-    private final short[] threshold;
+    private final int[] threshold;
 
-    private DeliverOrders(byte[] dir, short[] threshold) { this.dir = dir; this.threshold = threshold; }
+    private DeliverOrders(byte[] dir, int[] threshold) { this.dir = dir; this.threshold = threshold; }
 
     private static final ConcurrentHashMap<Integer, DeliverOrders> EMPTY = new ConcurrentHashMap<>();
 
@@ -28,7 +28,7 @@ public final class DeliverOrders {
         return EMPTY.computeIfAbsent(n, k -> {
             byte[] d = new byte[k];
             Arrays.fill(d, (byte) NONE);
-            return new DeliverOrders(d, new short[k]);
+            return new DeliverOrders(d, new int[k]);
         });
     }
 
@@ -42,7 +42,7 @@ public final class DeliverOrders {
 
     public DeliverOrders with(int c, int d, double thr) {
         byte[] nd = dir.clone();
-        short[] nt = threshold.clone();
+        int[] nt = threshold.clone();
         nd[c] = (byte) d;
         nt[c] = d == NONE ? 0 : Sector.thresholdOf(thr);
         for (byte v : nd) if (v != NONE) return new DeliverOrders(nd, nt);
