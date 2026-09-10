@@ -95,9 +95,7 @@ public final class CommandExecutor {
         Sector s = owned(w, c, t.sector());
         if (s == null) return CommandResult.fail(w, "you do not own " + t.sector());
         if (!com.has(t.commodity())) return CommandResult.fail(w, "unknown commodity: " + t.commodity());
-        double[] th = s.thresholds().clone();
-        th[com.index(t.commodity())] = t.amount() < 0 ? Double.NaN : t.amount();
-        return new CommandResult(w.withSector(s.withThresholds(th)), null, 0);
+        return new CommandResult(w.withSector(s.withThreshold(com.index(t.commodity()), t.amount() < 0 ? Double.NaN : t.amount())), null, 0);
     }
 
     /** A standing order; validated now, executed at every update by the flow step. Issue #45. */
@@ -326,17 +324,19 @@ public final class CommandExecutor {
         double room = people ? Math.max(0, ctx.maxPopulation(to) - (to.stock().get(com.civ) + to.stock().get(com.uw))) : Double.POSITIVE_INFINITY;
         if (people && room < moving) moving = room;
         if (people && room <= 0) return CommandResult.fail(w, m.to() + " is full: " + fmt(to.stock().get(com.civ) + to.stock().get(com.uw)) + " people at a limit of " + fmt(ctx.maxPopulation(to)));
-        moving = Math.floor(moving * 1000) / 1000;
+        // Whole units (issue #77): a sector's stock is whole, so a move is whole. Half a civilian
+        // never left anywhere, and a fractional move would be rounded away on arrival regardless.
+        moving = Math.floor(moving);
         if (moving <= 0) return CommandResult.fail(w, srcPays
                 ? "no mobility in " + m.from() + " (has " + fmt(from.mobility()) + "; the route costs " + fmt(totalUnit) + " per unit)"
                 : "no mobility along the route (" + choke + " has " + fmt(w.sector(choke).mobility()) + ")");
         World next = w;
         if (srcPays) {
-            next = next.withSector(from.withMobility(Math.max(0, from.mobility() - moving * totalUnit)));
+            next = next.withSector(from.withMobility(Math.max(0, from.mobility() - mobCharge(moving * totalUnit))));
         } else {
             for (int h = 1; h < path.size(); h++) {
                 Sector t = next.sector(path.get(h));
-                next = next.withSector(t.withMobility(Math.max(0, t.mobility() - moving * unit[h])));
+                next = next.withSector(t.withMobility(Math.max(0, t.mobility() - mobCharge(moving * unit[h]))));
             }
         }
         Sector src = next.sector(m.from()), dst = next.sector(m.to());
@@ -430,12 +430,20 @@ public final class CommandExecutor {
         if (from.stock().get(com.civ) < e.civs()) return CommandResult.fail(w, "only " + fmt(from.stock().get(com.civ)) + " civilians in " + e.from());
         // GUESS: original charged the source sector's mobility for the walk. Cost = civs × cost into target.
         org.hastingtx.empire.engine.update.Ctx ectx = new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0);
-        double mobCost = e.civs() * ectx.weightLeaving(com.civ, from) * moveCostInto(to);
+        double mobCost = mobCharge(e.civs() * ectx.weightLeaving(com.civ, from) * moveCostInto(to));
         if (from.mobility() < mobCost) return CommandResult.fail(w, "need " + fmt(mobCost) + " mobility in " + e.from() + ", have " + fmt(from.mobility()));
         World next = w.withSector(from.withMobility(from.mobility() - mobCost).withStock(from.stock().plus(com.civ, -e.civs())));
         next = next.withSector(to.withOwner(c.id()).withStock(to.stock().plus(com.civ, e.civs())));
         return new CommandResult(next, null, 0);
     }
+
+    /**
+     * What a sector is actually charged for a hand move. Mobility is a whole number (issue #77), and a
+     * cost is rounded UP rather than half-up: half-up would make any move costing under half a point
+     * free, and a free move repeated is unlimited free movement. Round-up costs at most one extra
+     * point and never gives something away.
+     */
+    private static double mobCharge(double cost) { return cost <= 0 ? 0 : Math.ceil(cost - 1e-9); }
 
     private double moveCostInto(Sector s) {
         EconomyCfg.MobilityCfg m = cfg.economy().mobility();
