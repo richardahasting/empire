@@ -80,10 +80,55 @@ public class GameService {
     public Collection<Game> all() { return loaded.values().stream().sorted(Comparator.comparingLong(g -> g.id)).toList(); }
 
     // ------------------------------------------------------------------------------ admin
+
+    /**
+     * Rebind the preset with a different map. The raw YAML map is patched and reloaded rather than the
+     * bound config being mutated, so what the game stores is exactly what it plays by.
+     */
+    @SuppressWarnings("unchecked")
+    private ConfigLoader.Loaded withMap(ConfigLoader.Loaded l, Integer width, Integer height, Double waterPercent) {
+        if (width == null && height == null && waterPercent == null) return l;
+        Map<String, Object> raw = new java.util.LinkedHashMap<>(l.raw());
+        Map<String, Object> world = new java.util.LinkedHashMap<>((Map<String, Object>) raw.getOrDefault("world", Map.of()));
+        int w = width != null ? width : ((Number) world.get("width")).intValue();
+        int h = height != null ? height : ((Number) world.get("height")).intValue();
+        if (w < MIN_DIMENSION || h < MIN_DIMENSION) throw new IllegalArgumentException("a world is at least " + MIN_DIMENSION + " sectors on a side");
+        if (w > MAX_DIMENSION || h > MAX_DIMENSION) throw new IllegalArgumentException("a world is at most " + MAX_DIMENSION + " sectors on a side");
+        if ((long) w * h > MAX_SECTORS)
+            throw new IllegalArgumentException(w + "x" + h + " is " + (long) w * h + " sectors; the most we will generate is " + MAX_SECTORS + " (e.g. 1024x2048)");
+        world.put("width", w);
+        world.put("height", h);
+        if (waterPercent != null) {
+            if (waterPercent < 0 || waterPercent > 95) throw new IllegalArgumentException("water is 0 to 95 percent — the generator needs somewhere to put the capitals");
+            Map<String, Object> terrain = new java.util.LinkedHashMap<>((Map<String, Object>) world.getOrDefault("terrain", Map.of()));
+            terrain.put("land_fraction", Math.round((1.0 - waterPercent / 100.0) * 1000.0) / 1000.0);
+            world.put("terrain", terrain);
+        }
+        raw.put("world", world);
+        return loader.loadYaml(loader.toYaml(raw));
+    }
+
+    /** Biggest world we will generate: 1024x2048, measured at ~8 GB and ~82 s an update (issue #81). */
+    public static final int MAX_SECTORS = 2_097_152;
+    public static final int MAX_DIMENSION = 2048;
+    public static final int MIN_DIMENSION = 16;
+
     public Game create(String preset, String name, List<String> countryNames, long seed, Long createdBy) {
+        return create(preset, name, countryNames, seed, createdBy, null, null, null);
+    }
+
+    /**
+     * Create a game, optionally overriding the preset's map (issue #81). {@code width} and
+     * {@code height} are in sectors; {@code waterPercent} is how much of the world is sea, which sets
+     * {@code terrain.land_fraction}. A null keeps whatever the preset says. The overrides are written
+     * into the game's stored config snapshot, so the game keeps playing by them for life.
+     */
+    public Game create(String preset, String name, List<String> countryNames, long seed, Long createdBy,
+                       Integer width, Integer height, Double waterPercent) {
         if (countryNames == null || countryNames.isEmpty()) throw new IllegalArgumentException("at least one country");
         if (new HashSet<>(countryNames).size() != countryNames.size()) throw new IllegalArgumentException("country names must be unique");
         ConfigLoader.Loaded l = loader.loadPreset(preset);
+        l = withMap(l, width, height, waterPercent);
         GameConfig cfg = l.config();
         World world = new WorldGenerator(cfg).generate(countryNames, seed);
         long id = games.create(name, preset, loader.toYaml(l.raw()), l.hash(), seed, world.width(), world.height(), world.wrapX(), world.wrapY(), createdBy);
@@ -203,9 +248,11 @@ public class GameService {
             UpdateResult r = Update.run(g.world, g.cfg, seed);
             long ms = (System.nanoTime() - t0) / 1_000_000;
             worlds.saveDiff(gameId, g.world, r.next(), g.com);
-            logs.update(gameId, n, seed, r.stateHash(), r.events(), r.flows(), ms, r.notes());
+            // only pay for the hash if this game asked for it (issue #82); it is lazy, so not asking costs nothing
+            String stateHash = g.cfg.options().stateHash() ? r.stateHash() : null;
+            logs.update(gameId, n, seed, stateHash, r.events(), r.flows(), ms, r.notes());
             g.world = r.next();
-            log.info("game {} update {} in {} ms, hash {}", gameId, n, ms, r.stateHash().substring(0, 12));
+            log.info("game {} update {} in {} ms{}", gameId, n, ms, stateHash == null ? "" : ", hash " + stateHash.substring(0, 12));
             return r;
         } finally { g.lock.unlock(); }
     }

@@ -887,3 +887,7 @@ options:
   sanctuary: true
   interest: true
   demand_update: false      # KNOWN: original allowed player-demanded updates; off by default
+  # NEW (Richard 2026-09-09, issue #82): hash the whole world into the update log every update.
+  # Nothing reads it and it costs ~9.5 s an update on a 1024x1024 map, so it is off. The world is
+  # saved every update regardless, so the hash can be recomputed from any stored state on demand.
+  state_hash_per_update: false
