@@ -16,7 +16,24 @@ public record DistributionCfg(
         /** A threshold set on a mixed selection (`*` or a rectangle) is multiplied by this for sectors of the given type; absent = 1. Issue #40. */
         Map<String, Double> massThresholdMultiplierByType,
         /** Deliver orders (issue #45) move goods this many times cheaper than a hand move; absent = same as mobility_bonus. */
-        Double deliverMobilityBonus) {
+        Double deliverMobilityBonus,
+        /** What designating a sector sets up for it (issue #99); absent = off. */
+        AutoWire autoWire) {
+
+    /**
+     * Thresholds and a centre, applied when a sector is designated (issue #99). A distribution centre
+     * moves nothing on its own — the flow step only acts on commodities the sector has a threshold for —
+     * so wiring one without the other would look like a feature and behave like nothing.
+     */
+    public record AutoWire(boolean enabled, Double produced, Double consumed, Double civ, Double food) {
+        public double producedOr0() { return produced == null ? 0 : produced; }
+        public double consumedOr0() { return consumed == null ? 0 : consumed; }
+        public double civOr0() { return civ == null ? 0 : civ; }
+        public double foodOr0() { return food == null ? 0 : food; }
+    }
+
+    /** True when designating should wire a sector up. */
+    public boolean autoWireOn() { return autoWire != null && autoWire.enabled(); }
     public double deliverMobilityBonusOr1() { return deliverMobilityBonus == null ? mobilityBonusOr1() : deliverMobilityBonus <= 0 ? 1.0 : deliverMobilityBonus; }
     /** ×1 unless the designation is listed. */
     public double massThresholdMultiplier(String designation) {
