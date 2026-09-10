@@ -20,6 +20,8 @@ public final class PopulationStep implements Step {
         int civ = ctx.com.civ, mil = ctx.com.mil, uw = ctx.com.uw, food = ctx.com.food;
         SplittableRandom plagueRng = Rng.stream("plague", ctx.seed);
         boolean plagueOn = ctx.cfg.options().plague();
+        // one pass for the whole world, not one pass per populated sector (issue #82)
+        java.util.Map<Integer, java.util.List<Sector>> mitigators = plagueOn ? mitigatorsByOwner(ctx) : java.util.Map.of();
 
         for (int i = 0; i < ctx.led.nSectors; i++) {
             Sector s = ctx.sector(i);
@@ -98,7 +100,7 @@ public final class PopulationStep implements Step {
             if (plagueOn && s.owned() && nCiv + nUw > 0) {
                 double ceiling = Math.max(1, ctx.maxPopulation(s));
                 double crowding = Math.pow((nCiv + nUw) / ceiling, p.plague().crowdingExponent());
-                double[] mit = hospitalMitigation(ctx, s);
+                double[] mit = hospitalMitigation(ctx, mitigators, s);
                 double prob = p.plague().baseProbabilityPerEtu() * ctx.etus * crowding * mit[1];
                 if (plagueRng.nextDouble() < prob) {
                     double mort = p.plague().mortality() * mit[0];
@@ -112,13 +114,27 @@ public final class PopulationStep implements Step {
     }
 
     /** {mortality multiplier, probability multiplier} from the best hospital in range, else {1,1}. */
-    private static double[] hospitalMitigation(Ctx ctx, Sector s) {
-        double bestM = 1, bestP = 1;
+    /**
+     * The plague-mitigating sectors of each country, collected in one pass (issue #82). This used to be
+     * rediscovered by scanning every sector in the world for every populated sector, which is invisible
+     * on a small map and quadratic on a large one.
+     */
+    private static java.util.Map<Integer, java.util.List<Sector>> mitigatorsByOwner(Ctx ctx) {
+        java.util.Map<Integer, java.util.List<Sector>> out = new java.util.HashMap<>();
         for (int j = 0; j < ctx.led.nSectors; j++) {
             Sector h = ctx.sector(j);
-            if (h.owner() != s.owner()) continue;
+            if (!h.owned()) continue;
             SectorTypeCfg t = ctx.type(h);
             if (!t.hasFlag("plague_mitigation") || t.plagueMitigation() == null) continue;
+            out.computeIfAbsent(h.owner(), k -> new java.util.ArrayList<>()).add(h);
+        }
+        return out;
+    }
+
+    private static double[] hospitalMitigation(Ctx ctx, java.util.Map<Integer, java.util.List<Sector>> mitigators, Sector s) {
+        double bestM = 1, bestP = 1;
+        for (Sector h : mitigators.getOrDefault(s.owner(), java.util.List.of())) {
+            SectorTypeCfg t = ctx.type(h);
             SectorTypeCfg.PlagueMitigation pm = t.plagueMitigation();
             if (org.hastingtx.empire.engine.geo.Hex.distance(ctx.snap, h.at(), s.at()) > pm.radiusSectors()) continue;
             double e = h.efficiency() / 100.0;

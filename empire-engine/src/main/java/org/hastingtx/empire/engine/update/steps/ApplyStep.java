@@ -66,7 +66,7 @@ public final class ApplyStep {
         }
         java.util.Map<String, List<String>> notes = new java.util.TreeMap<>();
         for (var e : led.notes.entrySet()) { Sector s = ctx.sector(e.getKey()); if (s.owned()) notes.put(s.at().x() + "," + s.at().y(), List.copyOf(e.getValue())); }
-        return new UpdateResult(out, List.copyOf(led.events), List.copyOf(led.flows), hash(out), notes);
+        return new UpdateResult(out, List.copyOf(led.events), List.copyOf(led.flows), UpdateResult.lazyHash(out), notes);
     }
 
     private static void checkConservation(Ctx ctx, World out) {
@@ -92,7 +92,10 @@ public final class ApplyStep {
     public static String hash(World w) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
-            StringBuilder sb = new StringBuilder(1 << 16);
+            // Feed the digest as we go rather than building the whole world into one string first
+            // (issue #82): at a million sectors that string was ~400 MB, and growing it was most of
+            // the update. The byte stream is unchanged, so the hash is unchanged.
+            StringBuilder sb = new StringBuilder(1024);
             sb.append(w.width()).append('x').append(w.height()).append('#').append(w.updateNumber()).append('\n');
             for (Sector s : w.sectors()) {
                 sb.append(s.at()).append('|').append(s.terrain()).append('|').append(s.elevation()).append('|').append(s.resources()).append('|')
@@ -104,15 +107,18 @@ public final class ApplyStep {
                 sb.append('|');
                 for (HeldParcel p : s.held()) sb.append(p.commodity()).append(':').append(f(p.qty())).append('>').append(p.dest()).append(p.rail() ? "R" : "").append(';');
                 sb.append('\n');
+                md.update(sb.toString().getBytes(StandardCharsets.UTF_8)); sb.setLength(0);
             }
             for (Country c : w.countries()) {
                 sb.append(c.id()).append('|').append(c.name()).append('|').append(c.capital()).append('|').append(f(c.cash())).append('|').append(f(c.btu())).append('|')
                   .append(f(c.levels().tech())).append(',').append(f(c.levels().research())).append(',').append(f(c.levels().education())).append(',').append(f(c.levels().happiness()))
                   .append('|').append(c.inSanctuary()).append('|').append(c.bankrupt()).append('\n');
+                md.update(sb.toString().getBytes(StandardCharsets.UTF_8)); sb.setLength(0);
             }
             for (Contact ct : w.contacts()) {
                 sb.append("K").append(ct.owner()).append('|').append(ct.shipId()).append('|').append(ct.targetOwner()).append('|').append(ct.cls())
                   .append('|').append(ct.at()).append('|').append(ct.seenUpdate()).append('|').append(f(ct.confidence())).append('\n');
+                md.update(sb.toString().getBytes(StandardCharsets.UTF_8)); sb.setLength(0);
             }
             for (Ship sh : w.ships()) {
                 sb.append("S").append(sh.id()).append('|').append(sh.owner()).append('|').append(sh.cls()).append('|').append(sh.at()).append('|').append(f(sh.efficiency())).append('|').append(sh.dest()).append('|');
@@ -120,6 +126,7 @@ public final class ApplyStep {
                 sb.append('|');
                 for (int c = 0; c < sh.stock().size(); c++) sb.append(f(sh.stock().get(c))).append(',');
                 sb.append('\n');
+                md.update(sb.toString().getBytes(StandardCharsets.UTF_8)); sb.setLength(0);
             }
             byte[] d = md.digest(sb.toString().getBytes(StandardCharsets.UTF_8));
             StringBuilder hex = new StringBuilder();

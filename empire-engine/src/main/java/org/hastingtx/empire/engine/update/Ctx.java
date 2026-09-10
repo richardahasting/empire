@@ -18,6 +18,8 @@ public final class Ctx {
     public final int etus;
     public final long seed;
     public final List<List<Coord>> neighbours;
+    /** Sector type by designation, built once (issue #82): GameConfig.sectorType is a linear string scan. */
+    private final java.util.Map<String, SectorTypeCfg> typeIndex;
     /** Work (work-unit·ETUs) spent in step 4, subtracted from step 5's pool. */
     public final double[] workSpent;
     /** Ships as this update leaves them (the ship step rewrites this list; apply copies it out). */
@@ -32,6 +34,8 @@ public final class Ctx {
         this.workSpent = new double[snap.sectors().size()];
         this.ships = new ArrayList<>(snap.ships());
         this.contacts = new ArrayList<>(snap.contacts());
+        this.typeIndex = new java.util.HashMap<>();
+        for (SectorTypeCfg t : cfg.economy().sectorTypes()) typeIndex.put(t.id(), t);
         this.neighbours = new ArrayList<>(snap.sectors().size());
         for (Sector s : snap.sectors()) neighbours.add(Hex.neighbours(snap, s.at()));
     }
@@ -39,7 +43,11 @@ public final class Ctx {
     public int idx(Coord c) { return snap.index(c); }
     public Sector sector(int i) { return snap.sectors().get(i); }
     public Country country(int id) { return snap.countries().get(id); }
-    public SectorTypeCfg type(Sector s) { return cfg.sectorType(s.designation()); }
+    public SectorTypeCfg type(Sector s) {
+        SectorTypeCfg t = typeIndex.get(s.designation());
+        if (t == null) throw new IllegalArgumentException("unknown sector type: " + s.designation());
+        return t;
+    }
 
     /** Storage cap for a non-person commodity in this sector. GUESS: independent of efficiency. */
     public double capacity(Sector s, int c) {
