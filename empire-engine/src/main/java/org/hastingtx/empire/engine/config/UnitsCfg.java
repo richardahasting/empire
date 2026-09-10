@@ -19,6 +19,8 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
             /** Which commodity a tank holds (issue #65). Null means petrol. */
             String fuelCommodity,
             boolean crews,
+            /** Roles whose crew is civilians; everything else musters military (issue #66). */
+            List<String> crewCivRoles,
             boolean autoUnloadInHarbor,
             /** Food a fishing boat of rate 1 at 100% makes per ETU per point of sea fertility. */
             double fishingFoodPerEtuPerFertilityPoint,
@@ -32,6 +34,10 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
         public int sightOf(ShipClassCfg cls) { return cls.sight() != null ? cls.sight() : sight != null ? sight : 2; }
         /** What goes in a tank (issue #65). */
         public String fuelId() { return fuelCommodity == null ? "pet" : fuelCommodity; }
+        /** True when this class musters civilians rather than military (issue #66). */
+        public boolean crewIsCivilian(ShipClassCfg cls) {
+            return crewCivRoles == null ? !"warship".equals(cls.role()) && !"submarine".equals(cls.role()) : crewCivRoles.contains(cls.role());
+        }
         public record FishingCfg(int radius, int wanderHops, double returnWhenHoldFraction) {}
         public FishingCfg fishingOrDefault() { return fishing == null ? new FishingCfg(6, 2, 0.9) : fishing; }
         public record SpeedTech(double at0, double perTechPoint, double max) {}
@@ -71,7 +77,10 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
             /** How much fuel the hull holds (issue #65). Null on a class that predates fuel. */
             Double tank,
             /** Fuel burned per sea hex sailed. */
-            Double fuelPerHex) {
+            Double fuelPerHex,
+            /** How many people it takes to sail her (issue #66). */
+            Double crew) {
+        public double crewOr0() { return crew == null ? 0 : crew; }
         public double tankOr0() { return tank == null ? 0 : tank; }
         public double fuelPerHexOr0() { return fuelPerHex == null ? 0 : fuelPerHex; }
         public double fishingRateOr0() { return fishingRate == null ? 0 : fishingRate; }

@@ -272,7 +272,15 @@ public final class CommandExecutor {
         if (!harborOf(w, c, h)) return CommandResult.fail(w, "ship #" + s.ship() + " must be in one of your harbours to be scrapped");
         Stocks st = h.stock();
         for (int ci = 0; ci < com.size(); ci++) st = st.plus(ci, ship.stock().get(ci));   // the hold goes ashore (capacity applies at the update)
-        return new CommandResult(w.withSector(h.withStock(st)).withoutShip(ship.id()), null, 0, "ship #" + s.ship() + " scrapped at " + h.at());
+        // and so do the crew and the fuel in her tank (issues #65, #66): breaking a hull up does not
+        // drown its people or pour its petrol into the harbour
+        var ships = cfg.units().ships();
+        if (ships != null && ships.crews() && ship.crew() > 0) {
+            var cls = ships.shipClass(ship.cls());
+            st = st.plus(ships.crewIsCivilian(cls) ? com.civ : com.mil, ship.crew());
+        }
+        if (ships != null && ships.fuel() && ship.fuel() > 0) st = st.plus(com.index(ships.fuelId()), ship.fuel());
+        return new CommandResult(w.withSector(h.withStock(st)).withoutShip(ship.id()), null, 0, "ship #" + s.ship() + " scrapped at " + h.at() + "; her crew, cargo and fuel are ashore");
     }
 
     private CommandResult distribute(World w, Country c, Command.Distribute d) {

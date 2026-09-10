@@ -820,7 +820,12 @@ units:
     # Tanks are sized at roughly thirty hexes, so seven to ten updates of steady sailing. GUESS, all of it.
     fuel: true
     fuel_commodity: pet
-    crews: false                       # phase 2: no crews yet (issue #66)
+    # Crews (issue #66). A hull needs people aboard to sail: civilians on a merchantman, military on a
+    # warship, as in the original. The harbour signs them on while the ship is docked and they come
+    # ashore when it is scrapped. A short-handed ship stays at the quay — which makes a fleet compete
+    # with a factory for the same population, and that is the cost the feature is for.
+    crews: true
+    crew_civ_roles: [fishing, cargo, tanker, luxury]   # everything else musters military
     auto_unload_in_harbor: true        # a fishing boat home from the grounds lands its catch
     fishing_food_per_etu_per_fertility_point: 0.1   # rate 1, fertility 50, 60 ETUs, 100% -> 300 food per update
     # A hull keeps the tech it was laid at (KNOWN: ship tech) and sails class speed × this multiplier
@@ -834,19 +839,19 @@ units:
     # lifted"): everything within this many hexes of a ship is in its owner's view while it is there.
     sight: 2
     classes:
-      - { id: fishing_boat,            name: fishing boat,            glyph: f, role: fishing, tech_required: 0,  build: { lcm: 25, cash: 300 },             hold: 300,  speed: 3, fishing_rate: 1.0, tank: 60, fuel_per_hex: 2 }
-      - { id: industrial_fishing_boat, name: industrial fishing boat, glyph: F, role: fishing, tech_required: 20, build: { lcm: 60, hcm: 30, cash: 1500 },   hold: 1200, speed: 4, fishing_rate: 3.0, tank: 150, fuel_per_hex: 5 }
-      - { id: cargo_ship,              name: cargo ship,              glyph: c, role: cargo,   tech_required: 0,  build: { lcm: 60, hcm: 30, cash: 1000 },   hold: 600,  speed: 3, carries: [all], tank: 120, fuel_per_hex: 4 }
-      - { id: super_cargo,             name: super cargo ship,        glyph: C, role: cargo,   tech_required: 25, build: { lcm: 150, hcm: 100, cash: 4000 }, hold: 2400, speed: 4, carries: [all], tank: 400, fuel_per_hex: 12 }
-      - { id: tanker,                  name: tanker,                  glyph: t, role: tanker,  tech_required: 15, build: { lcm: 80, hcm: 40, cash: 1500 },   hold: 1500, speed: 3, carries: [oil, pet], tank: 200, fuel_per_hex: 6 }
-      - { id: super_tanker,            name: super tanker,            glyph: T, role: tanker,  tech_required: 35, build: { lcm: 200, hcm: 120, cash: 6000 }, hold: 6000, speed: 4, carries: [oil, pet], tank: 700, fuel_per_hex: 20 }
-      - { id: luxury_craft,            name: luxury craft,            glyph: l, role: luxury,  tech_required: 30, build: { lcm: 120, hcm: 40, cash: 5000 },  hold: 100,  speed: 3, happiness_per_etu: 1.0, carries: [civ], upkeep_per_update: { cash: 50 }, tank: 100, fuel_per_hex: 3 }
+      - { id: fishing_boat,            name: fishing boat,            glyph: f, role: fishing, tech_required: 0,  build: { lcm: 25, cash: 300 },             hold: 300,  speed: 3, fishing_rate: 1.0, tank: 60, fuel_per_hex: 2, crew: 5 }
+      - { id: industrial_fishing_boat, name: industrial fishing boat, glyph: F, role: fishing, tech_required: 20, build: { lcm: 60, hcm: 30, cash: 1500 },   hold: 1200, speed: 4, fishing_rate: 3.0, tank: 150, fuel_per_hex: 5, crew: 15 }
+      - { id: cargo_ship,              name: cargo ship,              glyph: c, role: cargo,   tech_required: 0,  build: { lcm: 60, hcm: 30, cash: 1000 },   hold: 600,  speed: 3, carries: [all], tank: 120, fuel_per_hex: 4, crew: 10 }
+      - { id: super_cargo,             name: super cargo ship,        glyph: C, role: cargo,   tech_required: 25, build: { lcm: 150, hcm: 100, cash: 4000 }, hold: 2400, speed: 4, carries: [all], tank: 400, fuel_per_hex: 12, crew: 30 }
+      - { id: tanker,                  name: tanker,                  glyph: t, role: tanker,  tech_required: 15, build: { lcm: 80, hcm: 40, cash: 1500 },   hold: 1500, speed: 3, carries: [oil, pet], tank: 200, fuel_per_hex: 6, crew: 15 }
+      - { id: super_tanker,            name: super tanker,            glyph: T, role: tanker,  tech_required: 35, build: { lcm: 200, hcm: 120, cash: 6000 }, hold: 6000, speed: 4, carries: [oil, pet], tank: 700, fuel_per_hex: 20, crew: 40 }
+      - { id: luxury_craft,            name: luxury craft,            glyph: l, role: luxury,  tech_required: 30, build: { lcm: 120, hcm: 40, cash: 5000 },  hold: 100,  speed: 3, happiness_per_etu: 1.0, carries: [civ], upkeep_per_update: { cash: 50 }, tank: 100, fuel_per_hex: 3, crew: 8 }
       # warships need guns, shells and oil in the harbour to lay down (Richard 2026-09-09); fuel per voyage comes with units.ships.fuel
-      - { id: destroyer,               name: destroyer,               glyph: d, role: warship, tech_required: 40, build: { lcm: 100, hcm: 150, gun: 10, shell: 50, oil: 50, cash: 5000 }, hold: 200,  speed: 5, sight: 3, tank: 250, fuel_per_hex: 8 }
-      - { id: frigate,                 name: frigate,                 glyph: g, role: warship, tech_required: 45, build: { lcm: 120, hcm: 200, gun: 15, shell: 80, oil: 80, cash: 7000 }, hold: 300,  speed: 5, sight: 3, tank: 300, fuel_per_hex: 10 }
-      - { id: submarine,               name: submarine,               glyph: s, role: submarine, tech_required: 50, build: { lcm: 100, hcm: 250, gun: 5, shell: 60, oil: 100, cash: 9000 }, hold: 100, speed: 4, tank: 200, fuel_per_hex: 7 }
-      - { id: battleship,              name: battleship,              glyph: b, role: warship, tech_required: 60, build: { lcm: 200, hcm: 600, gun: 40, shell: 200, oil: 200, cash: 20000 }, hold: 500, speed: 4, tank: 500, fuel_per_hex: 18 }
-      - { id: carrier,                 name: aircraft carrier,        glyph: v, role: warship, tech_required: 70, build: { lcm: 300, hcm: 800, gun: 20, shell: 100, oil: 300, cash: 40000 }, hold: 800, speed: 4, sight: 4, tank: 800, fuel_per_hex: 25 }
+      - { id: destroyer,               name: destroyer,               glyph: d, role: warship, tech_required: 40, build: { lcm: 100, hcm: 150, gun: 10, shell: 50, oil: 50, cash: 5000 }, hold: 200,  speed: 5, sight: 3, tank: 250, fuel_per_hex: 8, crew: 50 }
+      - { id: frigate,                 name: frigate,                 glyph: g, role: warship, tech_required: 45, build: { lcm: 120, hcm: 200, gun: 15, shell: 80, oil: 80, cash: 7000 }, hold: 300,  speed: 5, sight: 3, tank: 300, fuel_per_hex: 10, crew: 70 }
+      - { id: submarine,               name: submarine,               glyph: s, role: submarine, tech_required: 50, build: { lcm: 100, hcm: 250, gun: 5, shell: 60, oil: 100, cash: 9000 }, hold: 100, speed: 4, tank: 200, fuel_per_hex: 7, crew: 40 }
+      - { id: battleship,              name: battleship,              glyph: b, role: warship, tech_required: 60, build: { lcm: 200, hcm: 600, gun: 40, shell: 200, oil: 200, cash: 20000 }, hold: 500, speed: 4, tank: 500, fuel_per_hex: 18, crew: 150 }
+      - { id: carrier,                 name: aircraft carrier,        glyph: v, role: warship, tech_required: 70, build: { lcm: 300, hcm: 800, gun: 20, shell: 100, oil: 300, cash: 40000 }, hold: 800, speed: 4, sight: 4, tank: 800, fuel_per_hex: 25, crew: 200 }
 
 # -----------------------------------------------------------------------------
 # AGENTS — NEW
