@@ -727,7 +727,10 @@ infrastructure:
     # mobility cost of anything entering the sector, on top of the road discount — distribution, deliver
     # orders and hand moves all ride the rails without an order. Trains remain the bulk option.
     mobility_discount_curve: { type: linear, at_0: 1.0, at_100: 0.2 }
-    max_sectors_per_update: { base: 8, per_tech_point: 0.05 }
+    # A ceiling only (Richard 2026-09-09, issue #79): a train runs as far as the sending sector's
+    # mobility pays for, hop by hop, and rail level sets the price of a hop. This just stops a
+    # pathological path running away, and mirrors manual_move_max_sectors_per_update.
+    max_sectors_per_update: { base: 100, per_tech_point: 0 }
     decay_per_update: 1.0
     maintenance_cash_per_point_per_update: 0.20
     severed_route_behavior: strand_in_place
