@@ -24,20 +24,19 @@ public final class ApplyStep {
         List<Sector> next = new ArrayList<>(led.nSectors);
         for (int i = 0; i < led.nSectors; i++) {
             Sector s = ctx.sector(i);
-            double[] q = s.stock().toArray();
+            // Whole units throughout (issue #77): the snapshot is integral, every delta is integral, so
+            // the result is integral and conservation below can be checked by equality rather than tolerance.
+            int[] q = new int[nCom];
             for (int c = 0; c < nCom; c++) {
-                q[c] += led.stock[i][c];
-                if (q[c] < 0) {
-                    if (q[c] < -1e-6) throw new IllegalStateException("negative stock of " + ctx.com.id(c) + " at " + s.at() + ": " + q[c]);
-                    q[c] = 0;
-                }
+                q[c] = (int) s.stock().get(c) + led.stock[i][c];
+                if (q[c] < 0) throw new IllegalStateException("negative stock of " + ctx.com.id(c) + " at " + s.at() + ": " + q[c]);
                 if (!ctx.com.isPerson(c)) {
-                    double cap = Math.floor(ctx.capacity(s, c));   // a whole cap, or the stored value and the spoilage tally disagree (issue #77)
-                    if (q[c] > cap) { led.destroyed[c] += q[c] - cap; led.event("spoilage", s.owner(), s.at(), ctx.com.id(c) + " over capacity in " + s.at(), q[c] - cap); led.note(i, Ledger.q(q[c] - cap) + " " + ctx.com.id(c) + " over capacity, lost"); q[c] = cap; }
+                    int cap = (int) Math.floor(ctx.capacity(s, c));   // a whole cap, or the stored value and the spoilage tally disagree (issue #77)
+                    if (q[c] > cap) { int lost = q[c] - cap; led.destroyed(c, lost); led.event("spoilage", s.owner(), s.at(), ctx.com.id(c) + " over capacity in " + s.at(), lost); led.note(i, Ledger.q(lost) + " " + ctx.com.id(c) + " over capacity, lost"); q[c] = cap; }
                 } else if (c == ctx.com.civ || c == ctx.com.uw) {
                     // KNOWN (human.c trunc_people): civilians and workers above the sector's population cap are truncated every update
-                    double cap = Math.floor(ctx.maxPopulation(s));
-                    if (q[c] > cap + 1e-9) { led.destroyed[c] += q[c] - cap; led.event("overcrowding", s.owner(), s.at(), ctx.com.id(c) + " over the population limit in " + s.at(), q[c] - cap); led.note(i, Ledger.q(q[c] - cap) + " " + ctx.com.id(c) + " over the population limit, lost"); q[c] = cap; }
+                    int cap = (int) Math.floor(ctx.maxPopulation(s));
+                    if (q[c] > cap) { int lost = q[c] - cap; led.destroyed(c, lost); led.event("overcrowding", s.owner(), s.at(), ctx.com.id(c) + " over the population limit in " + s.at(), lost); led.note(i, Ledger.q(lost) + " " + ctx.com.id(c) + " over the population limit, lost"); q[c] = cap; }
                 }
             }
             Sector n = s.withStock(Stocks.of(q))
@@ -69,32 +68,37 @@ public final class ApplyStep {
         return new UpdateResult(out, List.copyOf(led.events), List.copyOf(led.flows), UpdateResult.lazyHash(out), notes);
     }
 
+    /**
+     * Exact (issue #77, rule 7). Every quantity in the world is a whole number and every entry in the
+     * ledger is a whole number, so the books balance to the unit or they do not balance. The old
+     * {@code 1e-6} relative tolerance was there to absorb floating-point drift that can no longer occur;
+     * keeping it would have hidden a real one-unit leak in a large world.
+     */
     private static void checkConservation(Ctx ctx, World out) {
         int nCom = ctx.com.size();
-        double[] before = new double[nCom], after = new double[nCom];
-        for (Sector s : ctx.snap.sectors()) { for (int c = 0; c < nCom; c++) before[c] += s.stock().get(c); for (HeldParcel p : s.held()) before[p.commodity()] += p.qty(); }
-        for (Sector s : out.sectors()) { for (int c = 0; c < nCom; c++) after[c] += s.stock().get(c); for (HeldParcel p : s.held()) after[p.commodity()] += p.qty(); }
-        for (Ship sh : ctx.snap.ships()) for (int c = 0; c < nCom; c++) before[c] += sh.stock().get(c);
-        for (Ship sh : out.ships()) for (int c = 0; c < nCom; c++) after[c] += sh.stock().get(c);
+        long[] before = new long[nCom], after = new long[nCom];
+        for (Sector s : ctx.snap.sectors()) { for (int c = 0; c < nCom; c++) before[c] += (long) s.stock().get(c); for (HeldParcel p : s.held()) before[p.commodity()] += (long) p.qty(); }
+        for (Sector s : out.sectors()) { for (int c = 0; c < nCom; c++) after[c] += (long) s.stock().get(c); for (HeldParcel p : s.held()) after[p.commodity()] += (long) p.qty(); }
+        for (Ship sh : ctx.snap.ships()) for (int c = 0; c < nCom; c++) before[c] += (long) sh.stock().get(c);
+        for (Ship sh : out.ships()) for (int c = 0; c < nCom; c++) after[c] += (long) sh.stock().get(c);
         Ledger l = ctx.led;
         for (int c = 0; c < nCom; c++) {
-            double expected = before[c] + l.produced[c] + l.grown[c] - l.consumed[c] - l.destroyed[c];
-            double tol = 1e-6 * Math.max(1.0, Math.abs(before[c]) + Math.abs(l.produced[c]) + Math.abs(l.consumed[c]));
-            if (Math.abs(after[c] - expected) > tol && Boolean.getBoolean("empire.conserve.debug")) {
+            long expected = before[c] + l.produced[c] + l.grown[c] - l.consumed[c] - l.destroyed[c];
+            if (after[c] == expected) continue;
+            if (Boolean.getBoolean("empire.conserve.debug")) {
                 for (int i = 0; i < ctx.snap.sectors().size(); i++) {
-                    double b = ctx.snap.sectors().get(i).stock().get(c), a = out.sectors().get(i).stock().get(c);
-                    double bh = 0, ah = 0;
-                    for (HeldParcel p : ctx.snap.sectors().get(i).held()) if (p.commodity() == c) bh += p.qty();
-                    for (HeldParcel p : out.sectors().get(i).held()) if (p.commodity() == c) ah += p.qty();
-                    double d = (a + ah) - (b + bh) - l.stock[i][c];
-                    if (Math.abs(d) > 1e-9)
-                        System.err.printf("CONSERVE %s at %s: before=%.3f+%.3f after=%.3f+%.3f delta=%.3f mismatch=%.3f%n",
+                    long b = (long) ctx.snap.sectors().get(i).stock().get(c), a = (long) out.sectors().get(i).stock().get(c);
+                    long bh = 0, ah = 0;
+                    for (HeldParcel p : ctx.snap.sectors().get(i).held()) if (p.commodity() == c) bh += (long) p.qty();
+                    for (HeldParcel p : out.sectors().get(i).held()) if (p.commodity() == c) ah += (long) p.qty();
+                    long d = (a + ah) - (b + bh) - l.stock[i][c];
+                    if (d != 0)
+                        System.err.printf("CONSERVE %s at %s: before=%d+%d after=%d+%d delta=%d mismatch=%d%n",
                                 ctx.com.id(c), ctx.snap.sectors().get(i).at(), b, bh, a, ah, l.stock[i][c], d);
                 }
             }
-            if (Math.abs(after[c] - expected) > tol)
-                throw new IllegalStateException(String.format(Locale.ROOT, "conservation violated for %s: before=%.6f produced=%.6f grown=%.6f consumed=%.6f destroyed=%.6f expected=%.6f after=%.6f",
-                        ctx.com.id(c), before[c], l.produced[c], l.grown[c], l.consumed[c], l.destroyed[c], expected, after[c]));
+            throw new IllegalStateException(String.format(Locale.ROOT, "conservation violated for %s: before=%d produced=%d grown=%d consumed=%d destroyed=%d expected=%d after=%d (out by %d)",
+                    ctx.com.id(c), before[c], l.produced[c], l.grown[c], l.consumed[c], l.destroyed[c], expected, after[c], after[c] - expected));
         }
     }
 
@@ -115,7 +119,7 @@ public final class ApplyStep {
                   .append(f(s.roadLevel())).append('|').append(f(s.roadTarget())).append('|').append(f(s.railLevel())).append('|').append(f(s.railTarget())).append('|').append(s.distCenter()).append('|').append(s.sanctuary()).append('|');
                 for (int c = 0; c < s.stock().size(); c++) sb.append(f(s.stock().get(c))).append(',');
                 sb.append('|');
-                for (int c = 0; c < s.thresholds().length; c++) sb.append(Double.isNaN(s.thresholds()[c]) ? "-" : f(s.thresholds()[c])).append(',');
+                for (int c = 0; c < s.thresholdCount(); c++) sb.append(s.hasThreshold(c) ? f(s.threshold(c)) : "-").append(',');
                 sb.append('|');
                 for (HeldParcel p : s.held()) sb.append(p.commodity()).append(':').append(f(p.qty())).append('>').append(p.dest()).append(p.rail() ? "R" : "").append(';');
                 sb.append('\n');

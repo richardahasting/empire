@@ -17,9 +17,18 @@ import java.util.Map;
  * Step 4: efficiency rises by spending the sector's own materials and work; road levels
  * decay unless maintained. Cash is spent in canonical sector order until the treasury runs
  * dry, which is deterministic and documented.
+ *
+ * <p>Points are whole (issue #77, rule 3). Efficiency, road and rail are 0..100 byte scales, so half a
+ * point is not a thing the world can hold; building must therefore either buy a whole point or buy
+ * nothing at all. {@link #whole} floors what work, materials, cash and mobility can afford and returns
+ * 0 below one — the materials stay in the sector and accrue until a whole point is affordable, which is
+ * Richard's rule and also the only way the sector's books balance against what it actually got.
  */
 public final class BuildUpStep implements Step {
     public String name() { return "buildup"; }
+
+    /** What is actually built: whole points, or none — nothing is bought with a fraction (issue #77). */
+    private static double whole(double points) { double p = Math.floor(points + 1e-9); return p < 1 ? 0 : p; }
 
     public void run(Ctx ctx) {
         EconomyCfg.EfficiencyCfg ec = ctx.cfg.economy().efficiency();
@@ -59,7 +68,8 @@ public final class BuildUpStep implements Step {
                         if (avail < wanted * e.getValue()) ctx.led.shortOf(i, c, wanted * e.getValue() - avail);
                     }
                 }
-                if (points > 1e-9) {
+                points = whole(points);
+                if (points > 0) {
                     StringBuilder used = new StringBuilder();
                     for (var e : build.entrySet()) {
                         if (e.getValue() <= 0) continue;
@@ -90,7 +100,8 @@ public final class BuildUpStep implements Step {
                     if (e.getKey().equals("cash")) points = Math.min(points, cashLeft[cid] / per);
                     else { int c = ctx.com.index(e.getKey()); double avail = s.stock().get(c) + ctx.led.stock[i][c]; points = Math.min(points, avail / per); if (avail < wantedRoad * per) ctx.led.shortOf(i, c, wantedRoad * per - avail); }
                 }
-                if (points > 1e-9) {
+                points = whole(points);
+                if (points > 0) {
                     StringBuilder used = new StringBuilder();
                     for (var e : road.buildMaterialsPerPoint().entrySet()) {
                         double per = e.getValue() * m;
@@ -152,7 +163,7 @@ public final class BuildUpStep implements Step {
         if (crossing != null && ctx.country(cid).levels().tech() < crossing.techRequired()) return 0;
         // the crossing's one-time cost: all of it or none of it
         double crossCash = 0;
-        if (crossing != null && points > 1e-9) {
+        if (crossing != null && whole(points) > 0) {
             boolean ok = true;
             for (var e : crossing.materials().entrySet()) {
                 if (e.getKey().equals("cash")) { crossCash = e.getValue(); if (cashLeft[cid] < e.getValue()) ok = false; }
@@ -173,7 +184,8 @@ public final class BuildUpStep implements Step {
                 if (avail < wanted * per) ctx.led.shortOf(payer, c, wanted * per - avail);
             }
         }
-        if (points <= 1e-9) return 0;
+        points = whole(points);
+        if (points <= 0) return 0;
         StringBuilder used = new StringBuilder();
         if (crossing != null) {
             for (var e : crossing.materials().entrySet()) {
@@ -204,9 +216,11 @@ public final class BuildUpStep implements Step {
         Sector s = ctx.sector(i);
         if (s.railTarget() <= 1e-9 && s.railLevel() <= 1e-9) return;
         int sponsor = -1; double best = -1;
-        for (Coord nb : ctx.neighbours.get(i)) {
-            int j = ctx.idx(nb); Sector n = ctx.sector(j);
-            if (!n.owned() || !n.terrain().isLand()) continue;
+        for (int k = 0; k < Ctx.DIRS; k++) {
+            int j = ctx.neighbour(i, k);
+            if (j < 0) continue;
+            Sector n = ctx.sector(j);
+            if (!n.owned() || !n.isLand()) continue;
             if (n.railLevel() > best) { best = n.railLevel(); sponsor = j; }
         }
         if (sponsor < 0) return;

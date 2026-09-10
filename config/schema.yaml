@@ -701,7 +701,9 @@ infrastructure:
     max_level_by_terrain:       { wilderness: 100, plains: 100, forest: 90, swamp: 60, mountain: 60 }
     # Mobility cost multiplier as a function of road_level: 1.0 at 0, min_multiplier at 100.
     mobility_discount_curve: { type: linear, at_0: 1.0, at_100: 0.1 }   # KNOWN: sector_mcost(): cost -= base × 0.009 × road
-    decay_per_update: 0.5
+    # Whole points (issue #77, Richard 2026-09-09): road level is a rounded byte, so a rate below 1
+    # rounds back to where it started and the road never rots. Was 0.5.
+    decay_per_update: 1.0
     maintenance_cash_per_point_per_update: 0.05
     combat_damage_fraction: 0.30            # fraction of level lost when sector is captured
   rail:
@@ -766,7 +768,7 @@ detection:
     decay_curve: sigmoid                    # p(d) = 1 / (1 + exp(k*(d/range - midpoint)))
     sigmoid_k: 8.0
     sigmoid_midpoint: 0.85
-    radar_level_build: { lcm: 2.0, hcm: 1.0, cash: 20, max_points_per_update: 5, decay_per_update: 0.5 }
+    radar_level_build: { lcm: 2.0, hcm: 1.0, cash: 20, max_points_per_update: 5, decay_per_update: 1.0 }   # whole points (issue #77): 0.5 never decayed
   # Signature multiplies p; >1 easier to see.
   # submarine: NEW (issue #75) — a boat that runs quiet is the thing radar struggles with, and the
   # reason detection exists at all. GUESS, and the main dial for how dangerous submarines feel.

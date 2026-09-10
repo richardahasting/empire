@@ -17,7 +17,19 @@ public final class Ctx {
     public final Ledger led;
     public final int etus;
     public final long seed;
-    public final List<List<Coord>> neighbours;
+    /**
+     * The six neighbours of every sector, flat: {@code neighbours[i * 6 + k]} is a sector index, or -1
+     * where the world does not wrap and the hex has no neighbour there. This was a
+     * {@code List<List<Coord>>} — six {@link Coord} objects and two list objects per sector, rebuilt for
+     * every update. At a million sectors that was over 200 MB of garbage an update, more than the world
+     * itself weighs (issue #77). Read it with {@link #neighbour}.
+     */
+    private final int[] neighbours;
+
+    public static final int DIRS = 6;
+
+    /** Sector index of {@code i}'s {@code k}th neighbour, or -1 if there is none. */
+    public int neighbour(int i, int k) { return neighbours[i * DIRS + k]; }
     /** Sector type by designation, built once (issue #82): GameConfig.sectorType is a linear string scan. */
     private final java.util.Map<String, SectorTypeCfg> typeIndex;
     /** Work (work-unit·ETUs) spent in step 4, subtracted from step 5's pool. */
@@ -36,8 +48,13 @@ public final class Ctx {
         this.contacts = new ArrayList<>(snap.contacts());
         this.typeIndex = new java.util.HashMap<>();
         for (SectorTypeCfg t : cfg.economy().sectorTypes()) typeIndex.put(t.id(), t);
-        this.neighbours = new ArrayList<>(snap.sectors().size());
-        for (Sector s : snap.sectors()) neighbours.add(Hex.neighbours(snap, s.at()));
+        int n = snap.sectors().size();
+        this.neighbours = new int[n * DIRS];
+        java.util.Arrays.fill(this.neighbours, -1);
+        for (int i = 0; i < n; i++) {
+            List<Coord> nb = Hex.neighbours(snap, snap.sectors().get(i).at());
+            for (int k = 0; k < nb.size(); k++) this.neighbours[i * DIRS + k] = snap.index(nb.get(k));
+        }
     }
 
     public int idx(Coord c) { return snap.index(c); }
@@ -132,9 +149,9 @@ public final class Ctx {
         while (!q.isEmpty()) {
             int u = q.poll();
             if (u == dst) break;
-            for (Coord nb : neighbours.get(u)) {
-                int v = idx(nb);
-                if (prev[v] != -2 || !railHop(v, owner)) continue;
+            for (int k = 0; k < DIRS; k++) {
+                int v = neighbour(u, k);
+                if (v < 0 || prev[v] != -2 || !railHop(v, owner)) continue;
                 prev[v] = u; q.add(v);
             }
         }
@@ -149,7 +166,7 @@ public final class Ctx {
         int src = idx(from);
         if (!railCapable(src) || sector(src).owner() != owner) return seen;
         java.util.ArrayDeque<Integer> q = new java.util.ArrayDeque<>(); q.add(src); seen.add(src);
-        while (!q.isEmpty()) { int u = q.poll(); for (Coord nb : neighbours.get(u)) { int v = idx(nb); if (!seen.contains(v) && railHop(v, owner)) { seen.add(v); q.add(v); } } }
+        while (!q.isEmpty()) { int u = q.poll(); for (int k = 0; k < DIRS; k++) { int v = neighbour(u, k); if (v >= 0 && !seen.contains(v) && railHop(v, owner)) { seen.add(v); q.add(v); } } }
         return seen;
     }
     /** Units a rail sector can carry this update: capacity_at_100 × rail_level/100. Depot efficiency is applied at the endpoints. */

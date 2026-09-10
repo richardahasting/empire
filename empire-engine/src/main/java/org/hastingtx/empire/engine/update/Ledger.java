@@ -14,15 +14,23 @@ import java.util.List;
 public final class Ledger {
     public final int nSectors, nCom, nCountries;
 
-    public final double[][] stock;       // [sector][commodity]
+    /**
+     * [sector][commodity]. Deltas, so signed and free to go negative or transiently past the cap —
+     * {@code int} rather than {@code short} for that reason (issue #77). At a million sectors this is
+     * 43 MB an update rather than 86, and it is allocated fresh every update.
+     */
+    public final int[][] stock;
     public final double[] efficiency, mobility, road, rail;
     public final double[] cash, btu;
     public final double[][] level;       // [country][tech, research, education, happiness]
     public final boolean[] bankruptNext;
     public final int[] plagueLeft;
 
-    // per-commodity tallies (world totals)
-    public final double[] produced, consumed, destroyed, grown, transferNet;
+    /**
+     * Per-commodity world totals. {@code long}, and exactly integral: conservation is checked by
+     * integer equality (issue #77, rule 7), so a tally that drifted by a fraction would fail the update.
+     */
+    public final long[] produced, consumed, destroyed, grown, transferNet;
 
     /** Replacement held-parcel lists; null entry = unchanged from snapshot. */
     public final List<HeldParcel>[] heldNext;
@@ -43,14 +51,14 @@ public final class Ledger {
         this.nSectors = snap.sectors().size();
         this.nCom = nCom;
         this.nCountries = snap.countries().size();
-        stock = new double[nSectors][nCom];
+        stock = new int[nSectors][nCom];
         efficiency = new double[nSectors]; mobility = new double[nSectors]; road = new double[nSectors]; rail = new double[nSectors];
         cash = new double[nCountries]; btu = new double[nCountries];
         level = new double[nCountries][4];
         bankruptNext = new boolean[nCountries];
         plagueLeft = new int[nCountries];
         for (int i = 0; i < nCountries; i++) plagueLeft[i] = snap.countries().get(i).plagueUpdatesLeft();
-        produced = new double[nCom]; consumed = new double[nCom]; destroyed = new double[nCom]; grown = new double[nCom]; transferNet = new double[nCom];
+        produced = new long[nCom]; consumed = new long[nCom]; destroyed = new long[nCom]; grown = new long[nCom]; transferNet = new long[nCom];
         heldNext = (List<HeldParcel>[]) new List[nSectors];
     }
 
@@ -74,19 +82,33 @@ public final class Ledger {
      */
     public static double taken(double qty) { return Math.floor(qty); }
 
-    public double produce(int sector, int c, double qty) { double q = whole(qty); stock[sector][c] += q; produced[c] += q; return q; }
-    public double consume(int sector, int c, double qty) { double q = taken(qty); stock[sector][c] -= q; consumed[c] += q; return q; }
-    public double destroy(int sector, int c, double qty) { double q = taken(qty); stock[sector][c] -= q; destroyed[c] += q; return q; }
-    public double grow(int sector, int c, double qty) { double q = whole(qty); stock[sector][c] += q; grown[c] += q; return q; }
+    public double produce(int sector, int c, double qty) { int q = (int) whole(qty); stock[sector][c] += q; produced[c] += q; return q; }
+    public double consume(int sector, int c, double qty) { int q = (int) taken(qty); stock[sector][c] -= q; consumed[c] += q; return q; }
+    public double destroy(int sector, int c, double qty) { int q = (int) taken(qty); stock[sector][c] -= q; destroyed[c] += q; return q; }
+    public double grow(int sector, int c, double qty) { int q = (int) whole(qty); stock[sector][c] += q; grown[c] += q; return q; }
     /** Negative growth (starvation, plague) is a death: tallied as destroyed. */
-    public double die(int sector, int c, double qty) { double q = taken(qty); stock[sector][c] -= q; destroyed[c] += q; return q; }
+    public double die(int sector, int c, double qty) { int q = (int) taken(qty); stock[sector][c] -= q; destroyed[c] += q; return q; }
 
     /** Move qty of c out of sector {@code from} into sector {@code to}. Sums to zero by construction. */
-    public double transfer(int from, int to, int c, double qty) { double q = taken(qty); stock[from][c] -= q; stock[to][c] += q; return q; }
+    public double transfer(int from, int to, int c, double qty) { int q = (int) taken(qty); stock[from][c] -= q; stock[to][c] += q; return q; }
     /** Stock leaves a sector into a held parcel (still in the world, not in any stock). */
-    public double toHeld(int from, int c, double qty) { double q = taken(qty); stock[from][c] -= q; transferNet[c] -= q; return q; }
+    public double toHeld(int from, int c, double qty) { int q = (int) taken(qty); stock[from][c] -= q; transferNet[c] -= q; return q; }
     /** Held parcel arrives into a sector's stock. */
-    public double fromHeld(int to, int c, double qty) { double q = taken(qty); stock[to][c] += q; transferNet[c] += q; return q; }
+    public double fromHeld(int to, int c, double qty) { int q = (int) taken(qty); stock[to][c] += q; transferNet[c] += q; return q; }
+
+    /**
+     * Stock crosses between a sector and a ship's hold. A ship's stock is counted in the conservation
+     * sum exactly like a sector's, so this is a plain move with nothing to tally — but it still has to
+     * go through here, or the sector's delta stops being a whole number (issue #77).
+     */
+    public double toShip(int from, int c, double qty) { int q = (int) taken(qty); stock[from][c] -= q; return q; }
+    public double fromShip(int to, int c, double qty) { int q = (int) taken(qty); stock[to][c] += q; return q; }
+
+    /** A ship makes something at sea (fishing). Tallied as produced; the hold is not a sector. */
+    public double produceAtSea(int c, double qty) { int q = (int) whole(qty); produced[c] += q; return q; }
+
+    /** Something is destroyed that was never in a sector's stock — over-capacity spoilage at apply time. */
+    public void destroyed(int c, double qty) { destroyed[c] += (long) qty; }
 
     public void event(String type, int country, org.hastingtx.empire.engine.model.Coord at, String msg, double amount) {
         events.add(new Event(type, country, at, msg, amount));

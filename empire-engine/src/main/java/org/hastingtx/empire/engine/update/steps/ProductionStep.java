@@ -32,7 +32,7 @@ public final class ProductionStep implements Step {
             if (work <= 0) continue;
 
             double unit = work * (s.efficiency() / 100.0) * c.handicap().production();   // work already carries the ETUs
-            if (t.resourceGate() != null) unit *= s.resources().get(t.resourceGate()) / 100.0;
+            if (t.resourceGate() != null) unit *= s.resource(t.resourceGate()) / 100.0;
             if (t.levelEffect() != null) unit *= ctx.curve(t.levelEffect().curve(), c.levels().get(t.levelEffect().level()));
             if (c.bankrupt()) unit *= ctx.cfg.economy().money().bankruptcy().effect().productionMultiplier();
             if (unit <= 0) continue;
