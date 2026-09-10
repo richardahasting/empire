@@ -18,7 +18,9 @@ public record World(
         List<Ship> ships,
         long nextShipId,
         /** Standing sightings of enemy ships, per country (issue #75). */
-        List<Contact> contacts) {
+        List<Contact> contacts,
+        /** What each country remembers of sectors it has seen and can no longer see (issue #64). */
+        List<SeenSector> seen) {
 
     public World(int width, int height, boolean wrapX, boolean wrapY, List<Sector> sectors, List<Country> countries, List<MoveOrder> pendingMoves, long updateNumber) {
         this(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, List.of());
@@ -27,8 +29,9 @@ public record World(
         this(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, List.of(), 1);
     }
     public World(int width, int height, boolean wrapX, boolean wrapY, List<Sector> sectors, List<Country> countries, List<MoveOrder> pendingMoves, long updateNumber, List<RailOrder> pendingRail, List<Ship> ships, long nextShipId) {
-        this(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, List.of());
+        this(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, List.of(), List.of());
     }
+
 
     public World {
         // Chunked and copy-on-write (issue #89), and kept as-is when it already is: List.copyOf on a
@@ -39,6 +42,7 @@ public record World(
         pendingRail = List.copyOf(pendingRail);
         ships = List.copyOf(ships);
         contacts = List.copyOf(contacts);
+        seen = List.copyOf(seen);
         if (sectors.size() != width * height) throw new IllegalArgumentException("sector count != width*height");
     }
 
@@ -49,17 +53,20 @@ public record World(
     public Sector sector(int x, int y) { return sectors.get(index(x, y)); }
     public Country country(int id) { return countries.get(id); }
 
-    public World withSectors(List<Sector> s) { return new World(width, height, wrapX, wrapY, s, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts); }
-    public World withCountries(List<Country> c) { return new World(width, height, wrapX, wrapY, sectors, c, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts); }
-    public World withPendingMoves(List<MoveOrder> m) { return new World(width, height, wrapX, wrapY, sectors, countries, m, updateNumber, pendingRail, ships, nextShipId, contacts); }
-    public World withPendingRail(List<RailOrder> r) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, r, ships, nextShipId, contacts); }
-    public World withUpdateNumber(long n) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, n, pendingRail, ships, nextShipId, contacts); }
+    public World withSectors(List<Sector> s) { return new World(width, height, wrapX, wrapY, s, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen); }
+    public World withCountries(List<Country> c) { return new World(width, height, wrapX, wrapY, sectors, c, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen); }
+    public World withPendingMoves(List<MoveOrder> m) { return new World(width, height, wrapX, wrapY, sectors, countries, m, updateNumber, pendingRail, ships, nextShipId, contacts, seen); }
+    public World withPendingRail(List<RailOrder> r) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, r, ships, nextShipId, contacts, seen); }
+    public World withUpdateNumber(long n) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, n, pendingRail, ships, nextShipId, contacts, seen); }
 
-    public World withShips(List<Ship> sh) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, sh, nextShipId, contacts); }
-    public World withShips(List<Ship> sh, long next) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, sh, next, contacts); }
+    public World withShips(List<Ship> sh) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, sh, nextShipId, contacts, seen); }
+    public World withShips(List<Ship> sh, long next) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, sh, next, contacts, seen); }
     public Ship ship(long id) { for (Ship sh : ships) if (sh.id() == id) return sh; return null; }
     public World withShip(Ship sh) { List<Ship> copy = new ArrayList<>(ships); for (int i = 0; i < copy.size(); i++) if (copy.get(i).id() == sh.id()) { copy.set(i, sh); return withShips(copy); } copy.add(sh); return withShips(copy); }
-    public World withContacts(List<Contact> cs) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, cs); }
+    public World withContacts(List<Contact> cs) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, cs, seen); }
+    public World withSeen(List<SeenSector> ss) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, ss); }
+    /** What {@code owner} remembers of sectors it can no longer see (issue #64). */
+    public List<SeenSector> seenBy(int owner) { List<SeenSector> out = new ArrayList<>(); for (SeenSector s : seen) if (s.owner() == owner) out.add(s); return out; }
     /** The sightings {@code owner} currently holds. */
     public List<Contact> contactsOf(int owner) { List<Contact> out = new ArrayList<>(); for (Contact c : contacts) if (c.owner() == owner) out.add(c); return out; }
 

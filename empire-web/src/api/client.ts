@@ -50,6 +50,11 @@ export interface SectorView {
   deliveries: Record<string, { dir: string; threshold: number }>;
   /** A sanctuary, and whose (owner's name for a foreign sector; null for yours or nobody's). */
   sanctuary: boolean; ownerName: string | null;
+  /**
+   * On the chart from memory rather than from sight (issue #64): everything here is as it was at
+   * `seenUpdate`, not as it is. `age` is updates since, so it can be dimmed by how stale it is.
+   */
+  remembered: boolean; seenUpdate: number; age: number;
 }
 export interface ShipView {
   id: number; cls: string; name: string; at: Coord; relative: Coord; efficiency: number; stock: Record<string, number>; load: number; hold: number;

@@ -32,6 +32,7 @@ public class WorldRepository {
         writeRail(gameId, w.pendingRail(), com);
         writeShips(gameId, w, com);
         writeContacts(gameId, w);
+        writeSeen(gameId, w);
         jdbc.update("UPDATE game SET update_number = ? WHERE id = ?", w.updateNumber(), gameId);
     }
 
@@ -48,6 +49,7 @@ public class WorldRepository {
         if (!after.pendingRail().equals(before.pendingRail())) writeRail(gameId, after.pendingRail(), com);
         if (!after.ships().equals(before.ships()) || after.nextShipId() != before.nextShipId()) writeShips(gameId, after, com);
         if (!after.contacts().equals(before.contacts())) writeContacts(gameId, after);
+        if (!after.seen().equals(before.seen())) writeSeen(gameId, after);
         jdbc.update("UPDATE game SET update_number = ? WHERE id = ?", after.updateNumber(), gameId);
     }
 
@@ -140,6 +142,19 @@ public class WorldRepository {
         }
         jdbc.batchUpdate("INSERT INTO ship (game_id, id, owner, class, name, x, y, efficiency, dest_x, dest_y, lane_from_x, lane_from_y, lane_to_x, lane_to_y, lane_cargo, lane_outbound, built, note, tech, mission, home_x, home_y) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows);
         if (!stock.isEmpty()) jdbc.batchUpdate("INSERT INTO ship_stock (game_id, ship_id, commodity, qty) VALUES (?,?,?,?)", stock);
+    }
+
+    /**
+     * Map memory (issue #64), rewritten whole whenever it changed. It only ever grows, and it changes on
+     * almost every update while a country is exploring, so a diff would cost more than the rewrite.
+     */
+    private void writeSeen(long gameId, World w) {
+        jdbc.update("DELETE FROM sector_seen WHERE game_id = ?", gameId);
+        if (w.seen().isEmpty()) return;
+        List<Object[]> rows = new ArrayList<>();
+        for (SeenSector m : w.seen())
+            rows.add(new Object[] {gameId, m.owner(), m.at().x(), m.at().y(), m.terrain().id(), m.sectorOwner(), m.designation(), m.seenUpdate()});
+        jdbc.batchUpdate("INSERT INTO sector_seen (game_id, owner, x, y, terrain, sector_owner, designation, seen_update) VALUES (?,?,?,?,?,?,?,?)", rows);
     }
 
     /** Few contacts, so they are rewritten whenever any of them changed. */
@@ -237,6 +252,9 @@ public class WorldRepository {
         List<Contact> contacts = jdbc.query("SELECT * FROM contact WHERE game_id = ? ORDER BY owner, ship_id", (rs, i) ->
                 new Contact(rs.getInt("owner"), rs.getLong("ship_id"), rs.getInt("target_owner"), rs.getString("class"),
                         new Coord(rs.getInt("x"), rs.getInt("y")), rs.getLong("seen_update"), rs.getDouble("confidence")), g.id());
-        return new World(g.width(), g.height(), g.wrapX(), g.wrapY(), list, countries, moves, g.updateNumber(), rail, ships, nextShip == null ? 1 : nextShip, contacts);
+        List<SeenSector> seen = jdbc.query("SELECT * FROM sector_seen WHERE game_id = ? ORDER BY owner, y, x", (rs, i) ->
+                new SeenSector(rs.getInt("owner"), new Coord(rs.getInt("x"), rs.getInt("y")), Terrain.of(rs.getString("terrain")),
+                        rs.getInt("sector_owner"), rs.getString("designation"), rs.getLong("seen_update")), g.id());
+        return new World(g.width(), g.height(), g.wrapX(), g.wrapY(), list, countries, moves, g.updateNumber(), rail, ships, nextShip == null ? 1 : nextShip, contacts, seen);
     }
 }

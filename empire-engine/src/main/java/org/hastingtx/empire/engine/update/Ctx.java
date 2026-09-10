@@ -94,6 +94,8 @@ public final class Ctx {
     public final List<Ship> ships;
     /** Contacts as this update leaves them (the detection step rewrites this list; apply copies it out). */
     public final List<Contact> contacts;
+    /** Map memory as this update leaves it (issue #64); apply copies it out. */
+    public final List<SeenSector> seen;
 
     public Ctx(World snap, GameConfig cfg, Commodities com, long seed) {
         this.snap = snap; this.cfg = cfg; this.com = com; this.seed = seed;
@@ -101,6 +103,7 @@ public final class Ctx {
         this.nSectors = snap.sectors().size();
         this.ships = new ArrayList<>(snap.ships());
         this.contacts = new ArrayList<>(snap.contacts());
+        this.seen = new ArrayList<>(snap.seen());
         this.typeIndex = new java.util.HashMap<>();
         for (SectorTypeCfg t : cfg.economy().sectorTypes()) typeIndex.put(t.id(), t);
         int n = snap.sectors().size();

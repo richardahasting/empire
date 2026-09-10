@@ -47,7 +47,14 @@ public record CountryView(
 
     public record LaneView(Coord from, Coord to, Coord fromRelative, Coord toRelative, List<String> cargo, boolean outbound) {}
 
-    /** {@code full} is true for owned sectors; adjacent unowned sectors expose terrain and owner only. */
+    /**
+     * {@code full} is true for owned sectors; adjacent unowned sectors expose terrain and owner only.
+     *
+     * <p>{@code remembered} marks a sector nobody is looking at: it is on the chart because this country
+     * saw it once (issue #64), and everything in it is as it was at {@code seenUpdate}, not as it is.
+     * {@code age} is how many updates ago that was, so a client can dim it by how stale it is. A current
+     * sector has {@code remembered} false and {@code age} 0.
+     */
     public record SectorView(
             Coord at,
             Coord relative,
@@ -71,7 +78,10 @@ public record CountryView(
             Map<String, Delivery> deliveries,
             /** A sanctuary, and whose (owner's name for a foreign sector, null for yours or nobody's). Issue #54. */
             boolean sanctuary,
-            String ownerName) {}
+            String ownerName,
+            boolean remembered,
+            long seenUpdate,
+            long age) {}
 
     public record Delivery(String dir, double threshold) {}
 
@@ -81,14 +91,7 @@ public record CountryView(
         List<String> ids = new ArrayList<>();
         for (int i = 0; i < com.size(); i++) ids.add(com.id(i));
 
-        Set<Coord> visible = new TreeSet<>();
-        for (Sector s : w.ownedBy(countryId)) { visible.add(s.at()); visible.addAll(Hex.neighbours(w, s.at())); }
-        // a ship lifts the fog around it (issue #62): everything within its class's sight is in view while it is there
-        if (cfg.units().ships() != null) for (Ship sh : w.ships()) {
-            if (sh.owner() != countryId) continue;
-            int sight = cfg.units().ships().sightOf(cfg.units().ships().shipClass(sh.cls()));
-            for (Sector s : w.sectors()) if (Hex.distance(w, s.at(), sh.at()) <= sight) visible.add(s.at());
-        }
+        Set<Coord> visible = Visibility.of(w, cfg, countryId);
 
         List<SectorView> views = new ArrayList<>();
         for (Coord at : visible) {
@@ -104,7 +107,8 @@ public record CountryView(
                 }
                 for (HeldParcel p : s.held()) held.merge(com.id(p.commodity()), p.qty(), Double::sum);
                 views.add(new SectorView(at, rel, true, s.terrain().id(), s.elevation(), s.owner(), s.designation(), s.efficiency(),
-                        s.mobility(), s.roadLevel(), s.roadTarget(), s.railLevel(), s.railTarget(), stock, th, s.distCenter(), held, s.resources(), deliveries, s.sanctuary(), null));
+                        s.mobility(), s.roadLevel(), s.roadTarget(), s.railLevel(), s.railTarget(), stock, th, s.distCenter(), held, s.resources(), deliveries, s.sanctuary(), null,
+                        false, w.updateNumber(), 0));
             } else {
                 // a neighbour: terrain and owner only. Sanctuaries are shown as such, with the owner's name (the original marked them 's').
                 String ownerName = s.owned() ? w.country(s.owner()).name() : null;
@@ -112,9 +116,23 @@ public record CountryView(
                 Resources res = s.terrain() == Terrain.OCEAN ? new Resources(s.resources().fertility(), 0, 0, 0, 0) : null;
                 boolean sea = s.terrain() == Terrain.OCEAN;
                 views.add(new SectorView(at, rel, false, s.terrain().id(), s.elevation(), s.owner(), null, 0, 0, 0, 0, sea ? s.railLevel() : 0, sea ? s.railTarget() : 0,
-                        Map.of(), Map.of(), null, Map.of(), res, Map.of(), s.sanctuary(), ownerName));
+                        Map.of(), Map.of(), null, Map.of(), res, Map.of(), s.sanctuary(), ownerName,
+                        false, w.updateNumber(), 0));
             }
         }
+        // ...and everything this country remembers but cannot currently see (issue #64). Drawn from the
+        // memory, not from the world: the point is that it says what was there, not what is.
+        for (SeenSector m : w.seenBy(countryId)) {
+            if (visible.contains(m.at())) continue;
+            String ownerName = m.sectorOwner() == Sector.NOBODY ? null
+                    : m.sectorOwner() < w.countries().size() ? w.country(m.sectorOwner()).name() : null;
+            views.add(new SectorView(m.at(), relative(w, c.capital(), m.at()), false, m.terrain().id(), 0, m.sectorOwner(),
+                    m.sectorOwner() == countryId ? m.designation() : null, 0, 0, 0, 0, 0, 0,
+                    Map.of(), Map.of(), null, Map.of(), null, Map.of(), false, ownerName,
+                    true, m.seenUpdate(), m.age(w.updateNumber())));
+        }
+        views.sort(java.util.Comparator.comparing(SectorView::at));
+
         List<String> others = new ArrayList<>();
         for (Country o : w.countries()) if (o.id() != countryId) others.add(o.name());
         List<ShipView> ships = new ArrayList<>();
