@@ -31,7 +31,9 @@ public record World(
     }
 
     public World {
-        sectors = List.copyOf(sectors);
+        // Chunked and copy-on-write (issue #89), and kept as-is when it already is: List.copyOf on a
+        // fresh ArrayList was a second full copy of every sector on top of the one withSector made.
+        sectors = Sectors.of(sectors);
         countries = List.copyOf(countries);
         pendingMoves = List.copyOf(pendingMoves);
         pendingRail = List.copyOf(pendingRail);
@@ -65,10 +67,13 @@ public record World(
     public List<Ship> shipsAt(Coord c) { List<Ship> out = new ArrayList<>(); for (Ship sh : ships) if (sh.at().equals(c)) out.add(sh); return out; }
     public List<Ship> shipsOf(int owner) { List<Ship> out = new ArrayList<>(); for (Ship sh : ships) if (sh.owner() == owner) out.add(sh); return out; }
 
+    /**
+     * This world with one sector replaced. Copies one chunk and the chunk index, sharing the rest with
+     * this world (issue #89) — it used to copy all 524,288 references, twice, at 10 ms a call, and the
+     * command executor does this once per command and once per hop of a move.
+     */
     public World withSector(Sector s) {
-        List<Sector> copy = new ArrayList<>(sectors);
-        copy.set(index(s.at()), s);
-        return withSectors(copy);
+        return withSectors(Sectors.of(sectors).with(index(s.at()), s));
     }
     public World withCountry(Country c) {
         List<Country> copy = new ArrayList<>(countries);

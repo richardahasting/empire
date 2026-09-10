@@ -16,16 +16,16 @@ public final class ApplyStep {
     private ApplyStep() {}
 
     public static UpdateResult apply(Ctx ctx) {
-        Ledger led = ctx.led;
+        Ledger led = ctx.led();
         World snap = ctx.snap;
         int nCom = ctx.com.size();
         double mobMax = ctx.cfg.economy().mobility().sectorMax();
 
-        List<Sector> next = new ArrayList<>(led.nSectors);
+        List<Sector> next = new ArrayList<>(ctx.nSectors);
         // Sectors this step actually rebuilt, for the conservation check below.
-        int[] rebuilt = new int[led.nSectors];
+        int[] rebuilt = new int[ctx.nSectors];
         int nRebuilt = 0;
-        for (int i = 0; i < led.nSectors; i++) {
+        for (int i = 0; i < ctx.nSectors; i++) {
             Sector s = ctx.sector(i);
             // Issue #87: an unowned sector the ledger did not touch cannot have changed. Its stock, its
             // designation and therefore its caps are all exactly what the last apply left, so there is
@@ -108,7 +108,7 @@ public final class ApplyStep {
         }
         for (Ship sh : ctx.snap.ships()) for (int c = 0; c < nCom; c++) before[c] += (long) sh.stock().get(c);
         for (Ship sh : out.ships()) for (int c = 0; c < nCom; c++) after[c] += (long) sh.stock().get(c);
-        Ledger l = ctx.led;
+        Ledger l = ctx.led();
         for (int c = 0; c < nCom; c++) {
             long expected = before[c] + l.produced[c] + l.grown[c] - l.consumed[c] - l.destroyed[c];
             if (after[c] == expected) continue;

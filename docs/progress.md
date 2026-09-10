@@ -147,16 +147,48 @@ What it took, in descending order of value:
 - **`ApplyStep` reuses untouched sectors**, and conservation sums only what it rebuilt —
   a skipped sector adds the same amount to both sides and cancels.
 
+## Then commands stopped copying the world (#89)
+
+With the update down to ~78 ms, command execution was the whole cycle. Timed properly —
+`Sim`'s own agent timer spans the agent's turn *and* its commands, so an earlier reading
+of "agents ~12 s, commands ~7 s" was one number split by guesswork — 512x1024, forty
+countries, five updates:
+
+| Phase | Before | After |
+|---|---|---|
+| `CountryView.of` | 366 ms | ~590 ms |
+| `agent.turn` | 14 ms | 13 ms |
+| **command execution** | **44,547 ms** | **296 ms** |
+| `Update.run` | 813 ms | ~570 ms |
+| **per update cycle** | **~9.1 s** | **~0.30 s** |
+
+Two causes, and the second was much the larger:
+
+- **`World.withSector` copied the sector list, twice** — `new ArrayList<>(sectors)` and
+  then `List.copyOf` in the record's compact constructor — to change one hex. 10.1 ms a
+  call. `Sectors` now holds them in 1024-sector chunks and changing one copies the chunk
+  array and one chunk, sharing the rest: 1,536 references instead of 524,288.
+- **Every command built a `Ctx`.** Six verbs make one to ask what a hop costs, and its
+  constructor allocated a `Ledger` — `int[nSectors * nCom]`, 29 MB — plus the work pool,
+  the held-parcel slots and #87's worklist scan. All of it is lazy now. Only the update's
+  steps write a ledger, and `Ctx`'s own reads of pending stock answer 0 when there is
+  none rather than conjuring one, so `maxPopulation` no longer allocates 29 MB to add
+  zero. Command execution: 1,103 ms an update → 59 ms.
+
+Also, the sim harness was walking the world once per country in `Sim.row` and again in
+`Scoring.score` — eighty scans of half a million sectors an update. One pass now.
+
 ### Where the time is now
 
-The update is no longer the bottleneck and parallelising it would be premature. Per
-update cycle at 512x1024 with forty scripted agents: **agent turns ~12 s, command
-execution ~7 s, the update 0.08 s.** Command execution is almost all
-`World.withSector`, which copies the 524,288-entry sector list *twice* — once in
-`new ArrayList<>(sectors)` and again in the record's compact constructor — at **10 ms a
-call**. That is the next thing worth fixing, and sharding by nation is the natural way
-to fix it: a country's commands touch only its own sectors, so its thread can hold a
-small overlay and the merge is O(changes).
+`CountryView.of` is the largest single phase, at ~2.9 ms a country and one call per
+country per update. It scans the world to find what a country owns and can see, which is
+the same shape of problem #87 fixed inside the update — worth a look before anything
+else.
+
+Parallelism is still not the lever. If it ever is, shard by **nation**, not by sector:
+the ordering that matters (`BuildUpStep` spending a treasury until it runs dry) is
+intra-country, so nation-sharding preserves it exactly where sector-sharding breaks it,
+and #77 making the tallies `long[]` means per-thread partials merge identically.
 
 ## Not done, and deliberately
 

@@ -14,7 +14,16 @@ public final class Ctx {
     public final World snap;
     public final GameConfig cfg;
     public final Commodities com;
-    public final Ledger led;
+    /**
+     * Built on first use (issue #89). The command executor makes a {@code Ctx} for a single lookup —
+     * what a hop costs, whether a hold carries a commodity — and a {@link Ledger} is
+     * {@code int[nSectors * nCom]}: 29 MB, allocated and thrown away, for every command a player
+     * issues. Only the update's steps ever write one, so nothing allocates it until something does.
+     */
+    private Ledger led;
+
+    /** Sector count, which used to be read off the ledger and does not need one. */
+    public final int nSectors;
     public final int etus;
     public final long seed;
     /**
@@ -45,24 +54,24 @@ public final class Ctx {
      * of an update — and a stored index would be a second source of truth for who owns what, needing to
      * be kept in step on explore, capture and abandonment and carried through save and load.
      */
-    public final int[] owned;
+    private int[] owned;
 
     /**
      * Sectors holding people. The population step keys on people rather than ownership, which is the
      * right predicate — population should follow people, not flags — and will matter when a sector can
      * hold people while changing hands.
      */
-    public final int[] populated;
+    private int[] populated;
 
     /** Sectors holding parcels in transit. Needed to clear a sector whose parcels have all left. */
-    public final int[] withHeld;
+    private int[] withHeld;
 
     /**
      * Unowned sectors that still have something happening: an abandoned sector whose efficiency is
      * rotting, or a sea hex carrying a bridge or an order for one. Both are bounded worklists, not the
      * map.
      */
-    public final int[] activeUnowned;
+    private int[] activeUnowned;
 
     /**
      * {@link #owned} and {@link #activeUnowned} merged, ascending — every sector an update can act on.
@@ -73,14 +82,14 @@ public final class Ctx {
      * nobody (#60), so anything indexed by "a sector that can pay mobility" has to include unowned sea
      * carrying track.
      */
-    public final int[] ownedOrActive;
+    private int[] ownedOrActive;
 
     /** Sector index of {@code i}'s {@code k}th neighbour, or -1 if there is none. */
     public int neighbour(int i, int k) { return neighbours[i * DIRS + k]; }
     /** Sector type by designation, built once (issue #82): GameConfig.sectorType is a linear string scan. */
     private final java.util.Map<String, SectorTypeCfg> typeIndex;
-    /** Work (work-unit·ETUs) spent in step 4, subtracted from step 5's pool. */
-    public final double[] workSpent;
+    /** Work (work-unit·ETUs) spent in step 4, subtracted from step 5's pool. Lazy, like the ledger. */
+    private double[] workSpent;
     /** Ships as this update leaves them (the ship step rewrites this list; apply copies it out). */
     public final List<Ship> ships;
     /** Contacts as this update leaves them (the detection step rewrites this list; apply copies it out). */
@@ -89,35 +98,13 @@ public final class Ctx {
     public Ctx(World snap, GameConfig cfg, Commodities com, long seed) {
         this.snap = snap; this.cfg = cfg; this.com = com; this.seed = seed;
         this.etus = cfg.etus();
-        this.led = new Ledger(snap, com.size());
-        this.workSpent = new double[snap.sectors().size()];
+        this.nSectors = snap.sectors().size();
         this.ships = new ArrayList<>(snap.ships());
         this.contacts = new ArrayList<>(snap.contacts());
         this.typeIndex = new java.util.HashMap<>();
         for (SectorTypeCfg t : cfg.economy().sectorTypes()) typeIndex.put(t.id(), t);
         int n = snap.sectors().size();
 
-        // One ascending pass builds every worklist (issue #87). Ascending is what keeps the update
-        // deterministic: a step iterating these visits sectors in the order a full walk would have.
-        int nOwned = 0, nPop = 0, nHeld = 0, nActive = 0, nBoth = 0;
-        int[] ownedBuf = new int[n], popBuf = new int[n], heldBuf = new int[n], activeBuf = new int[n], bothBuf = new int[n];
-        int civ = com.civ, mil = com.mil, uw = com.uw;
-        for (int i = 0; i < n; i++) {
-            Sector s = snap.sectors().get(i);
-            boolean own = s.owned();
-            if (own) ownedBuf[nOwned++] = i;
-            if (s.stock().get(civ) + s.stock().get(mil) + s.stock().get(uw) > 0) popBuf[nPop++] = i;
-            if (!s.held().isEmpty()) heldBuf[nHeld++] = i;
-            // an abandoned sector still rotting, or a sea hex with a bridge on it or ordered
-            boolean active = !own && (s.efficiency() > 0 || (s.isOcean() && (s.railLevel() > 0 || s.railTarget() > 0)));
-            if (active) activeBuf[nActive++] = i;
-            if (own || active) bothBuf[nBoth++] = i;
-        }
-        this.owned = java.util.Arrays.copyOf(ownedBuf, nOwned);
-        this.populated = java.util.Arrays.copyOf(popBuf, nPop);
-        this.withHeld = java.util.Arrays.copyOf(heldBuf, nHeld);
-        this.activeUnowned = java.util.Arrays.copyOf(activeBuf, nActive);
-        this.ownedOrActive = java.util.Arrays.copyOf(bothBuf, nBoth);
 
         // Direction-indexed, -1 where there is none. Iterating 0..5 and skipping -1 visits the same
         // neighbours in the same order as walking the packed list Hex.neighbours used to return.
@@ -174,6 +161,59 @@ public final class Ctx {
     public PathScratch pathScratch() {
         if (pathScratch == null) pathScratch = new PathScratch(snap.sectors().size());
         return pathScratch;
+    }
+
+
+    // --- built on demand ------------------------------------------------------------------------
+    //
+    // A Ctx is made for every command as well as for every update, and a command needs none of this.
+    // The update is single-threaded, so plain lazy fields are safe; a nation-sharded update would build
+    // these once up front instead.
+
+    /** The ledger this update is accumulating. */
+    public Ledger led() {
+        if (led == null) led = new Ledger(snap, com.size());
+        return led;
+    }
+
+    /** This update's stock delta for commodity {@code c} in sector {@code i}, or 0 outside an update. */
+    private int delta(int i, int c) { return led == null ? 0 : led.st(i, c); }
+
+    public double[] workSpent() {
+        if (workSpent == null) workSpent = new double[snap.sectors().size()];
+        return workSpent;
+    }
+
+    public int[] owned() { indexes(); return owned; }
+    public int[] populated() { indexes(); return populated; }
+    public int[] withHeld() { indexes(); return withHeld; }
+    public int[] activeUnowned() { indexes(); return activeUnowned; }
+    public int[] ownedOrActive() { indexes(); return ownedOrActive; }
+
+    private void indexes() {
+        if (owned != null) return;
+        int n = snap.sectors().size();
+            // One ascending pass builds every worklist (issue #87). Ascending is what keeps the update
+            // deterministic: a step iterating these visits sectors in the order a full walk would have.
+            int nOwned = 0, nPop = 0, nHeld = 0, nActive = 0, nBoth = 0;
+            int[] ownedBuf = new int[n], popBuf = new int[n], heldBuf = new int[n], activeBuf = new int[n], bothBuf = new int[n];
+            int civ = com.civ, mil = com.mil, uw = com.uw;
+            for (int i = 0; i < n; i++) {
+                Sector s = snap.sectors().get(i);
+                boolean own = s.owned();
+                if (own) ownedBuf[nOwned++] = i;
+                if (s.stock().get(civ) + s.stock().get(mil) + s.stock().get(uw) > 0) popBuf[nPop++] = i;
+                if (!s.held().isEmpty()) heldBuf[nHeld++] = i;
+                // an abandoned sector still rotting, or a sea hex with a bridge on it or ordered
+                boolean active = !own && (s.efficiency() > 0 || (s.isOcean() && (s.railLevel() > 0 || s.railTarget() > 0)));
+                if (active) activeBuf[nActive++] = i;
+                if (own || active) bothBuf[nBoth++] = i;
+            }
+            this.owned = java.util.Arrays.copyOf(ownedBuf, nOwned);
+            this.populated = java.util.Arrays.copyOf(popBuf, nPop);
+            this.withHeld = java.util.Arrays.copyOf(heldBuf, nHeld);
+            this.activeUnowned = java.util.Arrays.copyOf(activeBuf, nActive);
+            this.ownedOrActive = java.util.Arrays.copyOf(bothBuf, nBoth);
     }
 
     public int idx(Coord c) { return snap.index(c); }
@@ -238,11 +278,11 @@ public final class Ctx {
         Sector s = sector(i);
         EconomyCfg.WorkCfg w = cfg.economy().work();
         double happiness = s.owned() ? country(s.owner()).levels().happiness() : 0;
-        double civ = s.stock().get(com.civ) + led.st(i, com.civ);
-        double uw = s.stock().get(com.uw) + led.st(i, com.uw);
-        double mil = s.stock().get(com.mil) + led.st(i, com.mil);
+        double civ = s.stock().get(com.civ) + delta(i, com.civ);
+        double uw = s.stock().get(com.uw) + delta(i, com.uw);
+        double mil = s.stock().get(com.mil) + delta(i, com.mil);
         double raw = Math.max(0, civ) * w.perCiv() + Math.max(0, uw) * w.perUw() + Math.max(0, mil) * w.perMil();
-        return raw * etus * w.happinessEffectCurve().eval(happiness) - workSpent[i];
+        return raw * etus * w.happinessEffectCurve().eval(happiness) - workSpent()[i];
     }
 
     // ---- rail network (KNOWN-by-spec: contiguous chain of rail-capable sectors between depots) ----

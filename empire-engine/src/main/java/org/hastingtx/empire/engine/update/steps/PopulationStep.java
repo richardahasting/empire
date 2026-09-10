@@ -24,7 +24,7 @@ public final class PopulationStep implements Step {
         java.util.Map<Integer, java.util.List<Sector>> mitigators = plagueOn ? mitigatorsByOwner(ctx) : java.util.Map.of();
 
         // issue #87: sectors holding people, which is this step's own predicate — not ownership
-        for (int i : ctx.populated) {
+        for (int i : ctx.populated()) {
             Sector s = ctx.sector(i);
             double nCiv = s.stock().get(civ), nMil = s.stock().get(mil), nUw = s.stock().get(uw);
 
@@ -47,11 +47,11 @@ public final class PopulationStep implements Step {
             double have = s.stock().get(food);
             double foodLeft;
             if (have >= demand) {
-                if (demand > 0) { ctx.led.consume(i, food, demand); if (s.owned()) ctx.led.note(i, "people ate " + Ledger.q(demand) + " food"); }
+                if (demand > 0) { ctx.led().consume(i, food, demand); if (s.owned()) ctx.led().note(i, "people ate " + Ledger.q(demand) + " food"); }
                 foodLeft = have - demand;
             } else {
-                if (have > 0) ctx.led.consume(i, food, have);
-                if (s.owned()) { ctx.led.note(i, "people ate " + Ledger.q(have) + " food; " + Ledger.q(demand - have) + " short"); ctx.led.shortOf(i, food, demand - have); }
+                if (have > 0) ctx.led().consume(i, food, have);
+                if (s.owned()) { ctx.led().note(i, "people ate " + Ledger.q(have) + " food; " + Ledger.q(demand - have) + " short"); ctx.led().shortOf(i, food, demand - have); }
                 foodLeft = 0;
                 // KNOWN: victims = unfed people beyond what the food covers, at most half; uw starve first, then civ, then mil
                 double shortfall = demand <= 0 ? 0 : 1.0 - have / demand;
@@ -67,11 +67,11 @@ public final class PopulationStep implements Step {
                         default -> {}
                     }
                 }
-                if (dCiv > 0) ctx.led.die(i, civ, dCiv);
-                if (dMil > 0) ctx.led.die(i, mil, dMil);
-                if (dUw > 0) ctx.led.die(i, uw, dUw);
+                if (dCiv > 0) ctx.led().die(i, civ, dCiv);
+                if (dMil > 0) ctx.led().die(i, mil, dMil);
+                if (dUw > 0) ctx.led().die(i, uw, dUw);
                 nCiv -= dCiv; nMil -= dMil; nUw -= dUw;
-                if (s.owned() && dCiv + dMil + dUw > 0) { ctx.led.event("starvation", s.owner(), s.at(), "starvation in " + s.at(), dCiv + dMil + dUw); ctx.led.note(i, Ledger.q(dCiv + dMil + dUw) + " starved"); }
+                if (s.owned() && dCiv + dMil + dUw > 0) { ctx.led().event("starvation", s.owner(), s.at(), "starvation in " + s.at(), dCiv + dMil + dUw); ctx.led().note(i, Ledger.q(dCiv + dMil + dUw) + " starved"); }
             }
 
             // 2. births, bounded by ceiling and by food
@@ -88,11 +88,11 @@ public final class PopulationStep implements Step {
                     double bc = civBirths * scale, bu = uwBirths * scale;
                     // births under the unused subsistence limit are free; the rest eat from stock
                     double fromStock = Math.max(0, allowed - subsistenceHeadroom);
-                    if (p.foodPerBirth() > 0 && fromStock > 0) ctx.led.consume(i, food, Math.min(foodLeft, fromStock * p.foodPerBirth()));
-                    if (bc > 0) ctx.led.grow(i, civ, bc);
-                    if (bu > 0) ctx.led.grow(i, uw, bu);
+                    if (p.foodPerBirth() > 0 && fromStock > 0) ctx.led().consume(i, food, Math.min(foodLeft, fromStock * p.foodPerBirth()));
+                    if (bc > 0) ctx.led().grow(i, civ, bc);
+                    if (bu > 0) ctx.led().grow(i, uw, bu);
                     nCiv += bc; nUw += bu;
-                    if (bc + bu >= 0.05) ctx.led.note(i, "population +" + Ledger.q(bc + bu) + (fromStock > 0 && p.foodPerBirth() > 0 ? " (births ate " + Ledger.q(Math.min(foodLeft, fromStock * p.foodPerBirth())) + " food)" : ""));
+                    if (bc + bu >= 0.05) ctx.led().note(i, "population +" + Ledger.q(bc + bu) + (fromStock > 0 && p.foodPerBirth() > 0 ? " (births ate " + Ledger.q(Math.min(foodLeft, fromStock * p.foodPerBirth())) + " food)" : ""));
                 }
             }
 
@@ -104,10 +104,10 @@ public final class PopulationStep implements Step {
                 double prob = p.plague().baseProbabilityPerEtu() * ctx.etus * crowding * mit[1];
                 if (plagueRng.nextDouble() < prob) {
                     double mort = p.plague().mortality() * mit[0];
-                    ctx.led.die(i, civ, nCiv * mort);
-                    if (nUw > 0) ctx.led.die(i, uw, nUw * mort);
-                    ctx.led.event("plague", s.owner(), s.at(), "plague in " + s.at(), (nCiv + nUw) * mort);
-                    ctx.led.note(i, "plague killed " + Ledger.q((nCiv + nUw) * mort));
+                    ctx.led().die(i, civ, nCiv * mort);
+                    if (nUw > 0) ctx.led().die(i, uw, nUw * mort);
+                    ctx.led().event("plague", s.owner(), s.at(), "plague in " + s.at(), (nCiv + nUw) * mort);
+                    ctx.led().note(i, "plague killed " + Ledger.q((nCiv + nUw) * mort));
                 }
             }
         }
@@ -121,7 +121,7 @@ public final class PopulationStep implements Step {
      */
     private static java.util.Map<Integer, java.util.List<Sector>> mitigatorsByOwner(Ctx ctx) {
         java.util.Map<Integer, java.util.List<Sector>> out = new java.util.HashMap<>();
-        for (int j = 0; j < ctx.led.nSectors; j++) {
+        for (int j = 0; j < ctx.nSectors; j++) {
             Sector h = ctx.sector(j);
             if (!h.owned()) continue;
             SectorTypeCfg t = ctx.type(h);
