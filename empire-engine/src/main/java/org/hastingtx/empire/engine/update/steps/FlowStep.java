@@ -227,6 +227,10 @@ public final class FlowStep implements Step {
                 continue;
             }
             if (p.fromHeld != null) consumedHeld.add(p.fromHeld);
+            // Whole units of a resumed parcel that have been put somewhere. A parcel is destroyed
+            // wholesale when it is picked up, so whatever is not placed has to be given back to it
+            // exactly — see the leftover below (issue #97).
+            double placed = 0;
             int hops = 0; int cur = p.originIdx; String hold = null; double moving = qty;
             for (int h = 1; h < p.path.size(); h++) {
                 int t = ctx.idx(p.path.get(h));
@@ -238,8 +242,9 @@ public final class FlowStep implements Step {
                 if (moving - canMove < 1e-9) canMove = moving;   // floating-point dust is not a parcel
                 if (canMove <= 0) { hold = "mobility exhausted in " + ctx.sector(pay).at(); break; }
                 if (canMove < moving) { // the remainder holds here
-                    addHeld(newHeld, cur, new HeldParcel(p.commodity, moving - canMove, p.owner, p.path.get(0), p.dest, ctx.snap.updateNumber()));
-                    if (p.fromHeld == null) ctx.led().toHeld(p.originIdx, p.commodity, moving - canMove);
+                    double rest = Math.floor(moving - canMove);
+                    if (rest > 0) { addHeld(newHeld, cur, new HeldParcel(p.commodity, rest, p.owner, p.path.get(0), p.dest, ctx.snap.updateNumber())); placed += rest; }
+                    if (p.fromHeld == null) ctx.led().toHeld(p.originIdx, p.commodity, rest);
                     moving = canMove; hold = "mobility exhausted in " + ctx.sector(pay).at();
                 }
                 mobSpent[pay] += moving * unitCost;
@@ -250,14 +255,22 @@ public final class FlowStep implements Step {
             if (moving > 0) {
                 if (completed) {
                     if (p.fromHeld == null) ctx.led().transfer(p.originIdx, cur, p.commodity, moving);
-                    else ctx.led().fromHeld(cur, p.commodity, moving);
+                    else placed += ctx.led().fromHeld(cur, p.commodity, moving);
                 } else {
-                    addHeld(newHeld, cur, new HeldParcel(p.commodity, moving, p.owner, p.path.get(0), p.dest, ctx.snap.updateNumber()));
-                    if (p.fromHeld == null) ctx.led().toHeld(p.originIdx, p.commodity, moving);
+                    double kept = Math.floor(moving);
+                    if (kept > 0) { addHeld(newHeld, cur, new HeldParcel(p.commodity, kept, p.owner, p.path.get(0), p.dest, ctx.snap.updateNumber())); placed += kept; }
+                    if (p.fromHeld == null) ctx.led().toHeld(p.originIdx, p.commodity, kept);
                 }
             }
-            if (p.fromHeld != null && qty < p.fromHeld.qty() - 1e-9) // partial claim of a held parcel: the rest stays put
-                addHeld(newHeld, p.originIdx, p.fromHeld.withQty(p.fromHeld.qty() - qty));
+            if (p.fromHeld != null) {
+                // Exactly what was not placed stays where the parcel was standing (issue #97). This used
+                // to be floor(qty_of_parcel - claim), which rounded down a second time: a 55-unit parcel
+                // claimed at 29.4 delivered 29 and held back 25, and the missing unit was gone from the
+                // world. The claim is a fraction because contention scales it; the parcel is whole units
+                // on both sides of the split or it is not conserved.
+                double rest = p.fromHeld.qty() - placed;
+                if (rest > 0) addHeld(newHeld, p.originIdx, p.fromHeld.withQty(rest));
+            }
             ctx.led().flows.add(new Flow(p.kind, p.owner, p.commodity, p.requested, qty, p.path, hops, completed, hold));
             // the story, at both ends (issue #49)
             String what = Ledger.q(moving) + " " + ctx.com.id(p.commodity);
