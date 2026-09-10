@@ -72,9 +72,68 @@ public final class CommandExecutor {
         if (t.hasFlag("coastal_required") && !coastal(w, s)) return CommandResult.fail(w, d.type() + " must be coastal");
         if (s.designation().equals(d.type())) return CommandResult.fail(w, "already " + d.type());
         double eff = redesignatedEfficiency(s.designation(), d.type(), s.efficiency());
-        World next = w.withSector(s.withDesignation(d.type(), eff));
+        Sector designated = s.withDesignation(d.type(), eff);
+        String wired = null;
+        if (cfg.distribution().autoWireOn()) { Sector[] box = {designated}; wired = autoWire(w, c, box, t); designated = box[0]; }
+        World next = w.withSector(designated);
         if (t.hasFlag("one_per_country_active")) next = next.withCountry(c.withCapital(s.at()));
-        return new CommandResult(next, null, 0);
+        return new CommandResult(next, null, 0, wired);
+    }
+
+    /**
+     * Put a freshly designated sector to work (issue #99): point it at the nearest distribution hub it
+     * can actually reach, and give it thresholds from its own sector type.
+     *
+     * <p>It only ever fills in blanks. A centre or a threshold the player set is left exactly as it is,
+     * so re-designating can never undo a deliberate {@code distribute} or {@code thresh}.
+     *
+     * <p>Returns what it did, for the reply, or null if there was nothing to do.
+     */
+    private String autoWire(World w, Country c, Sector[] box, SectorTypeCfg t) {
+        var aw = cfg.distribution().autoWire();
+        Sector s = box[0];
+        StringBuilder said = new StringBuilder();
+
+        if (s.distCenter() == null) {
+            Coord hub = nearestHub(w, c, s.at());
+            if (hub != null) { s = s.withDistCenter(hub); said.append("surplus goes to ").append(hub); }
+        }
+
+        // what it makes leaves; what it eats is kept topped up; people and food are wanted everywhere
+        java.util.LinkedHashMap<Integer, Double> want = new java.util.LinkedHashMap<>();
+        for (String id : t.produces().keySet()) if (com.has(id)) want.put(com.index(id), aw.producedOr0());
+        for (String id : t.consumes().keySet()) if (com.has(id)) want.putIfAbsent(com.index(id), aw.consumedOr0());
+        want.putIfAbsent(com.civ, aw.civOr0());
+        want.putIfAbsent(com.food, aw.foodOr0());
+
+        List<String> set = new ArrayList<>();
+        for (var e : want.entrySet()) {
+            if (s.hasThreshold(e.getKey())) continue;   // the player already said what they want here
+            s = s.withThreshold(e.getKey(), e.getValue());
+            set.add(com.id(e.getKey()) + " " + fmt(e.getValue()));
+        }
+        if (!set.isEmpty()) { if (!said.isEmpty()) said.append("; "); said.append("thresholds ").append(String.join(", ", set)); }
+
+        box[0] = s;
+        return said.isEmpty() ? null : said.toString();
+    }
+
+    /**
+     * The nearest sector of {@code c}'s carrying the {@code distribution_hub} flag that a distribution
+     * shipment could actually reach. Nearest by hex distance, ties broken by coordinate order so two
+     * equally close warehouses always give the same answer.
+     */
+    private Coord nearestHub(World w, Country c, Coord from) {
+        org.hastingtx.empire.engine.update.Ctx ctx = new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0);
+        Coord best = null; int bestD = Integer.MAX_VALUE;
+        for (Sector h : w.ownedBy(c.id())) {
+            if (h.at().equals(from) || !cfg.sectorType(h.designation()).hasFlag("distribution_hub")) continue;
+            int d = Hex.distance(w, from, h.at());
+            if (d > bestD || (d == bestD && best != null && h.at().compareTo(best) >= 0)) continue;
+            if (org.hastingtx.empire.engine.update.steps.FlowStep.path(ctx, from, h.at(), c.id(), cfg.distribution()) == null) continue;
+            best = h.at(); bestD = d;
+        }
+        return best;
     }
 
     /** economy.efficiency.redesignate: exact pair (with * wildcards), then same category, then default. */

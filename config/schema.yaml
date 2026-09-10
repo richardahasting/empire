@@ -671,6 +671,17 @@ distribution:
   contention: [proportional, commodity_priority, seeded_rng]
   # A held (in-transit) parcel occupies a sector as "cargo" — captured with it.
   held_cargo_counts_toward_capacity: false
+  # Designating a sector wires it into distribution (Richard 2026-09-10, issue #99): it is pointed at
+  # the nearest distribution_hub it can actually reach, and given thresholds from its own sector type,
+  # so one command puts it to work instead of five. Only ever fills in blanks — a centre or a threshold
+  # the player set is never touched, so re-designating cannot undo a deliberate choice.
+  # The numbers are what Richard had been setting by hand before this existed.
+  auto_wire:
+    enabled: true
+    produced: 0          # keep none of what the sector makes: the surplus is the point of the centre
+    consumed: 300        # a working stock of each input, topped up from the centre
+    civ: 600             # every sector wants people
+    food: 500            # and wants them fed
   path_cost: cheapest_mobility                # cheapest_mobility | fewest_hops
   mobility_bonus: 10                          # KNOWN: distribute.c IMPORT_BONUS/EXPORT_BONUS = 10 — ten times cheaper than a hand move
   # NEW (Richard 2026-09-08, issue #40): a threshold set on a mixed selection (`thresh * food 400`,
