@@ -88,6 +88,12 @@ public class Console {
                 case "move" -> { need(t, 5, "move commodity from_x,y to_x,y qty"); yield cmd(gameId, a, new Command.Move(abs(v, t[2]), abs(v, t[3]), t[1], Double.parseDouble(t[4]))); }
                 case "rail" -> { need(t, 3, "rail SECTOR LEVEL"); double lvl = Double.parseDouble(t[2]); yield many(gameId, a, v, cfg, t[1], at -> new Command.BuildRail(at, lvl)); }
                 case "railship", "train" -> { need(t, 5, "railship COMMODITY from_x,y to_x,y qty"); yield cmd(gameId, a, new Command.RailShip(abs(v, t[2]), abs(v, t[3]), t[1], Double.parseDouble(t[4]))); }
+                case "raillane" -> {
+                    need(t, 3, "raillane x,y x2,y2 [COMMODITY ...] | raillane x,y x2,y2 none");
+                    Coord from = abs(v, t[1]), to = abs(v, t[2]);
+                    boolean off = t.length > 3 && t[3].equalsIgnoreCase("none");
+                    yield cmd(gameId, a, new Command.RailLane(from, to, off || t.length <= 3 ? List.of() : List.of(Arrays.copyOfRange(t, 3, t.length)), off));
+                }
                 case "road" -> { need(t, 3, "road SECTOR LEVEL"); double lvl = Double.parseDouble(t[2]); yield many(gameId, a, v, cfg, t[1], at -> new Command.BuildRoad(at, lvl)); }
                 case "expl", "explore" -> { need(t, 4, "expl from_x,y to_x,y civs"); yield cmd(gameId, a, new Command.Explore(abs(v, t[1]), abs(v, t[2]), Double.parseDouble(t[3]))); }
                 default -> new Reply("", false, "unknown command '" + verb + "' (try help)", null);
@@ -213,5 +219,7 @@ public class Console {
               each sector pays its own BTU; e.g. road * 100 · thresh *:agribusiness hcm 50 · thresh -2:2,-2:2 food 100
               thresh on * or a rectangle scales goods by designation (warehouse ×10, people ×1); *:warehouse or one sector sets it as typed
             railship COMMODITY x,y x2,y2 N   train N units between two depots at the update (line checked now)
+            raillane x,y x2,y2 [COMM ...]    standing run between two depots, every update; no list = keep the far end's thresholds topped up
+            raillane x,y x2,y2 none          cancel that lane
             """;
 }

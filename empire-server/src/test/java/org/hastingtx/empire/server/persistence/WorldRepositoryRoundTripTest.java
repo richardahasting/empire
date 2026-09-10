@@ -48,12 +48,22 @@ class WorldRepositoryRoundTripTest {
         played = played.withSector(played.sector(cap).withDeliver(played.sector(cap).deliver().with(com.index("food"), 2, 250)));
         // a detection contact too (issue #75): it is in the state hash, so a dropped column fails here
         played = played.withContacts(List.of(new org.hastingtx.empire.engine.model.Contact(0, 7, 1, "submarine", cap, played.updateNumber(), 0.42)));
+        // map memory (issue #64) and standing rail lanes (issue #70), both of which are their own tables
+        played = played.withSeen(List.of(new org.hastingtx.empire.engine.model.SeenSector(
+                0, cap, played.sector(cap).terrain(), 0, played.sector(cap).designation(), played.updateNumber())));
+        // one lane with a named cargo and one that feeds thresholds, so the empty-cargo case is covered too
+        Coord other = played.sectors().stream().filter(x -> x.owner() == 0 && !x.at().equals(cap)).findFirst().orElseThrow().at();
+        played = played.withRailLanes(List.of(
+                new org.hastingtx.empire.engine.model.RailLane(0, cap, other, List.of(com.index("food"), com.index("lcm"))),
+                new org.hastingtx.empire.engine.model.RailLane(0, other, cap, List.of())));
 
         gameId = games.create("roundtrip-test", "teaching", new ConfigLoader().toYaml(l.raw()), l.hash(), 11, played.width(), played.height(), played.wrapX(), played.wrapY(), null);
         worlds.saveAll(gameId, played, com);
         World loaded = worlds.load(games.find(gameId).orElseThrow(), cfg);
         assertThat(ApplyStep.hash(loaded)).isEqualTo(ApplyStep.hash(played));
         assertThat(loaded.pendingMoves()).isEqualTo(played.pendingMoves());
+        assertThat(loaded.seen()).isEqualTo(played.seen());
+        assertThat(loaded.railLanes()).isEqualTo(played.railLanes());
         assertThat(loaded.contacts()).isEqualTo(played.contacts());
         for (int i = 0; i < played.sectors().size(); i++) assertThat(loaded.sectors().get(i).deliver()).as("deliver orders at %d", i).isEqualTo(played.sectors().get(i).deliver());
 
