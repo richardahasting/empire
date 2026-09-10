@@ -22,13 +22,14 @@ public class AdminController {
         return a;
     }
 
-    public record CreateRequest(String preset, String name, List<String> countries, Long seed) {}
+    /** {@code width}/{@code height} in sectors and {@code water} as a percent override the preset's map (issue #81); null keeps it. */
+    public record CreateRequest(String preset, String name, List<String> countries, Long seed, Integer width, Integer height, Double water) {}
 
     @PostMapping("/games")
     public GameService.Summary create(@RequestBody CreateRequest r, HttpServletRequest req) {
         Account a = admin(req);
         long seed = r.seed() != null ? r.seed() : System.currentTimeMillis();
-        GameService.Game g = games.create(r.preset() == null ? "teaching" : r.preset(), r.name() == null ? "Game" : r.name(), r.countries(), seed, a.id());
+        GameService.Game g = games.create(r.preset() == null ? "teaching" : r.preset(), r.name() == null ? "Game" : r.name(), r.countries(), seed, a.id(), r.width(), r.height(), r.water());
         return games.summary(g, a);
     }
 

@@ -87,12 +87,22 @@ function CreateGame({ onCreated }: { onCreated: () => Promise<void> }) {
   const [preset, setPreset] = useState("teaching");
   const [countries, setCountries] = useState("Rick, Sharon");
   const [seed, setSeed] = useState("");
+  const [width, setWidth] = useState("");
+  const [height, setHeight] = useState("");
+  const [water, setWater] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const create = async () => {
     setBusy(true); setError(null);
     try {
-      await api.post("/admin/games", { name, preset, countries: countries.split(",").map(s => s.trim()).filter(Boolean), seed: seed ? Number(seed) : null });
+      await api.post("/admin/games", {
+        name, preset,
+        countries: countries.split(",").map(s => s.trim()).filter(Boolean),
+        seed: seed ? Number(seed) : null,
+        width: width ? Number(width) : null,
+        height: height ? Number(height) : null,
+        water: water ? Number(water) : null,
+      });
       await onCreated();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
@@ -104,7 +114,14 @@ function CreateGame({ onCreated }: { onCreated: () => Promise<void> }) {
         <label>Preset<Select value={preset} onChange={e => setPreset(e.target.value)}><option value="teaching">teaching (16×16, economy only)</option><option value="sandbox">sandbox</option><option value="blitz">blitz</option><option value="classic">classic (128×64)</option></Select></label>
         <label>Countries<Input value={countries} onChange={e => setCountries(e.target.value)} placeholder="comma separated" /></label>
         <label>Seed<Input value={seed} onChange={e => setSeed(e.target.value)} placeholder="random" /></label>
+        <label>Width<Input value={width} onChange={e => setWidth(e.target.value)} placeholder="preset" inputMode="numeric" /></label>
+        <label>Height<Input value={height} onChange={e => setHeight(e.target.value)} placeholder="preset" inputMode="numeric" /></label>
+        <label>Water %<Input value={water} onChange={e => setWater(e.target.value)} placeholder="preset (70)" inputMode="numeric" /></label>
       </div>
+      <p className="text-xs text-muted-foreground">
+        Size and water override the preset. Up to 2048 a side and 2,097,152 sectors in all (1024×2048);
+        a world that big takes about 82 seconds an update. Water is the percent of the map that is sea.
+      </p>
       {error && <p className="text-destructive">{error}</p>}
       <Button disabled={busy} onClick={() => void create()}>Create</Button>
     </section>
