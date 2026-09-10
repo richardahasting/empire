@@ -34,18 +34,18 @@ public final class ShipStep implements Step {
                 StringBuilder used = new StringBuilder();
                 for (var e : sc.dockMaterialsPerPoint().entrySet()) {
                     if (e.getValue() <= 0) continue;
-                    if (e.getKey().equals("cash")) points = Math.min(points, Math.max(0, ctx.country(ship.owner()).cash() + ctx.led.cash[ship.owner()]) / e.getValue());
-                    else { int c = ctx.com.index(e.getKey()); double avail = here.stock().get(c) + ctx.led.st(hi, c); points = Math.min(points, avail / e.getValue()); if (avail < sc.dockPointsPerUpdate() * e.getValue()) ctx.led.shortOf(hi, c, sc.dockPointsPerUpdate() * e.getValue() - avail); }
+                    if (e.getKey().equals("cash")) points = Math.min(points, Math.max(0, ctx.country(ship.owner()).cash() + ctx.led().cash[ship.owner()]) / e.getValue());
+                    else { int c = ctx.com.index(e.getKey()); double avail = here.stock().get(c) + ctx.led().st(hi, c); points = Math.min(points, avail / e.getValue()); if (avail < sc.dockPointsPerUpdate() * e.getValue()) ctx.led().shortOf(hi, c, sc.dockPointsPerUpdate() * e.getValue() - avail); }
                 }
                 if (points > 1e-9) {
                     for (var e : sc.dockMaterialsPerPoint().entrySet()) {
                         if (e.getValue() <= 0) continue;
-                        if (e.getKey().equals("cash")) { ctx.led.cash[ship.owner()] -= points * e.getValue(); used.append(used.isEmpty() ? "" : ", ").append('$').append(Ledger.q(points * e.getValue())); }
-                        else { ctx.led.consume(hi, ctx.com.index(e.getKey()), points * e.getValue()); used.append(used.isEmpty() ? "" : ", ").append(Ledger.q(points * e.getValue())).append(' ').append(e.getKey()); }
+                        if (e.getKey().equals("cash")) { ctx.led().cash[ship.owner()] -= points * e.getValue(); used.append(used.isEmpty() ? "" : ", ").append('$').append(Ledger.q(points * e.getValue())); }
+                        else { ctx.led().consume(hi, ctx.com.index(e.getKey()), points * e.getValue()); used.append(used.isEmpty() ? "" : ", ").append(Ledger.q(points * e.getValue())).append(' ').append(e.getKey()); }
                     }
                     ship = ship.withEfficiency(ship.efficiency() + points);
                     note.append("fitted out to ").append(Ledger.q(ship.efficiency())).append('%').append(used.isEmpty() ? "" : " using " + used);
-                    ctx.led.note(hi, label(ship) + " fitted out to " + Ledger.q(ship.efficiency()) + "%" + (used.isEmpty() ? "" : " using " + used));
+                    ctx.led().note(hi, label(ship) + " fitted out to " + Ledger.q(ship.efficiency()) + "%" + (used.isEmpty() ? "" : " using " + used));
                 }
             }
             double eff = ship.efficiency() / 100.0;
@@ -54,14 +54,14 @@ public final class ShipStep implements Step {
             if (cls.fishingRateOr0() > 0 && here.terrain() == Terrain.OCEAN && eff > 0) {
                 double room = Math.max(0, cls.hold() - ship.load());
                 double fish = Math.min(room, cls.fishingRateOr0() * here.fertility() * ctx.etus * sc.fishingFoodPerEtuPerFertilityPoint() * eff);
-                fish = ctx.led.produceAtSea(ctx.com.food, fish);   // whole units, tallied where it is made (issue #77)
+                fish = ctx.led().produceAtSea(ctx.com.food, fish);   // whole units, tallied where it is made (issue #77)
                 if (fish > 0) { ship = ship.withStock(ship.stock().plus(ctx.com.food, fish)); sep(note).append("fished ").append(Ledger.q(fish)).append(" food"); if (room - fish < 1e-9) note.append(" (hold full)"); }
                 else if (room <= 1e-9) sep(note).append("hold full, no fishing");
             }
             // luxury: happiness while at sea
             if (cls.happinessOr0() > 0 && here.terrain() == Terrain.OCEAN && eff > 0) {
                 double h = cls.happinessOr0() * ctx.etus * eff;
-                ctx.led.level[ship.owner()][3] += h;
+                ctx.led().level[ship.owner()][3] += h;
                 sep(note).append("cruised: +").append(Ledger.q(h)).append(" happiness");
             }
             // lane: load at from, unload at to, and always know where to go next
@@ -106,7 +106,7 @@ public final class ShipStep implements Step {
                 }
             } else if (ship.dest() != null) { if (ship.lane() == null) ship = ship.withDest(null); }
             // upkeep
-            if (cls.upkeepPerUpdate() != null) for (var e : cls.upkeepPerUpdate().entrySet()) if (e.getKey().equals("cash")) ctx.led.cash[ship.owner()] -= e.getValue();
+            if (cls.upkeepPerUpdate() != null) for (var e : cls.upkeepPerUpdate().entrySet()) if (e.getKey().equals("cash")) ctx.led().cash[ship.owner()] -= e.getValue();
             out.add(ship.withNote(note.isEmpty() ? (docked ? "in harbour" : "holding") : note.toString()));
         }
         ctx.ships.clear(); ctx.ships.addAll(out);
@@ -179,10 +179,10 @@ public final class ShipStep implements Step {
                 if (!wanted.isEmpty() && !wanted.contains(c)) continue;
                 if (!carries(ctx, cls, c)) continue;
                 double keep = src.hasThreshold(c) ? src.threshold(c) : 0;
-                double avail = src.stock().get(c) + ctx.led.st(si, c) - keep;
+                double avail = src.stock().get(c) + ctx.led().st(si, c) - keep;
                 double q = Math.min(room, avail);
                 if (q <= 1e-9) continue;
-                q = ctx.led.toShip(si, c, q);              // whole units both sides, or the two disagree (issue #77)
+                q = ctx.led().toShip(si, c, q);              // whole units both sides, or the two disagree (issue #77)
                 if (q <= 0) continue;
                 room -= q;
                 ship = ship.withStock(ship.stock().plus(c, q));
@@ -190,7 +190,7 @@ public final class ShipStep implements Step {
             }
             if (here.isEmpty()) continue;
             took.append(took.isEmpty() ? "" : "; ").append(here).append(si == hi ? "" : " from the warehouse at " + src.at());
-            ctx.led.note(si, label(ship) + " loaded " + here);
+            ctx.led().note(si, label(ship) + " loaded " + here);
         }
         if (!took.isEmpty()) sep(note).append("loaded ").append(took).append(" at ").append(harbor.at());
         else sep(note).append("nothing to load at ").append(harbor.at());
@@ -208,18 +208,18 @@ public final class ShipStep implements Step {
                 double q = st.get(c);
                 if (q <= 1e-9) continue;
                 double room = ctx.com.isPerson(c)
-                        ? Math.max(0, ctx.maxPopulation(dst) - (dst.stock().get(ctx.com.civ) + ctx.led.st(si, ctx.com.civ) + dst.stock().get(ctx.com.uw) + ctx.led.st(si, ctx.com.uw)))
-                        : Math.max(0, ctx.capacity(dst, c) - (dst.stock().get(c) + ctx.led.st(si, c)));
+                        ? Math.max(0, ctx.maxPopulation(dst) - (dst.stock().get(ctx.com.civ) + ctx.led().st(si, ctx.com.civ) + dst.stock().get(ctx.com.uw) + ctx.led().st(si, ctx.com.uw)))
+                        : Math.max(0, ctx.capacity(dst, c) - (dst.stock().get(c) + ctx.led().st(si, c)));
                 double u = Math.min(q, room);
                 if (u <= 1e-9) continue;
-                u = ctx.led.fromShip(si, c, u);
+                u = ctx.led().fromShip(si, c, u);
                 if (u <= 0) continue;
                 st = st.plus(c, -u);
                 here.append(here.isEmpty() ? "" : ", ").append(Ledger.q(u)).append(' ').append(ctx.com.id(c));
             }
             if (here.isEmpty()) continue;
             put.append(put.isEmpty() ? "" : "; ").append(here).append(si == hi ? "" : " into the warehouse at " + dst.at());
-            ctx.led.note(si, label(ship) + " unloaded " + here);
+            ctx.led().note(si, label(ship) + " unloaded " + here);
         }
         if (!put.isEmpty()) sep(note).append("unloaded ").append(put).append(" at ").append(harbor.at());
         return ship.withStock(st);

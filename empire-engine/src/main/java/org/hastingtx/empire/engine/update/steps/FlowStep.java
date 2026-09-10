@@ -42,7 +42,7 @@ public final class FlowStep implements Step {
 
         // --- 6. plan -------------------------------------------------------------------
         // distribution
-        for (int i : ctx.owned) {          // issue #87
+        for (int i : ctx.owned()) {          // issue #87
             Sector s = ctx.sector(i);
             if (s.distCenter() == null || s.distCenter().equals(s.at())) continue;
             Sector ctr = ctx.snap.sector(s.distCenter());
@@ -50,7 +50,7 @@ public final class FlowStep implements Step {
             int ci = ctx.idx(ctr.at());
             for (int c = 0; c < ctx.com.size(); c++) {
                 if (!s.hasThreshold(c)) continue;
-                double post = s.stock().get(c) + ctx.led.st(i, c);
+                double post = s.stock().get(c) + ctx.led().st(i, c);
                 double thr = s.threshold(c);
                 if (post < thr - 1e-9) {
                     List<Coord> path = path(ctx, ctr.at(), s.at(), s.owner(), dc);
@@ -62,12 +62,12 @@ public final class FlowStep implements Step {
             }
         }
         // deliver orders (KNOWN: deliver.c): above the threshold, one hex that way, if that hex is yours (issue #45)
-        for (int i : ctx.owned) {          // issue #87
+        for (int i : ctx.owned()) {          // issue #87
             Sector s = ctx.sector(i);
             if (s.deliver().count() == 0) continue;
             for (int c = 0; c < ctx.com.size(); c++) {
                 if (!s.deliver().has(c)) continue;
-                double post = s.stock().get(c) + ctx.led.st(i, c);
+                double post = s.stock().get(c) + ctx.led().st(i, c);
                 double thr = s.deliver().threshold(c);
                 if (post <= thr + 1e-9) continue;
                 Coord to = Hex.normalise(ctx.snap, Hex.stepRaw(s.at(), s.deliver().dir(c)));
@@ -80,7 +80,7 @@ public final class FlowStep implements Step {
         // held parcels resume
         List<HeldParcel> heldRefs = new ArrayList<>();
         Map<HeldParcel, Integer> heldAt = new IdentityHashMap<>();
-        for (int i : ctx.withHeld) {       // issue #87: only sectors actually holding parcels
+        for (int i : ctx.withHeld()) {       // issue #87: only sectors actually holding parcels
             for (HeldParcel p : ctx.sector(i).held()) {
                 heldRefs.add(p); heldAt.put(p, i);
                 if (p.rail()) continue;   // trains are handled by the rail pass
@@ -93,12 +93,12 @@ public final class FlowStep implements Step {
         for (MoveOrder m : ctx.snap.pendingMoves()) {
             int fi = ctx.idx(m.from());
             List<Coord> path = path(ctx, m.from(), m.to(), m.owner(), dc);
-            if (path == null) { ctx.led.event("move_failed", m.owner(), m.from(), "no route from " + m.from() + " to " + m.to(), m.qty()); continue; }
+            if (path == null) { ctx.led().event("move_failed", m.owner(), m.from(), "no route from " + m.from() + " to " + m.to(), m.qty()); continue; }
             int reach = (int) Math.floor(ctx.cfg.economy().mobility().manualMoveMaxSectorsPerUpdate().eval(ctx.country(m.owner()).levels().tech()));
             List<Coord> p = path.size() - 1 > reach ? new ArrayList<>(path.subList(0, reach + 1)) : path;
             plans.add(new Plan("move", m.owner(), m.commodity(), fi, m.to(), p, null, floorQ(m.qty(), quantum)));
         }
-        if (plans.isEmpty()) { Map<Integer, List<HeldParcel>> nh = new HashMap<>(); for (int i : ctx.withHeld) for (HeldParcel p : ctx.sector(i).held()) addHeld(nh, i, p); railPass(ctx, nh); carryHeld(ctx, nh); return; }
+        if (plans.isEmpty()) { Map<Integer, List<HeldParcel>> nh = new HashMap<>(); for (int i : ctx.withHeld()) for (HeldParcel p : ctx.sector(i).held()) addHeld(nh, i, p); railPass(ctx, nh); carryHeld(ctx, nh); return; }
 
         // --- 7. resolve contention ------------------------------------------------------
         // source budgets
@@ -109,7 +109,7 @@ public final class FlowStep implements Step {
                 p.sourceKey = p.originIdx;
                 long key = ((long) p.originIdx << 8) | p.commodity;
                 Sector src = ctx.sector(p.originIdx);
-                double post = src.stock().get(p.commodity) + ctx.led.st(p.originIdx, p.commodity);
+                double post = src.stock().get(p.commodity) + ctx.led().st(p.originIdx, p.commodity);
                 // every order keeps its own threshold (a centre supplying others keeps the centre's; a source pushing to its
                 // centre keeps its own, which its request already respects); where a deliver order and a distribution
                 // threshold draw on one stock, the stricter keep bounds them both
@@ -122,16 +122,16 @@ public final class FlowStep implements Step {
             }
         }
         // mobility budgets
-        double[] mobBudget = new double[ctx.led.nSectors];
+        double[] mobBudget = new double[ctx.nSectors];
         // Only a sector that can pay is ever indexed here: paths run through their owner's territory,
         // and a rail path may cross a bridge, which is unowned sea (issue #87).
-        for (int i : ctx.ownedOrActive) mobBudget[i] = Math.max(0, ctx.sector(i).mobility() + ctx.led.mobility[i]);
+        for (int i : ctx.ownedOrActive()) mobBudget[i] = Math.max(0, ctx.sector(i).mobility() + ctx.led().mobility[i]);
         // room for people (issue #48): civilians and workers never move into a sector that cannot hold them —
         // the apply step would truncate them. Room = population cap − people there after this update's births.
-        double[] roomBudget = new double[ctx.led.nSectors];
-        for (int i : ctx.ownedOrActive) {   // issue #87: people only ever arrive somewhere owned
+        double[] roomBudget = new double[ctx.nSectors];
+        for (int i : ctx.ownedOrActive()) {   // issue #87: people only ever arrive somewhere owned
             Sector s = ctx.sector(i);
-            roomBudget[i] = Math.max(0, ctx.maxPopulation(s) - (s.stock().get(ctx.com.civ) + ctx.led.st(i, ctx.com.civ) + s.stock().get(ctx.com.uw) + ctx.led.st(i, ctx.com.uw)));
+            roomBudget[i] = Math.max(0, ctx.maxPopulation(s) - (s.stock().get(ctx.com.civ) + ctx.led().st(i, ctx.com.civ) + s.stock().get(ctx.com.uw) + ctx.led().st(i, ctx.com.uw)));
         }
 
         for (int iter = 0; iter < 50; iter++) {
@@ -144,7 +144,7 @@ public final class FlowStep implements Step {
                 if (total > budget + 1e-9) { p.claim *= budget / total; changed = true; }
             }
             // mobility
-            double[] mobClaim = new double[ctx.led.nSectors];
+            double[] mobClaim = new double[ctx.nSectors];
             for (Plan p : plans) for (int h = 1; h < p.path.size(); h++) mobClaim[payer(ctx, p, h)] += hopCost(ctx, p, p.claim, h);
             for (Plan p : plans) {
                 double f = 1.0;
@@ -152,7 +152,7 @@ public final class FlowStep implements Step {
                 if (f < 1.0) { p.claim *= f; changed = true; }
             }
             // room at the destination for people
-            double[] roomClaim = new double[ctx.led.nSectors];
+            double[] roomClaim = new double[ctx.nSectors];
             for (Plan p : plans) if (needsRoom(ctx, p)) roomClaim[ctx.idx(p.path.get(p.path.size() - 1))] += p.claim;
             for (Plan p : plans) {
                 if (!needsRoom(ctx, p)) continue;
@@ -183,8 +183,8 @@ public final class FlowStep implements Step {
         for (int k = 0; k < plans.size(); k++) tieOf.put(plans.get(k), tie[k]);
         order.sort(Comparator.<Plan>comparingInt(p -> ctx.com.priority(p.commodity)).thenComparingDouble(tieOf::get));
         Map<Long, Double> used = new HashMap<>();
-        double[] mobUsed = new double[ctx.led.nSectors];
-        double[] roomUsed = new double[ctx.led.nSectors];
+        double[] mobUsed = new double[ctx.nSectors];
+        double[] roomUsed = new double[ctx.nSectors];
         for (Plan p : plans) {
             used.merge(srcKey(p), p.claim, Double::sum);
             for (int h = 1; h < p.path.size(); h++) mobUsed[payer(ctx, p, h)] += hopCost(ctx, p, p.claim, h);
@@ -215,15 +215,15 @@ public final class FlowStep implements Step {
     }
 
     private void walk(Ctx ctx, List<Plan> plans, double quantum, double[] mobBudget, List<HeldParcel> heldRefs, Map<HeldParcel, Integer> heldAt) {
-        double[] mobSpent = new double[ctx.led.nSectors];
+        double[] mobSpent = new double[ctx.nSectors];
         Map<Integer, List<HeldParcel>> newHeld = new HashMap<>();
         Set<HeldParcel> consumedHeld = Collections.newSetFromMap(new IdentityHashMap<>());
         plans.sort(Comparator.<Plan>comparingInt(p -> p.originIdx).thenComparingInt(p -> p.commodity).thenComparing(p -> p.dest));
         for (Plan p : plans) {
             double qty = p.claim;
             if (qty <= 0) {
-                ctx.led.flows.add(new Flow(p.kind, p.owner, p.commodity, p.requested, 0, p.path, 0, false, "no allocation"));
-                if (isPull(ctx, p)) ctx.led.shortOf(ctx.idx(p.dest), p.commodity, p.requested);
+                ctx.led().flows.add(new Flow(p.kind, p.owner, p.commodity, p.requested, 0, p.path, 0, false, "no allocation"));
+                if (isPull(ctx, p)) ctx.led().shortOf(ctx.idx(p.dest), p.commodity, p.requested);
                 continue;
             }
             if (p.fromHeld != null) consumedHeld.add(p.fromHeld);
@@ -239,7 +239,7 @@ public final class FlowStep implements Step {
                 if (canMove <= 0) { hold = "mobility exhausted in " + ctx.sector(pay).at(); break; }
                 if (canMove < moving) { // the remainder holds here
                     addHeld(newHeld, cur, new HeldParcel(p.commodity, moving - canMove, p.owner, p.path.get(0), p.dest, ctx.snap.updateNumber()));
-                    if (p.fromHeld == null) ctx.led.toHeld(p.originIdx, p.commodity, moving - canMove);
+                    if (p.fromHeld == null) ctx.led().toHeld(p.originIdx, p.commodity, moving - canMove);
                     moving = canMove; hold = "mobility exhausted in " + ctx.sector(pay).at();
                 }
                 mobSpent[pay] += moving * unitCost;
@@ -249,34 +249,34 @@ public final class FlowStep implements Step {
             if (!completed && hold == null) hold = "reach exhausted at " + ctx.sector(cur).at();
             if (moving > 0) {
                 if (completed) {
-                    if (p.fromHeld == null) ctx.led.transfer(p.originIdx, cur, p.commodity, moving);
-                    else ctx.led.fromHeld(cur, p.commodity, moving);
+                    if (p.fromHeld == null) ctx.led().transfer(p.originIdx, cur, p.commodity, moving);
+                    else ctx.led().fromHeld(cur, p.commodity, moving);
                 } else {
                     addHeld(newHeld, cur, new HeldParcel(p.commodity, moving, p.owner, p.path.get(0), p.dest, ctx.snap.updateNumber()));
-                    if (p.fromHeld == null) ctx.led.toHeld(p.originIdx, p.commodity, moving);
+                    if (p.fromHeld == null) ctx.led().toHeld(p.originIdx, p.commodity, moving);
                 }
             }
             if (p.fromHeld != null && qty < p.fromHeld.qty() - 1e-9) // partial claim of a held parcel: the rest stays put
                 addHeld(newHeld, p.originIdx, p.fromHeld.withQty(p.fromHeld.qty() - qty));
-            ctx.led.flows.add(new Flow(p.kind, p.owner, p.commodity, p.requested, qty, p.path, hops, completed, hold));
+            ctx.led().flows.add(new Flow(p.kind, p.owner, p.commodity, p.requested, qty, p.path, hops, completed, hold));
             // the story, at both ends (issue #49)
             String what = Ledger.q(moving) + " " + ctx.com.id(p.commodity);
             String verb = switch (p.kind) { case "deliver" -> "delivered"; case "move" -> "moved"; case "resume" -> "forwarded"; default -> "sent"; };
             if (moving > 0) {
                 Coord from = ctx.sector(p.originIdx).at(), to = ctx.sector(cur).at();
                 if (completed) {
-                    ctx.led.note(p.originIdx, verb + " " + what + " to " + to + (p.kind.equals("distribution") && p.dest.equals(ctx.sector(p.originIdx).distCenter()) ? " (surplus to centre)" : ""));
-                    ctx.led.note(cur, "received " + what + " from " + from + (p.kind.equals("distribution") && !p.dest.equals(ctx.sector(p.originIdx).distCenter()) ? " (supply from centre)" : ""));
+                    ctx.led().note(p.originIdx, verb + " " + what + " to " + to + (p.kind.equals("distribution") && p.dest.equals(ctx.sector(p.originIdx).distCenter()) ? " (surplus to centre)" : ""));
+                    ctx.led().note(cur, "received " + what + " from " + from + (p.kind.equals("distribution") && !p.dest.equals(ctx.sector(p.originIdx).distCenter()) ? " (supply from centre)" : ""));
                 } else {
-                    ctx.led.note(p.originIdx, what + " bound for " + p.dest + " held at " + to + (hold != null ? " — " + hold : ""));
-                    if (cur != p.originIdx) ctx.led.note(cur, "holding " + what + " bound for " + p.dest + " from " + from);
+                    ctx.led().note(p.originIdx, what + " bound for " + p.dest + " held at " + to + (hold != null ? " — " + hold : ""));
+                    if (cur != p.originIdx) ctx.led().note(cur, "holding " + what + " bound for " + p.dest + " from " + from);
                 }
             }
-            if (qty - moving > 1e-9) ctx.led.note(p.originIdx, Ledger.q(qty - moving) + " " + ctx.com.id(p.commodity) + " for " + p.dest + " stayed" + (hold != null ? " — " + hold : ""));
+            if (qty - moving > 1e-9) ctx.led().note(p.originIdx, Ledger.q(qty - moving) + " " + ctx.com.id(p.commodity) + " for " + p.dest + " stayed" + (hold != null ? " — " + hold : ""));
             // a sector that pulled from its centre and did not get all it asked for is short by the rest
-            if (isPull(ctx, p) && p.requested - (completed ? moving : 0) > 1e-9) ctx.led.shortOf(ctx.idx(p.dest), p.commodity, p.requested - (completed ? moving : 0));
+            if (isPull(ctx, p) && p.requested - (completed ? moving : 0) > 1e-9) ctx.led().shortOf(ctx.idx(p.dest), p.commodity, p.requested - (completed ? moving : 0));
         }
-        for (int i : ctx.ownedOrActive) ctx.led.mobility[i] -= mobSpent[i];   // issue #87: only these were charged
+        for (int i : ctx.ownedOrActive()) ctx.led().mobility[i] -= mobSpent[i];   // issue #87: only these were charged
         // held parcels that were not planned (no route) stay put
         for (HeldParcel p : heldRefs) if (!consumedHeld.contains(p)) addHeld(newHeld, heldAt.get(p), p);
         railPass(ctx, newHeld);
@@ -295,9 +295,9 @@ public final class FlowStep implements Step {
         // new orders
         for (var o : ctx.snap.pendingRail()) {
             List<Coord> path = ctx.railPath(o.from(), o.to(), o.owner());
-            if (path == null) { ctx.led.event("rail_severed", o.owner(), o.from(), "no rail line from " + o.from() + " to " + o.to() + " any more; shipment cancelled", o.qty()); continue; }
+            if (path == null) { ctx.led().event("rail_severed", o.owner(), o.from(), "no rail line from " + o.from() + " to " + o.to() + " any more; shipment cancelled", o.qty()); continue; }
             int fi = ctx.idx(o.from());
-            double avail = ctx.sector(fi).stock().get(o.commodity()) + ctx.led.st(fi, o.commodity());
+            double avail = ctx.sector(fi).stock().get(o.commodity()) + ctx.led().st(fi, o.commodity());
             trains.add(new Train(o.owner(), o.commodity(), Math.max(0, Math.min(o.qty(), avail)), fi, o.to(), path, null));
         }
         // trains already on the line: they were removed from newHeld's carry-over by the road pass only if planned there; rail parcels were never planned there, so take them out now
@@ -306,19 +306,19 @@ public final class FlowStep implements Step {
             for (HeldParcel p : e.getValue()) {
                 if (!p.rail()) { keep.add(p); continue; }
                 List<Coord> path = ctx.railPath(ctx.sector(e.getKey()).at(), p.dest(), p.owner());
-                if (path == null) { keep.add(p); ctx.led.event("rail_stranded", p.owner(), ctx.sector(e.getKey()).at(), "train stranded at " + ctx.sector(e.getKey()).at() + ": the line to " + p.dest() + " is cut", p.qty()); continue; }
+                if (path == null) { keep.add(p); ctx.led().event("rail_stranded", p.owner(), ctx.sector(e.getKey()).at(), "train stranded at " + ctx.sector(e.getKey()).at() + ": the line to " + p.dest() + " is cut", p.qty()); continue; }
                 trains.add(new Train(p.owner(), p.commodity(), p.qty(), e.getKey(), p.dest(), path, p));
             }
             e.setValue(keep);
         }
         if (trains.isEmpty()) return;
         // capacity contention per rail sector entered, proportional
-        double[] cap = new double[ctx.led.nSectors];
-        for (int i : ctx.ownedOrActive) cap[i] = ctx.railCapable(i) ? ctx.railCapacity(i) : 0;   // issue #87
+        double[] cap = new double[ctx.nSectors];
+        for (int i : ctx.ownedOrActive()) cap[i] = ctx.railCapable(i) ? ctx.railCapacity(i) : 0;   // issue #87
         double[] claim = new double[trains.size()];
         for (int k = 0; k < trains.size(); k++) claim[k] = trains.get(k).qty();
         for (int iter = 0; iter < 50; iter++) {
-            double[] used = new double[ctx.led.nSectors]; boolean changed = false;
+            double[] used = new double[ctx.nSectors]; boolean changed = false;
             for (int k = 0; k < trains.size(); k++) for (int h = 1; h < trains.get(k).path.size(); h++) used[ctx.idx(trains.get(k).path.get(h))] += claim[k];
             for (int k = 0; k < trains.size(); k++) {
                 double f = 1.0;
@@ -330,7 +330,7 @@ public final class FlowStep implements Step {
         for (int k = 0; k < trains.size(); k++) {
             Train t = trains.get(k);
             double qty = claim[k];
-            if (qty <= 1e-9) { ctx.led.flows.add(new Flow("rail", t.owner, t.commodity, t.qty, 0, t.path, 0, false, "line at capacity")); continue; }
+            if (qty <= 1e-9) { ctx.led().flows.add(new Flow("rail", t.owner, t.commodity, t.qty, 0, t.path, 0, false, "line at capacity")); continue; }
             // endpoint efficiency scales what actually gets through
             double effScale = Math.min(ctx.sector(ctx.idx(t.path.get(0))).efficiency(), ctx.sector(ctx.idx(t.dest)).efficiency()) / 100.0;
             // whole units on the rails too (issue #77): a train carries wagons, not fractions, and the
@@ -346,7 +346,7 @@ public final class FlowStep implements Step {
             int maxHops = Math.min(ceiling, t.path.size() - 1);
             double mult = rail.mobilityMultiplier() == null ? 0 : rail.mobilityMultiplier();
             double perUnitWeight = mult * ctx.weightLeaving(t.commodity, ctx.sector(t.originIdx));
-            double budget = Math.max(0, ctx.sector(t.originIdx).mobility() + ctx.led.mobility[t.originIdx]);
+            double budget = Math.max(0, ctx.sector(t.originIdx).mobility() + ctx.led().mobility[t.originIdx]);
             int hops = 0;
             double spend = 0;
             String mobHold = null;
@@ -372,20 +372,20 @@ public final class FlowStep implements Step {
                     mobHold = "mobility carried it " + hops + (hops == 1 ? " hex" : " hexes") + " from " + ctx.sector(t.originIdx).at();
                 }
             }
-            if (spend > 0) ctx.led.mobility[t.originIdx] -= spend;
+            if (spend > 0) ctx.led().mobility[t.originIdx] -= spend;
             int stopIdx = ctx.idx(t.path.get(hops));
             boolean arrives = hops == t.path.size() - 1;
-            if (moving <= 1e-9) { ctx.led.flows.add(new Flow("rail", t.owner, t.commodity, t.qty, 0, t.path, 0, false, mobHold != null ? mobHold : "nothing to move")); if (t.from != null) addHeld(newHeld, t.originIdx, t.from); continue; }
-            if (t.from == null) ctx.led.toHeld(t.originIdx, t.commodity, moving);   // leaves stock; becomes cargo
+            if (moving <= 1e-9) { ctx.led().flows.add(new Flow("rail", t.owner, t.commodity, t.qty, 0, t.path, 0, false, mobHold != null ? mobHold : "nothing to move")); if (t.from != null) addHeld(newHeld, t.originIdx, t.from); continue; }
+            if (t.from == null) ctx.led().toHeld(t.originIdx, t.commodity, moving);   // leaves stock; becomes cargo
             double leftover = t.qty - moving;
             if (t.from != null && leftover > 1e-9) addHeld(newHeld, t.originIdx, t.from.withQty(leftover));
-            if (arrives) ctx.led.fromHeld(stopIdx, t.commodity, moving);
+            if (arrives) ctx.led().fromHeld(stopIdx, t.commodity, moving);
             else addHeld(newHeld, stopIdx, new HeldParcel(t.commodity, moving, t.owner, t.path.get(0), t.dest, ctx.snap.updateNumber(), "rail"));
             double cash = rail.cashPer100UnitsShipped() * moving / 100.0;
-            ctx.led.cash[t.owner] -= cash;
-            ctx.led.flows.add(new Flow("rail", t.owner, t.commodity, t.qty, moving, t.path, hops, arrives, arrives ? (mobHold != null && moving < t.qty - 1e-9 ? mobHold : null) : "range exhausted at " + t.path.get(hops)));
-            ctx.led.note(t.originIdx, "train: " + Ledger.q(moving) + " " + ctx.com.id(t.commodity) + (arrives ? " arrived at " + t.dest : " left for " + t.dest + ", holding at " + t.path.get(hops)) + (mobHold != null ? " (" + mobHold + ")" : ""));
-            if (arrives && stopIdx != t.originIdx) ctx.led.note(stopIdx, "train: received " + Ledger.q(moving) + " " + ctx.com.id(t.commodity) + " from " + t.path.get(0));
+            ctx.led().cash[t.owner] -= cash;
+            ctx.led().flows.add(new Flow("rail", t.owner, t.commodity, t.qty, moving, t.path, hops, arrives, arrives ? (mobHold != null && moving < t.qty - 1e-9 ? mobHold : null) : "range exhausted at " + t.path.get(hops)));
+            ctx.led().note(t.originIdx, "train: " + Ledger.q(moving) + " " + ctx.com.id(t.commodity) + (arrives ? " arrived at " + t.dest : " left for " + t.dest + ", holding at " + t.path.get(hops)) + (mobHold != null ? " (" + mobHold + ")" : ""));
+            if (arrives && stopIdx != t.originIdx) ctx.led().note(stopIdx, "train: received " + Ledger.q(moving) + " " + ctx.com.id(t.commodity) + " from " + t.path.get(0));
         }
     }
 
@@ -398,9 +398,9 @@ public final class FlowStep implements Step {
      */
     private static void carryHeld(Ctx ctx, Map<Integer, List<HeldParcel>> newHeld) {
         int total = 0;
-        for (var e : newHeld.entrySet()) { ctx.led.heldNext[e.getKey()] = e.getValue(); total += e.getValue().size(); }
-        for (int i : ctx.withHeld) if (!newHeld.containsKey(i)) ctx.led.heldNext[i] = List.of();
-        ctx.led.heldTotal = total;
+        for (var e : newHeld.entrySet()) { ctx.led().heldNext[e.getKey()] = e.getValue(); total += e.getValue().size(); }
+        for (int i : ctx.withHeld()) if (!newHeld.containsKey(i)) ctx.led().heldNext[i] = List.of();
+        ctx.led().heldTotal = total;
     }
 
     /** Parcels with the same commodity, owner and destination merge, keeping the earliest issue. */

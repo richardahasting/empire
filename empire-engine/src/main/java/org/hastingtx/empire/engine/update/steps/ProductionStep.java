@@ -20,7 +20,7 @@ public final class ProductionStep implements Step {
     private static final String[] LEVELS = {"tech", "research", "education", "happiness"};
 
     public void run(Ctx ctx) {
-        for (int i : ctx.owned) {          // issue #87: the owned list, not the map
+        for (int i : ctx.owned()) {          // issue #87: the owned list, not the map
             Sector s = ctx.sector(i);
             SectorTypeCfg t = ctx.type(s);
             if (t.produces().isEmpty() && t.producesLevel().isEmpty()) continue;
@@ -45,7 +45,7 @@ public final class ProductionStep implements Step {
                 int ci = ctx.com.index(e.getKey());
                 double w = unit * e.getValue();
                 double room = ctx.com.isPerson(ci) ? Math.max(0, ctx.maxPopulation(s) - people(ctx, i))
-                                                  : Math.max(0, ctx.capacity(s, ci) - (s.stock().get(ci) + ctx.led.st(i, ci)));
+                                                  : Math.max(0, ctx.capacity(s, ci) - (s.stock().get(ci) + ctx.led().st(i, ci)));
                 want[ci] = Math.min(w, room);
                 totalWant += want[ci];
             }
@@ -64,30 +64,30 @@ public final class ProductionStep implements Step {
                 int in = ctx.com.index(e.getKey());
                 double need = totalWant * e.getValue();
                 if (need <= 0) continue;
-                double avail = Math.max(0, s.stock().get(in) + ctx.led.st(i, in));
+                double avail = Math.max(0, s.stock().get(in) + ctx.led().st(i, in));
                 scale = Math.min(scale, avail / need);
-                if (avail < need) ctx.led.shortOf(i, in, need - avail);
+                if (avail < need) ctx.led().shortOf(i, in, need - avail);
             }
             if (scale <= 0) continue;
 
             double producedTotal = 0;
             StringBuilder made = new StringBuilder(), used = new StringBuilder();
-            for (int ci = 0; ci < want.length; ci++) if (want[ci] > 0) { ctx.led.produce(i, ci, want[ci] * scale); producedTotal += want[ci] * scale; made.append(made.isEmpty() ? "" : ", ").append(Ledger.q(want[ci] * scale)).append(' ').append(ctx.com.id(ci)); }
-            for (int li = 0; li < 4; li++) if (wantLevel[li] > 0) { ctx.led.level[c.id()][li] += wantLevel[li] * scale; producedTotal += wantLevel[li] * scale; made.append(made.isEmpty() ? "" : ", ").append(Ledger.q(wantLevel[li] * scale)).append(' ').append(LEVEL_NAMES[li]); }
+            for (int ci = 0; ci < want.length; ci++) if (want[ci] > 0) { ctx.led().produce(i, ci, want[ci] * scale); producedTotal += want[ci] * scale; made.append(made.isEmpty() ? "" : ", ").append(Ledger.q(want[ci] * scale)).append(' ').append(ctx.com.id(ci)); }
+            for (int li = 0; li < 4; li++) if (wantLevel[li] > 0) { ctx.led().level[c.id()][li] += wantLevel[li] * scale; producedTotal += wantLevel[li] * scale; made.append(made.isEmpty() ? "" : ", ").append(Ledger.q(wantLevel[li] * scale)).append(' ').append(LEVEL_NAMES[li]); }
             for (var e : consumes.entrySet()) {
                 int in = ctx.com.index(e.getKey());
                 double q = producedTotal * e.getValue();
-                if (q > 0) { ctx.led.consume(i, in, q); used.append(used.isEmpty() ? "" : ", ").append(Ledger.q(q)).append(' ').append(e.getKey()); }
+                if (q > 0) { ctx.led().consume(i, in, q); used.append(used.isEmpty() ? "" : ", ").append(Ledger.q(q)).append(' ').append(e.getKey()); }
             }
             double cashPer = t.productionCashPerUnitOr0();
-            if (cashPer > 0) { ctx.led.cash[c.id()] -= cashPer * producedTotal; used.append(used.isEmpty() ? "" : ", ").append('$').append(Ledger.q(cashPer * producedTotal)); }   // KNOWN: guns $30, shells $3, tech $300...
-            if (!made.isEmpty()) ctx.led.note(i, "made " + made + (used.isEmpty() ? "" : " using " + used) + (scale < 1 - 1e-9 ? " (short of inputs)" : ""));
+            if (cashPer > 0) { ctx.led().cash[c.id()] -= cashPer * producedTotal; used.append(used.isEmpty() ? "" : ", ").append('$').append(Ledger.q(cashPer * producedTotal)); }   // KNOWN: guns $30, shells $3, tech $300...
+            if (!made.isEmpty()) ctx.led().note(i, "made " + made + (used.isEmpty() ? "" : " using " + used) + (scale < 1 - 1e-9 ? " (short of inputs)" : ""));
         }
     }
 
     private static double people(Ctx ctx, int i) {
         Sector s = ctx.sector(i);
-        return s.stock().get(ctx.com.civ) + ctx.led.st(i, ctx.com.civ) + s.stock().get(ctx.com.uw) + ctx.led.st(i, ctx.com.uw);
+        return s.stock().get(ctx.com.civ) + ctx.led().st(i, ctx.com.civ) + s.stock().get(ctx.com.uw) + ctx.led().st(i, ctx.com.uw);
     }
 
     static int levelIndex(String id) {

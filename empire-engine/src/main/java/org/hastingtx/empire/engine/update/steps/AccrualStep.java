@@ -12,14 +12,14 @@ public final class AccrualStep implements Step {
 
     public void run(Ctx ctx) {
         EconomyCfg.MobilityCfg m = ctx.cfg.economy().mobility();
-        for (int i : ctx.owned) {          // issue #87: the owned list, not the map
+        for (int i : ctx.owned()) {          // issue #87: the owned list, not the map
             Sector s = ctx.sector(i);
             Country c = ctx.country(s.owner());
             double gain = m.sectorAccrualPerEtu() * ctx.etus * m.accrualFactor(s.efficiency());
             gain *= c.handicap().mobility();
             if (c.bankrupt()) gain *= ctx.cfg.economy().money().bankruptcy().effect().mobilityMultiplier();
             double room = m.sectorMax() - s.mobility();
-            ctx.led.mobility[i] += Math.max(0, Math.min(gain, room));
+            ctx.led().mobility[i] += Math.max(0, Math.min(gain, room));
         }
         EconomyCfg.BtuCfg b = ctx.cfg.economy().btu();
         for (Country c : ctx.snap.countries()) {
@@ -30,7 +30,7 @@ public final class AccrualStep implements Step {
             double effFactor = Boolean.TRUE.equals(b.scaleByEfficiencyPercent()) ? Math.max(0.5, cap.efficiency()) : 1.0;
             double gain = b.accrualPerCapitalCivPerEtu() * civ * effFactor * ctx.etus * c.handicap().btuRate();
             double cap_ = b.max() * c.handicap().btuCap();
-            ctx.led.btu[c.id()] += Math.max(0, Math.min(gain, cap_ - c.btu()));
+            ctx.led().btu[c.id()] += Math.max(0, Math.min(gain, cap_ - c.btu()));
         }
     }
 }

@@ -18,15 +18,15 @@ public final class LevelsStep implements Step {
 
     public void run(Ctx ctx) {
         EconomyCfg.LevelsCfg lc = ctx.cfg.economy().levels();
-        int n = ctx.led.nCountries;
+        int n = ctx.led().nCountries;
         double[] civs = new double[n];
-        for (int i : ctx.owned) {          // issue #87: the owned list, not the map
+        for (int i : ctx.owned()) {          // issue #87: the owned list, not the map
             Sector s = ctx.sector(i);
-            civs[s.owner()] += Math.max(0, s.stock().get(ctx.com.civ) + ctx.led.st(i, ctx.com.civ));
+            civs[s.owner()] += Math.max(0, s.stock().get(ctx.com.civ) + ctx.led().st(i, ctx.com.civ));
         }
         double[] newTech = new double[n], newRes = new double[n];
         for (Country c : ctx.snap.countries()) {
-            double[] d = ctx.led.level[c.id()];
+            double[] d = ctx.led().level[c.id()];
             double prodT = d[0], prodR = d[1], prodE = d[2], prodH = d[3];
             double pop = civs[c.id()] + 1;
             double E = c.levels().education(), H = c.levels().happiness();
@@ -63,7 +63,7 @@ public final class LevelsStep implements Step {
             }
         }
         for (Country c : ctx.snap.countries()) {
-            double[] d = ctx.led.level[c.id()];
+            double[] d = ctx.led().level[c.id()];
             d[0] = newTech[c.id()] - c.levels().tech();
             d[1] = newRes[c.id()] - c.levels().research();
         }
