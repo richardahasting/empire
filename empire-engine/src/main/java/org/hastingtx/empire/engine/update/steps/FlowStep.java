@@ -126,13 +126,14 @@ public final class FlowStep implements Step {
         // Only a sector that can pay is ever indexed here: paths run through their owner's territory,
         // and a rail path may cross a bridge, which is unowned sea (issue #87).
         for (int i : ctx.ownedOrActive()) mobBudget[i] = Math.max(0, ctx.sector(i).mobility() + ctx.led().mobility[i]);
-        // room for people (issue #48): civilians and workers never move into a sector that cannot hold them —
-        // the apply step would truncate them. Room = population cap − people there after this update's births.
-        double[] roomBudget = new double[ctx.nSectors];
-        for (int i : ctx.ownedOrActive()) {   // issue #87: people only ever arrive somewhere owned
-            Sector s = ctx.sector(i);
-            roomBudget[i] = Math.max(0, ctx.maxPopulation(s) - (s.stock().get(ctx.com.civ) + ctx.led().st(i, ctx.com.civ) + s.stock().get(ctx.com.uw) + ctx.led().st(i, ctx.com.uw)));
-        }
+        // Room at the destination, per commodity (issues #48, #101). Nothing is shipped in order to be
+        // destroyed: a sector that is full is not sent more, and what cannot go stays where it is —
+        // in the source, or, for a parcel already in transit, exactly where it is standing.
+        //
+        // People share one pool, because the population cap counts civilians and workers together and
+        // the apply step truncates them together. Everything else has its own capacity per commodity.
+        Map<Long, Double> roomBudget = new HashMap<>();
+        for (Plan p : plans) roomBudget.computeIfAbsent(roomKey(ctx, p), k -> room(ctx, p));
 
         for (int iter = 0; iter < 50; iter++) {
             boolean changed = false;
@@ -151,13 +152,13 @@ public final class FlowStep implements Step {
                 for (int h = 1; h < p.path.size(); h++) { int t = payer(ctx, p, h); if (mobClaim[t] > mobBudget[t] + 1e-9) f = Math.min(f, mobBudget[t] / mobClaim[t]); }
                 if (f < 1.0) { p.claim *= f; changed = true; }
             }
-            // room at the destination for people
-            double[] roomClaim = new double[ctx.nSectors];
-            for (Plan p : plans) if (needsRoom(ctx, p)) roomClaim[ctx.idx(p.path.get(p.path.size() - 1))] += p.claim;
+            // room at the destination, for anything
+            Map<Long, Double> roomClaim = new HashMap<>();
+            for (Plan p : plans) roomClaim.merge(roomKey(ctx, p), p.claim, Double::sum);
             for (Plan p : plans) {
-                if (!needsRoom(ctx, p)) continue;
-                int d = ctx.idx(p.path.get(p.path.size() - 1));
-                if (roomClaim[d] > roomBudget[d] + 1e-9) { p.claim *= roomBudget[d] / roomClaim[d]; changed = true; }
+                long k = roomKey(ctx, p);
+                double budget = roomBudget.get(k), wanted = roomClaim.get(k);
+                if (wanted > budget + 1e-9) { p.claim *= budget / wanted; changed = true; }
             }
             if (!changed) break;
         }
@@ -174,7 +175,7 @@ public final class FlowStep implements Step {
      * that is already full, and the apply step then throws it away as overcrowding. Latent until the
      * quantum was turned on, because this whole pass is gated on it.
      */
-    private static void handOutLeftovers(Ctx ctx, List<Plan> plans, double quantum, Map<Long, Double> sourceBudget, double[] mobBudget, double[] roomBudget) {
+    private static void handOutLeftovers(Ctx ctx, List<Plan> plans, double quantum, Map<Long, Double> sourceBudget, double[] mobBudget, Map<Long, Double> roomBudget) {
         SplittableRandom rng = Rng.stream("contention", ctx.seed);
         List<Plan> order = new ArrayList<>(plans);
         double[] tie = new double[plans.size()];
@@ -184,11 +185,11 @@ public final class FlowStep implements Step {
         order.sort(Comparator.<Plan>comparingInt(p -> ctx.com.priority(p.commodity)).thenComparingDouble(tieOf::get));
         Map<Long, Double> used = new HashMap<>();
         double[] mobUsed = new double[ctx.nSectors];
-        double[] roomUsed = new double[ctx.nSectors];
+        Map<Long, Double> roomUsed = new HashMap<>();
         for (Plan p : plans) {
             used.merge(srcKey(p), p.claim, Double::sum);
             for (int h = 1; h < p.path.size(); h++) mobUsed[payer(ctx, p, h)] += hopCost(ctx, p, p.claim, h);
-            if (needsRoom(ctx, p)) roomUsed[ctx.idx(p.path.get(p.path.size() - 1))] += p.claim;
+            roomUsed.merge(roomKey(ctx, p), p.claim, Double::sum);
         }
         // One unit per plan per pass, not everything to whoever sorts first. Draining the whole
         // remainder into the head of the order gave that direction fifteen extra units of food in the
@@ -198,14 +199,13 @@ public final class FlowStep implements Step {
         while (gave) {
             gave = false;
             for (Plan p : order) {
-                int dest = ctx.idx(p.path.get(p.path.size() - 1));
-                boolean wantsRoom = needsRoom(ctx, p);
+                long rk = roomKey(ctx, p);
                 if (p.claim + quantum <= p.requested + 1e-9
                         && used.get(srcKey(p)) + quantum <= sourceBudget.get(srcKey(p)) + 1e-9
                         && mobRoom(ctx, p, quantum, mobBudget, mobUsed)
-                        && (!wantsRoom || roomUsed[dest] + quantum <= roomBudget[dest] + 1e-9)) {
+                        && roomUsed.getOrDefault(rk, 0.0) + quantum <= roomBudget.get(rk) + 1e-9) {
                     p.claim += quantum; used.merge(srcKey(p), quantum, Double::sum);
-                    if (wantsRoom) roomUsed[dest] += quantum;
+                    roomUsed.merge(rk, quantum, Double::sum);
                     for (int h = 1; h < p.path.size(); h++) mobUsed[payer(ctx, p, h)] += hopCost(ctx, p, quantum, h);
                     gave = true;
                 }
@@ -484,7 +484,28 @@ public final class FlowStep implements Step {
     }
 
     /** Civilians and workers count against the destination's population cap (mil do not: KNOWN, trunc_people). */
-    private static boolean needsRoom(Ctx ctx, Plan p) { return p.commodity == ctx.com.civ || p.commodity == ctx.com.uw; }
+    /**
+     * The room a plan competes for: its destination and its commodity (issue #101).
+     *
+     * <p>Civilians and workers share one key, because the population cap counts them together and the
+     * apply step truncates them together — two shipments of people into the same sector are competing
+     * for the same places. Everything else has its own capacity, so food arriving does not squeeze out
+     * iron arriving.
+     */
+    private static long roomKey(Ctx ctx, Plan p) {
+        int dest = ctx.idx(p.path.get(p.path.size() - 1));
+        int c = (p.commodity == ctx.com.civ || p.commodity == ctx.com.uw) ? ctx.com.civ : p.commodity;
+        return ((long) dest << 8) | c;
+    }
+
+    /** How much of {@code p}'s commodity the destination can still take after this update's own changes. */
+    private static double room(Ctx ctx, Plan p) {
+        int i = ctx.idx(p.path.get(p.path.size() - 1));
+        Sector s = ctx.sector(i);
+        if (p.commodity == ctx.com.civ || p.commodity == ctx.com.uw)   // issue #48: people share the population cap
+            return Math.max(0, ctx.maxPopulation(s) - (s.stock().get(ctx.com.civ) + ctx.led().st(i, ctx.com.civ) + s.stock().get(ctx.com.uw) + ctx.led().st(i, ctx.com.uw)));
+        return Math.max(0, Math.floor(ctx.capacity(s, p.commodity)) - (s.stock().get(p.commodity) + ctx.led().st(i, p.commodity)));
+    }
 
     private static boolean mobRoom(Ctx ctx, Plan p, double qty, double[] budget, double[] used) {
         for (int h = 1; h < p.path.size(); h++) { int t = payer(ctx, p, h); if (used[t] + hopCost(ctx, p, qty, h) > budget[t] + 1e-9) return false; }
@@ -496,7 +517,15 @@ public final class FlowStep implements Step {
         return ctx.cfg.distribution().sourcePays() ? p.originIdx : ctx.idx(p.path.get(h));
     }
 
-    private static double floorQ(double v, double q) { return q <= 0 ? v : Math.floor(v / q + 1e-9) * q; }
+    /**
+     * Round down to a whole lot. The lot is one unit unless a bigger one is configured (issue #101).
+     *
+     * <p>It used to return {@code v} untouched when no quantum was set, which made whole units a
+     * distribution preference rather than a property of the world — and a game whose config snapshot
+     * predates {@code quantum: 1.0} shipped fifths of a girder for life. Issue #77 settled that every
+     * quantity in the world is an integer; a flow is a quantity.
+     */
+    private static double floorQ(double v, double q) { double lot = q <= 0 ? 1 : q; return Math.floor(v / lot + 1e-9) * lot; }
 
     /** Reach in hops for this path: base + tech, plus the road bonus prorated by the path's mean road level. */
     private static List<Coord> truncate(Ctx ctx, List<Coord> path, int owner, DistributionCfg dc) {
