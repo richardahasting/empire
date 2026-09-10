@@ -53,8 +53,9 @@ public final class ShipStep implements Step {
             // fishing: food from the sea hex's fertility into the hold
             if (cls.fishingRateOr0() > 0 && here.terrain() == Terrain.OCEAN && eff > 0) {
                 double room = Math.max(0, cls.hold() - ship.load());
-                double fish = Math.min(room, cls.fishingRateOr0() * here.resources().fertility() * ctx.etus * sc.fishingFoodPerEtuPerFertilityPoint() * eff);
-                if (fish > 1e-9) { ship = ship.withStock(ship.stock().plus(ctx.com.food, fish)); ctx.led.produced[ctx.com.food] += fish; sep(note).append("fished ").append(Ledger.q(fish)).append(" food"); if (room - fish < 1e-9) note.append(" (hold full)"); }
+                double fish = Math.min(room, cls.fishingRateOr0() * here.fertility() * ctx.etus * sc.fishingFoodPerEtuPerFertilityPoint() * eff);
+                fish = ctx.led.produceAtSea(ctx.com.food, fish);   // whole units, tallied where it is made (issue #77)
+                if (fish > 0) { ship = ship.withStock(ship.stock().plus(ctx.com.food, fish)); sep(note).append("fished ").append(Ledger.q(fish)).append(" food"); if (room - fish < 1e-9) note.append(" (hold full)"); }
                 else if (room <= 1e-9) sep(note).append("hold full, no fishing");
             }
             // luxury: happiness while at sea
@@ -128,7 +129,7 @@ public final class ShipStep implements Step {
             if (org.hastingtx.empire.engine.geo.Hex.distance(ctx.snap, s.at(), ship.home()) > fc.radius()) continue;
             if (org.hastingtx.empire.engine.geo.Hex.distance(ctx.snap, s.at(), ship.at()) > hops) continue;
             if (SeaRoutes.path(ctx.snap, ctx.cfg, ship.owner(), ship.at(), s.at()) == null) continue;
-            double wgt = s.resources().fertility() + 1.0;
+            double wgt = s.fertility() + 1.0;
             cands.add(s.at()); weights.add(wgt); total += wgt;
         }
         if (cands.isEmpty()) return null;
@@ -181,9 +182,9 @@ public final class ShipStep implements Step {
                 double avail = src.stock().get(c) + ctx.led.stock[si][c] - keep;
                 double q = Math.min(room, avail);
                 if (q <= 1e-9) continue;
-                q = Ledger.whole(q);                       // whole units both sides, or the two disagree (issue #77)
+                q = ctx.led.toShip(si, c, q);              // whole units both sides, or the two disagree (issue #77)
                 if (q <= 0) continue;
-                ctx.led.stock[si][c] -= q; room -= q;
+                room -= q;
                 ship = ship.withStock(ship.stock().plus(c, q));
                 here.append(here.isEmpty() ? "" : ", ").append(Ledger.q(q)).append(' ').append(ctx.com.id(c));
             }
@@ -211,9 +212,9 @@ public final class ShipStep implements Step {
                         : Math.max(0, ctx.capacity(dst, c) - (dst.stock().get(c) + ctx.led.stock[si][c]));
                 double u = Math.min(q, room);
                 if (u <= 1e-9) continue;
-                u = Ledger.whole(u);
+                u = ctx.led.fromShip(si, c, u);
                 if (u <= 0) continue;
-                ctx.led.stock[si][c] += u; st = st.plus(c, -u);
+                st = st.plus(c, -u);
                 here.append(here.isEmpty() ? "" : ", ").append(Ledger.q(u)).append(' ').append(ctx.com.id(c));
             }
             if (here.isEmpty()) continue;
