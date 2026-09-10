@@ -26,3 +26,4 @@ dist/
 # Simulation output
 sim-out/
 *.sim.json
+tools/__pycache__/

@@ -237,7 +237,10 @@ economy:
   # (iron→lcm/hcm, oil→pet, dust→bar, lcm+hcm+oil→shell, etc.). Every numeric
   # rate is a GUESS calibrated against nothing yet — the M0 balance harness
   # exists to fix that. Treat the numbers as placeholders.
-  default_capacity: 1000      # KNOWN: original per-sector item cap (Richard 2026-09-09). Warehouses store no
+  default_capacity: 10000     # Richard 2026-09-10 (issue #91): the original's 1000 was a consequence of packing
+                              # quantities into ten bits, not a design choice. We are not packing, so the cap is
+                              # ours to pick. A warehouse or city still stores ten times, so the real ceiling is
+                              # 100,000 — which is why a quantity is an int and not a short. Warehouses store no
                               # more; they SHIP cheaper. Anything that holds ten times this -- a city
                               # (store_multiplier 10) or a big hull -- keeps its stock in units of 10, so the
                               # quantity still fits the 10-bit field of issue #77.

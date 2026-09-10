@@ -51,7 +51,7 @@ class SectorFootprintTest {
         List<Field> refs = instanceFields(Sector.class).stream().filter(f -> !f.getType().isPrimitive()).toList();
         assertThat(refs).describedAs("reference fields on Sector: each is a header and a cache miss").hasSize(4);
         assertThat(refs.stream().map(f -> f.getType().getSimpleName()))
-                .containsExactlyInAnyOrder("short[]", "Stocks", "List", "DeliverOrders");
+                .containsExactlyInAnyOrder("int[]", "Stocks", "List", "DeliverOrders");
 
         // Position, terrain, endowments, tenure and every 0..100 scale live inline. Nothing here is a
         // Coord, a Resources or a String; those cost a pointer plus an object apiece.
@@ -74,18 +74,20 @@ class SectorFootprintTest {
     @Test
     void aFullyLoadedSectorFitsTheBudget() {
         int nCom = 14;
-        int stocks = shallow(Stocks.class) + array(short.class, nCom);
-        int thresholds = array(short.class, nCom);
-        int deliver = shallow(DeliverOrders.class) + array(byte.class, nCom) + array(short.class, nCom);
+        // int, not short: a warehouse holds 100,000 and a short stops at 32,767 (issue #91).
+        int stocks = shallow(Stocks.class) + array(int.class, nCom);
+        int thresholds = array(int.class, nCom);
+        int deliver = shallow(DeliverOrders.class) + array(byte.class, nCom) + array(int.class, nCom);
         int total = shallow(Sector.class) + stocks + thresholds + deliver;
 
-        // The issue's target was ~230 bytes for a sector carrying everything it can carry. Held parcels
-        // are excluded: a parcel is cargo in transit, not part of the hex.
-        assertThat(total).describedAs("a sector with stock, thresholds and delivery orders").isLessThanOrEqualTo(280);
+        // #77 aimed at ~230 bytes for a sector carrying everything it can carry; widening quantities to
+        // int for #91 cost 72 of them, which against 610 before #77 is a trade worth making. Held
+        // parcels are excluded: a parcel is cargo in transit, not part of the hex.
+        assertThat(total).describedAs("a sector with stock, thresholds and delivery orders").isLessThanOrEqualTo(350);
 
         // And the shape the win actually comes from: the old record kept four more objects per sector —
         // a Coord, a Resources, a Coord for the distribution centre, and boxed 0..100 scales.
-        assertThat(shallow(Sector.class) + stocks).describedAs("the common case: stock but nothing else").isLessThanOrEqualTo(130);
+        assertThat(shallow(Sector.class) + stocks).describedAs("the common case: stock but nothing else").isLessThanOrEqualTo(160);
     }
 
     @Test
@@ -100,6 +102,7 @@ class SectorFootprintTest {
 
         // Rule 5: a threshold is an exact quantity. Byte scaling would make `thresh food 100` mean 120.
         assertThat(s.withThreshold(3, 9999).threshold(3)).isEqualTo(9999);
+        assertThat(s.withThreshold(3, 100_000).threshold(3)).describedAs("a warehouse's ceiling, issue #91").isEqualTo(100_000);
         assertThat(s.hasThreshold(3)).isFalse();
         assertThat(s.withThreshold(3, 100).hasThreshold(3)).isTrue();
         assertThat(s.withThreshold(3, 100).withThreshold(3, Double.NaN).hasThreshold(3)).isFalse();

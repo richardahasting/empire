@@ -25,7 +25,7 @@ import java.util.Objects;
  * removes most of the allocations. {@code distCenter} uses {@link #NO_COORD} for "unset" rather than a
  * null reference.
  *
- * <p>An unset threshold is {@link #NO_THRESHOLD} rather than {@code NaN}: a short has no NaN. Sectors
+ * <p>An unset threshold is {@link #NO_THRESHOLD} rather than {@code NaN}: an int has no NaN. Sectors
  * with no thresholds at all share one canonical array, which is most of a large world.
  */
 public final class Sector {
@@ -34,7 +34,7 @@ public final class Sector {
     /** {@code distCenter} sentinel: no distribution centre set. */
     static final short NO_COORD = Short.MIN_VALUE;
     /** {@code thresholds} sentinel: no threshold set for this commodity. */
-    static final short NO_THRESHOLD = -1;
+    static final int NO_THRESHOLD = -1;
 
     // position, 4 B — a Coord is materialised on demand
     private final short x, y;
@@ -51,7 +51,7 @@ public final class Sector {
     // distribution centre, 4 B
     private final short distX, distY;
     // references, 16 B
-    private final short[] thresholds;
+    private final int[] thresholds;
     private final Stocks stock;
     private final List<HeldParcel> held;
     private final DeliverOrders deliver;
@@ -62,7 +62,7 @@ public final class Sector {
                    byte efficiency, byte mobility, byte roadLevel, byte railLevel, byte radarLevel,
                    byte roadTarget, byte railTarget, boolean sanctuary,
                    short distX, short distY,
-                   short[] thresholds, Stocks stock, List<HeldParcel> held, DeliverOrders deliver) {
+                   int[] thresholds, Stocks stock, List<HeldParcel> held, DeliverOrders deliver) {
         this.x = x; this.y = y; this.terrain = terrain; this.elevation = elevation;
         this.fertility = fertility; this.minerals = minerals; this.gold = gold; this.oil = oil; this.uranium = uranium;
         this.owner = owner; this.designation = designation;
@@ -96,13 +96,16 @@ public final class Sector {
         return (byte) o;
     }
 
-    /** A threshold is an exact quantity, not a 0..100 scale — a byte would make {@code thresh food 100} mean 120. */
-    static short thresholdOf(double v) {
+    /**
+     * A threshold is an exact quantity, not a 0..100 scale — a byte would make {@code thresh food 100}
+     * mean 120, and a short would stop at 32,767 in a warehouse that holds 100,000 (issue #91).
+     */
+    static int thresholdOf(double v) {
         if (Double.isNaN(v)) return NO_THRESHOLD;
         long r = Math.round(v);
         if (r < 0) return 0;
-        if (r > Short.MAX_VALUE) return Short.MAX_VALUE;
-        return (short) r;
+        if (r > Integer.MAX_VALUE) return Integer.MAX_VALUE;
+        return (int) r;
     }
 
     // --- accessors, unchanged --------------------------------------------------------------------
@@ -161,7 +164,7 @@ public final class Sector {
 
     private Sector copy(byte owner, byte designation, byte efficiency, byte mobility, byte roadLevel, byte railLevel,
                         byte radarLevel, byte roadTarget, byte railTarget, boolean sanctuary, short distX, short distY,
-                        short[] thresholds, Stocks stock, List<HeldParcel> held, DeliverOrders deliver) {
+                        int[] thresholds, Stocks stock, List<HeldParcel> held, DeliverOrders deliver) {
         return new Sector(x, y, terrain, elevation, fertility, minerals, gold, oil, uranium, owner, designation,
                 efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget, sanctuary,
                 distX, distY, thresholds, stock, held, deliver);
@@ -183,7 +186,7 @@ public final class Sector {
     public Sector withDeliver(DeliverOrders d) { return copy(owner, designation, efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget, sanctuary, distX, distY, thresholds, stock, held, d); }
 
     public Sector withThresholds(double[] t) {
-        short[] n = new short[t.length];
+        int[] n = new int[t.length];
         boolean any = false;
         for (int i = 0; i < t.length; i++) { n[i] = thresholdOf(t[i]); if (n[i] != NO_THRESHOLD) any = true; }
         return copy(owner, designation, efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget, sanctuary, distX, distY, any ? n : noThresholds(t.length), stock, held, deliver);
@@ -191,12 +194,12 @@ public final class Sector {
 
     /** One threshold, without a round trip through a {@code double[]}. */
     public Sector withThreshold(int i, double v) {
-        short s = thresholdOf(v);
+        int s = thresholdOf(v);
         if (thresholds[i] == s) return this;
-        short[] n = thresholds.clone();
+        int[] n = thresholds.clone();
         n[i] = s;
         boolean any = false;
-        for (short q : n) if (q != NO_THRESHOLD) { any = true; break; }
+        for (int q : n) if (q != NO_THRESHOLD) { any = true; break; }
         return copy(owner, designation, efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget, sanctuary, distX, distY, any ? n : noThresholds(n.length), stock, held, deliver);
     }
 
@@ -220,10 +223,10 @@ public final class Sector {
      * ever set a threshold on; they share one array instead of holding half a million copies of the same
      * fourteen sentinels.
      */
-    private static final java.util.concurrent.ConcurrentHashMap<Integer, short[]> NO_THRESHOLDS = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.concurrent.ConcurrentHashMap<Integer, int[]> NO_THRESHOLDS = new java.util.concurrent.ConcurrentHashMap<>();
 
-    static short[] noThresholds(int n) {
-        return NO_THRESHOLDS.computeIfAbsent(n, k -> { short[] a = new short[k]; Arrays.fill(a, NO_THRESHOLD); return a; });
+    static int[] noThresholds(int n) {
+        return NO_THRESHOLDS.computeIfAbsent(n, k -> { int[] a = new int[k]; Arrays.fill(a, NO_THRESHOLD); return a; });
     }
 
     public static Sector blank(Coord at, Terrain t, int elevation, Resources r, int nCommodities) {
