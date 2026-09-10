@@ -89,6 +89,9 @@ public final class ShipStep implements Step {
             } else if (docked && sc.autoUnloadInHarbor() && cls.fishingRateOr0() > 0 && ship.load() > 0) {
                 ship = unload(ctx, ship, here, hi, note);   // a fishing boat home from the grounds lands its catch
             }
+            // refuel (issue #65): a harbour pumps from its own stock, a tanker from its hold at sea
+            if (sc.fuel() && docked) ship = refuel(ctx, ship, cls, hi, note);
+            else if (sc.fuel()) ship = refuelAtSea(ctx, ship, cls, out, note);
             // sail
             if (ship.dest() != null && !ship.dest().equals(ship.at())) {
                 List<Coord> path = SeaRoutes.path(ctx.snap, ctx.cfg, ship.owner(), ship.at(), ship.dest());
@@ -96,11 +99,22 @@ public final class ShipStep implements Step {
                 else {
                     int range = sc.range(cls, ship.tech(), ship.efficiency());
                     int hops = Math.min(range, path.size() - 1);
-                    if (hops <= 0) sep(note).append("too unfit to sail (").append(Ledger.q(ship.efficiency())).append("%)");
+                    // a dry tank holds the ship where it is (issue #65)
+                    double perHex = sc.fuel() ? cls.fuelPerHexOr0() : 0;
+                    int fuelled = perHex > 0 ? (int) Math.floor(ship.fuel() / perHex) : hops;
+                    if (perHex > 0 && fuelled < hops) hops = Math.max(0, fuelled);
+                    if (hops <= 0 && perHex > 0 && ship.fuel() < perHex) sep(note).append("out of fuel, holding at ").append(ship.at());
+                    else if (hops <= 0) sep(note).append("too unfit to sail (").append(Ledger.q(ship.efficiency())).append("%)");
                     else {
                         Coord to = path.get(hops);
                         ship = ship.withAt(to);
+                        if (perHex > 0) {
+                            double burned = hops * perHex;
+                            ship = ship.withFuel(ship.fuel() - burned);
+                            ctx.led().destroyed(ctx.com.index(sc.fuelId()), burned);   // burned fuel leaves the world
+                        }
                         sep(note).append("sailed ").append(hops).append(hops == 1 ? " hex" : " hexes").append(" to ").append(to);
+                        if (perHex > 0 && ship.fuel() < perHex) note.append(" (tank dry)");
                         if (to.equals(ship.dest())) { note.append(", arrived"); if (ship.lane() == null) ship = ship.withDest(null); }
                     }
                 }
@@ -110,6 +124,48 @@ public final class ShipStep implements Step {
             out.add(ship.withNote(note.isEmpty() ? (docked ? "in harbour" : "holding") : note.toString()));
         }
         ctx.ships.clear(); ctx.ships.addAll(out);
+    }
+
+    /**
+     * Top the tank up from the harbour's own stock (issue #65). The fuel is not consumed here — it moves
+     * from a sector into a tank, and a tank is counted in conservation exactly like a hold, because fuel
+     * sitting in a ship is still fuel. It leaves the world when it is burned, a hex at a time.
+     */
+    private static Ship refuel(Ctx ctx, Ship ship, UnitsCfg.ShipClassCfg cls, int hi, StringBuilder note) {
+        double room = cls.tankOr0() - ship.fuel();
+        if (room < 1) return ship;
+        int pet = ctx.com.index(ctx.cfg.units().ships().fuelId());
+        double have = ctx.sector(hi).stock().get(pet) + ctx.led().st(hi, pet);
+        double took = ctx.led().toShip(hi, pet, Math.min(room, Math.max(0, have)));
+        if (took <= 0) { if (ship.fuel() < cls.fuelPerHexOr0()) sep(note).append("no ").append(ctx.com.id(pet)).append(" in the harbour to refuel"); return ship; }
+        sep(note).append("took on ").append(Ledger.q(took)).append(' ').append(ctx.com.id(pet));
+        return ship.withFuel(ship.fuel() + took);
+    }
+
+    /**
+     * A tanker in the same hex pumps from its hold into this ship's tank (issue #65) — that is what a
+     * tanker is for, and without it a fleet's reach is a harbour's reach. Both hold and tank are counted
+     * in conservation, so this is a plain move with nothing to tally.
+     *
+     * <p>Only tankers already processed this update can give: the list is walked in id order and a ship
+     * that has not moved yet is not in {@code done}. That keeps it deterministic — who fuels whom cannot
+     * depend on anything but the order the ships were built.
+     */
+    private static Ship refuelAtSea(Ctx ctx, Ship ship, UnitsCfg.ShipClassCfg cls, List<Ship> done, StringBuilder note) {
+        double room = cls.tankOr0() - ship.fuel();
+        if (room < 1 || ship.fuel() >= cls.fuelPerHexOr0()) return ship;   // only a ship that needs it
+        int pet = ctx.com.index(ctx.cfg.units().ships().fuelId());
+        for (int k = 0; k < done.size(); k++) {
+            Ship t = done.get(k);
+            if (t.owner() != ship.owner() || !t.at().equals(ship.at())) continue;
+            if (!"tanker".equals(ctx.cfg.units().ships().shipClass(t.cls()).role())) continue;
+            double give = Math.floor(Math.min(room, t.stock().get(pet)));
+            if (give < 1) continue;
+            done.set(k, t.withStock(t.stock().plus(pet, -give)));
+            sep(note).append("refuelled ").append(Ledger.q(give)).append(' ').append(ctx.com.id(pet)).append(" from ").append(label(t));
+            return ship.withFuel(ship.fuel() + give);
+        }
+        return ship;
     }
 
     private static StringBuilder sep(StringBuilder sb) { if (!sb.isEmpty()) sb.append("; "); return sb; }

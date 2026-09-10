@@ -16,6 +16,8 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
             /** Harbour efficiency needed to build or repair. */
             double harborMinEfficiency,
             boolean fuel,
+            /** Which commodity a tank holds (issue #65). Null means petrol. */
+            String fuelCommodity,
             boolean crews,
             boolean autoUnloadInHarbor,
             /** Food a fishing boat of rate 1 at 100% makes per ETU per point of sea fertility. */
@@ -28,6 +30,8 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
             Integer sight,
             List<ShipClassCfg> classes) {
         public int sightOf(ShipClassCfg cls) { return cls.sight() != null ? cls.sight() : sight != null ? sight : 2; }
+        /** What goes in a tank (issue #65). */
+        public String fuelId() { return fuelCommodity == null ? "pet" : fuelCommodity; }
         public record FishingCfg(int radius, int wanderHops, double returnWhenHoldFraction) {}
         public FishingCfg fishingOrDefault() { return fishing == null ? new FishingCfg(6, 2, 0.9) : fishing; }
         public record SpeedTech(double at0, double perTechPoint, double max) {}
@@ -63,7 +67,13 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
             List<String> carries,
             Map<String, Double> upkeepPerUpdate,
             /** Sight radius in hexes; null = the fleet default. */
-            Integer sight) {
+            Integer sight,
+            /** How much fuel the hull holds (issue #65). Null on a class that predates fuel. */
+            Double tank,
+            /** Fuel burned per sea hex sailed. */
+            Double fuelPerHex) {
+        public double tankOr0() { return tank == null ? 0 : tank; }
+        public double fuelPerHexOr0() { return fuelPerHex == null ? 0 : fuelPerHex; }
         public double fishingRateOr0() { return fishingRate == null ? 0 : fishingRate; }
         public double happinessOr0() { return happinessPerEtu == null ? 0 : happinessPerEtu; }
         public List<String> carriesOrEmpty() { return carries == null ? List.of() : carries; }

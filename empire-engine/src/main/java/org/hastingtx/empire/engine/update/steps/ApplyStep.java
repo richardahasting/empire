@@ -108,6 +108,13 @@ public final class ApplyStep {
         }
         for (Ship sh : ctx.snap.ships()) for (int c = 0; c < nCom; c++) before[c] += (long) sh.stock().get(c);
         for (Ship sh : out.ships()) for (int c = 0; c < nCom; c++) after[c] += (long) sh.stock().get(c);
+        // Fuel in a tank is still fuel (issue #65): it left a sector but it has not left the world, and
+        // it only stops being counted when it is burned, which is tallied as destroyed.
+        int fuelIdx = ctx.cfg.units().ships() != null && ctx.cfg.units().ships().fuel() ? ctx.com.index(ctx.cfg.units().ships().fuelId()) : -1;
+        if (fuelIdx >= 0) {
+            for (Ship sh : ctx.snap.ships()) before[fuelIdx] += (long) sh.fuel();
+            for (Ship sh : out.ships()) after[fuelIdx] += (long) sh.fuel();
+        }
         Ledger l = ctx.led();
         for (int c = 0; c < nCom; c++) {
             long expected = before[c] + l.produced[c] + l.grown[c] - l.consumed[c] - l.destroyed[c];
