@@ -468,10 +468,11 @@ public final class FlowStep implements Step {
             if (done[u]) continue;
             done[u] = true;
             if (u == dst) break;
-            for (Coord nb : ctx.neighbours.get(u)) {
-                int v = ctx.idx(nb);
+            for (int k = 0; k < Ctx.DIRS; k++) {
+                int v = ctx.neighbour(u, k);
+                if (v < 0) continue;
                 Sector sv = ctx.sector(v);
-                if (sv.owner() != owner || !sv.terrain().isLand()) continue;
+                if (sv.owner() != owner || !sv.isLand()) continue;
                 double w = hops ? 1.0 : ctx.moveCostInto(sv);
                 if (Double.isInfinite(w)) continue;
                 double nd = dist[u] + w;
