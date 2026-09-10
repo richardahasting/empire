@@ -683,7 +683,7 @@ distribution:
   # null = continuous quantities (allocation is exactly proportional and therefore exactly
   # direction-symmetric). Set e.g. 1.0 to ship whole units; the last indivisible unit then
   # goes by commodity priority, then seeded RNG — which is deliberately NOT rotation-symmetric.
-  quantum: null
+  quantum: 1.0              # whole units only (issue #77): stock is integral, so a flow must be too
 
 # -----------------------------------------------------------------------------
 # INFRASTRUCTURE — NEW: per-sector road/rail, independent of designation
