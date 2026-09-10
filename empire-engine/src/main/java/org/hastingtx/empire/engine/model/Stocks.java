@@ -2,25 +2,46 @@ package org.hastingtx.empire.engine.model;
 
 import java.util.Arrays;
 
-/** Immutable per-sector commodity quantities. Index = Commodities position. */
+/**
+ * Immutable per-sector commodity quantities. Index = Commodities position.
+ *
+ * <p>Held as {@code short} (issue #77). Empire's quantities are discrete, and a short covers the whole
+ * range: the per-sector cap is 1000, and a sector that stores ten times (a city, a warehouse) tops out
+ * at 10,000 — comfortably inside 32,767. That is why no units-of-ten packing is needed here; it was
+ * only ever required to squeeze into ten bits.
+ *
+ * <p>The accessors stay wide, so the update steps do not change. 152 bytes a sector becomes 44.
+ */
 public final class Stocks {
-    private final double[] q;
+    private final short[] q;
 
-    private Stocks(double[] q) { this.q = q; }
+    private Stocks(short[] q) { this.q = q; }
 
-    public static Stocks zero(int n) { return new Stocks(new double[n]); }
-    public static Stocks of(double[] q) { return new Stocks(q.clone()); }
+    static short narrow(double v) {
+        long r = Math.round(v);
+        if (r > Short.MAX_VALUE) return Short.MAX_VALUE;
+        if (r < Short.MIN_VALUE) return Short.MIN_VALUE;
+        return (short) r;
+    }
+
+    public static Stocks zero(int n) { return new Stocks(new short[n]); }
+
+    public static Stocks of(double[] q) {
+        short[] c = new short[q.length];
+        for (int i = 0; i < q.length; i++) c[i] = narrow(q[i]);
+        return new Stocks(c);
+    }
 
     public int size() { return q.length; }
     public double get(int i) { return q[i]; }
-    public double[] toArray() { return q.clone(); }
-    public double total() { double t = 0; for (double v : q) t += v; return t; }
+    public double[] toArray() { double[] out = new double[q.length]; for (int i = 0; i < q.length; i++) out[i] = q[i]; return out; }
+    public double total() { double t = 0; for (short v : q) t += v; return t; }
 
-    public Stocks with(int i, double v) { double[] c = q.clone(); c[i] = v; return new Stocks(c); }
-    public Stocks plus(int i, double d) { double[] c = q.clone(); c[i] += d; return new Stocks(c); }
+    public Stocks with(int i, double v) { short[] c = q.clone(); c[i] = narrow(v); return new Stocks(c); }
+    public Stocks plus(int i, double d) { short[] c = q.clone(); c[i] = narrow(q[i] + d); return new Stocks(c); }
     public Stocks plusAll(double[] d) {
-        double[] c = q.clone();
-        for (int i = 0; i < c.length; i++) c[i] += d[i];
+        short[] c = q.clone();
+        for (int i = 0; i < c.length; i++) c[i] = narrow(q[i] + d[i]);
         return new Stocks(c);
     }
 

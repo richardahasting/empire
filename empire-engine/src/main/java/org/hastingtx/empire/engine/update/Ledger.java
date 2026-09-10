@@ -54,19 +54,39 @@ public final class Ledger {
         heldNext = (List<HeldParcel>[]) new List[nSectors];
     }
 
-    public void produce(int sector, int c, double qty) { stock[sector][c] += qty; produced[c] += qty; }
-    public void consume(int sector, int c, double qty) { stock[sector][c] -= qty; consumed[c] += qty; }
-    public void destroy(int sector, int c, double qty) { stock[sector][c] -= qty; destroyed[c] += qty; }
-    public void grow(int sector, int c, double qty) { stock[sector][c] += qty; grown[c] += qty; }
+    /**
+     * Quantities are whole units (issue #77). Every stock movement is rounded here, at the moment it is
+     * recorded, so the tally and the stock always agree and conservation holds exactly rather than
+     * within a tolerance. Half-up, per Richard 2026-09-09: 2.5 becomes 3. Each method returns what it
+     * actually moved, so a caller that needs the quantity elsewhere — a held parcel, a ship's hold —
+     * uses the same whole number and nothing is invented or lost between the two.
+     *
+     * <p>Richard's rule, same day: if it cannot make one whole unit it does not happen and takes
+     * nothing, which falls out of rounding a sub-half quantity to zero.
+     */
+    public static double whole(double qty) { return Math.round(qty); }
+
+    /**
+     * What a sector actually gives up. Taking floors rather than rounding half-up: stock is whole, so
+     * rounding 1.5 up out of a stock of 1 would overdraw it into the negative. Flooring is also
+     * Richard's rule for the other direction — if it cannot make a whole unit it does not happen and
+     * takes nothing (2026-09-09).
+     */
+    public static double taken(double qty) { return Math.floor(qty); }
+
+    public double produce(int sector, int c, double qty) { double q = whole(qty); stock[sector][c] += q; produced[c] += q; return q; }
+    public double consume(int sector, int c, double qty) { double q = taken(qty); stock[sector][c] -= q; consumed[c] += q; return q; }
+    public double destroy(int sector, int c, double qty) { double q = taken(qty); stock[sector][c] -= q; destroyed[c] += q; return q; }
+    public double grow(int sector, int c, double qty) { double q = whole(qty); stock[sector][c] += q; grown[c] += q; return q; }
     /** Negative growth (starvation, plague) is a death: tallied as destroyed. */
-    public void die(int sector, int c, double qty) { stock[sector][c] -= qty; destroyed[c] += qty; }
+    public double die(int sector, int c, double qty) { double q = taken(qty); stock[sector][c] -= q; destroyed[c] += q; return q; }
 
     /** Move qty of c out of sector {@code from} into sector {@code to}. Sums to zero by construction. */
-    public void transfer(int from, int to, int c, double qty) { stock[from][c] -= qty; stock[to][c] += qty; }
+    public double transfer(int from, int to, int c, double qty) { double q = taken(qty); stock[from][c] -= q; stock[to][c] += q; return q; }
     /** Stock leaves a sector into a held parcel (still in the world, not in any stock). */
-    public void toHeld(int from, int c, double qty) { stock[from][c] -= qty; transferNet[c] -= qty; }
+    public double toHeld(int from, int c, double qty) { double q = taken(qty); stock[from][c] -= q; transferNet[c] -= q; return q; }
     /** Held parcel arrives into a sector's stock. */
-    public void fromHeld(int to, int c, double qty) { stock[to][c] += qty; transferNet[c] += qty; }
+    public double fromHeld(int to, int c, double qty) { double q = taken(qty); stock[to][c] += q; transferNet[c] += q; return q; }
 
     public void event(String type, int country, org.hastingtx.empire.engine.model.Coord at, String msg, double amount) {
         events.add(new Event(type, country, at, msg, amount));

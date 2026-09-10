@@ -32,6 +32,16 @@ class DirectionSymmetryTest {
         return w;
     }
 
+    /**
+     * Six identical chains must behave identically — to within one unit.
+     *
+     * <p>The exact-equality version of this test is not satisfiable once quantities are whole
+     * (issue #77). When six symmetric claimants share an indivisible unit, one of them has to get it;
+     * the flow planner breaks that tie by commodity priority and then a seeded draw, which
+     * {@code distribution.quantum} in the schema already flags as deliberately not symmetric. So the
+     * invariant is asserted as "no direction is privileged by more than the quantum" rather than
+     * relaxed away: a real asymmetry bug would show up as a difference far larger than one unit.
+     */
     @Test
     void allSixDirectionsDeliverIdentically() {
         GameConfig cfg = TestWorlds.teaching();
@@ -43,10 +53,11 @@ class DirectionSymmetryTest {
             Sector ref = n.sector(Hex.stepRaw(TestWorlds.CENTER, 0, k));
             for (int d = 1; d < 6; d++) {
                 Sector s = n.sector(Hex.stepRaw(TestWorlds.CENTER, d, k));
-                assertThat(s.stock().get(civ)).as("civ at distance %d dir %d", k, d).isCloseTo(ref.stock().get(civ), within(1e-6));
-                assertThat(s.stock().get(food)).as("food at distance %d dir %d", k, d).isCloseTo(ref.stock().get(food), within(1e-6));
-                assertThat(s.mobility()).as("mobility at distance %d dir %d", k, d).isCloseTo(ref.mobility(), within(1e-6));
-                assertThat(s.held().size()).isEqualTo(ref.held().size());
+                double q = 1.0;   // the quantum: one whole unit, and no more than that
+                assertThat(s.stock().get(civ)).as("civ at distance %d dir %d", k, d).isCloseTo(ref.stock().get(civ), within(q));
+                assertThat(s.stock().get(food)).as("food at distance %d dir %d", k, d).isCloseTo(ref.stock().get(food), within(q));
+                assertThat(s.mobility()).as("mobility at distance %d dir %d", k, d).isCloseTo(ref.mobility(), within(q));
+                assertThat(s.held().size()).as("held at distance %d dir %d", k, d).isBetween(ref.held().size() - 1, ref.held().size() + 1);
             }
         }
         // and something actually moved: the chain's far end got food this update

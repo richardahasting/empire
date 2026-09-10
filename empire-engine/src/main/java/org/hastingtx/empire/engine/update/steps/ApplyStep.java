@@ -32,11 +32,11 @@ public final class ApplyStep {
                     q[c] = 0;
                 }
                 if (!ctx.com.isPerson(c)) {
-                    double cap = ctx.capacity(s, c);
+                    double cap = Math.floor(ctx.capacity(s, c));   // a whole cap, or the stored value and the spoilage tally disagree (issue #77)
                     if (q[c] > cap) { led.destroyed[c] += q[c] - cap; led.event("spoilage", s.owner(), s.at(), ctx.com.id(c) + " over capacity in " + s.at(), q[c] - cap); led.note(i, Ledger.q(q[c] - cap) + " " + ctx.com.id(c) + " over capacity, lost"); q[c] = cap; }
                 } else if (c == ctx.com.civ || c == ctx.com.uw) {
                     // KNOWN (human.c trunc_people): civilians and workers above the sector's population cap are truncated every update
-                    double cap = ctx.maxPopulation(s);
+                    double cap = Math.floor(ctx.maxPopulation(s));
                     if (q[c] > cap + 1e-9) { led.destroyed[c] += q[c] - cap; led.event("overcrowding", s.owner(), s.at(), ctx.com.id(c) + " over the population limit in " + s.at(), q[c] - cap); led.note(i, Ledger.q(q[c] - cap) + " " + ctx.com.id(c) + " over the population limit, lost"); q[c] = cap; }
                 }
             }
@@ -80,6 +80,18 @@ public final class ApplyStep {
         for (int c = 0; c < nCom; c++) {
             double expected = before[c] + l.produced[c] + l.grown[c] - l.consumed[c] - l.destroyed[c];
             double tol = 1e-6 * Math.max(1.0, Math.abs(before[c]) + Math.abs(l.produced[c]) + Math.abs(l.consumed[c]));
+            if (Math.abs(after[c] - expected) > tol && Boolean.getBoolean("empire.conserve.debug")) {
+                for (int i = 0; i < ctx.snap.sectors().size(); i++) {
+                    double b = ctx.snap.sectors().get(i).stock().get(c), a = out.sectors().get(i).stock().get(c);
+                    double bh = 0, ah = 0;
+                    for (HeldParcel p : ctx.snap.sectors().get(i).held()) if (p.commodity() == c) bh += p.qty();
+                    for (HeldParcel p : out.sectors().get(i).held()) if (p.commodity() == c) ah += p.qty();
+                    double d = (a + ah) - (b + bh) - l.stock[i][c];
+                    if (Math.abs(d) > 1e-9)
+                        System.err.printf("CONSERVE %s at %s: before=%.3f+%.3f after=%.3f+%.3f delta=%.3f mismatch=%.3f%n",
+                                ctx.com.id(c), ctx.snap.sectors().get(i).at(), b, bh, a, ah, l.stock[i][c], d);
+                }
+            }
             if (Math.abs(after[c] - expected) > tol)
                 throw new IllegalStateException(String.format(Locale.ROOT, "conservation violated for %s: before=%.6f produced=%.6f grown=%.6f consumed=%.6f destroyed=%.6f expected=%.6f after=%.6f",
                         ctx.com.id(c), before[c], l.produced[c], l.grown[c], l.consumed[c], l.destroyed[c], expected, after[c]));

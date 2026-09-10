@@ -161,12 +161,18 @@ public final class FlowStep implements Step {
         }
         // quantise (if a quantum is configured); hand out the leftover whole units by priority, then RNG
         for (Plan p : plans) p.claim = floorQ(p.claim, quantum);
-        if (quantum > 0) handOutLeftovers(ctx, plans, quantum, sourceBudget, mobBudget);
+        if (quantum > 0) handOutLeftovers(ctx, plans, quantum, sourceBudget, mobBudget, roomBudget);
 
         walk(ctx, plans, quantum, mobBudget, heldRefs, heldAt);
     }
 
-    private static void handOutLeftovers(Ctx ctx, List<Plan> plans, double quantum, Map<Long, Double> sourceBudget, double[] mobBudget) {
+    /**
+     * Hand out the last indivisible units. Must respect the destination's population room as well as
+     * the source and the mobility (issue #77): without it a leftover civilian is posted into a capital
+     * that is already full, and the apply step then throws it away as overcrowding. Latent until the
+     * quantum was turned on, because this whole pass is gated on it.
+     */
+    private static void handOutLeftovers(Ctx ctx, List<Plan> plans, double quantum, Map<Long, Double> sourceBudget, double[] mobBudget, double[] roomBudget) {
         SplittableRandom rng = Rng.stream("contention", ctx.seed);
         List<Plan> order = new ArrayList<>(plans);
         double[] tie = new double[plans.size()];
@@ -176,11 +182,31 @@ public final class FlowStep implements Step {
         order.sort(Comparator.<Plan>comparingInt(p -> ctx.com.priority(p.commodity)).thenComparingDouble(tieOf::get));
         Map<Long, Double> used = new HashMap<>();
         double[] mobUsed = new double[ctx.led.nSectors];
-        for (Plan p : plans) { used.merge(srcKey(p), p.claim, Double::sum); for (int h = 1; h < p.path.size(); h++) mobUsed[payer(ctx, p, h)] += hopCost(ctx, p, p.claim, h); }
-        for (Plan p : order) {
-            while (p.claim + quantum <= p.requested + 1e-9 && used.get(srcKey(p)) + quantum <= sourceBudget.get(srcKey(p)) + 1e-9 && mobRoom(ctx, p, quantum, mobBudget, mobUsed)) {
-                p.claim += quantum; used.merge(srcKey(p), quantum, Double::sum);
-                for (int h = 1; h < p.path.size(); h++) mobUsed[payer(ctx, p, h)] += hopCost(ctx, p, quantum, h);
+        double[] roomUsed = new double[ctx.led.nSectors];
+        for (Plan p : plans) {
+            used.merge(srcKey(p), p.claim, Double::sum);
+            for (int h = 1; h < p.path.size(); h++) mobUsed[payer(ctx, p, h)] += hopCost(ctx, p, p.claim, h);
+            if (needsRoom(ctx, p)) roomUsed[ctx.idx(p.path.get(p.path.size() - 1))] += p.claim;
+        }
+        // One unit per plan per pass, not everything to whoever sorts first. Draining the whole
+        // remainder into the head of the order gave that direction fifteen extra units of food in the
+        // six-chain symmetry fixture while its five identical siblings got none (issue #77). Round-robin
+        // keeps the tie-break to the single indivisible unit it is supposed to be.
+        boolean gave = true;
+        while (gave) {
+            gave = false;
+            for (Plan p : order) {
+                int dest = ctx.idx(p.path.get(p.path.size() - 1));
+                boolean wantsRoom = needsRoom(ctx, p);
+                if (p.claim + quantum <= p.requested + 1e-9
+                        && used.get(srcKey(p)) + quantum <= sourceBudget.get(srcKey(p)) + 1e-9
+                        && mobRoom(ctx, p, quantum, mobBudget, mobUsed)
+                        && (!wantsRoom || roomUsed[dest] + quantum <= roomBudget[dest] + 1e-9)) {
+                    p.claim += quantum; used.merge(srcKey(p), quantum, Double::sum);
+                    if (wantsRoom) roomUsed[dest] += quantum;
+                    for (int h = 1; h < p.path.size(); h++) mobUsed[payer(ctx, p, h)] += hopCost(ctx, p, quantum, h);
+                    gave = true;
+                }
             }
         }
 
@@ -305,7 +331,9 @@ public final class FlowStep implements Step {
             if (qty <= 1e-9) { ctx.led.flows.add(new Flow("rail", t.owner, t.commodity, t.qty, 0, t.path, 0, false, "line at capacity")); continue; }
             // endpoint efficiency scales what actually gets through
             double effScale = Math.min(ctx.sector(ctx.idx(t.path.get(0))).efficiency(), ctx.sector(ctx.idx(t.dest)).efficiency()) / 100.0;
-            double moving = Math.min(qty, t.from == null ? qty : t.qty) * (t.from == null ? Math.max(0.01, effScale) : 1.0);
+            // whole units on the rails too (issue #77): a train carries wagons, not fractions, and the
+            // parcel it leaves behind is subtracted from this, so both sides must be integral
+            double moving = Math.floor(Math.min(qty, t.from == null ? qty : t.qty) * (t.from == null ? Math.max(0.01, effScale) : 1.0));
 
             // How far it gets is what its mobility pays for (Richard 2026-09-09, issue #79): walk the line
             // hop by hop and stop at the last one the sending sector can afford. Rail level already prices a
@@ -334,9 +362,9 @@ public final class FlowStep implements Step {
                     // it cannot afford the whole load even one hop: move what the budget carries, one hop, so a
                     // train always makes progress instead of standing still for ever
                     double unit1 = ctx.moveCostInto(ctx.sector(ctx.idx(t.path.get(1)))) * perUnitWeight;
-                    double afford = unit1 > 0 ? Math.floor(budget / unit1 * 1000) / 1000 : moving;
+                    double afford = unit1 > 0 ? Math.floor(budget / unit1) : moving;
                     mobHold = "mobility exhausted in " + ctx.sector(t.originIdx).at();
-                    if (afford > 1e-9) { moving = Math.min(moving, afford); hops = 1; spend = moving * unit1; }
+                    if (afford >= 1) { moving = Math.floor(Math.min(moving, afford)); hops = 1; spend = moving * unit1; }
                     else moving = 0;
                 } else if (hops < t.path.size() - 1) {
                     mobHold = "mobility carried it " + hops + (hops == 1 ? " hex" : " hexes") + " from " + ctx.sector(t.originIdx).at();

@@ -181,6 +181,8 @@ public final class ShipStep implements Step {
                 double avail = src.stock().get(c) + ctx.led.stock[si][c] - keep;
                 double q = Math.min(room, avail);
                 if (q <= 1e-9) continue;
+                q = Ledger.whole(q);                       // whole units both sides, or the two disagree (issue #77)
+                if (q <= 0) continue;
                 ctx.led.stock[si][c] -= q; room -= q;
                 ship = ship.withStock(ship.stock().plus(c, q));
                 here.append(here.isEmpty() ? "" : ", ").append(Ledger.q(q)).append(' ').append(ctx.com.id(c));
@@ -209,6 +211,8 @@ public final class ShipStep implements Step {
                         : Math.max(0, ctx.capacity(dst, c) - (dst.stock().get(c) + ctx.led.stock[si][c]));
                 double u = Math.min(q, room);
                 if (u <= 1e-9) continue;
+                u = Ledger.whole(u);
+                if (u <= 0) continue;
                 ctx.led.stock[si][c] += u; st = st.plus(c, -u);
                 here.append(here.isEmpty() ? "" : ", ").append(Ledger.q(u)).append(' ').append(ctx.com.id(c));
             }
