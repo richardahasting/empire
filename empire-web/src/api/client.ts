@@ -70,6 +70,10 @@ export interface CountryView {
   levels: Levels; inSanctuary: boolean; bankrupt: boolean; commodityIds: string[]; sectors: SectorView[]; otherCountryNames: string[];
   /** Your ships (issue #56). */
   ships: ShipView[];
+  /** Standing depot-to-depot rail runs; empty cargo means "keep the far end's thresholds topped up" (issue #70). */
+  railLanes: { from: Coord; to: Coord; fromRelative: Coord; toRelative: Coord; cargo: string[] }[];
+  /** Trains stopped part-way along a line (issue #70). */
+  trains: { at: Coord; relative: Coord; commodity: string; qty: number; dest: Coord; destRelative: Coord }[];
 }
 export interface CountrySeat { id: number; name: string; taken: boolean }
 export interface GameSummary {

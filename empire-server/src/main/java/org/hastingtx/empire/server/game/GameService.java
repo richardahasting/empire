@@ -378,6 +378,7 @@ public class GameService {
             case Command.Move m -> m.from();
             case Command.Explore e -> e.from();
             case Command.RailShip r -> r.from();
+            case Command.RailLane r -> r.from();
             case Command.BuildShip b -> b.harbor();
             case Command.Sail s -> null;
             case Command.Load l -> null;

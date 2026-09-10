@@ -33,6 +33,7 @@ public class WorldRepository {
         writeShips(gameId, w, com);
         writeContacts(gameId, w);
         writeSeen(gameId, w);
+        writeRailLanes(gameId, w, com);
         jdbc.update("UPDATE game SET update_number = ? WHERE id = ?", w.updateNumber(), gameId);
     }
 
@@ -50,8 +51,11 @@ public class WorldRepository {
         if (!after.ships().equals(before.ships()) || after.nextShipId() != before.nextShipId()) writeShips(gameId, after, com);
         if (!after.contacts().equals(before.contacts())) writeContacts(gameId, after);
         if (!after.seen().equals(before.seen())) writeSeen(gameId, after);
+        if (!after.railLanes().equals(before.railLanes())) writeRailLanes(gameId, after, com);
         jdbc.update("UPDATE game SET update_number = ? WHERE id = ?", after.updateNumber(), gameId);
     }
+
+    private static String laneKey(int owner, int fx, int fy, int tx, int ty) { return owner + ":" + fx + "," + fy + ">" + tx + "," + ty; }
 
     static boolean same(Sector a, Sector b) {
         return a.owner() == b.owner() && a.designation().equals(b.designation()) && a.efficiency() == b.efficiency() && a.mobility() == b.mobility()
@@ -157,6 +161,21 @@ public class WorldRepository {
         jdbc.batchUpdate("INSERT INTO sector_seen (game_id, owner, x, y, terrain, sector_owner, designation, seen_update) VALUES (?,?,?,?,?,?,?,?)", rows);
     }
 
+    /** A handful of standing lanes; rewritten whole when any of them changes (issue #70). */
+    private void writeRailLanes(long gameId, World w, Commodities com) {
+        jdbc.update("DELETE FROM rail_lane_cargo WHERE game_id = ?", gameId);
+        jdbc.update("DELETE FROM rail_lane WHERE game_id = ?", gameId);
+        if (w.railLanes().isEmpty()) return;
+        List<Object[]> lanes = new ArrayList<>(), cargo = new ArrayList<>();
+        for (RailLane l : w.railLanes()) {
+            lanes.add(new Object[] {gameId, l.owner(), l.from().x(), l.from().y(), l.to().x(), l.to().y()});
+            for (int k = 0; k < l.cargo().size(); k++)
+                cargo.add(new Object[] {gameId, l.owner(), l.from().x(), l.from().y(), l.to().x(), l.to().y(), com.id(l.cargo().get(k)), k});
+        }
+        jdbc.batchUpdate("INSERT INTO rail_lane (game_id, owner, from_x, from_y, to_x, to_y) VALUES (?,?,?,?,?,?)", lanes);
+        if (!cargo.isEmpty()) jdbc.batchUpdate("INSERT INTO rail_lane_cargo (game_id, owner, from_x, from_y, to_x, to_y, commodity, ordinal) VALUES (?,?,?,?,?,?,?,?)", cargo);
+    }
+
     /** Few contacts, so they are rewritten whenever any of them changed. */
     private void writeContacts(long gameId, World w) {
         jdbc.update("DELETE FROM contact WHERE game_id = ?", gameId);
@@ -255,6 +274,15 @@ public class WorldRepository {
         List<SeenSector> seen = jdbc.query("SELECT * FROM sector_seen WHERE game_id = ? ORDER BY owner, y, x", (rs, i) ->
                 new SeenSector(rs.getInt("owner"), new Coord(rs.getInt("x"), rs.getInt("y")), Terrain.of(rs.getString("terrain")),
                         rs.getInt("sector_owner"), rs.getString("designation"), rs.getLong("seen_update")), g.id());
-        return new World(g.width(), g.height(), g.wrapX(), g.wrapY(), list, countries, moves, g.updateNumber(), rail, ships, nextShip == null ? 1 : nextShip, contacts, seen);
+        Map<String, List<Integer>> laneCargo = new LinkedHashMap<>();
+        jdbc.query("SELECT * FROM rail_lane_cargo WHERE game_id = ? ORDER BY owner, from_y, from_x, to_y, to_x, ordinal", rs -> {
+            laneCargo.computeIfAbsent(laneKey(rs.getInt("owner"), rs.getInt("from_x"), rs.getInt("from_y"), rs.getInt("to_x"), rs.getInt("to_y")), k -> new ArrayList<>())
+                     .add(com.index(rs.getString("commodity")));
+        }, g.id());
+        List<RailLane> lanes = jdbc.query("SELECT * FROM rail_lane WHERE game_id = ? ORDER BY owner, from_y, from_x, to_y, to_x", (rs, i) -> {
+            int o = rs.getInt("owner"), fx = rs.getInt("from_x"), fy = rs.getInt("from_y"), tx = rs.getInt("to_x"), ty = rs.getInt("to_y");
+            return new RailLane(o, new Coord(fx, fy), new Coord(tx, ty), laneCargo.getOrDefault(laneKey(o, fx, fy, tx, ty), List.of()));
+        }, g.id());
+        return new World(g.width(), g.height(), g.wrapX(), g.wrapY(), list, countries, moves, g.updateNumber(), rail, ships, nextShip == null ? 1 : nextShip, contacts, seen, lanes);
     }
 }

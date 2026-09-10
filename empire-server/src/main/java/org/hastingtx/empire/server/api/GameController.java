@@ -91,6 +91,7 @@ public class GameController {
                 case "sail" -> new Command.Sail(needShip(), Boolean.TRUE.equals(clear) || x2 == null ? null : at(x2, y2));
                 case "load" -> new Command.Load(needShip(), commodity, amount == null ? 0 : amount);
                 case "unload" -> new Command.Unload(needShip(), commodity, amount == null ? 0 : amount);
+                case "rail_lane", "raillane" -> new Command.RailLane(at(x, y), at(x2, y2), cargo == null ? List.of() : cargo, Boolean.TRUE.equals(clear));
                 case "lane" -> new Command.Lane(needShip(), Boolean.TRUE.equals(clear) || x == null ? null : at(x, y), x2 == null ? null : at(x2, y2), cargo == null ? List.of() : cargo);
                 case "scrap" -> new Command.Scrap(needShip());
                 case "fish" -> new Command.Fish(needShip(), x == null || y == null ? null : at(x, y), Boolean.TRUE.equals(clear));

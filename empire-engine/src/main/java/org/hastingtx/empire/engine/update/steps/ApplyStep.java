@@ -65,7 +65,7 @@ public final class ApplyStep {
             countries.add(new Country(c.id(), c.name(), c.capital(), c.cash() + led.cash[c.id()], c.btu() + led.btu[c.id()], lv,
                     c.handicap(), c.inSanctuary(), led.bankruptNext[c.id()], led.plagueLeft[c.id()]));
         }
-        World out = new World(snap.width(), snap.height(), snap.wrapX(), snap.wrapY(), next, countries, List.of(), snap.updateNumber() + 1, List.of(), ctx.ships, snap.nextShipId(), ctx.contacts, ctx.seen);
+        World out = new World(snap.width(), snap.height(), snap.wrapX(), snap.wrapY(), next, countries, List.of(), snap.updateNumber() + 1, List.of(), ctx.ships, snap.nextShipId(), ctx.contacts, ctx.seen, snap.railLanes());   // lanes are standing orders: they survive the update
         checkConservation(ctx, out, rebuilt, nRebuilt);
         // the last line of a sector's story: what it wanted and did not get
         for (var e : led.shortages.entrySet()) {
@@ -162,6 +162,12 @@ public final class ApplyStep {
             for (Contact ct : w.contacts()) {
                 sb.append("K").append(ct.owner()).append('|').append(ct.shipId()).append('|').append(ct.targetOwner()).append('|').append(ct.cls())
                   .append('|').append(ct.at()).append('|').append(ct.seenUpdate()).append('|').append(f(ct.confidence())).append('\n');
+                md.update(sb.toString().getBytes(StandardCharsets.UTF_8)); sb.setLength(0);
+            }
+            for (RailLane rl : w.railLanes()) {
+                sb.append("L").append(rl.owner()).append('|').append(rl.from()).append('>').append(rl.to()).append('|');
+                for (int c : rl.cargo()) sb.append(c).append(',');
+                sb.append('\n');
                 md.update(sb.toString().getBytes(StandardCharsets.UTF_8)); sb.setLength(0);
             }
             for (SeenSector ss : w.seen()) {

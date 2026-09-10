@@ -9,7 +9,8 @@ import org.hastingtx.empire.engine.model.Coord;
 public sealed interface Command permits
         Command.BreakSanctuary, Command.Designate, Command.Threshold, Command.Distribute,
         Command.Move, Command.Explore, Command.BuildRoad, Command.BuildRail, Command.RailShip, Command.Deliver,
-        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish {
+        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish,
+        Command.RailLane {
 
     String verb();
 
@@ -37,6 +38,11 @@ public sealed interface Command permits
 
     /** Ship by rail between two depots. Connectivity is checked now; the train runs at the update. */
     record RailShip(Coord from, Coord to, String commodity, double qty) implements Command { public String verb() { return "rail_ship"; } }
+    /**
+     * A standing depot-to-depot run (issue #70). An empty {@code cargo} keeps the far end's thresholds
+     * topped up; a list pushes those commodities. {@code clear} cancels the lane.
+     */
+    record RailLane(Coord from, Coord to, java.util.List<String> cargo, boolean clear) implements Command { public String verb() { return "rail_lane"; } }
 
     // ---- ships (issue #56) ----
     /** Lay a hull of {@code cls} in your harbour at {@code harbor}; materials and cash are paid now. */

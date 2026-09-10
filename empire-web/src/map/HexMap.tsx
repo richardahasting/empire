@@ -186,6 +186,32 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
       if (s.roadLevel > 0 || s.roadTarget > 0) drawRoadGauge(ctx, cx, cy, l.size, s.roadLevel, s.roadTarget, p);
       if (Object.keys(s.held).length > 0 && l.size >= 8) { ctx.fillStyle = p.muted; ctx.beginPath(); ctx.arc(cx + l.size * 0.45, cy - l.size * 0.45, Math.max(2, l.size * 0.15), 0, Math.PI * 2); ctx.fill(); }
     }
+    // standing rail lanes (issue #70): a dashed thread between the two depots, so a player can see the
+    // routine traffic they set up without having to remember it. The train's real route follows the
+    // track; this says only that the two ends are joined and something runs between them.
+    if (view.railLanes?.length && l.size >= 6) {
+      ctx.save();
+      ctx.strokeStyle = p.accent; ctx.globalAlpha = 0.5;
+      ctx.lineWidth = Math.max(1, l.size * 0.09); ctx.setLineDash([l.size * 0.4, l.size * 0.35]); ctx.lineCap = "round";
+      for (const lane of view.railLanes) {
+        const f = toDisplay(lane.from), t = toDisplay(lane.to);
+        const a = hexCenter(f.x, f.y, l), b = hexCenter(t.x, t.y, l);
+        ctx.beginPath(); ctx.moveTo(a.cx, a.cy); ctx.lineTo(b.cx, b.cy); ctx.stroke();
+      }
+      ctx.restore();
+    }
+    // trains on the line (issue #70): a boxcar where one stopped, pointing at where it is bound
+    if (view.trains?.length && l.size >= 8) {
+      for (const t of view.trains) {
+        const d = toDisplay(t.at); const { cx, cy } = hexCenter(d.x, d.y, l);
+        const wBox = Math.max(6, l.size * 0.5), hBox = Math.max(4, l.size * 0.3);
+        ctx.fillStyle = p.background; ctx.strokeStyle = p.accent; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.rect(cx - wBox / 2, cy - hBox / 2, wBox, hBox); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = p.accent;
+        ctx.beginPath(); ctx.arc(cx - wBox * 0.25, cy + hBox / 2, Math.max(1, l.size * 0.06), 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cx + wBox * 0.25, cy + hBox / 2, Math.max(1, l.size * 0.06), 0, Math.PI * 2); ctx.fill();
+      }
+    }
     // ships (issue #56): a small disc with the class glyph at the hex's lower right; several in one hex fan out
     if (view.ships.length && l.size >= 8) {
       const perHex = new Map<string, number>();

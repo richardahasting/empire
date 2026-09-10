@@ -57,7 +57,7 @@ class SectorSelectorTest {
                 cap.roadLevel(), cap.roadTarget(), cap.railLevel(), cap.railTarget(), cap.stock(), cap.thresholds(), cap.distCenter(), cap.held(), cap.resources(), Map.of(), false, null,
                 cap.remembered(), cap.seenUpdate(), cap.age());
         CountryView v2 = new CountryView(V.countryId(), V.name(), V.updateNumber(), V.capital(), V.wrapX(), V.wrapY(), V.width(), V.height(), V.cash(), V.btu(), V.levels(), V.handicap(),
-                V.inSanctuary(), V.bankrupt(), V.commodityIds(), List.of(wh), V.otherCountryNames(), List.of(), List.of());
+                V.inSanctuary(), V.bankrupt(), V.commodityIds(), List.of(wh), V.otherCountryNames(), List.of(), List.of(), List.of(), List.of());
         assertThat(SectorSelector.massThreshold(v2, CFG, cap.at(), "food", 400)).isEqualTo(4000.0);
         assertThat(SectorSelector.massThreshold(v2, CFG, cap.at(), "hcm", 400)).isEqualTo(4000.0);
         assertThat(SectorSelector.massThreshold(v2, CFG, cap.at(), "civ", 700)).isEqualTo(700.0);   // people are never scaled

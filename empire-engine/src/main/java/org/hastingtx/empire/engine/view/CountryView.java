@@ -34,7 +34,11 @@ public record CountryView(
         /** Your ships (issue #56). */
         List<ShipView> ships,
         /** What your radar and lookouts have seen of other people's ships (issue #75). */
-        List<ContactView> contacts) {
+        List<ContactView> contacts,
+        /** Your standing depot-to-depot rail runs (issue #70). */
+        List<RailLaneView> railLanes,
+        /** Trains of yours stopped on the line, part-way to somewhere (issue #70). */
+        List<TrainView> trains) {
 
     public record ShipView(long id, String cls, String name, Coord at, Coord relative, double efficiency, Map<String, Double> stock, double load, double hold,
                            Coord dest, Coord destRelative, LaneView lane, String note, boolean docked, double tech, int hexesPerUpdate, String mission, Coord homeRelative) {}
@@ -46,6 +50,15 @@ public record CountryView(
     public record ContactView(Coord at, Coord relative, String band, long age, double confidence, String cls, String ownerName) {}
 
     public record LaneView(Coord from, Coord to, Coord fromRelative, Coord toRelative, List<String> cargo, boolean outbound) {}
+
+    /**
+     * A standing rail run. An empty {@code cargo} means the lane keeps {@code to}'s thresholds topped
+     * up rather than pushing a named list (issue #70).
+     */
+    public record RailLaneView(Coord from, Coord to, Coord fromRelative, Coord toRelative, List<String> cargo) {}
+
+    /** A train part-way along its line: what it carries, where it stopped, where it is bound. */
+    public record TrainView(Coord at, Coord relative, String commodity, double qty, Coord dest, Coord destRelative) {}
 
     /**
      * {@code full} is true for owned sectors; adjacent unowned sectors expose terrain and owner only.
@@ -154,8 +167,21 @@ public record CountryView(
             String band = cfg.detection().band(ct.confidence());
             contacts.add(reveal(w, cfg, c.capital(), ct, band, w.updateNumber() - ct.seenUpdate()));
         }
+        // standing rail runs and the trains currently on them (issue #70)
+        List<RailLaneView> railLanes = new ArrayList<>();
+        for (RailLane l : w.railLanesOf(countryId))
+            railLanes.add(new RailLaneView(l.from(), l.to(), relative(w, c.capital(), l.from()), relative(w, c.capital(), l.to()),
+                    l.cargo().stream().map(com::id).toList()));
+        List<TrainView> trains = new ArrayList<>();
+        for (Coord at : visible) {
+            for (HeldParcel p : w.sector(at).held()) {
+                if (!p.rail() || p.owner() != countryId) continue;
+                trains.add(new TrainView(at, relative(w, c.capital(), at), com.id(p.commodity()), p.qty(), p.dest(), relative(w, c.capital(), p.dest())));
+            }
+        }
+
         return new CountryView(countryId, c.name(), w.updateNumber(), c.capital(), w.wrapX(), w.wrapY(), w.width(), w.height(), c.cash(), c.btu(), c.levels(), c.handicap(),
-                c.inSanctuary(), c.bankrupt(), ids, views, others, ships, contacts);
+                c.inSanctuary(), c.bankrupt(), ids, views, others, ships, contacts, railLanes, trains);
     }
 
     /**

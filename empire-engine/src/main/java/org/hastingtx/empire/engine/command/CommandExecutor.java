@@ -44,6 +44,7 @@ public final class CommandExecutor {
             case Command.BuildRoad br -> buildRoad(w, c, br);
             case Command.BuildRail bl -> buildRail(w, c, bl);
             case Command.RailShip rs -> railShip(w, c, rs);
+            case Command.RailLane rl -> railLane(w, c, rl);
         };
         if (!r.ok()) return r;
         World next = r.world();
@@ -414,6 +415,38 @@ public final class CommandExecutor {
         java.util.List<org.hastingtx.empire.engine.model.RailOrder> next = new java.util.ArrayList<>(w.pendingRail());
         next.add(new org.hastingtx.empire.engine.model.RailOrder(c.id(), r.from(), r.to(), ci, r.qty(), w.updateNumber()));
         return new CommandResult(w.withPendingRail(next), null, 0, "train scheduled: " + fmt(r.qty()) + " " + r.commodity() + " " + r.from() + " → " + r.to() + " at the update");
+    }
+
+    /**
+     * A standing rail run (issue #70). Validated the way a one-off train is — both ends working depots,
+     * a line between them now — so a lane that could never run is refused at the counter rather than
+     * failing quietly every update. The line can still be cut later; that is reported as it happens.
+     */
+    private CommandResult railLane(World w, Country c, Command.RailLane r) {
+        List<org.hastingtx.empire.engine.model.RailLane> lanes = new ArrayList<>(w.railLanes());
+        if (r.clear()) {
+            boolean removed = lanes.removeIf(l -> l.sameRoute(c.id(), r.from(), r.to()));
+            return new CommandResult(w.withRailLanes(lanes), null, 0,
+                    removed ? "rail lane " + r.from() + " → " + r.to() + " cancelled" : "no rail lane " + r.from() + " → " + r.to() + " was running");
+        }
+        if (owned(w, c, r.from()) == null) return CommandResult.fail(w, "you do not own " + r.from());
+        if (owned(w, c, r.to()) == null) return CommandResult.fail(w, "you do not own " + r.to());
+        if (r.from().equals(r.to())) return CommandResult.fail(w, "a lane needs two different depots");
+        org.hastingtx.empire.engine.update.Ctx ctx = new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0);
+        if (!ctx.isDepot(w.index(r.from()))) return CommandResult.fail(w, r.from() + " is not a working depot (needs the depot designation at 60%+ and rail of at least " + fmt(cfg.infrastructure().rail().minLevelToCarry()) + ")");
+        if (!ctx.isDepot(w.index(r.to()))) return CommandResult.fail(w, r.to() + " is not a working depot");
+        if (ctx.railPath(r.from(), r.to(), c.id()) == null) return CommandResult.fail(w, "no rail line from " + r.from() + " to " + r.to());
+        List<Integer> cargo = new ArrayList<>();
+        if (r.cargo() != null) for (String k : r.cargo()) {
+            if (!com.has(k)) return CommandResult.fail(w, "unknown commodity: " + k);
+            cargo.add(com.index(k));
+        }
+        lanes.removeIf(l -> l.sameRoute(c.id(), r.from(), r.to()));
+        lanes.add(new org.hastingtx.empire.engine.model.RailLane(c.id(), r.from(), r.to(), cargo));
+        String what = cargo.isEmpty()
+                ? "keeping " + r.to() + " topped up to its thresholds"
+                : "carrying " + String.join(", ", r.cargo());
+        return new CommandResult(w.withRailLanes(lanes), null, 0, "rail lane " + r.from() + " → " + r.to() + ", " + what + ", every update");
     }
 
     private CommandResult explore(World w, Country c, Command.Explore e) {

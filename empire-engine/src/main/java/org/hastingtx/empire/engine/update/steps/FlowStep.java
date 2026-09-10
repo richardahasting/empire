@@ -292,6 +292,29 @@ public final class FlowStep implements Step {
         var rail = ctx.cfg.infrastructure().rail();
         record Train(int owner, int commodity, double qty, int originIdx, Coord dest, List<Coord> path, HeldParcel from) {}
         List<Train> trains = new ArrayList<>();
+        // standing lanes first, so a one-off order the player typed this turn competes on equal terms
+        // with the routine traffic rather than being crowded out by it (issue #70)
+        for (var lane : ctx.snap.railLanes()) {
+            List<Coord> path = ctx.railPath(lane.from(), lane.to(), lane.owner());
+            if (path == null) {
+                ctx.led().event("rail_severed", lane.owner(), lane.from(), "the lane from " + lane.from() + " to " + lane.to() + " has no line; nothing ran", 0);
+                continue;
+            }
+            int fi = ctx.idx(lane.from()), ti = ctx.idx(lane.to());
+            Sector src = ctx.sector(fi), dst = ctx.sector(ti);
+            for (int c : laneCargo(ctx, lane, dst)) {
+                // what the far end wants: its threshold shortfall if it set one, otherwise its free room
+                double dstPost = dst.stock().get(c) + ctx.led().st(ti, c);
+                double want = dst.hasThreshold(c) ? dst.threshold(c) - dstPost
+                                                  : Math.floor(ctx.capacity(dst, c)) - dstPost;
+                // what this end can spare: everything above its own threshold, which is what a threshold is for
+                double srcPost = src.stock().get(c) + ctx.led().st(fi, c);
+                double spare = srcPost - (src.hasThreshold(c) ? src.threshold(c) : 0);
+                double qty = Math.floor(Math.min(want, spare));
+                if (qty < 1) continue;
+                trains.add(new Train(lane.owner(), c, qty, fi, lane.to(), path, null));
+            }
+        }
         // new orders
         for (var o : ctx.snap.pendingRail()) {
             List<Coord> path = ctx.railPath(o.from(), o.to(), o.owner());
@@ -396,6 +419,18 @@ public final class FlowStep implements Step {
      * parcels and has none now still needs an explicit empty list; one that never had any and has none
      * stays null.
      */
+    /**
+     * What a lane carries this update. A named list is exactly that list; an empty one means the far
+     * end's thresholds decide, which is the whole point of a lane between depots — the destination says
+     * what it wants with {@code thresh} and the network fills it without anyone ordering a train.
+     */
+    private static List<Integer> laneCargo(Ctx ctx, org.hastingtx.empire.engine.model.RailLane lane, Sector dst) {
+        if (!lane.feedsThresholds()) return lane.cargo();
+        List<Integer> out = new ArrayList<>();
+        for (int c = 0; c < ctx.com.size(); c++) if (dst.hasThreshold(c)) out.add(c);
+        return out;
+    }
+
     private static void carryHeld(Ctx ctx, Map<Integer, List<HeldParcel>> newHeld) {
         int total = 0;
         for (var e : newHeld.entrySet()) { ctx.led().heldNext[e.getKey()] = e.getValue(); total += e.getValue().size(); }
