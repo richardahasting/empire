@@ -892,6 +892,10 @@ options:
   sanctuary: true
   interest: true
   demand_update: false      # KNOWN: original allowed player-demanded updates; off by default
+  # KNOWN (Richard 2026-09-09, issue #64): the original kept a map of everything ever seen. Without it
+  # the fog closes behind a ship and a coastline you sailed past vanishes from your chart. What is
+  # remembered is only what a look would tell you — terrain, flag, designation — never stock or roads.
+  map_memory: true
   # NEW (Richard 2026-09-09, issue #82): hash the whole world into the update log every update.
   # Nothing reads it and it costs ~9.5 s an update on a 1024x1024 map, so it is off. The world is
   # saved every update regardless, so the hash can be recomputed from any stored state on demand.

@@ -93,7 +93,12 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
       const { cx, cy } = hexCenter(dx, dy, l);
       hexPath(ctx, cx, cy, l.size - 0.5);
       if (!s) { ctx.fillStyle = p.grid; ctx.globalAlpha = 0.25; ctx.fill(); ctx.globalAlpha = 1; continue; }
+      // Remembered ground is drawn faint, and fainter the longer since anyone looked (issue #64):
+      // it is on the chart because we sailed past once, not because we can see it.
+      const memory = s.remembered ? Math.max(0.18, 0.5 - 0.02 * s.age) : 1;
+      ctx.globalAlpha = memory;
       ctx.fillStyle = p.terrain[s.terrain] ?? p.grid; ctx.fill();
+      ctx.globalAlpha = 1;
       // overlay by layer
       let overlay: string | null = null, alpha = 0.55;
       if (s.full) {
@@ -107,8 +112,8 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
       } else if (s.owner >= 0) { overlay = p.owner(s.owner, false); alpha = 0.45; }
       else if (layer === "rail" && s.terrain === "ocean" && (s.railLevel > 0 || s.railTarget > 0)) { overlay = p.accent; alpha = 0.1 + 0.6 * (s.railLevel / 100); }   // a bridge (issue #60)
       else if (s.terrain === "ocean" && s.resources && s.resources.fertility > 0) { overlay = p.accent; alpha = 0.04 + 0.22 * (s.resources.fertility / 100); }   // fishing grounds (issue #56)
-      if (overlay) { ctx.globalAlpha = alpha; ctx.fillStyle = overlay; ctx.fill(); ctx.globalAlpha = 1; }
-      ctx.strokeStyle = p.grid; ctx.lineWidth = 1; ctx.stroke();
+      if (overlay) { ctx.globalAlpha = alpha * memory; ctx.fillStyle = overlay; ctx.fill(); ctx.globalAlpha = 1; }
+      ctx.strokeStyle = p.grid; ctx.lineWidth = 1; ctx.globalAlpha = memory; ctx.stroke(); ctx.globalAlpha = 1;
     }
     if (layer === "roads") {
       // links between adjacent sectors that both have road: a network you can read at a glance
