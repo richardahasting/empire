@@ -115,6 +115,11 @@ public final class ApplyStep {
             for (Ship sh : ctx.snap.ships()) before[fuelIdx] += (long) sh.fuel();
             for (Ship sh : out.ships()) after[fuelIdx] += (long) sh.fuel();
         }
+        // A crew is people who left a sector and are standing on a deck (issue #66) — still in the world.
+        if (ctx.cfg.units().ships() != null && ctx.cfg.units().ships().crews()) {
+            for (Ship sh : ctx.snap.ships()) before[ShipStep.crewCommodity(ctx, ctx.cfg.units().ships().shipClass(sh.cls()))] += (long) sh.crew();
+            for (Ship sh : out.ships()) after[ShipStep.crewCommodity(ctx, ctx.cfg.units().ships().shipClass(sh.cls()))] += (long) sh.crew();
+        }
         Ledger l = ctx.led();
         for (int c = 0; c < nCom; c++) {
             long expected = before[c] + l.produced[c] + l.grown[c] - l.consumed[c] - l.destroyed[c];

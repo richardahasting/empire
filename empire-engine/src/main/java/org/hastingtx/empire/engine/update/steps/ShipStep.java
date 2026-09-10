@@ -92,6 +92,8 @@ public final class ShipStep implements Step {
             // refuel (issue #65): a harbour pumps from its own stock, a tanker from its hold at sea
             if (sc.fuel() && docked) ship = refuel(ctx, ship, cls, hi, note);
             else if (sc.fuel()) ship = refuelAtSea(ctx, ship, cls, out, note);
+            // sign on a crew (issue #66): only a harbour can, and only from the people who are there
+            if (sc.crews() && docked) ship = muster(ctx, ship, cls, hi, note);
             // sail
             if (ship.dest() != null && !ship.dest().equals(ship.at())) {
                 List<Coord> path = SeaRoutes.path(ctx.snap, ctx.cfg, ship.owner(), ship.at(), ship.dest());
@@ -99,11 +101,18 @@ public final class ShipStep implements Step {
                 else {
                     int range = sc.range(cls, ship.tech(), ship.efficiency());
                     int hops = Math.min(range, path.size() - 1);
+                    // short-handed is not going anywhere (issue #66)
+                    if (sc.crews() && ship.crew() < cls.crewOr0()) {
+                        sep(note).append("short-handed: ").append(Ledger.q(ship.crew())).append(" of ").append(Ledger.q(cls.crewOr0()))
+                                 .append(' ').append(ctx.com.id(crewCommodity(ctx, cls))).append(" aboard");
+                        hops = 0;
+                    }
                     // a dry tank holds the ship where it is (issue #65)
                     double perHex = sc.fuel() ? cls.fuelPerHexOr0() : 0;
                     int fuelled = perHex > 0 ? (int) Math.floor(ship.fuel() / perHex) : hops;
                     if (perHex > 0 && fuelled < hops) hops = Math.max(0, fuelled);
-                    if (hops <= 0 && perHex > 0 && ship.fuel() < perHex) sep(note).append("out of fuel, holding at ").append(ship.at());
+                    if (hops <= 0 && sc.crews() && ship.crew() < cls.crewOr0()) { /* already said so */ }
+                    else if (hops <= 0 && perHex > 0 && ship.fuel() < perHex) sep(note).append("out of fuel, holding at ").append(ship.at());
                     else if (hops <= 0) sep(note).append("too unfit to sail (").append(Ledger.q(ship.efficiency())).append("%)");
                     else {
                         Coord to = path.get(hops);
@@ -166,6 +175,30 @@ public final class ShipStep implements Step {
             return ship.withFuel(ship.fuel() + give);
         }
         return ship;
+    }
+
+    /** Civilians on a merchantman, military on a warship (issue #66). */
+    static int crewCommodity(Ctx ctx, UnitsCfg.ShipClassCfg cls) {
+        return ctx.cfg.units().ships().crewIsCivilian(cls) ? ctx.com.civ : ctx.com.mil;
+    }
+
+    /**
+     * Sign on whoever is missing, from the people standing in the harbour (issue #66). A crew is not
+     * cargo — it does not eat into the hold and it does not get unloaded with the catch — but it is
+     * people, counted in conservation like any other, and it goes ashore when the hull is scrapped.
+     *
+     * <p>They come out of the harbour's own population, so a fleet competes with a factory for the same
+     * civilians. That is the cost the feature exists to impose.
+     */
+    private static Ship muster(Ctx ctx, Ship ship, UnitsCfg.ShipClassCfg cls, int hi, StringBuilder note) {
+        double want = cls.crewOr0() - ship.crew();
+        if (want < 1) return ship;
+        int who = crewCommodity(ctx, cls);
+        double have = ctx.sector(hi).stock().get(who) + ctx.led().st(hi, who);
+        double got = ctx.led().toShip(hi, who, Math.min(want, Math.max(0, have)));
+        if (got <= 0) { sep(note).append("no ").append(ctx.com.id(who)).append(" in the harbour to crew her"); return ship; }
+        sep(note).append("signed on ").append(Ledger.q(got)).append(' ').append(ctx.com.id(who));
+        return ship.withCrew(ship.crew() + got);
     }
 
     private static StringBuilder sep(StringBuilder sb) { if (!sb.isEmpty()) sb.append("; "); return sb; }

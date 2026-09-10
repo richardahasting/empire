@@ -34,8 +34,10 @@ class ShipFuelTest {
                 Map.of("civ", 500.0, "food", 300.0, "lcm", 500.0, "pet", harbourPet), Map.of());
     }
 
+    /** Fully crewed, so what these tests measure is fuel and nothing else (crews are issue #66). */
     private static World withShip(World w, Coord at, double fuel) {
-        Ship s = new Ship(w.nextShipId(), 0, "cargo_ship", "", at, 100, Stocks.zero(COM.size()), null, null, 0, "", 0, null, null, fuel);
+        double crew = CFG.units().ships().shipClass("cargo_ship").crewOr0();
+        Ship s = new Ship(w.nextShipId(), 0, "cargo_ship", "", at, 100, Stocks.zero(COM.size()), null, null, 0, "", 0, null, null, fuel, crew);
         return w.withShips(List.of(s), s.id() + 1);
     }
 
@@ -107,8 +109,10 @@ class ShipFuelTest {
         Coord meet = Hex.stepRaw(CAP, 0, 3);
         World w = world(0);
         // a tanker with petrol in its hold, and a dry cargo ship alongside
-        Ship tanker = new Ship(1, 0, "tanker", "", meet, 100, Stocks.of(new double[COM.size()]).with(PET, 500), null, null, 0, "", 0, null, null, 200);
-        Ship dry = new Ship(2, 0, "cargo_ship", "", meet, 100, Stocks.zero(COM.size()), null, null, 0, "", 0, null, null, 0);
+        Ship tanker = new Ship(1, 0, "tanker", "", meet, 100, Stocks.of(new double[COM.size()]).with(PET, 500), null, null, 0, "", 0, null, null, 200,
+                CFG.units().ships().shipClass("tanker").crewOr0());
+        Ship dry = new Ship(2, 0, "cargo_ship", "", meet, 100, Stocks.zero(COM.size()), null, null, 0, "", 0, null, null, 0,
+                CFG.units().ships().shipClass("cargo_ship").crewOr0());
         w = w.withShips(List.of(tanker, dry), 3);
 
         World after = Update.run(w, CFG, 3).next();

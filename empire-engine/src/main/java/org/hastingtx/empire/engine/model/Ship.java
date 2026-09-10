@@ -10,16 +10,24 @@ import java.util.List;
  * {@code mission} "fish" (Richard 2026-09-09): wander the grounds near {@code home}, fish, land the catch, repeat.
  * {@code fuel} is what is in the tank (issue #65) — petrol drawn from a harbour or a tanker, burned by
  * the hex. It is not cargo: it is counted in conservation like stock, but a hold full of petrol is
- * freight and a full tank is not.
+ * freight and a full tank is not. {@code crew} is the people signed on (issue #66) — civilians on a
+ * merchantman, military on a warship — counted in conservation the same way, and put ashore when she is
+ * scrapped.
  */
-public record Ship(long id, int owner, String cls, String name, Coord at, double efficiency, Stocks stock, Coord dest, Lane lane, long built, String note, double tech, String mission, Coord home, double fuel) {
+public record Ship(long id, int owner, String cls, String name, Coord at, double efficiency, Stocks stock, Coord dest, Lane lane, long built, String note, double tech, String mission, Coord home, double fuel, double crew) {
 
-    /** A hull with a dry tank, for callers that predate fuel (issue #65). */
+    /** A hull with a dry tank and nobody aboard, for callers that predate fuel and crews (issues #65, #66). */
     public Ship(long id, int owner, String cls, String name, Coord at, double efficiency, Stocks stock, Coord dest, Lane lane, long built, String note, double tech, String mission, Coord home) {
-        this(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, mission, home, 0);
+        this(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, mission, home, 0, 0);
     }
 
-    public Ship withFuel(double f) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, mission, home, Math.max(0, f)); }
+    /** A hull with a tank but no crew — the fuel tests and fixtures that predate #66. */
+    public Ship(long id, int owner, String cls, String name, Coord at, double efficiency, Stocks stock, Coord dest, Lane lane, long built, String note, double tech, String mission, Coord home, double fuel) {
+        this(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, mission, home, fuel, 0);
+    }
+
+    public Ship withFuel(double f) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, mission, home, Math.max(0, f), crew); }
+    public Ship withCrew(double c) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, mission, home, fuel, Math.max(0, c)); }
     public static final String FISH = "fish";
 
     /** Shuttle between two harbours: load {@code cargo} (commodity indices; empty = everything it may carry) above the harbour's thresholds at {@code from}, unload all at {@code to}. */
@@ -29,14 +37,14 @@ public record Ship(long id, int owner, String cls, String name, Coord at, double
         public Coord target() { return outbound ? to : from; }
     }
 
-    public Ship withAt(Coord c) { return new Ship(id, owner, cls, name, c, efficiency, stock, dest, lane, built, note, tech, mission, home, fuel); }
-    public Ship withEfficiency(double e) { return new Ship(id, owner, cls, name, at, e, stock, dest, lane, built, note, tech, mission, home, fuel); }
-    public Ship withStock(Stocks s) { return new Ship(id, owner, cls, name, at, efficiency, s, dest, lane, built, note, tech, mission, home, fuel); }
-    public Ship withDest(Coord d) { return new Ship(id, owner, cls, name, at, efficiency, stock, d, lane, built, note, tech, mission, home, fuel); }
-    public Ship withLane(Lane l) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, l, built, note, tech, mission, home, fuel); }
-    public Ship withNote(String n) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, n, tech, mission, home, fuel); }
-    public Ship withName(String n) { return new Ship(id, owner, cls, n, at, efficiency, stock, dest, lane, built, note, tech, mission, home, fuel); }
-    public Ship withMission(String m, Coord h) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, m, h, fuel); }
+    public Ship withAt(Coord c) { return new Ship(id, owner, cls, name, c, efficiency, stock, dest, lane, built, note, tech, mission, home, fuel, crew); }
+    public Ship withEfficiency(double e) { return new Ship(id, owner, cls, name, at, e, stock, dest, lane, built, note, tech, mission, home, fuel, crew); }
+    public Ship withStock(Stocks s) { return new Ship(id, owner, cls, name, at, efficiency, s, dest, lane, built, note, tech, mission, home, fuel, crew); }
+    public Ship withDest(Coord d) { return new Ship(id, owner, cls, name, at, efficiency, stock, d, lane, built, note, tech, mission, home, fuel, crew); }
+    public Ship withLane(Lane l) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, l, built, note, tech, mission, home, fuel, crew); }
+    public Ship withNote(String n) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, n, tech, mission, home, fuel, crew); }
+    public Ship withName(String n) { return new Ship(id, owner, cls, n, at, efficiency, stock, dest, lane, built, note, tech, mission, home, fuel, crew); }
+    public Ship withMission(String m, Coord h) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, m, h, fuel, crew); }
     public boolean fishing() { return FISH.equals(mission); }
     public double load() { return stock.total(); }
 }

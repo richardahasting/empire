@@ -61,6 +61,8 @@ export interface ShipView {
   dest: Coord | null; destRelative: Coord | null; lane: { from: Coord; to: Coord; fromRelative: Coord; toRelative: Coord; cargo: string[]; outbound: boolean } | null;
   /** Petrol in the tank and what it holds (issue #65); both 0 when the game has fuel off. */
   fuel: number; tank: number;
+  /** Who is aboard and how many she needs (issue #66); both 0 when crews are off. */
+  crew: number; crewNeeded: number;
   note: string; docked: boolean;
   /** Tech it was laid at, and how many sea hexes it makes per update now. */
   tech: number; hexesPerUpdate: number;
