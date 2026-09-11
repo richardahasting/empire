@@ -76,9 +76,12 @@ public record WorldOverrides(Integer width, Integer height, Double water,
         }
         if (minCapitalDistance != null) {
             if (minCapitalDistance < 1) throw new IllegalArgumentException("capitals are at least 1 sector apart");
-            checkCapitalsFit(w, h, countries, minCapitalDistance);
             terrain.put("min_distance_between_capitals", minCapitalDistance);
         }
+        // check the spacing that will actually be used, whether it came from this override or the preset:
+        // shrinking the map or adding countries can make the preset's own spacing impossible
+        Object spacing = terrain.get("min_distance_between_capitals");
+        if (spacing instanceof Number d) checkCapitalsFit(w, h, countries, d.intValue());
         if (landMix != null && !landMix.isEmpty()) terrain.put("land_mix", normalisedLandMix(landMix));
 
         world.put("terrain", terrain);
@@ -106,18 +109,56 @@ public record WorldOverrides(Integer width, Integer height, Double water,
     }
 
     /**
+     * How many hexes lie within {@code r} steps of a hex, centre included: the hex "disc" number,
+     * 1, 7, 19, 37 … Used to bound how many capitals can be packed into a world.
+     */
+    static long disc(int r) { return 3L * r * r + 3L * r + 1L; }
+
+    /**
+     * The largest radius whose discs around two capitals cannot overlap when the capitals are at
+     * least {@code minDistance} apart. Two hexes that far apart have disjoint discs of this radius,
+     * because twice it is still less than the distance between them.
+     */
+    static int packingRadius(int minDistance) { return Math.max(0, (minDistance - 1) / 2); }
+
+    /** Most capitals that could possibly be packed into {@code w}x{@code h} at this spacing. */
+    static long capitalsThatFit(int w, int h, int minDistance) {
+        return (long) w * h / disc(packingRadius(minDistance));
+    }
+
+    /** Widest spacing at which {@code countries} capitals could possibly fit. At least 1. */
+    static int widestSpacingFor(int w, int h, int countries) {
+        int best = 1;
+        for (int d = 1; d <= w + h; d++) {
+            if (countries * disc(packingRadius(d)) > (long) w * h) break;
+            best = d;
+        }
+        return best;
+    }
+
+    /**
      * Reject a min-capital-distance the generator cannot satisfy, before it spends 20,000 rejection
      * samples discovering that for itself and throws an IllegalStateException at the deity as a 500
-     * (WorldGenerator.placeCapitals). Throw IllegalArgumentException with a sentence the deity can act
-     * on — it says what is impossible and, ideally, what would fit.
+     * ({@code WorldGenerator.placeCapitals}).
      *
-     * TODO(richard, issue #105): decide the rule. A hex disc of radius r holds about 3r² + 3r + 1
-     * sectors, so a strict "countries × disc(minDistance/2) ≤ width × height" bound is the
-     * conservative packing argument — but rejection sampling gives up long before the strict bound
-     * bites, so a strict test passes worlds that still time out, and a bound tight enough to catch
-     * those rejects worlds that would in fact have generated.
+     * <p>The test is the conservative packing bound: capitals at least {@code minDistance} apart have
+     * disjoint discs of radius {@code (minDistance-1)/2}, so those discs must all fit inside the map.
+     * When they cannot, no legal arrangement exists and refusing is certainly right — this never turns
+     * away a world that would have generated. It does let some impossible-in-practice worlds through,
+     * because rejection sampling gives up long before the bound bites; those are caught by
+     * {@code GameService}, which turns the generator's own surrender into a 400 rather than a 500.
      */
     static void checkCapitalsFit(int width, int height, int countries, int minDistance) {
-        // TODO: implement
+        if (countries <= 1) return;
+        long need = countries * disc(packingRadius(minDistance));
+        long have = (long) width * height;
+        if (need <= have) return;
+        long maxCountries = capitalsThatFit(width, height, minDistance);
+        int maxSpacing = widestSpacingFor(width, height, countries);
+        throw new IllegalArgumentException(
+                countries + " capitals cannot be " + minDistance + " sectors apart on " + width + "x" + height
+                        + " — that needs room for " + need + " sectors and there are " + have
+                        + ". At this spacing " + maxCountries + " would fit; for " + countries
+                        + " countries the widest spacing is " + maxSpacing + ".");
     }
 }

@@ -101,9 +101,10 @@ public final class WorldGenerator {
      * (config, world, name, seed), and pure like the rest of the generator — the caller persists.
      *
      * <p>The capital goes on unowned land at least {@code min_distance_between_capitals} from every
-     * existing capital. Only when the world has no such sector does this raise a fresh island, the way
-     * generation does for its extra islands: a late joiner should inherit the map that is there before
-     * it changes the map that others have been sailing.
+     * existing capital. When the world has no such sector it refuses, and says which of the two
+     * reasons applies and by how much — a latecomer takes the map as it is, and a world with no room
+     * left is a fact for the deity to act on rather than something to paper over by raising land
+     * under a player who has been sailing that water.
      */
     public World addCountry(World world, String name, long seed) {
         PlayersCfg pc = cfg.players();
@@ -119,13 +120,7 @@ public final class WorldGenerator {
         int minDist = Math.max(1, cfg.world().terrain().minDistanceBetweenCapitals());
 
         Coord cap = vacantLand(world, minDist, rng);
-        if (cap == null) {
-            Landfall made = raiseIsland(world, minDist, rng);
-            if (made == null) throw new IllegalStateException(
-                    "nowhere to put a capital at least " + minDist + " sectors from every other, and no open sea to raise an island in");
-            world = made.world();
-            cap = made.at();
-        }
+        if (cap == null) throw new IllegalArgumentException(noRoom(world, trimmed, minDist));
 
         // the capital is plains, as at generation, so nobody starts on a mountain
         world = world.withSector(world.sector(cap).withTerrain(Terrain.PLAINS, elevation(Terrain.PLAINS, rng), resources(Terrain.PLAINS, rng)));
@@ -150,8 +145,29 @@ public final class WorldGenerator {
         return world.withCountries(countries);
     }
 
-    /** A grown island and the sector to put the capital on. */
-    private record Landfall(World world, Coord at) {}
+    /**
+     * Why there was nowhere to put this capital, counted rather than asserted: the two reasons a land
+     * sector can be unavailable are that somebody owns it or that it sits too close to an existing
+     * capital, and which one dominates tells the deity what to change.
+     */
+    private String noRoom(World world, String name, int minDist) {
+        long land = 0, owned = 0, tooClose = 0;
+        for (Sector s : world.sectors()) {
+            if (!s.terrain().isLand()) continue;
+            land++;
+            if (s.owned()) owned++;
+            else if (!farEnough(world, s.at(), minDist)) tooClose++;
+        }
+        StringBuilder b = new StringBuilder("nowhere to seat ").append(name).append(" on this ")
+                .append(world.width()).append('x').append(world.height()).append(" world: of ").append(land)
+                .append(" land sectors, ").append(owned).append(" are owned and ").append(tooClose)
+                .append(" are unowned but within ").append(minDist).append(" sectors of an existing capital");
+        if (tooClose > 0 && owned < land)
+            b.append(". Lowering the minimum distance between capitals would free ").append(tooClose).append(" of them");
+        else
+            b.append(". Every land sector is taken, so a new country needs a bigger world");
+        return b.toString();
+    }
 
     /** Unowned land far enough from every existing capital, or null if the world has none. */
     private Coord vacantLand(World world, int minDist, SplittableRandom rng) {
@@ -166,46 +182,6 @@ public final class WorldGenerator {
     private boolean farEnough(World world, Coord c, int minDist) {
         for (Country o : world.countries()) if (Hex.distance(world, c, o.capital()) < minDist) return false;
         return true;
-    }
-
-    /**
-     * Raise an island in open sea, as generation does for the islands beyond the countries' own, and
-     * return the world with it plus the hex to settle. Null when there is no open sea far enough out.
-     */
-    private Landfall raiseIsland(World world, int minDist, SplittableRandom rng) {
-        Coord start = null;
-        for (int tries = 0; tries < 400 && start == null; tries++) {
-            Coord c = new Coord(rng.nextInt(world.width()), rng.nextInt(world.height()));
-            if (world.sector(c).terrain() != Terrain.OCEAN) continue;
-            if (farEnough(world, c, minDist)) start = c;
-        }
-        if (start == null) return null;
-
-        int size = Math.max(3, cfg.world().terrain().islandSize());
-        int spike = Math.max(0, Math.min(100, cfg.world().terrain().spike()));
-        List<Coord> frontier = new ArrayList<>();
-        World out = world;
-        out = land(out, start, rng);
-        frontier.add(start);
-        int made = 1;
-        while (made < size && !frontier.isEmpty()) {
-            int idx = rng.nextInt(100) < spike ? frontier.size() - 1 : rng.nextInt(frontier.size());
-            Coord c = frontier.get(idx);
-            List<Coord> sea = new ArrayList<>();
-            for (Coord nb : Hex.neighbours(out, c)) if (out.sector(nb).terrain() == Terrain.OCEAN) sea.add(nb);
-            if (sea.isEmpty()) { frontier.remove(idx); continue; }
-            Coord pick = sea.get(rng.nextInt(sea.size()));
-            out = land(out, pick, rng);
-            frontier.add(pick);
-            made++;
-        }
-        return new Landfall(out, start);
-    }
-
-    /** Turn one ocean hex into land of a drawn type, with its own elevation and resources. */
-    private World land(World world, Coord c, SplittableRandom rng) {
-        Terrain t = pickLandType(rng);
-        return world.withSector(world.sector(c).withTerrain(t, elevation(t, rng), resources(t, rng)));
     }
 
     private Sector seed(Sector s, int owner, String designation, Map<String, Double> stocks, double scale, PlayersCfg pc) {
