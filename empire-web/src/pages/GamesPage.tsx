@@ -71,6 +71,7 @@ export function GamesPage() {
                 {me?.admin && <Button size="sm" variant="secondary" onClick={() => runUpdate(g)}>Run update</Button>}
                 {me?.admin && <AddCountry game={g} onAdded={load} />}
                 {me?.admin && <DeleteGame game={g} onDeleted={load} />}
+                {g.myCountry != null && <RenameCountry game={g} onRenamed={load} />}
                 {g.myCountry != null && <Button asChild size="sm"><Link to={`/games/${g.id}`}>Play</Link></Button>}
               </div>
             </div>
@@ -140,6 +141,61 @@ interface Seated { countryId: number; name: string; capital: { x: number; y: num
  * as emp7, so the name is asked for here rather than offered later — the server refuses a claim
  * without one, and taking the last seat rings the starting bell (issue #123).
  */
+/**
+ * Renaming your own country after the fact (issue #119). Naming happens when a seat is claimed;
+ * this is the "you can change it later" half, which the guide promises.
+ */
+function RenameCountry({ game, onRenamed }: { game: GameSummary; onRenamed: () => Promise<void> }) {
+  const current = game.countries.find(c => c.id === game.myCountry);
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!current) return null;
+
+  const close = (next: boolean) => { setOpen(next); if (!next) { setName(""); setError(null); } };
+
+  const rename = async () => {
+    const next = name.trim();
+    if (!next || next === current.name) return;
+    setBusy(true); setError(null);
+    try {
+      await api.post(`/games/${game.id}/rename`, { name: next });
+      close(false);
+      await onRenamed();
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={n => { close(n); if (n) setName(current.name); }}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="ghost" title="rename your country">Rename</Button>
+      </DialogTrigger>
+      <DialogContent size="sm">
+        <DialogHeader>
+          <DialogTitle>Rename {current.name}</DialogTitle>
+          <DialogDescription>
+            Everyone who can see your sectors sees this name, and it changes for them at once —
+            old map memory included. Names are unique within a game.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <label htmlFor={`rn-${game.id}`} className="text-sm">New name</label>
+          <Input id={`rn-${game.id}`} value={name} onChange={e => setName(e.target.value)} autoComplete="off" maxLength={40}
+                 onKeyDown={e => { if (e.key === "Enter" && name.trim() && !busy) void rename(); }} />
+          {error && <p className="text-sm text-destructive">{error}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="soft" size="sm" onClick={() => close(false)}>Cancel</Button>
+          <Button size="sm" disabled={!name.trim() || name.trim() === current.name || busy} onClick={() => void rename()}>
+            {busy ? "Renaming…" : "Rename"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ClaimSeat({ game, seat, onClaimed }: { game: GameSummary; seat: CountrySeat; onClaimed: () => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");

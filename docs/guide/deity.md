@@ -8,12 +8,14 @@ admin-only and lives on the games page.
 A game is built from a preset, which supplies every rule not on the create
 form — the economy, which units exist, how long an update is.
 
-| preset | map | update | countries | notes |
+| preset | map | update | seats by default | notes |
 |---|---|---|---|---|
 | teaching | 16×16 | 1 hour | 4 | economy only, no units, sanctuary relaxed |
 | sandbox | 32×32 | manual | 1 | everything unlocked, huge stocks |
 | blitz | 32×32 | 15 min | 8 | one evening, ends after 20 updates |
 | classic | 128×64 | daily | 40 | months long |
+
+The seat count is a default: the create form overrides it, up to 64.
 
 **A game keeps its rules for life.** The preset is copied into the game when it
 is created, so shipping a new rule does not change a running game. `Reload
@@ -24,6 +26,12 @@ stocks.
 
 The form overrides the preset's map. Anything left blank keeps the preset's
 value, and the placeholders show what that value actually is.
+
+**Countries** — how many seats the world is built with, up to **64**. They are
+created numbered — `emp1`, `emp2` and so on — and named by whoever claims them.
+This also sets the game's country limit, so it is the one number that decides
+both how many can play and how many ever could. The game waits in setup until
+they are all taken, or until you start it; see The starting bell below.
 
 **Seed** — the one number every random draw comes from. Not just the map: each
 update derives its own randomness from it, so the seed fixes the whole game's

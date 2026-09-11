@@ -12,8 +12,12 @@ The games page lists every game. Each one shows its size, which update it is on,
 how long until the next one, and the seats in it.
 
 Seats start out numbered — `emp1`, `emp2` and so on — and **taking one means
-naming it**. The name is what every other player sees on the map, and you can
-change it later.
+naming it**. The name is what every other player sees on the map.
+
+You can change it later with **Rename** on the game's card. The change is
+immediate for everyone, including on the parts of the map they remember rather
+than currently see, because names are looked up when a map is drawn rather than
+stored with it. Two countries in the same game cannot share a name.
 
 A game does not begin the moment it is created. It waits in **setup** until
 either every seat is taken or the deity starts it — so if you are the last one
