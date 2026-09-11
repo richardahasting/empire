@@ -107,10 +107,22 @@ public class AdminController {
 
     // ------------------------------------------------------------------ POGO, the deity (issue #128)
 
-    /** The whole map, unfogged, in absolute coordinates — the deity's own country sits at 0,0. */
+    /**
+     * The whole map, unfogged, in absolute coordinates — the deity's own country sits at 0,0.
+     * With {@code ?as=N} it returns the world as country N actually sees it, fog and all.
+     */
     @GetMapping("/games/{id}/view")
-    public org.hastingtx.empire.engine.view.CountryView deityView(@PathVariable long id, HttpServletRequest req) {
-        return games.deityView(id, admin(req));
+    public org.hastingtx.empire.engine.view.CountryView deityView(@PathVariable long id,
+                                                                  @RequestParam(required = false) Integer as,
+                                                                  HttpServletRequest req) {
+        Account a = admin(req);
+        return as == null ? games.deityView(id, a) : games.viewAs(id, as, a);
+    }
+
+    /** Who is in this game, POGO included, for the deity's own screen. */
+    @GetMapping("/games/{id}/roster")
+    public List<GameService.Roster> roster(@PathVariable long id, HttpServletRequest req) {
+        return games.roster(id, admin(req));
     }
 
     /** Change a sector by absolute coordinates. Every edit is logged; see GameService.editSector. */

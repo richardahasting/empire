@@ -69,6 +69,7 @@ export function GamesPage() {
                 {me?.admin && <Button size="sm" variant="ghost" onClick={() => reloadRules(g)} title="replace this game's rule snapshot with the preset as shipped now">Reload rules</Button>}
                 {me?.admin && <Button size="sm" variant="ghost" onClick={() => seedSea(g)} title="give the sea its fishing grounds (ocean fertility by region)">Seed fishing grounds</Button>}
                 {me?.admin && <Button size="sm" variant="secondary" onClick={() => runUpdate(g)}>Run update</Button>}
+                {me?.admin && <Button asChild size="sm" variant="ghost" title="the deity's screen: see everything, change anything"><Link to={`/admin/pogo/${g.id}`}>POGO</Link></Button>}
                 {me?.admin && <AddCountry game={g} onAdded={load} />}
                 {me?.admin && <DeleteGame game={g} onDeleted={load} />}
                 {g.myCountry != null && <RenameCountry game={g} onRenamed={load} />}

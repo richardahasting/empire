@@ -7,6 +7,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { GamesPage } from "./pages/GamesPage";
 import { HelpPage } from "./pages/HelpPage";
+import { PogoPage } from "./pages/PogoPage";
 import { GamePage } from "./pages/GamePage";
 import DesignSystemPage from "./pages/DesignSystemPage";
 import { TooltipProvider } from "./components/ui/tooltip";
@@ -30,6 +31,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/verify" element={<VerifyPage />} />
           <Route path="/help" element={<HelpPage />} />
           <Route path="/help/:slug" element={<HelpPage />} />
+          <Route path="/admin/pogo/:id" element={<Guard><PogoPage /></Guard>} />
           <Route path="/games" element={<Guard><GamesPage /></Guard>} />
           <Route path="/games/:id" element={<Guard><GamePage /></Guard>} />
           <Route path="/admin/design-system" element={<DesignSystemPage />} />

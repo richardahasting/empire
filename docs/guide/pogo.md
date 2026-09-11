@@ -72,6 +72,33 @@ second country and a wasted seat. The deity can now mint it a fresh one.
 
 A person who loses access does not need this: they ask for another magic link.
 
+## POGO's screen
+
+There is a **POGO** button on every game's card. It opens the deity's own screen,
+which does three things.
+
+**Look through somebody.** The selector across the top is *POGO + every country
+in the game*. POGO shows the whole map in the map's own coordinates. Any other
+country shows the world **as that player actually sees it** — their fog, their
+map memory, their contacts — which is the only way to answer "why can they not
+see that" without guessing.
+
+It is a table rather than the game's map, on purpose: this is a tool for finding
+one sector and changing it, and a list you can filter beats a picture you have
+to hunt across. Filter by coordinate, designation, terrain or owner.
+
+**Change a sector, or a country.** Pick a sector from the table to edit it;
+pick a country from the dropdown for cash, BTUs and tech. Blank fields are left
+alone.
+
+Editing is only offered while looking through POGO. A player's view reports
+coordinates relative to *their* capital, and a sector is changed by its place on
+the map rather than by where it happens to sit relative to somebody — offering
+an edit box against a relative coordinate would be offering a mistake.
+
+**See what has been changed.** Every hand edit is listed at the foot of the
+screen, oldest at the bottom.
+
 ## What editing costs
 
 Every edit is a write **outside the update**, and that is not free.
