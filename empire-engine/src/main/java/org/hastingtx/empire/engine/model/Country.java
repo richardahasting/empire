@@ -18,6 +18,9 @@ public record Country(
         boolean bankrupt,
         int plagueUpdatesLeft) {
 
+    /** Rename (issue #119). Uniqueness within a game is the server's business, not the engine's. */
+    public Country withName(String n) { return new Country(id, n, capital, cash, btu, levels, handicap, inSanctuary, bankrupt, plagueUpdatesLeft); }
+
     public Country withCash(double c) { return new Country(id, name, capital, c, btu, levels, handicap, inSanctuary, bankrupt, plagueUpdatesLeft); }
     public Country withBtu(double b) { return new Country(id, name, capital, cash, b, levels, handicap, inSanctuary, bankrupt, plagueUpdatesLeft); }
     public Country withLevels(Levels l) { return new Country(id, name, capital, cash, btu, l, handicap, inSanctuary, bankrupt, plagueUpdatesLeft); }

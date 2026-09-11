@@ -27,7 +27,7 @@ class CapitalsFitTest {
     }
 
     private static WorldOverrides spacing(Integer d) {
-        return new WorldOverrides(null, null, null, null, null, d, null, null, null);
+        return new WorldOverrides(null, null, null, null, null, d, null, null, null, null);
     }
 
     // ---- the geometry the bound rests on ----
@@ -85,7 +85,7 @@ class CapitalsFitTest {
     /** The preset's own spacing can become impossible when the map shrinks or countries are added. */
     @Test
     void thePresetsSpacingIsCheckedToo() {
-        WorldOverrides shrink = new WorldOverrides(16, 16, null, null, null, null, null, null, null);
+        WorldOverrides shrink = new WorldOverrides(16, 16, null, null, null, null, null, null, null, null);
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> shrink.patch(preset(128, 64, 12), 12));
         assertTrue(e.getMessage().contains("12 sectors apart"), e.getMessage());
     }
@@ -151,7 +151,7 @@ class CapitalsFitTest {
                     checked++;
                     Map<String, Object> raw;
                     try {
-                        raw = new WorldOverrides(size, size, null, null, null, d, null, null, null).patch(schema, n);
+                        raw = new WorldOverrides(size, size, null, null, null, d, null, null, null, null).patch(schema, n);
                     } catch (IllegalArgumentException e) {
                         refused++; continue;                      // the bound said no: a 400, which is the point
                     }
@@ -179,6 +179,6 @@ class CapitalsFitTest {
     private static Map<String, Object> full(int w, int h, int spacing) {
         ConfigLoader loader = new ConfigLoader();
         var raw = loader.loadSchema().raw();
-        return new WorldOverrides(w, h, null, null, null, spacing, null, null, null).patch(raw, 1);
+        return new WorldOverrides(w, h, null, null, null, spacing, null, null, null, null).patch(raw, 1);
     }
 }

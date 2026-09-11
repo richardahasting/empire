@@ -86,9 +86,26 @@ Two things worth knowing:
 
 ## Seating players
 
-Countries are created with the world. A seat is claimed by a player joining it.
+**Countries is a number**, not a list of names. Ask for eight and the world is
+built with eight seats called `emp1` … `emp8`, up to a maximum of 64. Each
+player names their own when they claim it.
 
-**Add country** seats someone in a game already running. The capital goes on
+## The starting bell
+
+A new game is created in **setup**, not running. No updates are scheduled and no
+commands are accepted, so nobody gains anything by joining early.
+
+The bell rings on whichever comes first:
+
+- **the last seat is claimed** — automatic, no action needed, or
+- **you press Start** — for when somebody is not coming. The empty seats stay
+  open and can still be claimed afterwards.
+
+Either way the game moves to `running` and the first update is scheduled from
+that moment.
+
+A seat is claimed by a player joining it and naming it. **Add country** seats
+someone in a game already running, beyond the seats it was built with. The capital goes on
 unowned land at the minimum distance from every other capital; if there is no
 such sector the request is **refused with the reason** — how many land sectors
 are owned, how many are merely too close, and whether the fix is a lower

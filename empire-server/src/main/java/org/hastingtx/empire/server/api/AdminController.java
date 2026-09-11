@@ -28,7 +28,7 @@ public class AdminController {
      * {@code width}/{@code height} are in sectors, {@code water} is the percent of the map that is sea,
      * and {@code landMix} is per-terrain weights that need not sum to anything in particular.
      */
-    public record CreateRequest(String preset, String name, List<String> countries, Long seed,
+    public record CreateRequest(String preset, String name, Integer countries, Long seed,
                                 Integer width, Integer height, Double water,
                                 Integer islandSize, Integer spike, Integer minCapitalDistance,
                                 Boolean wrapX, Boolean wrapY, Map<String, Double> landMix) {}
@@ -38,8 +38,9 @@ public class AdminController {
         Account a = admin(req);
         long seed = r.seed() != null ? r.seed() : System.currentTimeMillis();
         WorldOverrides w = new WorldOverrides(r.width(), r.height(), r.water(),
-                r.islandSize(), r.spike(), r.minCapitalDistance(), r.wrapX(), r.wrapY(), r.landMix());
-        GameService.Game g = games.create(r.preset() == null ? "teaching" : r.preset(), r.name() == null ? "Game" : r.name(), r.countries(), seed, a.id(), w);
+                r.islandSize(), r.spike(), r.minCapitalDistance(), r.wrapX(), r.wrapY(), r.landMix(), r.countries());
+        int seats = r.countries() == null ? 2 : r.countries();
+        GameService.Game g = games.createWithSeats(r.preset() == null ? "teaching" : r.preset(), r.name() == null ? "Game" : r.name(), seats, seed, a.id(), w);
         return games.summary(g, a);
     }
 
@@ -96,6 +97,12 @@ public class AdminController {
     public GameService.Seated addCountry(@PathVariable long id, @RequestBody AddCountryRequest r, HttpServletRequest req) {
         Account a = admin(req);
         return games.addCountry(id, r.name(), r.controller() == null ? "human" : r.controller(), a);
+    }
+
+    /** Ring the starting bell early, with seats still open (issue #123). */
+    @PostMapping("/games/{id}/start")
+    public GameService.Summary start(@PathVariable long id, HttpServletRequest req) {
+        return games.start(id, admin(req));
     }
 
     /** Delete a game and everything it owns. Irreversible (issue #109). */

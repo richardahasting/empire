@@ -22,10 +22,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Save a played world, load it back, and the state hash must be identical. Runs against
- * the real database (needs EMPIRE_DB_PASSWORD in the environment) and cleans up its game.
+ * the real database (needs EMPIRE_TEST_DB_PASSWORD) and cleans up its game.
  */
-@SpringBootTest(properties = "empire.mail-mode=log")
-@EnabledIfEnvironmentVariable(named = "EMPIRE_DB_PASSWORD", matches = ".+")
+@SpringBootTest
+@EnabledIfEnvironmentVariable(named = "EMPIRE_TEST_DB_PASSWORD", matches = ".+")
 class WorldRepositoryRoundTripTest {
     @Autowired WorldRepository worlds;
     @Autowired GameRepository games;

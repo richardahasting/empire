@@ -1,0 +1,18 @@
+# Tests never touch the live database (issue #115).
+#
+# The DB-backed tests used to be gated on EMPIRE_DB_PASSWORD, and the only way to satisfy that was
+# to source empire-server/.env — which holds production credentials. That pointed the Spring context
+# at the live database, and since Spring Boot runs Flyway on startup, a test run applied a brand-new
+# migration to production 35 minutes before the deploy meant to carry it.
+#
+# This is the "test" profile, activated for every test run by surefire (see empire-server/pom.xml).
+# It layers on top of the main application.yaml rather than replacing it, so only the datasource
+# changes — a test run cannot reach production even if the production environment is loaded.
+# Credentials come from empire-server/.env.test.
+spring:
+  datasource:
+    url: ${EMPIRE_TEST_DB_URL:jdbc:postgresql://127.0.0.1:5432/empire_test}
+    username: ${EMPIRE_TEST_DB_USER:empire_test_user}
+    password: ${EMPIRE_TEST_DB_PASSWORD:}
+empire:
+  mail-mode: log

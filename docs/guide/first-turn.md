@@ -9,8 +9,17 @@ another link.
 ## Joining a game
 
 The games page lists every game. Each one shows its size, which update it is on,
-how long until the next one, and the countries in it. Take an open seat and you
-have a country.
+how long until the next one, and the seats in it.
+
+Seats start out numbered — `emp1`, `emp2` and so on — and **taking one means
+naming it**. The name is what every other player sees on the map, and you can
+change it later.
+
+A game does not begin the moment it is created. It waits in **setup** until
+either every seat is taken or the deity starts it — so if you are the last one
+in, your claim is what starts the game. Before that you can look at your country
+and read this guide, but no commands are accepted and no updates run. Joining
+early gains you nothing, which is the point.
 
 ## What you own
 

@@ -139,6 +139,24 @@ public class GameService {
      */
     public Game create(String preset, String name, List<String> countryNames, long seed, Long createdBy,
                        WorldOverrides overrides) {
+        return createSeats(preset, name, countryNames, seed, createdBy, overrides);
+    }
+
+    /**
+     * Create a game with {@code seats} countries named emp1 … empN (issue #117). They are claimed and
+     * renamed by the people who play them (#119), and the game does not start until the bell (#123).
+     */
+    public Game createWithSeats(String preset, String name, int seats, long seed, Long createdBy, WorldOverrides overrides) {
+        WorldOverrides o = overrides == null ? WorldOverrides.NONE : overrides;
+        int n = o.countries() != null ? o.countries() : seats;
+        if (o.countries() == null)
+            o = new WorldOverrides(o.width(), o.height(), o.water(), o.islandSize(), o.spike(),
+                    o.minCapitalDistance(), o.wrapX(), o.wrapY(), o.landMix(), n);
+        return createSeats(preset, name, WorldOverrides.seatNames(n), seed, createdBy, o);
+    }
+
+    private Game createSeats(String preset, String name, List<String> countryNames, long seed, Long createdBy,
+                             WorldOverrides overrides) {
         if (countryNames == null || countryNames.isEmpty()) throw new IllegalArgumentException("at least one country");
         if (new HashSet<>(countryNames).size() != countryNames.size()) throw new IllegalArgumentException("country names must be unique");
         ConfigLoader.Loaded l = loader.loadPreset(preset);
@@ -147,11 +165,12 @@ public class GameService {
         World world = placing(() -> new WorldGenerator(cfg).generate(countryNames, seed));
         long id = games.create(name, preset, loader.toYaml(l.raw()), l.hash(), seed, world.width(), world.height(), world.wrapX(), world.wrapY(), createdBy);
         worlds.saveAll(id, world, Commodities.of(cfg));
-        games.setStatus(id, "running");
+        // the bell has not rung (issue #123): the game is visible and read-only until its players arrive
+        games.setStatus(id, "setup");
         long interval = parseInterval(cfg.schedule().updateInterval());
-        games.setSchedule(id, interval, interval > 0 ? java.time.Instant.now().plusSeconds(interval) : null);
+        games.setSchedule(id, interval, null);
         Game g = new Game(games.find(id).orElseThrow(), cfg, world);
-        g.status = "running";
+        g.status = "setup";
         loaded.put(id, g);
         log.info("created game {} '{}' preset {} seed {} countries {}", id, name, preset, seed, countryNames);
         return g;
@@ -218,7 +237,7 @@ public class GameService {
 
     public void setStatus(long gameId, String status) {
         Game g = get(gameId);
-        if (!java.util.Set.of("running", "paused", "finished").contains(status)) throw new IllegalArgumentException("status must be running, paused or finished");
+        if (!java.util.Set.of("setup", "running", "paused", "finished").contains(status)) throw new IllegalArgumentException("status must be setup, running, paused or finished");
         g.status = status;
         games.setStatus(gameId, status);
         if (status.equals("running") && g.intervalSeconds > 0 && (g.nextUpdateAt == null || g.nextUpdateAt.isBefore(java.time.Instant.now()))) {
@@ -359,12 +378,93 @@ public class GameService {
         return new Summary(g.id, g.name, g.preset, g.status, g.world.updateNumber(), g.world.width(), g.world.height(), seats, mine, g.intervalSeconds, g.nextUpdateAt);
     }
 
-    public Summary join(long gameId, Account a, int countryId) {
+    /**
+     * Claim a seat and name it in one act (issue #119). A seat arrives called emp7 and nobody wants to
+     * play as emp7, so the name is required rather than offered — and it is set in the same call as
+     * the bind, because a seat that is claimed but still unnamed is the state this exists to prevent.
+     *
+     * <p>Filling the last seat rings the starting bell (issue #123).
+     */
+    public Summary join(long gameId, Account a, int countryId, String name) {
         Game g = get(gameId);
         if (games.countryOf(gameId, a.id()).isPresent()) throw new IllegalArgumentException("you already have a country in this game");
         if (countryId < 0 || countryId >= g.world.countries().size()) throw new IllegalArgumentException("no such country");
-        if (games.bind(gameId, countryId, a.id()) != 1) throw new IllegalArgumentException("that country is taken");
+        if (name == null || name.isBlank()) throw new IllegalArgumentException("your country needs a name");
+        g.lock.lock();
+        try {
+            if (games.bind(gameId, countryId, a.id()) != 1) throw new IllegalArgumentException("that country is taken");
+            rename(g, countryId, name);
+            if (openSeats(gameId) == 0 && "setup".equals(g.status)) {
+                ring(g, "the last seat was taken");
+            }
+        } finally { g.lock.unlock(); }
         return summary(g, a);
+    }
+
+    /** Rename your own country (issue #119). Allowed at any time; names stay unique within a game. */
+    public Summary renameMine(long gameId, Account a, String name) {
+        Game g = get(gameId);
+        int country = myCountry(gameId, a);
+        if (name == null || name.isBlank()) throw new IllegalArgumentException("your country needs a name");
+        g.lock.lock();
+        try { rename(g, country, name); } finally { g.lock.unlock(); }
+        return summary(g, a);
+    }
+
+    /**
+     * Set a country's name in the world and in the database together. Called with the game's lock
+     * held. The unique index on (game_id, name) is what enforces distinctness; it raises a
+     * DataIntegrityViolationException, which is not mapped to anything, so it is turned into the
+     * bad request it actually is.
+     */
+    private void rename(Game g, int countryId, String name) {
+        String trimmed = name.trim();
+        if (trimmed.length() > 40) throw new IllegalArgumentException("a country name is at most 40 characters");
+        for (Country c : g.world.countries())
+            if (c.id() != countryId && c.name().equalsIgnoreCase(trimmed))
+                throw new IllegalArgumentException("there is already a country called " + c.name() + " in this game");
+        World before = g.world;
+        List<Country> next = new ArrayList<>(before.countries());
+        next.set(countryId, next.get(countryId).withName(trimmed));
+        World after = before.withCountries(next);
+        try {
+            worlds.saveDiff(g.id, before, after, g.com);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            throw new IllegalArgumentException("there is already a country called " + trimmed + " in this game");
+        }
+        g.world = after;
+        log.info("game {}: country {} is now '{}'", g.id, countryId, trimmed);
+    }
+
+    /** Seats nobody has claimed yet. */
+    public int openSeats(long gameId) {
+        int open = 0;
+        for (GameRepository.Seat s : games.seats(gameId)) if (s.accountId() == null) open++;
+        return open;
+    }
+
+    /**
+     * Ring the starting bell (issue #123): the game leaves {@code setup}, and the first update is
+     * scheduled from now. Until this happens the scheduler ignores the game and every command is
+     * refused, so nobody gains anything by joining early.
+     */
+    private void ring(Game g, String why) {
+        g.status = "running";
+        games.setStatus(g.id, "running");
+        java.time.Instant next = g.intervalSeconds > 0 ? java.time.Instant.now().plusSeconds(g.intervalSeconds) : null;
+        g.nextUpdateAt = next;
+        games.setSchedule(g.id, g.intervalSeconds, next);
+        log.info("game {} '{}' started — {}", g.id, g.name, why);
+    }
+
+    /** The deity's bell, for when somebody is not coming (issue #123). */
+    public Summary start(long gameId, Account by) {
+        if (!by.admin()) throw new SecurityException("deity only");
+        Game g = get(gameId);
+        if (!"setup".equals(g.status)) throw new IllegalArgumentException("this game has already started");
+        g.lock.lock();
+        try { ring(g, "started by the deity with " + openSeats(gameId) + " seats still open"); } finally { g.lock.unlock(); }
+        return summary(g, by);
     }
 
     public int myCountry(long gameId, Account a) {

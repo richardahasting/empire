@@ -22,8 +22,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * silently discarded. In memory everything looked right; the country vanished at the next restart.
  * This loads the world back from the database, which is the only place that bug was visible.
  */
-@SpringBootTest(properties = "empire.mail-mode=log")
-@EnabledIfEnvironmentVariable(named = "EMPIRE_DB_PASSWORD", matches = ".+")
+@SpringBootTest
+@EnabledIfEnvironmentVariable(named = "EMPIRE_TEST_DB_PASSWORD", matches = ".+")
 class NewCountrySurvivesSaveTest {
     @Autowired WorldRepository worlds;
     @Autowired GameRepository games;
@@ -31,7 +31,10 @@ class NewCountrySurvivesSaveTest {
     private Long gameId;
 
     @AfterEach
-    void cleanup() { if (gameId != null) jdbc.update("DELETE FROM game WHERE id = ?", gameId); }
+    void cleanup() {
+        if (gameId != null) jdbc.update("DELETE FROM game WHERE id = ?", gameId);
+        jdbc.update("DELETE FROM account WHERE email LIKE 'seat-keep-%@example.invalid'");
+    }
 
     @Test
     void aCountryAddedToARunningGameIsStillThereWhenTheWorldIsLoadedBack() {
@@ -74,8 +77,11 @@ class NewCountrySurvivesSaveTest {
                 start.width(), start.height(), start.wrapX(), start.wrapY(), null);
         worlds.saveAll(gameId, start, com);
 
-        Long accountId = jdbc.queryForObject("SELECT id FROM account ORDER BY id LIMIT 1", Long.class);
-        org.junit.jupiter.api.Assumptions.assumeTrue(accountId != null, "needs an account to bind");
+        // its own account, so the test does not depend on the database already having one
+        Long accountId = jdbc.queryForObject(
+                "INSERT INTO account (email, name, is_admin) VALUES (?,?,false) RETURNING id",
+                Long.class, "seat-keep-" + gameId + "@example.invalid", "seat keeper");
+        assertThat(accountId).isNotNull();
         assertThat(games.bind(gameId, 0, accountId)).isEqualTo(1);
 
         // the upsert's conflict branch must not clobber controller or account_id
