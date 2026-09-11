@@ -328,8 +328,40 @@ public class GameService {
     public CountryView deityView(long gameId, Account by) {
         if (!by.admin()) throw new SecurityException("deity only");
         Game g = get(gameId);
-        int id = deityCountry(gameId);
-        return CountryView.omniscient(g.world, g.cfg, id);
+        return CountryView.omniscient(g.world, g.cfg, deityCountry(gameId));
+    }
+
+    /**
+     * The world as one country actually sees it — fog, map memory, contacts and all (issue #128).
+     * The deity's own country returns the unfogged view instead, since that is what POGO is for.
+     *
+     * <p>This shows a deity a player's private view, which is the point: it is the only way to answer
+     * "why can this player not see that" without guessing. It is an admin route for that reason.
+     */
+    public CountryView viewAs(long gameId, int countryId, Account by) {
+        if (!by.admin()) throw new SecurityException("deity only");
+        Game g = get(gameId);
+        if (countryId < 0 || countryId >= g.world.countries().size()) throw new IllegalArgumentException("no country " + countryId);
+        return countryId == deityCountryOrMinusOne(gameId)
+                ? CountryView.omniscient(g.world, g.cfg, countryId)
+                : CountryView.of(g.world, g.cfg, countryId);
+    }
+
+    /** Who is in this game, deity included, as the deity's own screen needs to list them. */
+    public record Roster(int countryId, String name, String controller, boolean taken, boolean deity) {}
+
+    public List<Roster> roster(long gameId, Account by) {
+        if (!by.admin()) throw new SecurityException("deity only");
+        get(gameId);
+        List<Roster> out = new ArrayList<>();
+        for (GameRepository.Seat s : games.seats(gameId))
+            out.add(new Roster(s.countryId(), s.name(), s.controller(), s.accountId() != null, "deity".equals(s.controller())));
+        return out;
+    }
+
+    private int deityCountryOrMinusOne(long gameId) {
+        for (GameRepository.Seat s : games.seats(gameId)) if ("deity".equals(s.controller())) return s.countryId();
+        return -1;
     }
 
     /** The id of this game's deity country, or an error saying it predates POGO. */
