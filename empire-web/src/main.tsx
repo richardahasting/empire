@@ -8,6 +8,7 @@ import { VerifyPage } from "./pages/VerifyPage";
 import { GamesPage } from "./pages/GamesPage";
 import { GamePage } from "./pages/GamePage";
 import DesignSystemPage from "./pages/DesignSystemPage";
+import { TooltipProvider } from "./components/ui/tooltip";
 
 function Guard({ children }: { children: React.ReactElement }) {
   const { me, loading } = useAuth();
@@ -19,6 +20,7 @@ function NotFound() { return <main className="p-6 text-sm">Nothing here. <a clas
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
+    <TooltipProvider delayDuration={200}>
     <AuthProvider>
       <BrowserRouter basename="/empire">
         <Routes>
@@ -32,5 +34,6 @@ createRoot(document.getElementById("root")!).render(
         </Routes>
       </BrowserRouter>
     </AuthProvider>
+    </TooltipProvider>
   </StrictMode>
 );

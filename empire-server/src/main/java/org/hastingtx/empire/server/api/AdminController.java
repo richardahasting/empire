@@ -5,6 +5,7 @@ import org.hastingtx.empire.engine.update.UpdateResult;
 import org.hastingtx.empire.server.auth.Account;
 import org.hastingtx.empire.server.auth.AuthInterceptor;
 import org.hastingtx.empire.server.game.GameService;
+import org.hastingtx.empire.server.game.WorldOverrides;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,15 +23,35 @@ public class AdminController {
         return a;
     }
 
-    /** {@code width}/{@code height} in sectors and {@code water} as a percent override the preset's map (issue #81); null keeps it. */
-    public record CreateRequest(String preset, String name, List<String> countries, Long seed, Integer width, Integer height, Double water) {}
+    /**
+     * Every world field is optional and a null keeps the preset's value (issues #81, #105).
+     * {@code width}/{@code height} are in sectors, {@code water} is the percent of the map that is sea,
+     * and {@code landMix} is per-terrain weights that need not sum to anything in particular.
+     */
+    public record CreateRequest(String preset, String name, List<String> countries, Long seed,
+                                Integer width, Integer height, Double water,
+                                Integer islandSize, Integer spike, Integer minCapitalDistance,
+                                Boolean wrapX, Boolean wrapY, Map<String, Double> landMix) {}
 
     @PostMapping("/games")
     public GameService.Summary create(@RequestBody CreateRequest r, HttpServletRequest req) {
         Account a = admin(req);
         long seed = r.seed() != null ? r.seed() : System.currentTimeMillis();
-        GameService.Game g = games.create(r.preset() == null ? "teaching" : r.preset(), r.name() == null ? "Game" : r.name(), r.countries(), seed, a.id(), r.width(), r.height(), r.water());
+        WorldOverrides w = new WorldOverrides(r.width(), r.height(), r.water(),
+                r.islandSize(), r.spike(), r.minCapitalDistance(), r.wrapX(), r.wrapY(), r.landMix());
+        GameService.Game g = games.create(r.preset() == null ? "teaching" : r.preset(), r.name() == null ? "Game" : r.name(), r.countries(), seed, a.id(), w);
         return games.summary(g, a);
+    }
+
+    /** What one preset's world looks like before any override, so the create form can show real defaults (issue #105). */
+    public record PresetWorld(String preset, String name, int width, int height, boolean wrapX, boolean wrapY,
+                              double water, int islandSize, int spike, int minCapitalDistance,
+                              Map<String, Double> landMix, int maxCountries) {}
+
+    @GetMapping("/presets")
+    public List<PresetWorld> presets(HttpServletRequest req) {
+        admin(req);
+        return games.presetWorlds();
     }
 
     public record ScheduleRequest(String interval) {}
