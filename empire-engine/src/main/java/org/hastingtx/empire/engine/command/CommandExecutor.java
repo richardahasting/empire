@@ -387,11 +387,14 @@ public final class CommandExecutor {
             if (!srcPays && unit[h] > 0 && t.mobility() / unit[h] < moving) { moving = t.mobility() / unit[h]; choke = t.at(); }
         }
         if (srcPays && totalUnit > 0) moving = Math.min(moving, from.mobility() / totalUnit);
-        // people never move into a sector that cannot hold them (issue #48): the update would truncate them
-        boolean people = ci == com.civ || ci == com.uw;
-        double room = people ? Math.max(0, ctx.maxPopulation(to) - (to.stock().get(com.civ) + to.stock().get(com.uw))) : Double.POSITIVE_INFINITY;
-        if (people && room < moving) moving = room;
-        if (people && room <= 0) return CommandResult.fail(w, m.to() + " is full: " + fmt(to.stock().get(com.civ) + to.stock().get(com.uw)) + " people at a limit of " + fmt(ctx.maxPopulation(to)));
+        // Nothing moves into a sector that cannot hold it (issues #48, #103). Mobility says how much you
+        // could carry; this says how much there is any point carrying. Without it the move lands, the
+        // apply step destroys everything above the cap, and the mobility was spent to deliver it to the
+        // bin.
+        double room = roomFor(ctx, to, ci);
+        if (room < moving) moving = room;
+        if (room <= 0) return CommandResult.fail(w, m.to() + " is full of " + m.commodity() + ": "
+                + fmt(to.stock().get(ci)) + " at a limit of " + fmt(capFor(ctx, to, ci)));
         // Whole units (issue #77): a sector's stock is whole, so a move is whole. Half a civilian
         // never left anywhere, and a fractional move would be rounded away on arrival regardless.
         moving = Math.floor(moving);
@@ -410,7 +413,7 @@ public final class CommandExecutor {
         Sector src = next.sector(m.from()), dst = next.sector(m.to());
         next = next.withSector(src.withStock(src.stock().plus(ci, -moving)));
         next = next.withSector(dst.withStock(dst.stock().plus(ci, moving)));
-        String info = moving < m.qty() - 1e-9 ? "moved " + fmt(moving) + " of " + fmt(m.qty()) + " " + m.commodity() + " — " + (people && moving >= room - 1e-9 ? m.to() + " has room for no more" : srcPays ? "mobility in " + m.from() + " ran out" : "mobility along the route ran out") + "; the rest stayed in " + m.from()
+        String info = moving < m.qty() - 1e-9 ? "moved " + fmt(moving) + " of " + fmt(m.qty()) + " " + m.commodity() + " — " + (moving >= room - 1e-9 ? m.to() + " has room for no more" : srcPays ? "mobility in " + m.from() + " ran out" : "mobility along the route ran out") + "; the rest stayed in " + m.from()
                                               : "moved " + fmt(moving) + " " + m.commodity() + " to " + m.to();
         return new CommandResult(next, null, 0, info);
     }
@@ -528,6 +531,10 @@ public final class CommandExecutor {
         if (to.owned()) return CommandResult.fail(w, e.to() + " is already owned");
         if (e.civs() < 1) return CommandResult.fail(w, "need at least one civilian");
         if (from.stock().get(com.civ) < e.civs()) return CommandResult.fail(w, "only " + fmt(from.stock().get(com.civ)) + " civilians in " + e.from());
+        // and no more than the new sector can hold (issue #103): the update would truncate the rest
+        org.hastingtx.empire.engine.update.Ctx rctx = new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0);
+        double placeFor = Math.floor(rctx.maxPopulation(to));
+        if (e.civs() > placeFor) return CommandResult.fail(w, e.to() + " holds " + fmt(placeFor) + " people; send no more than that");
         // GUESS: original charged the source sector's mobility for the walk. Cost = civs × cost into target.
         org.hastingtx.empire.engine.update.Ctx ectx = new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0);
         double mobCost = mobCharge(e.civs() * ectx.weightLeaving(com.civ, from) * moveCostInto(to));
@@ -535,6 +542,22 @@ public final class CommandExecutor {
         World next = w.withSector(from.withMobility(from.mobility() - mobCost).withStock(from.stock().plus(com.civ, -e.civs())));
         next = next.withSector(to.withOwner(c.id()).withStock(to.stock().plus(com.civ, e.civs())));
         return new CommandResult(next, null, 0);
+    }
+
+    /**
+     * How much more of {@code ci} this sector can take, mirroring what the apply step truncates
+     * (issue #103): goods by their capacity, civilians and workers by the population cap they share,
+     * and military by nothing at all — apply does not cap it, so neither does this.
+     */
+    private double roomFor(org.hastingtx.empire.engine.update.Ctx ctx, Sector to, int ci) {
+        if (!com.isPerson(ci)) return Math.max(0, Math.floor(ctx.capacity(to, ci)) - to.stock().get(ci));
+        if (ci == com.civ || ci == com.uw) return Math.max(0, Math.floor(ctx.maxPopulation(to)) - (to.stock().get(com.civ) + to.stock().get(com.uw)));
+        return Double.POSITIVE_INFINITY;
+    }
+
+    /** The ceiling {@link #roomFor} measures against, for the message when there is no room left. */
+    private double capFor(org.hastingtx.empire.engine.update.Ctx ctx, Sector to, int ci) {
+        return com.isPerson(ci) ? Math.floor(ctx.maxPopulation(to)) : Math.floor(ctx.capacity(to, ci));
     }
 
     /**
