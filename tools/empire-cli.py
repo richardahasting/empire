@@ -8,6 +8,8 @@ game's own console API, so every command you type here is the same command the w
 
 Sign-in is by magic link: the client asks for your email, the server mails you a link, you
 paste the token (or the whole link) back. The session token is kept in ~/.config/empire/.
+Taking a seat asks for a country name — seats are handed out numbered (emp1, emp2, ...) and
+are named by whoever claims them.
 Inside the prompt: help, map, census, des, thresh, dist, move, expl, road, rail, railship,
 and the client-side verbs  games | game N | update | schedule 15m | view | projection | quit.
 """
@@ -93,9 +95,18 @@ def main():
     if game.get("myCountry") is None:
         open_seats = [c for c in game["countries"] if not c["taken"]]
         if not open_seats: print("no open country in that game"); return
-        print("open countries:", ", ".join(f"{c['id']}={c['name']}" for c in open_seats))
-        cid = input("join as (id): ").strip()
-        game = api.post(f"/games/{game['id']}/join", {"countryId": int(cid)})
+        print("open seats:", ", ".join(f"{c['id']}={c['name']}" for c in open_seats))
+        cid = input("take seat (id): ").strip()
+        # a seat arrives called emp7 and the server will not hand it over unnamed (issue #119)
+        name = ""
+        while not name:
+            name = input("name your country: ").strip()
+        game = api.post(f"/games/{game['id']}/join", {"countryId": int(cid), "name": name})
+        if game.get("status") == "setup":
+            waiting = sum(1 for c in game["countries"] if not c["taken"])
+            print(f"seated. the game starts when the last seat is taken — {waiting} still open")
+        else:
+            print("seated. the game is running")
     gid = game["id"]
     show(api.get(f"/games/{gid}/view"))
     print("type help for verbs; games, game N, update, schedule 15m, view, projection, quit are client-side")
