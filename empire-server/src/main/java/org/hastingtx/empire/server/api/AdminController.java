@@ -85,6 +85,19 @@ public class AdminController {
         return games.seedSeaFertility(id, admin(req));
     }
 
+    /** {@code controller} is "human" (an open seat) or "agent" (bound to a new bot account). */
+    public record AddCountryRequest(String name, String controller) {}
+
+    /**
+     * Seat a new country in a running game (issue #113). For an agent the response carries a bearer
+     * token, and this is the only time it is ever shown — only its hash is stored.
+     */
+    @PostMapping("/games/{id}/countries")
+    public GameService.Seated addCountry(@PathVariable long id, @RequestBody AddCountryRequest r, HttpServletRequest req) {
+        Account a = admin(req);
+        return games.addCountry(id, r.name(), r.controller() == null ? "human" : r.controller(), a);
+    }
+
     /** Delete a game and everything it owns. Irreversible (issue #109). */
     @DeleteMapping("/games/{id}")
     public Map<String, Object> delete(@PathVariable long id, HttpServletRequest req) {

@@ -16,6 +16,7 @@ import org.hastingtx.empire.engine.update.Update;
 import org.hastingtx.empire.engine.update.UpdateResult;
 import org.hastingtx.empire.engine.view.CountryView;
 import org.hastingtx.empire.server.auth.Account;
+import org.hastingtx.empire.server.auth.AuthService;
 import org.hastingtx.empire.server.persistence.GameRepository;
 import org.hastingtx.empire.server.persistence.GameRow;
 import org.hastingtx.empire.server.persistence.LogRepository;
@@ -59,7 +60,9 @@ public class GameService {
     private final ConfigLoader loader = new ConfigLoader();
     private final Map<Long, Game> loaded = new ConcurrentHashMap<>();
 
-    public GameService(GameRepository games, WorldRepository worlds, LogRepository logs) { this.games = games; this.worlds = worlds; this.logs = logs; }
+    private final AuthService auth;
+
+    public GameService(GameRepository games, WorldRepository worlds, LogRepository logs, AuthService auth) { this.games = games; this.worlds = worlds; this.logs = logs; this.auth = auth; }
 
     @PostConstruct
     void loadAll() {
@@ -269,6 +272,38 @@ public class GameService {
             games.delete(id);
             log.info("deleted game {} '{}' ({}x{}, {} updates) by account {}",
                     id, g.name, g.world.width(), g.world.height(), g.world.updateNumber(), by.id());
+        } finally { g.lock.unlock(); }
+    }
+
+    /** What came of seating a new country. {@code token} is non-null only for a bot, and only here. */
+    public record Seated(int countryId, String name, Coord capital, String controller, String token) {}
+
+    /**
+     * Seat a new country in a running game (issue #113). The engine places the capital and sanctuary;
+     * this persists the result and opens the seat — left unclaimed for a person to join, or bound
+     * immediately to a freshly minted bot account.
+     */
+    public Seated addCountry(long id, String name, String controller, Account by) {
+        if (!by.admin()) throw new SecurityException("deity only");
+        boolean agent = "agent".equalsIgnoreCase(controller);
+        if (!agent && !"human".equalsIgnoreCase(controller)) throw new IllegalArgumentException("controller is 'human' or 'agent'");
+        Game g = get(id);
+        g.lock.lock();
+        try {
+            World before = g.world;
+            World after = new WorldGenerator(g.cfg).addCountry(before, name, g.seed);
+            Country c = after.countries().get(after.countries().size() - 1);
+            worlds.saveDiff(id, before, after, g.com);
+            g.world = after;
+
+            String token = null;
+            if (agent) {
+                AuthService.Session s = auth.createAgentSession(c.name());
+                games.seatAgent(id, c.id(), s.account().id());
+                token = s.token();
+            }
+            log.info("game {}: seated country {} '{}' at {} as {}", id, c.id(), c.name(), c.capital(), agent ? "agent" : "open seat");
+            return new Seated(c.id(), c.name(), c.capital(), agent ? "agent" : "none", token);
         } finally { g.lock.unlock(); }
     }
 

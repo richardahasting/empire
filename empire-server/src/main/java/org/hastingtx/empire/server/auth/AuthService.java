@@ -32,6 +32,23 @@ public class AuthService {
         mailer.sendMagicLink(e, a.name(), t.raw(), first);
     }
 
+    /**
+     * A seat for a bot (issue #113). Agents are ordinary players and speak the same API as anyone
+     * else, but auth is by emailed magic link and a bot has no inbox — so the deity mints the session
+     * directly. The account is created under a {@code .invalid} address (RFC 2606, guaranteed
+     * unroutable) so no magic link can ever be sent to it by accident, and the raw token is returned
+     * exactly once: only its SHA-256 is stored.
+     */
+    @Transactional
+    public Session createAgentSession(String label) {
+        String slug = label == null ? "" : label.trim().toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", "");
+        if (slug.isBlank()) slug = "agent";
+        String email = slug + "-" + Long.toHexString(System.nanoTime()) + "@agents.invalid";
+        Account a = accounts.create(email, label == null || label.isBlank() ? "agent" : label.trim(), false);
+        TokenRepository.Issued t = tokens.issue(a.id(), "session", Instant.now().plus(Duration.ofDays(props.sessionTtlDays())));
+        return new Session(t.raw(), a);
+    }
+
     public record Session(String token, Account account) {}
 
     /** Step 2: the link is clicked. Burns the magic token, issues a long-lived session token. */
