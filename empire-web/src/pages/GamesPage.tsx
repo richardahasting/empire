@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, type GameSummary } from "@/api/client";
+import { api, type GameSummary, type CountrySeat } from "@/api/client";
 import { useAuth } from "@/api/auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,8 +37,10 @@ export function GamesPage() {
     if (!window.confirm(`Reload the rules of "${g.name}" from the ${g.preset} preset as shipped now? The game keeps its map and stocks; only the rules change.`)) return;
     try { await api.post(`/admin/games/${g.id}/config/refresh`); await load(); } catch (e) { setError((e as Error).message); }
   };
-  const join = async (g: GameSummary, countryId: number) => {
-    try { await api.post(`/games/${g.id}/join`, { countryId }); await load(); } catch (e) { setError((e as Error).message); }
+  const start = async (g: GameSummary) => {
+    const open = g.countries.filter(c => !c.taken).length;
+    if (!window.confirm(`Start "${g.name}" now with ${open} seat${open === 1 ? "" : "s"} still open? The first update will be scheduled.`)) return;
+    try { await api.post(`/admin/games/${g.id}/start`); await load(); } catch (e) { setError((e as Error).message); }
   };
 
   return (
@@ -61,6 +63,7 @@ export function GamesPage() {
                     <option value="0">manual</option><option value="5m">every 5m</option><option value="15m">every 15m</option><option value="1h">every hour</option><option value="6h">every 6h</option><option value="24h">daily</option>
                   </Select>
                 )}
+                {me?.admin && g.status === "setup" && <Button size="sm" variant="secondary" onClick={() => start(g)} title="ring the starting bell now, with seats still open">Start</Button>}
                 {me?.admin && g.status === "running" && <Button size="sm" variant="ghost" onClick={() => setStatus(g, "paused")}>Pause</Button>}
                 {me?.admin && g.status === "paused" && <Button size="sm" variant="ghost" onClick={() => setStatus(g, "running")}>Resume</Button>}
                 {me?.admin && <Button size="sm" variant="ghost" onClick={() => reloadRules(g)} title="replace this game's rule snapshot with the preset as shipped now">Reload rules</Button>}
@@ -71,14 +74,21 @@ export function GamesPage() {
                 {g.myCountry != null && <Button asChild size="sm"><Link to={`/games/${g.id}`}>Play</Link></Button>}
               </div>
             </div>
-            <ul className="mt-2 flex flex-wrap gap-2">
+            <ul className="mt-2 flex flex-wrap items-center gap-2">
               {g.countries.map(c => (
                 <li key={c.id}>
                   {c.id === g.myCountry ? <Badge tone="accent">{c.name} (you)</Badge>
                     : c.taken ? <Badge tone="neutral">{c.name}</Badge>
-                    : g.myCountry == null ? <Button size="sm" variant="secondary" onClick={() => join(g, c.id)}>Join as {c.name}</Button> : <Badge tone="neutral">{c.name} (open)</Badge>}
+                    : g.myCountry == null ? <ClaimSeat game={g} seat={c} onClaimed={load} /> : <Badge tone="neutral">{c.name} (open)</Badge>}
                 </li>
               ))}
+              {g.status === "setup" && (
+                <li className="text-xs text-muted-foreground">
+                  {g.countries.filter(c => !c.taken).length === 0
+                    ? "every seat taken"
+                    : `waiting for ${g.countries.filter(c => !c.taken).length} more · the game starts when the last seat is taken`}
+                </li>
+              )}
             </ul>
           </div>
         ))}
@@ -101,7 +111,7 @@ type LandTerrain = (typeof LAND_TERRAINS)[number];
 
 const HINTS = {
   preset: "The rule set the world is built from. It decides everything not on this form — the economy, which units exist, how long an update is. The fields below only override its map.",
-  countries: "One country per name, comma separated. Each gets its own island grown around its capital, so more countries means more land even at the same water percentage.",
+  countries: "How many seats the game has, up to 64. They are created as emp1, emp2 and so on, and each player names their own when they claim one. Each country gets its own island grown around its capital, so more seats means more land even at the same water percentage. The game does not start until every seat is taken \u2014 or until you start it yourself.",
   seed: "The one number every random draw in this game comes from: the map, and every update's population, plague and detection rolls. The same seed with the same settings and the same moves replays the identical game. Leave it blank for a world nobody has seen.",
   size: "The map in sectors, width × height. Up to 2048 a side and 2,097,152 sectors in all; the largest worlds take about 82 seconds an update.",
   water: "How much of the map is sea. Everything left over is land, split between the countries' own islands and whatever extra islands are needed to fill the quota.",
@@ -125,6 +135,61 @@ interface Seated { countryId: number; name: string; capital: { x: number; y: num
  * an agent seat is bound to a fresh bot account and mints a bearer token, which is shown here once
  * and never again — only its hash is kept.
  */
+/**
+ * Claiming a seat names it (issue #119). Seats are generated as emp1 … empN and nobody wants to play
+ * as emp7, so the name is asked for here rather than offered later — the server refuses a claim
+ * without one, and taking the last seat rings the starting bell (issue #123).
+ */
+function ClaimSeat({ game, seat, onClaimed }: { game: GameSummary; seat: CountrySeat; onClaimed: () => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const last = game.countries.filter(c => !c.taken).length === 1;
+
+  const close = (next: boolean) => { setOpen(next); if (!next) { setName(""); setError(null); } };
+
+  const claim = async () => {
+    if (!name.trim()) return;
+    setBusy(true); setError(null);
+    try {
+      await api.post(`/games/${game.id}/join`, { countryId: seat.id, name: name.trim() });
+      close(false);
+      await onClaimed();
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={close}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="secondary">Take {seat.name}</Button>
+      </DialogTrigger>
+      <DialogContent size="sm">
+        <DialogHeader>
+          <DialogTitle>Name your country</DialogTitle>
+          <DialogDescription>
+            {seat.name} is a seat number, not a name. Choose what your country is called — everyone
+            else will see it on the map. You can change it later.
+            {last && " This is the last open seat, so taking it starts the game."}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <label htmlFor={`claim-${game.id}-${seat.id}`} className="text-sm">Country name</label>
+          <Input id={`claim-${game.id}-${seat.id}`} value={name} onChange={e => setName(e.target.value)} autoComplete="off" maxLength={40}
+                 onKeyDown={e => { if (e.key === "Enter" && name.trim() && !busy) void claim(); }} />
+          {error && <p className="text-sm text-destructive">{error}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="soft" size="sm" onClick={() => close(false)}>Cancel</Button>
+          <Button size="sm" disabled={!name.trim() || busy} onClick={() => void claim()}>
+            {busy ? "Claiming…" : last ? "Claim and start" : "Claim"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function AddCountry({ game, onAdded }: { game: GameSummary; onAdded: () => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -269,7 +334,7 @@ function DeleteGame({ game, onDeleted }: { game: GameSummary; onDeleted: () => P
 function CreateGame({ onCreated }: { onCreated: () => Promise<void> }) {
   const [name, setName] = useState("New world");
   const [preset, setPreset] = useState("teaching");
-  const [countries, setCountries] = useState("Rick, Sharon");
+  const [countries, setCountries] = useState("2");
   const [seed, setSeed] = useState("");
   const [width, setWidth] = useState("");
   const [height, setHeight] = useState("");
@@ -302,7 +367,7 @@ function CreateGame({ onCreated }: { onCreated: () => Promise<void> }) {
     try {
       await api.post("/admin/games", {
         name, preset,
-        countries: countries.split(",").map(s => s.trim()).filter(Boolean),
+        countries: countries.trim() ? Number(countries) : null,
         seed: num(seed), width: num(width), height: num(height), water: num(water),
         islandSize: num(islandSize), spike: num(spike), minCapitalDistance: num(capitalDistance),
         wrapX, wrapY, landMix: mixPayload(),
@@ -330,8 +395,10 @@ function CreateGame({ onCreated }: { onCreated: () => Promise<void> }) {
         </div>
         <div className="space-y-1">
           <FieldLabel label="Countries" hint={HINTS.countries} htmlFor="cw-countries" />
-          <Input id="cw-countries" value={countries} onChange={e => setCountries(e.target.value)} placeholder="comma separated" />
-          {base && <p className="text-xs text-muted-foreground">this preset allows up to {base.maxCountries}</p>}
+          <Input id="cw-countries" value={countries} onChange={e => setCountries(e.target.value)} placeholder={base ? String(base.maxCountries) : "2"} inputMode="numeric" />
+          <p className="text-xs text-muted-foreground">
+            seats named emp1{countries.trim() && Number(countries) > 1 ? `\u2013emp${Number(countries)}` : ""}, named by whoever takes them
+          </p>
         </div>
         <div className="space-y-1">
           <FieldLabel label="Seed" hint={HINTS.seed} htmlFor="cw-seed" />

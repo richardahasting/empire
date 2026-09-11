@@ -112,14 +112,15 @@ public class WorldRepository {
      * the diff path, which silently discarded a country that did not exist yet — a country added to a
      * running game would live in memory, look right, and vanish at the next restart. The conflict
      * branch deliberately leaves {@code controller} and {@code account_id} alone so an existing seat
-     * keeps whoever is playing it.
+     * keeps whoever is playing it — but it does carry {@code name}, because a rename (issue #119)
+     * lives in the world and would otherwise be lost the moment the server restarted.
      */
     private void writeCountries(long gameId, List<Country> countries) {
         for (Country c : countries) {
             jdbc.update("""
                     INSERT INTO country (game_id, country_id, name, capital_x, capital_y, cash, btu, tech, research, education, happiness, handicap, in_sanctuary, bankrupt, plague_left, controller)
                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?::jsonb,?,?,?,'none')
-                    ON CONFLICT (game_id, country_id) DO UPDATE SET capital_x = EXCLUDED.capital_x, capital_y = EXCLUDED.capital_y, cash = EXCLUDED.cash, btu = EXCLUDED.btu,
+                    ON CONFLICT (game_id, country_id) DO UPDATE SET name = EXCLUDED.name, capital_x = EXCLUDED.capital_x, capital_y = EXCLUDED.capital_y, cash = EXCLUDED.cash, btu = EXCLUDED.btu,
                         tech = EXCLUDED.tech, research = EXCLUDED.research, education = EXCLUDED.education, happiness = EXCLUDED.happiness, handicap = EXCLUDED.handicap,
                         in_sanctuary = EXCLUDED.in_sanctuary, bankrupt = EXCLUDED.bankrupt, plague_left = EXCLUDED.plague_left""",
                     gameId, c.id(), c.name(), c.capital().x(), c.capital().y(), c.cash(), c.btu(), c.levels().tech(), c.levels().research(), c.levels().education(),

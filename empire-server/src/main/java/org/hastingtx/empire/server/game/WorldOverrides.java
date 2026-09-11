@@ -15,14 +15,27 @@ import java.util.Map;
  */
 public record WorldOverrides(Integer width, Integer height, Double water,
                              Integer islandSize, Integer spike, Integer minCapitalDistance,
-                             Boolean wrapX, Boolean wrapY, Map<String, Double> landMix) {
+                             Boolean wrapX, Boolean wrapY, Map<String, Double> landMix,
+                             Integer countries) {
 
-    public static final WorldOverrides NONE = new WorldOverrides(null, null, null, null, null, null, null, null, null);
+    public static final WorldOverrides NONE = new WorldOverrides(null, null, null, null, null, null, null, null, null, null);
 
     /** Biggest world we will generate: 1024x2048, measured at ~8 GB and ~82 s an update (issue #81). */
     public static final int MAX_SECTORS = 2_097_152;
     public static final int MAX_DIMENSION = 2048;
     public static final int MIN_DIMENSION = 16;
+    /** Most seats a game may have: emp1 to emp64 (issue #117). */
+    public static final int MAX_COUNTRIES = 64;
+
+    /** Seat names for a game of {@code n} countries: emp1 … empN, renamed when claimed (issue #119). */
+    public static List<String> seatNames(int n) {
+        if (n < 1) throw new IllegalArgumentException("a game needs at least one country");
+        if (n > MAX_COUNTRIES) throw new IllegalArgumentException("at most " + MAX_COUNTRIES + " countries");
+        List<String> out = new ArrayList<>(n);
+        for (int i = 1; i <= n; i++) out.add("emp" + i);
+        return out;
+    }
+
     /** Smallest island the generator will grow; below this it clamps rather than obeying. */
     public static final int MIN_ISLAND_SIZE = 3;
 
@@ -31,7 +44,8 @@ public record WorldOverrides(Integer width, Integer height, Double water,
 
     public boolean empty() {
         return width == null && height == null && water == null && islandSize == null && spike == null
-                && minCapitalDistance == null && wrapX == null && wrapY == null && (landMix == null || landMix.isEmpty());
+                && minCapitalDistance == null && wrapX == null && wrapY == null && (landMix == null || landMix.isEmpty())
+                && this.countries == null;
     }
 
     /**
@@ -81,11 +95,22 @@ public record WorldOverrides(Integer width, Integer height, Double water,
         // check the spacing that will actually be used, whether it came from this override or the preset:
         // shrinking the map or adding countries can make the preset's own spacing impossible
         Object spacing = terrain.get("min_distance_between_capitals");
-        if (spacing instanceof Number d) checkCapitalsFit(w, h, countries, d.intValue());
+        int seats = this.countries != null ? this.countries : countries;
+        if (spacing instanceof Number d) checkCapitalsFit(w, h, seats, d.intValue());
         if (landMix != null && !landMix.isEmpty()) terrain.put("land_mix", normalisedLandMix(landMix));
 
         world.put("terrain", terrain);
         out.put("world", world);
+
+        // the one field that is not part of the world (issue #117): the roster size lives under players
+        if (this.countries != null) {
+            if (this.countries < 1) throw new IllegalArgumentException("a game needs at least one country");
+            if (this.countries > MAX_COUNTRIES)
+                throw new IllegalArgumentException("at most " + MAX_COUNTRIES + " countries (emp1 to emp" + MAX_COUNTRIES + ")");
+            Map<String, Object> players = new LinkedHashMap<>((Map<String, Object>) out.getOrDefault("players", Map.of()));
+            players.put("max_countries", this.countries);
+            out.put("players", players);
+        }
         return out;
     }
 

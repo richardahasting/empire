@@ -21,10 +21,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Issue #109: deleting a game has to take everything it owns with it. Asserting the game row is gone
  * proves nothing — the question is whether any child table is left holding rows for a game that no
- * longer exists. Runs against the real database (needs EMPIRE_DB_PASSWORD) and cleans up after itself.
+ * longer exists. Runs against the real database (needs EMPIRE_TEST_DB_PASSWORD) and cleans up after itself.
  */
-@SpringBootTest(properties = "empire.mail-mode=log")
-@EnabledIfEnvironmentVariable(named = "EMPIRE_DB_PASSWORD", matches = ".+")
+@SpringBootTest
+@EnabledIfEnvironmentVariable(named = "EMPIRE_TEST_DB_PASSWORD", matches = ".+")
 class GameDeleteCascadeTest {
     @Autowired WorldRepository worlds;
     @Autowired GameRepository games;

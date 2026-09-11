@@ -29,7 +29,7 @@ class WorldOverridesGenerateTest {
     }
 
     private static WorldOverrides only(Integer w, Integer h, Double water, Integer island, Integer spike, Integer cap, Boolean wx, Boolean wy, Map<String, Double> mix) {
-        return new WorldOverrides(w, h, water, island, spike, cap, wx, wy, mix);
+        return new WorldOverrides(w, h, water, island, spike, cap, wx, wy, mix, null);
     }
 
     private static long count(World w, Terrain t) {

@@ -55,6 +55,18 @@
     </resources>
     <plugins>
       <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <!-- every test runs under the "test" profile, which repoints the datasource at empire_test.
+               Without this a @SpringBootTest picks up whatever database the environment names, and the
+               environment that makes the DB tests run at all is the production one (issue #115). -->
+          <systemPropertyVariables>
+            <spring.profiles.active>test</spring.profiles.active>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+      <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
         <version>${spring-boot.version}</version>

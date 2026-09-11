@@ -36,11 +36,20 @@ public class GameController {
     @GetMapping("/{id}")
     public GameService.Summary one(@PathVariable long id, HttpServletRequest req) { return games.summary(games.get(id), AuthInterceptor.current(req)); }
 
-    public record JoinRequest(int countryId) {}
+    /** {@code name} is required: a seat arrives called emp7 and is named as it is claimed (issue #119). */
+    public record JoinRequest(int countryId, String name) {}
 
     @PostMapping("/{id}/join")
     public GameService.Summary join(@PathVariable long id, @RequestBody JoinRequest r, HttpServletRequest req) {
-        return games.join(id, AuthInterceptor.current(req), r.countryId());
+        return games.join(id, AuthInterceptor.current(req), r.countryId(), r.name());
+    }
+
+    public record RenameRequest(String name) {}
+
+    /** Rename your own country (issue #119). */
+    @PostMapping("/{id}/rename")
+    public GameService.Summary rename(@PathVariable long id, @RequestBody RenameRequest r, HttpServletRequest req) {
+        return games.renameMine(id, AuthInterceptor.current(req), r.name());
     }
 
     @GetMapping("/{id}/view")
