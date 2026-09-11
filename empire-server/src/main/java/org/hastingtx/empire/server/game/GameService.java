@@ -144,7 +144,7 @@ public class GameService {
         ConfigLoader.Loaded l = loader.loadPreset(preset);
         l = withWorld(l, overrides, countryNames.size());
         GameConfig cfg = l.config();
-        World world = new WorldGenerator(cfg).generate(countryNames, seed);
+        World world = placing(() -> new WorldGenerator(cfg).generate(countryNames, seed));
         long id = games.create(name, preset, loader.toYaml(l.raw()), l.hash(), seed, world.width(), world.height(), world.wrapX(), world.wrapY(), createdBy);
         worlds.saveAll(id, world, Commodities.of(cfg));
         games.setStatus(id, "running");
@@ -275,6 +275,23 @@ public class GameService {
         } finally { g.lock.unlock(); }
     }
 
+    /**
+     * The generator places capitals by rejection sampling and, when it cannot, surrenders with an
+     * IllegalStateException — which is not mapped and would reach the deity as a 500 with a stack
+     * trace after a long wait (issue #108). The packing bound in {@link WorldOverrides} rejects the
+     * arrangements that are certainly impossible; this catches the rest, where a legal arrangement
+     * exists on paper but the sampler cannot find it, and says so as a 400.
+     */
+    static World placing(java.util.function.Supplier<World> generate) {
+        try {
+            return generate.get();
+        } catch (IllegalStateException e) {
+            throw new IllegalArgumentException(e.getMessage()
+                    + " — there may be room in principle, but not enough for the generator to find a layout. "
+                    + "Move the capitals closer together, take a country out, or make the world bigger.", e);
+        }
+    }
+
     /** What came of seating a new country. {@code token} is non-null only for a bot, and only here. */
     public record Seated(int countryId, String name, Coord capital, String controller, String token) {}
 
@@ -291,7 +308,7 @@ public class GameService {
         g.lock.lock();
         try {
             World before = g.world;
-            World after = new WorldGenerator(g.cfg).addCountry(before, name, g.seed);
+            World after = placing(() -> new WorldGenerator(g.cfg).addCountry(before, name, g.seed));
             Country c = after.countries().get(after.countries().size() - 1);
             worlds.saveDiff(id, before, after, g.com);
             g.world = after;

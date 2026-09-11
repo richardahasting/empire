@@ -104,11 +104,12 @@ class AddCountryTest {
     }
 
     /**
-     * The interesting case. With every unowned land sector taken, the generator has to raise an island
-     * rather than refuse — and the new country still lands on land, owning it, at a legal distance.
+     * The world with no room left. The generator must refuse rather than raise land under someone —
+     * and the refusal has to say which of the two reasons applies, because "lower the spacing" and
+     * "you need a bigger world" are different actions for the deity.
      */
     @Test
-    void anIslandIsRaisedWhenThereIsNoVacantLand() {
+    void aWorldWithNoVacantLandIsRefusedWithAReason() {
         World before = twoPlayers();
         List<Sector> sectors = new ArrayList<>(before.sectors());
         for (int i = 0; i < sectors.size(); i++) {
@@ -118,13 +119,38 @@ class AddCountryTest {
         World full = before.withSectors(sectors);
         long seaBefore = full.sectors().stream().filter(s -> s.terrain() == Terrain.OCEAN).count();
 
-        World after = add(full, "Carol");
+        assertThatThrownBy(() -> add(full, "Carol"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("nowhere to seat Carol")
+                .hasMessageContaining("are owned")
+                .hasMessageContaining("bigger world");
 
-        Sector cap = capitalOf(after, 2);
-        assertThat(cap.terrain().isLand()).as("the capital must be on land").isTrue();
-        assertThat(cap.owner()).isEqualTo(2);
-        assertThat(after.sectors().stream().filter(s -> s.terrain() == Terrain.OCEAN).count())
-                .as("an island should have been raised").isLessThan(seaBefore);
+        assertThat(full.sectors().stream().filter(s -> s.terrain() == Terrain.OCEAN).count())
+                .as("the map must not have been touched").isEqualTo(seaBefore);
+    }
+
+    /** When the blocker is spacing rather than ownership, the message should point at the spacing. */
+    @Test
+    void aCrowdedWorldSaysTheSpacingIsWhatIsInTheWay() {
+        World before = twoPlayers();
+        // nothing owned beyond the capitals, but every free hex is inside the exclusion radius
+        GameConfig wide = new ConfigLoader().loadYaml(new ConfigLoader().toYaml(
+                widened(new ConfigLoader().loadPreset("teaching").raw(), 999))).config();
+        assertThatThrownBy(() -> new WorldGenerator(wide).addCountry(before, "Carol", SEED))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("within 999 sectors of an existing capital")
+                .hasMessageContaining("Lowering the minimum distance");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static java.util.Map<String, Object> widened(java.util.Map<String, Object> raw, int spacing) {
+        var out = new java.util.LinkedHashMap<>(raw);
+        var world = new java.util.LinkedHashMap<>((java.util.Map<String, Object>) out.get("world"));
+        var terrain = new java.util.LinkedHashMap<>((java.util.Map<String, Object>) world.get("terrain"));
+        terrain.put("min_distance_between_capitals", spacing);
+        world.put("terrain", terrain);
+        out.put("world", world);
+        return out;
     }
 
     /** A seated country must survive an update, not just exist in the returned world. */

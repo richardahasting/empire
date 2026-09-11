@@ -184,7 +184,8 @@ function AddCountry({ game, onAdded }: { game: GameSummary; onAdded: () => Promi
               <DialogTitle>Add a country to “{game.name}”</DialogTitle>
               <DialogDescription>
                 A capital and a sanctuary are placed on unowned land, at the preset's minimum distance
-                from every other capital. If the world has no room left, a new island is raised.
+                from every other capital. If there is no such sector the world is left alone and this
+                says why — whether the land is taken or the capitals are simply spaced too far apart.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-3 py-2">
