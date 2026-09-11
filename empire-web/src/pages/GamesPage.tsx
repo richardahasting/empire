@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { FieldLabel } from "@/components/ui/tooltip";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Countdown } from "@/game/Dashboard";
 
@@ -82,6 +84,31 @@ export function GamesPage() {
   );
 }
 
+/** One preset's world as shipped, used for the placeholders on the create form. */
+interface PresetWorld {
+  preset: string; name: string; width: number; height: number;
+  wrapX: boolean; wrapY: boolean; water: number;
+  islandSize: number; spike: number; minCapitalDistance: number;
+  landMix: Record<string, number>; maxCountries: number;
+}
+
+const LAND_TERRAINS = ["wilderness", "plains", "forest", "mountain", "swamp"] as const;
+type LandTerrain = (typeof LAND_TERRAINS)[number];
+
+const HINTS = {
+  preset: "The rule set the world is built from. It decides everything not on this form — the economy, which units exist, how long an update is. The fields below only override its map.",
+  countries: "One country per name, comma separated. Each gets its own island grown around its capital, so more countries means more land even at the same water percentage.",
+  seed: "The one number every random draw in this game comes from: the map, and every update's population, plague and detection rolls. The same seed with the same settings and the same moves replays the identical game. Leave it blank for a world nobody has seen.",
+  size: "The map in sectors, width × height. Up to 2048 a side and 2,097,152 sectors in all; the largest worlds take about 82 seconds an update.",
+  water: "How much of the map is sea. Everything left over is land, split between the countries' own islands and whatever extra islands are needed to fill the quota.",
+  islandSize: "Average sectors in one landmass. Small values scatter the land into an archipelago; large values gather it into a few continents that countries may end up sharing.",
+  spike: "How ragged the coastlines come out, 0 to 100. High values grow land off the newest edge, making fingers, peninsulas and inlets. Low values grow it evenly, making round blobs.",
+  capitalDistance: "The fewest sectors allowed between any two capitals. Raise it to keep players apart early; raise it too far for the map and there is nowhere left to put everyone.",
+  wrapX: "The east edge joins the west, so sailing west far enough brings you back around. Turn it off for a map with hard edges you can back into.",
+  wrapY: "The north edge joins the south. With both wraps on the world is a torus, which is what the original Empire did. Needs an even height.",
+  landMix: "What the land is made of. These are weights, not percentages — they are scaled to fit, so only the ratios between them matter. Mountains carry the minerals and gold, plains carry the fertility, swamp carries the oil, and forest sits between.",
+} as const;
+
 function CreateGame({ onCreated }: { onCreated: () => Promise<void> }) {
   const [name, setName] = useState("New world");
   const [preset, setPreset] = useState("teaching");
@@ -90,40 +117,131 @@ function CreateGame({ onCreated }: { onCreated: () => Promise<void> }) {
   const [width, setWidth] = useState("");
   const [height, setHeight] = useState("");
   const [water, setWater] = useState("");
+  const [islandSize, setIslandSize] = useState("");
+  const [spike, setSpike] = useState("");
+  const [capitalDistance, setCapitalDistance] = useState("");
+  const [wrapX, setWrapX] = useState<boolean | null>(null);
+  const [wrapY, setWrapY] = useState<boolean | null>(null);
+  const [mix, setMix] = useState<Record<LandTerrain, string>>({ wilderness: "", plains: "", forest: "", mountain: "", swamp: "" });
+  const [presets, setPresets] = useState<PresetWorld[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => { api.get<PresetWorld[]>("/admin/presets").then(setPresets).catch(() => setPresets([])); }, []);
+  const base = presets.find(p => p.preset === preset);
+
+  const num = (s: string) => (s.trim() ? Number(s) : null);
+  const mixPayload = () => {
+    const touched = LAND_TERRAINS.filter(t => mix[t].trim() !== "");
+    if (touched.length === 0) return null;
+    // an untouched terrain keeps the preset's weight, so editing one field does not silently zero the rest
+    const out: Record<string, number> = {};
+    for (const t of LAND_TERRAINS) out[t] = mix[t].trim() ? Number(mix[t]) : (base?.landMix[t] ?? 0) * 100;
+    return out;
+  };
+
   const create = async () => {
     setBusy(true); setError(null);
     try {
       await api.post("/admin/games", {
         name, preset,
         countries: countries.split(",").map(s => s.trim()).filter(Boolean),
-        seed: seed ? Number(seed) : null,
-        width: width ? Number(width) : null,
-        height: height ? Number(height) : null,
-        water: water ? Number(water) : null,
+        seed: num(seed), width: num(width), height: num(height), water: num(water),
+        islandSize: num(islandSize), spike: num(spike), minCapitalDistance: num(capitalDistance),
+        wrapX, wrapY, landMix: mixPayload(),
       });
       await onCreated();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
+
+  const ph = (v: number | undefined) => (v === undefined ? "preset" : String(v));
+
   return (
-    <section className="space-y-3 rounded-lg border border-border bg-card p-4 text-sm">
+    <section className="space-y-4 rounded-lg border border-border bg-card p-4 text-sm">
       <h2 className="font-medium">Create a world <span className="text-muted-foreground">(deity)</span></h2>
-      <div className="grid gap-2 sm:grid-cols-2">
-        <label>Name<Input value={name} onChange={e => setName(e.target.value)} /></label>
-        <label>Preset<Select value={preset} onChange={e => setPreset(e.target.value)}><option value="teaching">teaching (16×16, economy only)</option><option value="sandbox">sandbox</option><option value="blitz">blitz</option><option value="classic">classic (128×64)</option></Select></label>
-        <label>Countries<Input value={countries} onChange={e => setCountries(e.target.value)} placeholder="comma separated" /></label>
-        <label>Seed<Input value={seed} onChange={e => setSeed(e.target.value)} placeholder="random" /></label>
-        <label>Width<Input value={width} onChange={e => setWidth(e.target.value)} placeholder="preset" inputMode="numeric" /></label>
-        <label>Height<Input value={height} onChange={e => setHeight(e.target.value)} placeholder="preset" inputMode="numeric" /></label>
-        <label>Water %<Input value={water} onChange={e => setWater(e.target.value)} placeholder="preset (70)" inputMode="numeric" /></label>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="space-y-1"><span>Name</span><Input value={name} onChange={e => setName(e.target.value)} /></label>
+        <div className="space-y-1">
+          <FieldLabel label="Preset" hint={HINTS.preset} htmlFor="cw-preset" />
+          <Select id="cw-preset" value={preset} onChange={e => setPreset(e.target.value)}>
+            <option value="teaching">teaching (16×16, economy only)</option>
+            <option value="sandbox">sandbox</option>
+            <option value="blitz">blitz</option>
+            <option value="classic">classic (128×64)</option>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <FieldLabel label="Countries" hint={HINTS.countries} htmlFor="cw-countries" />
+          <Input id="cw-countries" value={countries} onChange={e => setCountries(e.target.value)} placeholder="comma separated" />
+          {base && <p className="text-xs text-muted-foreground">this preset allows up to {base.maxCountries}</p>}
+        </div>
+        <div className="space-y-1">
+          <FieldLabel label="Seed" hint={HINTS.seed} htmlFor="cw-seed" />
+          <div className="flex gap-2">
+            <Input id="cw-seed" value={seed} onChange={e => setSeed(e.target.value)} placeholder="random" inputMode="numeric" />
+            <Button type="button" variant="soft" size="sm" onClick={() => setSeed(String(Math.floor(Math.random() * 1e9)))}>Roll</Button>
+          </div>
+        </div>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Size and water override the preset. Up to 2048 a side and 2,097,152 sectors in all (1024×2048);
-        a world that big takes about 82 seconds an update. Water is the percent of the map that is sea.
-      </p>
+
+      <fieldset className="space-y-3 rounded-[var(--radius)] border border-border p-3">
+        <legend className="px-1 text-xs uppercase tracking-wider text-muted-foreground">Map</legend>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="space-y-1">
+            <FieldLabel label="Width" hint={HINTS.size} htmlFor="cw-w" />
+            <Input id="cw-w" value={width} onChange={e => setWidth(e.target.value)} placeholder={ph(base?.width)} inputMode="numeric" />
+          </div>
+          <div className="space-y-1">
+            <FieldLabel label="Height" hint={HINTS.size} htmlFor="cw-h" />
+            <Input id="cw-h" value={height} onChange={e => setHeight(e.target.value)} placeholder={ph(base?.height)} inputMode="numeric" />
+          </div>
+          <div className="space-y-1">
+            <FieldLabel label="Water %" hint={HINTS.water} htmlFor="cw-water" />
+            <Input id="cw-water" value={water} onChange={e => setWater(e.target.value)} placeholder={ph(base?.water)} inputMode="numeric" />
+          </div>
+          <div className="space-y-1">
+            <FieldLabel label="Island size" hint={HINTS.islandSize} htmlFor="cw-island" />
+            <Input id="cw-island" value={islandSize} onChange={e => setIslandSize(e.target.value)} placeholder={ph(base?.islandSize)} inputMode="numeric" />
+          </div>
+          <div className="space-y-1">
+            <FieldLabel label="Spike" hint={HINTS.spike} htmlFor="cw-spike" />
+            <Input id="cw-spike" value={spike} onChange={e => setSpike(e.target.value)} placeholder={ph(base?.spike)} inputMode="numeric" />
+          </div>
+          <div className="space-y-1">
+            <FieldLabel label="Capitals apart" hint={HINTS.capitalDistance} htmlFor="cw-cap" />
+            <Input id="cw-cap" value={capitalDistance} onChange={e => setCapitalDistance(e.target.value)} placeholder={ph(base?.minCapitalDistance)} inputMode="numeric" />
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-6">
+          <span className="inline-flex items-center gap-2">
+            <Checkbox id="cw-wrapx" checked={wrapX ?? base?.wrapX ?? true} onChange={e => setWrapX(e.target.checked)} />
+            <FieldLabel label="Wrap east–west" hint={HINTS.wrapX} htmlFor="cw-wrapx" />
+          </span>
+          <span className="inline-flex items-center gap-2">
+            <Checkbox id="cw-wrapy" checked={wrapY ?? base?.wrapY ?? true} onChange={e => setWrapY(e.target.checked)} />
+            <FieldLabel label="Wrap north–south" hint={HINTS.wrapY} htmlFor="cw-wrapy" />
+          </span>
+        </div>
+      </fieldset>
+
+      <fieldset className="space-y-3 rounded-[var(--radius)] border border-border p-3">
+        <legend className="px-1 text-xs uppercase tracking-wider text-muted-foreground">
+          <FieldLabel label="Land mix" hint={HINTS.landMix} />
+        </legend>
+        <div className="grid gap-3 sm:grid-cols-5">
+          {LAND_TERRAINS.map(t => (
+            <div key={t} className="space-y-1">
+              <label className="capitalize" htmlFor={`cw-mix-${t}`}>{t}</label>
+              <Input id={`cw-mix-${t}`} value={mix[t]} onChange={e => setMix({ ...mix, [t]: e.target.value })}
+                     placeholder={base ? String(Math.round((base.landMix[t] ?? 0) * 100)) : "preset"} inputMode="numeric" />
+            </div>
+          ))}
+        </div>
+      </fieldset>
+
       {error && <p className="text-destructive">{error}</p>}
-      <Button disabled={busy} onClick={() => void create()}>Create</Button>
+      <Button disabled={busy} onClick={() => void create()}>{busy ? "Generating…" : "Create"}</Button>
     </section>
   );
 }

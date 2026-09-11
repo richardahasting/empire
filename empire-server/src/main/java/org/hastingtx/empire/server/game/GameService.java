@@ -82,53 +82,61 @@ public class GameService {
     // ------------------------------------------------------------------------------ admin
 
     /**
-     * Rebind the preset with a different map. The raw YAML map is patched and reloaded rather than the
-     * bound config being mutated, so what the game stores is exactly what it plays by.
+     * Rebind the preset with a different world. The raw YAML map is patched and reloaded rather than
+     * the bound config being mutated, so what the game stores is exactly what it plays by.
      */
-    @SuppressWarnings("unchecked")
-    private ConfigLoader.Loaded withMap(ConfigLoader.Loaded l, Integer width, Integer height, Double waterPercent) {
-        if (width == null && height == null && waterPercent == null) return l;
-        Map<String, Object> raw = new java.util.LinkedHashMap<>(l.raw());
-        Map<String, Object> world = new java.util.LinkedHashMap<>((Map<String, Object>) raw.getOrDefault("world", Map.of()));
-        int w = width != null ? width : ((Number) world.get("width")).intValue();
-        int h = height != null ? height : ((Number) world.get("height")).intValue();
-        if (w < MIN_DIMENSION || h < MIN_DIMENSION) throw new IllegalArgumentException("a world is at least " + MIN_DIMENSION + " sectors on a side");
-        if (w > MAX_DIMENSION || h > MAX_DIMENSION) throw new IllegalArgumentException("a world is at most " + MAX_DIMENSION + " sectors on a side");
-        if ((long) w * h > MAX_SECTORS)
-            throw new IllegalArgumentException(w + "x" + h + " is " + (long) w * h + " sectors; the most we will generate is " + MAX_SECTORS + " (e.g. 1024x2048)");
-        world.put("width", w);
-        world.put("height", h);
-        if (waterPercent != null) {
-            if (waterPercent < 0 || waterPercent > 95) throw new IllegalArgumentException("water is 0 to 95 percent — the generator needs somewhere to put the capitals");
-            Map<String, Object> terrain = new java.util.LinkedHashMap<>((Map<String, Object>) world.getOrDefault("terrain", Map.of()));
-            terrain.put("land_fraction", Math.round((1.0 - waterPercent / 100.0) * 1000.0) / 1000.0);
-            world.put("terrain", terrain);
-        }
-        raw.put("world", world);
-        return loader.loadYaml(loader.toYaml(raw));
+    private ConfigLoader.Loaded withWorld(ConfigLoader.Loaded l, WorldOverrides o, int countries) {
+        if (o == null || o.empty()) return l;
+        return loader.loadYaml(loader.toYaml(o.patch(l.raw(), countries)));
     }
 
-    /** Biggest world we will generate: 1024x2048, measured at ~8 GB and ~82 s an update (issue #81). */
-    public static final int MAX_SECTORS = 2_097_152;
-    public static final int MAX_DIMENSION = 2048;
-    public static final int MIN_DIMENSION = 16;
+    /** The presets the deity can build from, in the order the form offers them. */
+    public static final List<String> PRESETS = List.of("teaching", "sandbox", "blitz", "classic");
+
+    /** Each preset's world as shipped, so the create form can show the real defaults it is overriding. */
+    public List<org.hastingtx.empire.server.api.AdminController.PresetWorld> presetWorlds() {
+        List<org.hastingtx.empire.server.api.AdminController.PresetWorld> out = new ArrayList<>();
+        for (String p : PRESETS) {
+            var w = loader.loadPreset(p).config().world();
+            var t = w.terrain();
+            out.add(new org.hastingtx.empire.server.api.AdminController.PresetWorld(
+                    p, w.name(), w.width(), w.height(), w.wrapX(), w.wrapY(),
+                    Math.round((1.0 - t.landFraction()) * 1000.0) / 10.0,
+                    t.islandSize(), t.spike(), t.minDistanceBetweenCapitals(),
+                    t.landMix(), loader.loadPreset(p).config().players().maxCountries()));
+        }
+        return out;
+    }
+
+
+    /**
+     * Reject a min-capital-distance the generator cannot satisfy, before it spends 20,000 rejection
+     * samples discovering that for itself and throws an IllegalStateException at the deity as a 500.
+     *
+     * TODO(richard): decide and implement the rule. See the note in the PR/issue #105 for the
+     * trade-offs — a strict packing bound rejects worlds that would in fact have generated, and a
+     * loose one lets slow failures through.
+     */
+    private static void checkCapitalsFit(int width, int height, int countries, int minDistance) {
+        // TODO: implement
+    }
+
 
     public Game create(String preset, String name, List<String> countryNames, long seed, Long createdBy) {
-        return create(preset, name, countryNames, seed, createdBy, null, null, null);
+        return create(preset, name, countryNames, seed, createdBy, WorldOverrides.NONE);
     }
 
     /**
-     * Create a game, optionally overriding the preset's map (issue #81). {@code width} and
-     * {@code height} are in sectors; {@code waterPercent} is how much of the world is sea, which sets
-     * {@code terrain.land_fraction}. A null keeps whatever the preset says. The overrides are written
-     * into the game's stored config snapshot, so the game keeps playing by them for life.
+     * Create a game, optionally overriding the preset's world (issues #81, #105). A null field in
+     * {@code overrides} keeps whatever the preset says. The overrides are written into the game's
+     * stored config snapshot, so the game keeps playing by them for life.
      */
     public Game create(String preset, String name, List<String> countryNames, long seed, Long createdBy,
-                       Integer width, Integer height, Double waterPercent) {
+                       WorldOverrides overrides) {
         if (countryNames == null || countryNames.isEmpty()) throw new IllegalArgumentException("at least one country");
         if (new HashSet<>(countryNames).size() != countryNames.size()) throw new IllegalArgumentException("country names must be unique");
         ConfigLoader.Loaded l = loader.loadPreset(preset);
-        l = withMap(l, width, height, waterPercent);
+        l = withWorld(l, overrides, countryNames.size());
         GameConfig cfg = l.config();
         World world = new WorldGenerator(cfg).generate(countryNames, seed);
         long id = games.create(name, preset, loader.toYaml(l.raw()), l.hash(), seed, world.width(), world.height(), world.wrapX(), world.wrapY(), createdBy);

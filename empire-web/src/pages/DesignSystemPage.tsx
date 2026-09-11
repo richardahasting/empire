@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuLabel, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider, FieldLabel } from "@/components/ui/tooltip";
 
 // ─── Token list (matches shared/tokens.css) ────────────────────────────────
 const COLOR_TOKENS = [
@@ -327,6 +328,42 @@ function CheckboxSection() {
   );
 }
 
+function TooltipSection() {
+  return (
+    <TooltipProvider delayDuration={200}>
+      <section style={sectionStyle}>
+        <h2 style={sectionHeadingStyle}>Tooltip</h2>
+        <p className="text-sm text-muted-foreground">
+          Explains a control without spending a line of the form on it. The trigger is a real button,
+          so it opens on hover, on keyboard focus, and on tap. Keep the text to a sentence or two —
+          anything longer belongs in the docs, not in a popover.
+        </p>
+        <div className="flex flex-wrap items-center gap-8 pt-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="soft" size="sm">Hover or focus me</Button>
+            </TooltipTrigger>
+            <TooltipContent>Any element can be the trigger — wrap it with <code>asChild</code>.</TooltipContent>
+          </Tooltip>
+          <div className="space-y-1">
+            <FieldLabel
+              label="Spike"
+              hint="How ragged the coastlines come out, 0 to 100. High values grow land off the newest edge, making fingers and inlets."
+              htmlFor="ds-spike"
+            />
+            <Input id="ds-spike" placeholder="10" style={{ maxWidth: 160 }} />
+          </div>
+        </div>
+        <p className="pt-3 text-sm text-muted-foreground">
+          <code>FieldLabel</code> is the form pairing: a label plus a help affordance. Prefer it over a
+          muted hint line whenever the form has more than a handful of fields. One
+          <code> TooltipProvider </code>near the app root covers every tooltip under it.
+        </p>
+      </section>
+    </TooltipProvider>
+  );
+}
+
 function RadioSection() {
   const [selected, setSelected] = React.useState("monthly");
 
@@ -470,6 +507,7 @@ export default function DesignSystem() {
         <InputSection />
         <SelectSection />
         <CheckboxSection />
+        <TooltipSection />
         <RadioSection />
         <DialogSection />
         <DropdownMenuSection />
