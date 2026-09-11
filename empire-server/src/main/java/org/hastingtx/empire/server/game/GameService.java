@@ -42,6 +42,9 @@ public class GameService {
         public final String name, preset; public final long seed;
         public volatile World world; public volatile String status;
         public volatile long intervalSeconds; public volatile java.time.Instant nextUpdateAt;
+        /** Set under {@link #lock} when the game is being deleted, so an update that is already
+         *  waiting on the lock abandons rather than writing rows back to a game that is gone. */
+        volatile boolean deleted;
         final ReentrantLock lock = new ReentrantLock();
         Game(GameRow row, GameConfig cfg, World world) {
             this.id = row.id(); this.cfg = cfg; this.com = Commodities.of(cfg); this.exec = new CommandExecutor(cfg);
@@ -225,7 +228,7 @@ public class GameService {
     public void tick() {
         java.time.Instant now = java.time.Instant.now();
         for (Game g : loaded.values()) {
-            if (!"running".equals(g.status) || g.intervalSeconds <= 0 || g.nextUpdateAt == null || g.nextUpdateAt.isAfter(now)) continue;
+            if (g.deleted || !"running".equals(g.status) || g.intervalSeconds <= 0 || g.nextUpdateAt == null || g.nextUpdateAt.isAfter(now)) continue;
             try {
                 forceUpdate(g.id);
                 java.time.Instant next = g.nextUpdateAt.plusSeconds(g.intervalSeconds);
@@ -246,10 +249,34 @@ public class GameService {
         return org.hastingtx.empire.engine.update.Projection.of(w, g.cfg, country, g.seed * 1_000_003L + w.updateNumber() + 1);
     }
 
+    /**
+     * Delete a game and everything it owns (issue #109). Every game-owned table is ON DELETE CASCADE
+     * on game(id), so the row delete takes the map, countries, ships, orders and the whole
+     * update and command history with it. There is no undo.
+     *
+     * <p>Ordering matters: the flag goes up and the game leaves the loaded map under its own lock, so
+     * an update already in flight finishes first and one already waiting for the lock abandons
+     * instead of writing rows back to a game that no longer exists.
+     */
+    public void delete(long id, Account by) {
+        if (!by.admin()) throw new SecurityException("deity only");
+        Game g = get(id);
+        g.lock.lock();
+        try {
+            g.deleted = true;
+            g.status = "deleted";
+            loaded.remove(id);
+            games.delete(id);
+            log.info("deleted game {} '{}' ({}x{}, {} updates) by account {}",
+                    id, g.name, g.world.width(), g.world.height(), g.world.updateNumber(), by.id());
+        } finally { g.lock.unlock(); }
+    }
+
     public UpdateResult forceUpdate(long gameId) {
         Game g = get(gameId);
         g.lock.lock();
         try {
+            if (g.deleted) throw new NoSuchElementException("game " + gameId + " was deleted");
             long n = g.world.updateNumber() + 1;
             long seed = g.seed * 1_000_003L + n;
             long t0 = System.nanoTime();

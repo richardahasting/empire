@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FieldLabel } from "@/components/ui/tooltip";
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Countdown } from "@/game/Dashboard";
 
@@ -64,6 +65,7 @@ export function GamesPage() {
                 {me?.admin && <Button size="sm" variant="ghost" onClick={() => reloadRules(g)} title="replace this game's rule snapshot with the preset as shipped now">Reload rules</Button>}
                 {me?.admin && <Button size="sm" variant="ghost" onClick={() => seedSea(g)} title="give the sea its fishing grounds (ocean fertility by region)">Seed fishing grounds</Button>}
                 {me?.admin && <Button size="sm" variant="secondary" onClick={() => runUpdate(g)}>Run update</Button>}
+                {me?.admin && <DeleteGame game={g} onDeleted={load} />}
                 {g.myCountry != null && <Button asChild size="sm"><Link to={`/games/${g.id}`}>Play</Link></Button>}
               </div>
             </div>
@@ -108,6 +110,60 @@ const HINTS = {
   wrapY: "The north edge joins the south. With both wraps on the world is a torus, which is what the original Empire did. Needs an even height.",
   landMix: "What the land is made of. These are weights, not percentages — they are scaled to fit, so only the ratios between them matter. Mountains carry the minerals and gold, plains carry the fertility, swamp carries the oil, and forest sits between.",
 } as const;
+
+/**
+ * Deleting a game takes its map, its countries and its whole history with it, and there is no undo.
+ * The name has to be typed: a dialog you can dismiss with a reflexive click on "OK" is not a
+ * confirmation, and the other admin actions here are all recoverable in a way this one is not.
+ */
+function DeleteGame({ game, onDeleted }: { game: GameSummary; onDeleted: () => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const matches = typed.trim() === game.name;
+
+  const close = (next: boolean) => { setOpen(next); if (!next) { setTyped(""); setError(null); } };
+
+  const remove = async () => {
+    if (!matches) return;
+    setBusy(true); setError(null);
+    try {
+      await api.post(`/admin/games/${game.id}`, undefined, "DELETE");
+      close(false);
+      await onDeleted();
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={close}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="ghost" title="delete this game and everything in it">Delete</Button>
+      </DialogTrigger>
+      <DialogContent size="sm">
+        <DialogHeader>
+          <DialogTitle>Delete “{game.name}”?</DialogTitle>
+          <DialogDescription>
+            This removes the {game.width}×{game.height} map, every country and ship, and all{" "}
+            {game.updateNumber} updates of history. It cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <label htmlFor={`del-${game.id}`} className="text-sm">Type <span className="font-medium text-foreground">{game.name}</span> to confirm</label>
+          <Input id={`del-${game.id}`} value={typed} onChange={e => setTyped(e.target.value)} autoComplete="off"
+                 onKeyDown={e => { if (e.key === "Enter" && matches && !busy) void remove(); }} />
+          {error && <p className="text-sm text-destructive">{error}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="soft" size="sm" onClick={() => close(false)}>Cancel</Button>
+          <Button variant="danger" size="sm" disabled={!matches || busy} onClick={() => void remove()}>
+            {busy ? "Deleting…" : "Delete for good"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function CreateGame({ onCreated }: { onCreated: () => Promise<void> }) {
   const [name, setName] = useState("New world");
