@@ -23,7 +23,6 @@ public record WorldCfg(
             String generator,
             double landFraction,
             int islandSize,
-            int continentCount,
             int spike,
             int minDistanceBetweenCapitals,
             Map<String, Double> landMix) {}

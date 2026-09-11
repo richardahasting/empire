@@ -60,6 +60,20 @@ class ConfigLoaderTest {
         assertThatThrownBy(() -> loader.load(f)).isInstanceOf(ConfigException.class).hasMessageContaining("unknown terrain tundra");
     }
 
+    /**
+     * Issue #106: continent_count was inert config, and removing it from WorldCfg is not free —
+     * the binder rejects unknown keys, so every game snapshot stored before the removal has to be
+     * migrated (V17) or GameService.loadAll will quietly drop those games. This pins the reason:
+     * an old snapshot really does fail to bind now.
+     */
+    @Test
+    void aSnapshotStillCarryingContinentCountNoLongerBinds() throws Exception {
+        Path dir = Files.createTempDirectory("empire-cfg");
+        Path f = dir.resolve("old-snapshot.yaml");
+        Files.writeString(f, "extends: " + schemaPath() + "\nworld: { terrain: { continent_count: 0 } }\n");
+        assertThatThrownBy(() -> loader.load(f)).isInstanceOf(ConfigException.class).hasMessageContaining("continent_count");
+    }
+
     private static String schemaPath() {
         return Path.of("..", "config", "schema.yaml").toAbsolutePath().normalize().toString();
     }
