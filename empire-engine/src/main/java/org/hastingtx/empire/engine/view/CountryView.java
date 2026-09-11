@@ -102,18 +102,42 @@ public record CountryView(
 
     public record Delivery(String dir, double threshold) {}
 
+    /**
+     * The deity's view: the same shape as a country's, with the fog lifted (issue #128).
+     *
+     * <p>Fog is not scattered through this class — it is the {@code visible} set and nothing else, so
+     * seeing everything is a substitution rather than a second renderer. Map memory and contacts
+     * become moot on the way: nothing is ever remembered-but-not-seen, and every ship is simply there.
+     *
+     * <p>Coordinates come back <b>absolute</b>, not relative. Putting the deity's capital at the
+     * origin very nearly achieves that by itself — but on a wrapped world {@link #relative} folds
+     * anything more than half a map away to the short way round, so hex {@code 10,2} on a 16-wide
+     * torus would read {@code -6,2}. That is right for a player and wrong for a tool whose whole job
+     * is editing a named sector: the deity would see one number and have to type another.
+     *
+     * <p>Deliberately its own entry point rather than a flag on {@link #of}. A boolean that turns off
+     * the fog is exactly the parameter that eventually gets passed {@code true} by accident.
+     */
+    public static CountryView omniscient(World w, GameConfig cfg, int countryId) {
+        Set<Coord> everywhere = new TreeSet<>();
+        for (Sector s : w.sectors()) everywhere.add(s.at());
+        return build(w, cfg, countryId, everywhere, true);
+    }
+
     public static CountryView of(World w, GameConfig cfg, int countryId) {
+        return build(w, cfg, countryId, Visibility.of(w, cfg, countryId), false);
+    }
+
+    private static CountryView build(World w, GameConfig cfg, int countryId, Set<Coord> visible, boolean absolute) {
         Commodities com = Commodities.of(cfg);
         Country c = w.country(countryId);
         List<String> ids = new ArrayList<>();
         for (int i = 0; i < com.size(); i++) ids.add(com.id(i));
 
-        Set<Coord> visible = Visibility.of(w, cfg, countryId);
-
         List<SectorView> views = new ArrayList<>();
         for (Coord at : visible) {
             Sector s = w.sector(at);
-            Coord rel = relative(w, c.capital(), at);
+            Coord rel = absolute ? at : relative(w, c.capital(), at);
             if (s.owner() == countryId) {
                 Map<String, Double> stock = new LinkedHashMap<>(), th = new LinkedHashMap<>(), held = new LinkedHashMap<>();
                 Map<String, Delivery> deliveries = new LinkedHashMap<>();

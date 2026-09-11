@@ -10,7 +10,11 @@ import org.hastingtx.empire.engine.gen.WorldGenerator;
 import org.hastingtx.empire.engine.model.Commodities;
 import org.hastingtx.empire.engine.model.Coord;
 import org.hastingtx.empire.engine.model.Country;
+import org.hastingtx.empire.engine.model.Levels;
+import org.hastingtx.empire.engine.model.Resources;
 import org.hastingtx.empire.engine.model.Sector;
+import org.hastingtx.empire.engine.model.Stocks;
+import org.hastingtx.empire.engine.update.Ledger;
 import org.hastingtx.empire.engine.model.World;
 import org.hastingtx.empire.engine.update.Update;
 import org.hastingtx.empire.engine.update.UpdateResult;
@@ -96,6 +100,9 @@ public class GameService {
         return loader.loadYaml(loader.toYaml(o.patch(l.raw(), countries)));
     }
 
+    /** The deity's own country, at absolute 0,0 in every game (issue #128). POGO in the original. */
+    public static final String DEITY = "POGO";
+
     /** The presets the deity can build from, in the order the form offers them. */
     public static final List<String> PRESETS = List.of("teaching", "sandbox", "blitz", "classic");
 
@@ -164,7 +171,11 @@ public class GameService {
         GameConfig cfg = l.config();
         World world = placing(() -> new WorldGenerator(cfg).generate(countryNames, seed));
         long id = games.create(name, preset, loader.toYaml(l.raw()), l.hash(), seed, world.width(), world.height(), world.wrapX(), world.wrapY(), createdBy);
+        // the deity's own country, at the origin (issue #128). Never a seat, never in the roster.
+        int deityId = world.countries().size();
+        world = new WorldGenerator(cfg).addDeity(world, DEITY, seed);
         worlds.saveAll(id, world, Commodities.of(cfg));
+        games.seatDeity(id, deityId);
         // the bell has not rung (issue #123): the game is visible and read-only until its players arrive
         games.setStatus(id, "setup");
         long interval = parseInterval(cfg.schedule().updateInterval());
@@ -311,6 +322,161 @@ public class GameService {
         }
     }
 
+    // ---------------------------------------------------------------- the deity's own powers (#128)
+
+    /** The whole map, in absolute coordinates, through the deity's own country at the origin. */
+    public CountryView deityView(long gameId, Account by) {
+        if (!by.admin()) throw new SecurityException("deity only");
+        Game g = get(gameId);
+        int id = deityCountry(gameId);
+        return CountryView.omniscient(g.world, g.cfg, id);
+    }
+
+    /** The id of this game's deity country, or an error saying it predates POGO. */
+    public int deityCountry(long gameId) {
+        for (GameRepository.Seat s : games.seats(gameId)) if ("deity".equals(s.controller())) return s.countryId();
+        throw new IllegalArgumentException("this game has no deity country — it was created before POGO existed");
+    }
+
+    /** What a deity may change about a sector. A null field is left alone. */
+    public record SectorEdit(Integer owner, String designation, Double efficiency, Double mobility,
+                             Map<String, Double> stock, Integer fertility, Integer minerals, Integer gold,
+                             Integer oil, Integer uranium, Integer roadLevel, Integer railLevel, Integer radarLevel) {}
+
+    /**
+     * Change a sector, by absolute coordinates (issue #128). This is a write outside the update, so it
+     * is taken under the game's lock like every other one — and it is logged, because it costs the
+     * game two of its guarantees. The update proves that each commodity's total equals the old total
+     * plus what was produced and consumed, and that a world replays from (config, seed, commands);
+     * a deity conjuring ten thousand iron makes both false. That is a fair price for a tool whose
+     * whole purpose is rescuing a broken game, but it should never be a silent one.
+     */
+    public Sector editSector(long gameId, int x, int y, SectorEdit e, Account by) {
+        if (!by.admin()) throw new SecurityException("deity only");
+        Game g = get(gameId);
+        Coord at = new Coord(x, y);
+        if (!g.world.inBounds(at)) throw new IllegalArgumentException(x + "," + y + " is off the map");
+        g.lock.lock();
+        try {
+            World before = g.world;
+            Sector s = before.sector(at);
+            List<String> changed = new ArrayList<>();
+
+            if (e.owner() != null) {
+                if (e.owner() < -1 || e.owner() >= before.countries().size()) throw new IllegalArgumentException("no country " + e.owner());
+                changed.add("owner " + s.owner() + "->" + e.owner());
+                s = s.withOwner(e.owner());
+            }
+            if (e.designation() != null) {
+                double eff = e.efficiency() != null ? e.efficiency() : s.efficiency();
+                changed.add("designation " + s.designation() + "->" + e.designation());
+                s = s.withDesignation(e.designation(), eff);
+            } else if (e.efficiency() != null) {
+                changed.add("efficiency " + Ledger.q(s.efficiency()) + "->" + Ledger.q(e.efficiency()));
+                s = s.withDesignation(s.designation(), e.efficiency());
+            }
+            if (e.mobility() != null) { changed.add("mobility " + Ledger.q(s.mobility()) + "->" + Ledger.q(e.mobility())); s = s.withMobility(e.mobility()); }
+            if (e.roadLevel() != null) { changed.add("road " + Ledger.q(s.roadLevel()) + "->" + e.roadLevel()); s = s.withRoadLevel(e.roadLevel()); }
+            if (e.railLevel() != null) { changed.add("rail " + Ledger.q(s.railLevel()) + "->" + e.railLevel()); s = s.withRailLevel(e.railLevel()); }
+            if (e.radarLevel() != null) { changed.add("radar " + Ledger.q(s.radarLevel()) + "->" + e.radarLevel()); s = s.withRadarLevel(e.radarLevel()); }
+            Resources r = s.resources();
+            if (e.fertility() != null || e.minerals() != null || e.gold() != null || e.oil() != null || e.uranium() != null) {
+                Resources next = new Resources(
+                        e.fertility() != null ? e.fertility() : r.fertility(),
+                        e.minerals() != null ? e.minerals() : r.minerals(),
+                        e.gold() != null ? e.gold() : r.gold(),
+                        e.oil() != null ? e.oil() : r.oil(),
+                        e.uranium() != null ? e.uranium() : r.uranium());
+                changed.add("resources " + next);
+                s = s.withTerrain(s.terrain(), s.elevation(), next);
+            }
+            if (e.stock() != null && !e.stock().isEmpty()) {
+                double[] q = s.stock().toArray();
+                for (Map.Entry<String, Double> en : e.stock().entrySet()) {
+                    int i = g.com.index(en.getKey());
+                    if (i < 0) throw new IllegalArgumentException("no commodity " + en.getKey());
+                    q[i] = en.getValue();
+                }
+                changed.add("stock " + e.stock());
+                s = s.withStock(Stocks.of(q));
+            }
+            if (changed.isEmpty()) throw new IllegalArgumentException("nothing to change");
+
+            World after = before.withSector(s);
+            worlds.saveDiff(gameId, before, after, g.com);
+            g.world = after;
+            log.warn("DEITY EDIT game {} sector {},{} by account {}: {}", gameId, x, y, by.id(), String.join("; ", changed));
+            logs.deityEdit(gameId, after.updateNumber(), "sector " + x + "," + y, String.join("; ", changed), by.id());
+            return s;
+        } finally { g.lock.unlock(); }
+    }
+
+    /** What a deity may change about a country. A null field is left alone. */
+    public record CountryEdit(Double cash, Double btu, Double tech, Double research, Double education,
+                              Double happiness, Boolean inSanctuary, Boolean bankrupt) {}
+
+    /** Change a country's national figures (issue #128). Logged, for the same reason as a sector edit. */
+    public Country editCountry(long gameId, int countryId, CountryEdit e, Account by) {
+        if (!by.admin()) throw new SecurityException("deity only");
+        Game g = get(gameId);
+        if (countryId < 0 || countryId >= g.world.countries().size()) throw new IllegalArgumentException("no country " + countryId);
+        g.lock.lock();
+        try {
+            World before = g.world;
+            Country c = before.country(countryId);
+            List<String> changed = new ArrayList<>();
+            if (e.cash() != null) { changed.add("cash " + Ledger.q(c.cash()) + "->" + Ledger.q(e.cash())); c = c.withCash(e.cash()); }
+            if (e.btu() != null) { changed.add("btu " + Ledger.q(c.btu()) + "->" + Ledger.q(e.btu())); c = c.withBtu(e.btu()); }
+            Levels lv = c.levels();
+            if (e.tech() != null || e.research() != null || e.education() != null || e.happiness() != null) {
+                Levels next = new Levels(
+                        e.tech() != null ? e.tech() : lv.tech(),
+                        e.research() != null ? e.research() : lv.research(),
+                        e.education() != null ? e.education() : lv.education(),
+                        e.happiness() != null ? e.happiness() : lv.happiness());
+                changed.add("levels " + next);
+                c = c.withLevels(next);
+            }
+            if (e.inSanctuary() != null) { changed.add("sanctuary " + c.inSanctuary() + "->" + e.inSanctuary()); c = c.withSanctuary(e.inSanctuary()); }
+            if (e.bankrupt() != null) { changed.add("bankrupt " + c.bankrupt() + "->" + e.bankrupt()); c = c.withBankrupt(e.bankrupt()); }
+            if (changed.isEmpty()) throw new IllegalArgumentException("nothing to change");
+
+            List<Country> next = new ArrayList<>(before.countries());
+            next.set(countryId, c);
+            World after = before.withCountries(next);
+            worlds.saveDiff(gameId, before, after, g.com);
+            g.world = after;
+            log.warn("DEITY EDIT game {} country {} by account {}: {}", gameId, countryId, by.id(), String.join("; ", changed));
+            logs.deityEdit(gameId, after.updateNumber(), "country " + countryId + " (" + c.name() + ")", String.join("; ", changed), by.id());
+            return c;
+        } finally { g.lock.unlock(); }
+    }
+
+    /**
+     * Mint a fresh token for a bot's seat and revoke whatever it had (issue #128). The token from
+     * {@link #addCountry} is shown once and stored only as a hash, so an agent that loses it had no
+     * way back in at all — the fix was a second country and a wasted seat.
+     */
+    public String reissueToken(long gameId, int countryId, Account by) {
+        if (!by.admin()) throw new SecurityException("deity only");
+        Game g = get(gameId);
+        if (countryId < 0 || countryId >= g.world.countries().size()) throw new IllegalArgumentException("no country " + countryId);
+        GameRepository.Seat seat = games.seats(gameId).stream().filter(s -> s.countryId() == countryId).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("no country " + countryId));
+        if (!"agent".equals(seat.controller()))
+            throw new IllegalArgumentException(seat.name() + " is not a bot seat — a person signs in with a magic link instead");
+        AuthService.Session s = auth.reissueAgentSession(seat.name());
+        games.seatAgent(gameId, countryId, s.account().id());
+        log.warn("DEITY reissued the token for game {} country {} ({}) by account {}", gameId, countryId, seat.name(), by.id());
+        return s.token();
+    }
+
+    /** Everything a deity has changed by hand in this game, newest first (issue #128). */
+    public List<Map<String, Object>> deityEdits(long gameId) {
+        get(gameId);
+        return logs.deityEdits(gameId);
+    }
+
     /** What came of seating a new country. {@code token} is non-null only for a bot, and only here. */
     public record Seated(int countryId, String name, Coord capital, String controller, String token) {}
 
@@ -327,7 +493,15 @@ public class GameService {
         g.lock.lock();
         try {
             World before = g.world;
-            World after = placing(() -> new WorldGenerator(g.cfg).addCountry(before, name, g.seed));
+            // Two adjustments to the ceiling. The deity's country is in the world but is not a player,
+            // so it does not fill the roster. And the limit here is the hard one, not the game's own
+            // max_countries: since #117 a game is created with exactly as many seats as it allows, so
+            // checking against that would refuse every Add country there has ever been — and a deity
+            // asking for another country is explicit intent overriding a number they set earlier.
+            // The real ceiling is still there: the world must physically have somewhere to put it.
+            int deities = before.countries().size() - playerSeats(id).size();
+            int limit = WorldOverrides.MAX_COUNTRIES + Math.max(0, deities);
+            World after = placing(() -> new WorldGenerator(g.cfg).addCountry(before, name, g.seed, limit));
             Country c = after.countries().get(after.countries().size() - 1);
             worlds.saveDiff(id, before, after, g.com);
             g.world = after;
@@ -371,7 +545,7 @@ public class GameService {
     public Summary summary(Game g, Account a) {
         List<CountrySeat> seats = new ArrayList<>();
         Integer mine = null;
-        for (GameRepository.Seat s : games.seats(g.id)) {
+        for (GameRepository.Seat s : playerSeats(g.id)) {
             seats.add(new CountrySeat(s.countryId(), s.name(), s.accountId() != null));
             if (a != null && s.accountId() != null && s.accountId() == a.id()) mine = s.countryId();
         }
@@ -439,8 +613,15 @@ public class GameService {
     /** Seats nobody has claimed yet. */
     public int openSeats(long gameId) {
         int open = 0;
-        for (GameRepository.Seat s : games.seats(gameId)) if (s.accountId() == null) open++;
+        for (GameRepository.Seat s : playerSeats(gameId)) if (s.accountId() == null) open++;
         return open;
+    }
+
+    /** Every seat a person or a bot could hold: the deity's own country is not one (issue #128). */
+    public List<GameRepository.Seat> playerSeats(long gameId) {
+        List<GameRepository.Seat> out = new ArrayList<>();
+        for (GameRepository.Seat s : games.seats(gameId)) if (!"deity".equals(s.controller())) out.add(s);
+        return out;
     }
 
     /**

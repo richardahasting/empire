@@ -58,7 +58,9 @@ class StartingBellTest {
     void seatsAreNumberedAndTheGameWaits() {
         GameService.Game g = newGame(3);
         assertThat(g.status).as("the bell has not rung").isEqualTo("setup");
-        assertThat(g.world.countries()).extracting(c -> c.name()).containsExactly("emp1", "emp2", "emp3");
+        // the world also holds the deity's own country (issue #128); the seats are the players
+        assertThat(games.playerSeats(g.id)).extracting(seat -> seat.name()).containsExactly("emp1", "emp2", "emp3");
+        assertThat(g.world.countries()).extracting(c -> c.name()).containsExactly("emp1", "emp2", "emp3", GameService.DEITY);
         assertThat(g.nextUpdateAt).as("nothing is scheduled before the bell").isNull();
         assertThat(games.openSeats(g.id)).isEqualTo(3);
     }

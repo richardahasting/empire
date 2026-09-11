@@ -140,6 +140,13 @@ Two kinds of seat:
   the ships, the orders and the whole update history. It asks you to type the
   game's name, because there is no undo and the history goes with it.
 
+## Reaching inside a running game
+
+Everything above is game-level. Changing a sector or a country in a world that
+is already being played is POGO's business — the deity's own country at the
+origin, which sees the whole map and can edit what it sees. See
+**[POGO, the deity](pogo.html)**.
+
 ## When an update fails
 
 A failed update is rolled back whole — nothing is written — and the schedule

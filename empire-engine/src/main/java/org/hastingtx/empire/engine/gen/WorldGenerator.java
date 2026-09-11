@@ -97,6 +97,49 @@ public final class WorldGenerator {
     }
 
     /**
+     * Seat the deity's own country at absolute {@code 0,0} (issue #128). POGO in the original.
+     *
+     * <p>The origin is the whole point. Every coordinate a player sees is relativised against their
+     * capital, so a country whose capital <em>is</em> the origin reads the world in the same numbers
+     * the database uses — the deity gets absolute coordinates out of the ordinary rule rather than
+     * out of a special case. Its two sectors are sanctuary, which already means invisible,
+     * invulnerable and unable to act beyond themselves, so the deity's presence costs the players
+     * nothing.
+     *
+     * <p>Unlike {@link #addCountry} this ignores the minimum distance between capitals: the deity
+     * goes at the origin or nowhere, and a country that cannot act is no threat to a neighbour.
+     */
+    public World addDeity(World world, String name, long seed) {
+        for (Country c : world.countries())
+            if (c.name().equalsIgnoreCase(name)) throw new IllegalArgumentException("this game already has a " + c.name());
+        SplittableRandom rng = Rng.stream("deity:" + name, seed);
+        Coord origin = new Coord(0, 0);
+        if (world.sector(origin).owned())
+            throw new IllegalArgumentException("0,0 already belongs to " + world.country(world.sector(origin).owner()).name());
+
+        // the origin becomes land if it was sea; the deity's island is two hexes and goes nowhere
+        world = world.withSector(world.sector(origin).withTerrain(Terrain.PLAINS, elevation(Terrain.PLAINS, rng), resources(Terrain.PLAINS, rng)));
+        Coord second = null;
+        for (Coord nb : Hex.neighbours(world, origin))
+            if (!world.sector(nb).owned()) { second = nb; break; }
+        if (second == null) throw new IllegalStateException("every hex around 0,0 is owned; there is no room for the deity");
+        if (!world.sector(second).terrain().isLand())
+            world = world.withSector(world.sector(second).withTerrain(Terrain.PLAINS, elevation(Terrain.PLAINS, rng), resources(Terrain.PLAINS, rng)));
+
+        PlayersCfg pc = cfg.players();
+        int id = world.countries().size();
+        Levels lv = new Levels(level("tech"), level("research"), level("education"), level("happiness"));
+        List<Country> countries = new ArrayList<>(world.countries());
+        // always in sanctuary, whatever the preset says about players: the deity does not play
+        countries.add(new Country(id, name, origin, pc.startingCash(), cfg.economy().btu().start(), lv,
+                HandicapCfg.NONE.resolve(cfg.handicapDefaults()), true, false, 0));
+
+        world = world.withSector(seed(world.sector(origin), id, "capital", pc.startingCommodities().capital(), 1.0, pc).withSanctuary(true));
+        world = world.withSector(seed(world.sector(second), id, "sanctuary", pc.startingCommodities().sanctuary(), 1.0, pc).withSanctuary(true));
+        return world.withCountries(countries);
+    }
+
+    /**
      * Seat a new country in a world that is already being played (issue #113). Deterministic in
      * (config, world, name, seed), and pure like the rest of the generator — the caller persists.
      *
@@ -107,11 +150,20 @@ public final class WorldGenerator {
      * under a player who has been sailing that water.
      */
     public World addCountry(World world, String name, long seed) {
+        return addCountry(world, name, seed, cfg.players().maxCountries());
+    }
+
+    /**
+     * As above, with the ceiling supplied by the caller. The engine counts countries; it does not know
+     * that one of them may be the deity's (issue #128), which is server-side bookkeeping by design.
+     * A caller that has seated a deity passes a limit that allows for it.
+     */
+    public World addCountry(World world, String name, long seed, int limit) {
         PlayersCfg pc = cfg.players();
         if (name == null || name.isBlank()) throw new IllegalArgumentException("a country needs a name");
         String trimmed = name.trim();
-        if (world.countries().size() >= pc.maxCountries())
-            throw new IllegalArgumentException("this game is full at " + pc.maxCountries() + " countries");
+        if (world.countries().size() >= limit)
+            throw new IllegalArgumentException("this game is full at " + limit + " countries");
         for (Country c : world.countries())
             if (c.name().equalsIgnoreCase(trimmed))
                 throw new IllegalArgumentException("a country called " + c.name() + " is already in this game");

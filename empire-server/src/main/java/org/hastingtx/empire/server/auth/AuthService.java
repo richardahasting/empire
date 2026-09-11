@@ -49,6 +49,15 @@ public class AuthService {
         return new Session(t.raw(), a);
     }
 
+    /**
+     * A replacement session for a bot whose token was lost (issue #128). The token from
+     * {@link #createAgentSession} is shown once and kept only as a hash, so there is nothing to
+     * recover — a new account is minted and the seat rebound to it, which also revokes the old one
+     * by leaving it attached to an account that no longer holds the country.
+     */
+    @Transactional
+    public Session reissueAgentSession(String label) { return createAgentSession(label); }
+
     public record Session(String token, Account account) {}
 
     /** Step 2: the link is clicked. Burns the magic token, issues a long-lived session token. */
