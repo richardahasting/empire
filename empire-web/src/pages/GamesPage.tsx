@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Radio, RadioGroup } from "@/components/ui/radio";
 import { FieldLabel } from "@/components/ui/tooltip";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -65,6 +66,7 @@ export function GamesPage() {
                 {me?.admin && <Button size="sm" variant="ghost" onClick={() => reloadRules(g)} title="replace this game's rule snapshot with the preset as shipped now">Reload rules</Button>}
                 {me?.admin && <Button size="sm" variant="ghost" onClick={() => seedSea(g)} title="give the sea its fishing grounds (ocean fertility by region)">Seed fishing grounds</Button>}
                 {me?.admin && <Button size="sm" variant="secondary" onClick={() => runUpdate(g)}>Run update</Button>}
+                {me?.admin && <AddCountry game={g} onAdded={load} />}
                 {me?.admin && <DeleteGame game={g} onDeleted={load} />}
                 {g.myCountry != null && <Button asChild size="sm"><Link to={`/games/${g.id}`}>Play</Link></Button>}
               </div>
@@ -116,6 +118,104 @@ const HINTS = {
  * The name has to be typed: a dialog you can dismiss with a reflexive click on "OK" is not a
  * confirmation, and the other admin actions here are all recoverable in a way this one is not.
  */
+interface Seated { countryId: number; name: string; capital: { x: number; y: number }; controller: string; token: string | null }
+
+/**
+ * Seat a new player in a running game (issue #113). A human seat is left open for someone to join;
+ * an agent seat is bound to a fresh bot account and mints a bearer token, which is shown here once
+ * and never again — only its hash is kept.
+ */
+function AddCountry({ game, onAdded }: { game: GameSummary; onAdded: () => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [controller, setController] = useState<"human" | "agent">("human");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [seated, setSeated] = useState<Seated | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const close = (next: boolean) => {
+    setOpen(next);
+    if (!next) { setName(""); setController("human"); setError(null); setSeated(null); setCopied(false); }
+  };
+
+  const add = async () => {
+    if (!name.trim()) return;
+    setBusy(true); setError(null);
+    try {
+      const r = await api.post<Seated>(`/admin/games/${game.id}/countries`, { name: name.trim(), controller });
+      await onAdded();
+      // a bot's token is only ever shown here, so the dialog stays open until it is dismissed
+      if (r.token) setSeated(r);
+      else close(false);
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  };
+
+  const copy = async () => {
+    if (!seated?.token) return;
+    try { await navigator.clipboard.writeText(seated.token); setCopied(true); } catch { setCopied(false); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={close}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="ghost" title="seat a new player in this game">Add country</Button>
+      </DialogTrigger>
+      <DialogContent size="sm">
+        {seated?.token ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>{seated.name} is seated</DialogTitle>
+              <DialogDescription>
+                Capital at {seated.capital.x},{seated.capital.y}. Give the bot this token as
+                {" "}<code>Authorization: Bearer …</code>. It is shown once — only its hash is stored,
+                so if it is lost the seat needs a new one.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 py-2">
+              <code className="block break-all rounded-[var(--radius)] border border-border bg-muted p-2 text-xs">{seated.token}</code>
+              <Button size="sm" variant="soft" onClick={() => void copy()}>{copied ? "Copied" : "Copy token"}</Button>
+            </div>
+            <DialogFooter><Button size="sm" onClick={() => close(false)}>Done</Button></DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>Add a country to “{game.name}”</DialogTitle>
+              <DialogDescription>
+                A capital and a sanctuary are placed on unowned land, at the preset's minimum distance
+                from every other capital. If the world has no room left, a new island is raised.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 py-2">
+              <div className="space-y-1">
+                <label htmlFor={`ac-name-${game.id}`} className="text-sm">Country name</label>
+                <Input id={`ac-name-${game.id}`} value={name} onChange={e => setName(e.target.value)} autoComplete="off"
+                       onKeyDown={e => { if (e.key === "Enter" && name.trim() && !busy) void add(); }} />
+              </div>
+              <RadioGroup>
+                <label className="flex items-center gap-2 text-sm">
+                  <Radio name={`ac-ctl-${game.id}`} checked={controller === "human"} onChange={() => setController("human")} />
+                  <span>Person — the seat stays open to join</span>
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <Radio name={`ac-ctl-${game.id}`} checked={controller === "agent"} onChange={() => setController("agent")} />
+                  <span>Agent — bound to a bot account, with a token</span>
+                </label>
+              </RadioGroup>
+              {error && <p className="text-sm text-destructive">{error}</p>}
+            </div>
+            <DialogFooter>
+              <Button variant="soft" size="sm" onClick={() => close(false)}>Cancel</Button>
+              <Button size="sm" disabled={!name.trim() || busy} onClick={() => void add()}>{busy ? "Seating…" : "Add country"}</Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function DeleteGame({ game, onDeleted }: { game: GameSummary; onDeleted: () => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");

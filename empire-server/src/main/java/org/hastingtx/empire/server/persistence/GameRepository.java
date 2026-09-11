@@ -59,6 +59,12 @@ public class GameRepository {
                 .param("a", accountId).param("g", gameId).param("c", countryId).update();
     }
 
+    /** Seat a bot: the country is played by this account from the moment it exists (issue #113). */
+    public int seatAgent(long gameId, int countryId, long accountId) {
+        return db.sql("UPDATE country SET account_id = :a, controller = 'agent' WHERE game_id = :g AND country_id = :c")
+                .param("a", accountId).param("g", gameId).param("c", countryId).update();
+    }
+
     public Optional<Integer> countryOf(long gameId, long accountId) {
         return db.sql("SELECT country_id FROM country WHERE game_id = :g AND account_id = :a").param("g", gameId).param("a", accountId).query(Integer.class).optional();
     }

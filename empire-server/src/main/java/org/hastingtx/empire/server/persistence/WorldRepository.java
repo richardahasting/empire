@@ -27,7 +27,7 @@ public class WorldRepository {
     public void saveAll(long gameId, World w, Commodities com) {
         List<Sector> all = w.sectors();
         writeSectors(gameId, all, com);
-        writeCountries(gameId, w.countries(), true);
+        writeCountries(gameId, w.countries());
         writeMoves(gameId, w.pendingMoves(), com);
         writeRail(gameId, w.pendingRail(), com);
         writeShips(gameId, w, com);
@@ -45,7 +45,7 @@ public class WorldRepository {
             if (!same(a, b)) changed.add(a);
         }
         writeSectors(gameId, changed, com);
-        writeCountries(gameId, after.countries(), false);
+        writeCountries(gameId, after.countries());
         if (!after.pendingMoves().equals(before.pendingMoves())) writeMoves(gameId, after.pendingMoves(), com);
         if (!after.pendingRail().equals(before.pendingRail())) writeRail(gameId, after.pendingRail(), com);
         if (!after.ships().equals(before.ships()) || after.nextShipId() != before.nextShipId()) writeShips(gameId, after, com);
@@ -107,24 +107,23 @@ public class WorldRepository {
             jdbc.batchUpdate("INSERT INTO held_parcel (game_id, x, y, commodity, qty, owner, origin_x, origin_y, dest_x, dest_y, issued_update, mode) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", parcelRows);
     }
 
-    private void writeCountries(long gameId, List<Country> countries, boolean insert) {
+    /**
+     * Always an upsert (issue #113). This used to take an {@code insert} flag and do a bare UPDATE on
+     * the diff path, which silently discarded a country that did not exist yet — a country added to a
+     * running game would live in memory, look right, and vanish at the next restart. The conflict
+     * branch deliberately leaves {@code controller} and {@code account_id} alone so an existing seat
+     * keeps whoever is playing it.
+     */
+    private void writeCountries(long gameId, List<Country> countries) {
         for (Country c : countries) {
-            if (insert) {
-                jdbc.update("""
-                        INSERT INTO country (game_id, country_id, name, capital_x, capital_y, cash, btu, tech, research, education, happiness, handicap, in_sanctuary, bankrupt, plague_left, controller)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?::jsonb,?,?,?,'none')
-                        ON CONFLICT (game_id, country_id) DO UPDATE SET capital_x = EXCLUDED.capital_x, capital_y = EXCLUDED.capital_y, cash = EXCLUDED.cash, btu = EXCLUDED.btu,
-                            tech = EXCLUDED.tech, research = EXCLUDED.research, education = EXCLUDED.education, happiness = EXCLUDED.happiness, handicap = EXCLUDED.handicap,
-                            in_sanctuary = EXCLUDED.in_sanctuary, bankrupt = EXCLUDED.bankrupt, plague_left = EXCLUDED.plague_left""",
-                        gameId, c.id(), c.name(), c.capital().x(), c.capital().y(), c.cash(), c.btu(), c.levels().tech(), c.levels().research(), c.levels().education(),
-                        c.levels().happiness(), json.write(c.handicap()), c.inSanctuary(), c.bankrupt(), c.plagueUpdatesLeft());
-            } else {
-                jdbc.update("""
-                        UPDATE country SET capital_x = ?, capital_y = ?, cash = ?, btu = ?, tech = ?, research = ?, education = ?, happiness = ?, handicap = ?::jsonb,
-                            in_sanctuary = ?, bankrupt = ?, plague_left = ? WHERE game_id = ? AND country_id = ?""",
-                        c.capital().x(), c.capital().y(), c.cash(), c.btu(), c.levels().tech(), c.levels().research(), c.levels().education(), c.levels().happiness(),
-                        json.write(c.handicap()), c.inSanctuary(), c.bankrupt(), c.plagueUpdatesLeft(), gameId, c.id());
-            }
+            jdbc.update("""
+                    INSERT INTO country (game_id, country_id, name, capital_x, capital_y, cash, btu, tech, research, education, happiness, handicap, in_sanctuary, bankrupt, plague_left, controller)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?::jsonb,?,?,?,'none')
+                    ON CONFLICT (game_id, country_id) DO UPDATE SET capital_x = EXCLUDED.capital_x, capital_y = EXCLUDED.capital_y, cash = EXCLUDED.cash, btu = EXCLUDED.btu,
+                        tech = EXCLUDED.tech, research = EXCLUDED.research, education = EXCLUDED.education, happiness = EXCLUDED.happiness, handicap = EXCLUDED.handicap,
+                        in_sanctuary = EXCLUDED.in_sanctuary, bankrupt = EXCLUDED.bankrupt, plague_left = EXCLUDED.plague_left""",
+                    gameId, c.id(), c.name(), c.capital().x(), c.capital().y(), c.cash(), c.btu(), c.levels().tech(), c.levels().research(), c.levels().education(),
+                    c.levels().happiness(), json.write(c.handicap()), c.inSanctuary(), c.bankrupt(), c.plagueUpdatesLeft());
         }
     }
 

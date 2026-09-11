@@ -96,6 +96,118 @@ public final class WorldGenerator {
         return world.withCountries(countries);
     }
 
+    /**
+     * Seat a new country in a world that is already being played (issue #113). Deterministic in
+     * (config, world, name, seed), and pure like the rest of the generator — the caller persists.
+     *
+     * <p>The capital goes on unowned land at least {@code min_distance_between_capitals} from every
+     * existing capital. Only when the world has no such sector does this raise a fresh island, the way
+     * generation does for its extra islands: a late joiner should inherit the map that is there before
+     * it changes the map that others have been sailing.
+     */
+    public World addCountry(World world, String name, long seed) {
+        PlayersCfg pc = cfg.players();
+        if (name == null || name.isBlank()) throw new IllegalArgumentException("a country needs a name");
+        String trimmed = name.trim();
+        if (world.countries().size() >= pc.maxCountries())
+            throw new IllegalArgumentException("this game is full at " + pc.maxCountries() + " countries");
+        for (Country c : world.countries())
+            if (c.name().equalsIgnoreCase(trimmed))
+                throw new IllegalArgumentException("a country called " + c.name() + " is already in this game");
+
+        SplittableRandom rng = Rng.stream("addcountry:" + trimmed + ":" + world.countries().size(), seed);
+        int minDist = Math.max(1, cfg.world().terrain().minDistanceBetweenCapitals());
+
+        Coord cap = vacantLand(world, minDist, rng);
+        if (cap == null) {
+            Landfall made = raiseIsland(world, minDist, rng);
+            if (made == null) throw new IllegalStateException(
+                    "nowhere to put a capital at least " + minDist + " sectors from every other, and no open sea to raise an island in");
+            world = made.world();
+            cap = made.at();
+        }
+
+        // the capital is plains, as at generation, so nobody starts on a mountain
+        world = world.withSector(world.sector(cap).withTerrain(Terrain.PLAINS, elevation(Terrain.PLAINS, rng), resources(Terrain.PLAINS, rng)));
+
+        Coord second = null;
+        for (Coord nb : Hex.neighbours(world, cap))
+            if (world.sector(nb).terrain().isLand() && !world.sector(nb).owned()) { second = nb; break; }
+        if (second == null) {   // force a neighbour to land, exactly as generation does
+            second = Hex.neighbours(world, cap).get(0);
+            world = world.withSector(world.sector(second).withTerrain(Terrain.PLAINS, elevation(Terrain.PLAINS, rng), resources(Terrain.PLAINS, rng)));
+        }
+
+        int id = world.countries().size();
+        HandicapCfg hc = handicapFor(trimmed).resolve(cfg.handicapDefaults());
+        Levels lv = new Levels(level("tech"), level("research"), level("education"), level("happiness"));
+        List<Country> countries = new ArrayList<>(world.countries());
+        countries.add(new Country(id, trimmed, cap, pc.startingCash(), cfg.economy().btu().start(), lv, hc, cfg.options().sanctuary(), false, 0));
+
+        double scale = hc.startingCommodities();
+        world = world.withSector(seed(world.sector(cap), id, "capital", pc.startingCommodities().capital(), scale, pc));
+        world = world.withSector(seed(world.sector(second), id, "sanctuary", pc.startingCommodities().sanctuary(), scale, pc));
+        return world.withCountries(countries);
+    }
+
+    /** A grown island and the sector to put the capital on. */
+    private record Landfall(World world, Coord at) {}
+
+    /** Unowned land far enough from every existing capital, or null if the world has none. */
+    private Coord vacantLand(World world, int minDist, SplittableRandom rng) {
+        List<Coord> ok = new ArrayList<>();
+        for (Sector s : world.sectors()) {
+            if (!s.terrain().isLand() || s.owned()) continue;
+            if (farEnough(world, s.at(), minDist)) ok.add(s.at());
+        }
+        return ok.isEmpty() ? null : ok.get(rng.nextInt(ok.size()));
+    }
+
+    private boolean farEnough(World world, Coord c, int minDist) {
+        for (Country o : world.countries()) if (Hex.distance(world, c, o.capital()) < minDist) return false;
+        return true;
+    }
+
+    /**
+     * Raise an island in open sea, as generation does for the islands beyond the countries' own, and
+     * return the world with it plus the hex to settle. Null when there is no open sea far enough out.
+     */
+    private Landfall raiseIsland(World world, int minDist, SplittableRandom rng) {
+        Coord start = null;
+        for (int tries = 0; tries < 400 && start == null; tries++) {
+            Coord c = new Coord(rng.nextInt(world.width()), rng.nextInt(world.height()));
+            if (world.sector(c).terrain() != Terrain.OCEAN) continue;
+            if (farEnough(world, c, minDist)) start = c;
+        }
+        if (start == null) return null;
+
+        int size = Math.max(3, cfg.world().terrain().islandSize());
+        int spike = Math.max(0, Math.min(100, cfg.world().terrain().spike()));
+        List<Coord> frontier = new ArrayList<>();
+        World out = world;
+        out = land(out, start, rng);
+        frontier.add(start);
+        int made = 1;
+        while (made < size && !frontier.isEmpty()) {
+            int idx = rng.nextInt(100) < spike ? frontier.size() - 1 : rng.nextInt(frontier.size());
+            Coord c = frontier.get(idx);
+            List<Coord> sea = new ArrayList<>();
+            for (Coord nb : Hex.neighbours(out, c)) if (out.sector(nb).terrain() == Terrain.OCEAN) sea.add(nb);
+            if (sea.isEmpty()) { frontier.remove(idx); continue; }
+            Coord pick = sea.get(rng.nextInt(sea.size()));
+            out = land(out, pick, rng);
+            frontier.add(pick);
+            made++;
+        }
+        return new Landfall(out, start);
+    }
+
+    /** Turn one ocean hex into land of a drawn type, with its own elevation and resources. */
+    private World land(World world, Coord c, SplittableRandom rng) {
+        Terrain t = pickLandType(rng);
+        return world.withSector(world.sector(c).withTerrain(t, elevation(t, rng), resources(t, rng)));
+    }
+
     private Sector seed(Sector s, int owner, String designation, Map<String, Double> stocks, double scale, PlayersCfg pc) {
         double[] q = com.fromMap(stocks);
         for (int i = 0; i < q.length; i++) q[i] *= scale;

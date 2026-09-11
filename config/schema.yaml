@@ -60,7 +60,6 @@ world:
     generator: "fairland"      # KNOWN: name of the original's world generator.
     land_fraction: 0.30
     island_size: 25            # mean sectors per island/continent seed
-    continent_count: 0         # 0 = one continent per country (fairland default)
     spike: 10                  # KNOWN fairland knob: coastline jaggedness 0..100
     min_distance_between_capitals: 12   # in sectors; validation rejects if impossible
     # GUESS: the original had no plains/forest terrain — those were designations
