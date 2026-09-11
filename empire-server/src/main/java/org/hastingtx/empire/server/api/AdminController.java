@@ -85,6 +85,15 @@ public class AdminController {
         return games.seedSeaFertility(id, admin(req));
     }
 
+    /** Delete a game and everything it owns. Irreversible (issue #109). */
+    @DeleteMapping("/games/{id}")
+    public Map<String, Object> delete(@PathVariable long id, HttpServletRequest req) {
+        Account a = admin(req);
+        String name = games.get(id).name;
+        games.delete(id, a);
+        return Map.of("deleted", id, "name", name);
+    }
+
     @PostMapping("/games/{id}/update")
     public Map<String, Object> update(@PathVariable long id, HttpServletRequest req) {
         admin(req);
