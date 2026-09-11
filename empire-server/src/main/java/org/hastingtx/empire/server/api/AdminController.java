@@ -105,6 +105,41 @@ public class AdminController {
         return games.start(id, admin(req));
     }
 
+    // ------------------------------------------------------------------ POGO, the deity (issue #128)
+
+    /** The whole map, unfogged, in absolute coordinates — the deity's own country sits at 0,0. */
+    @GetMapping("/games/{id}/view")
+    public org.hastingtx.empire.engine.view.CountryView deityView(@PathVariable long id, HttpServletRequest req) {
+        return games.deityView(id, admin(req));
+    }
+
+    /** Change a sector by absolute coordinates. Every edit is logged; see GameService.editSector. */
+    @PostMapping("/games/{id}/sectors/{x}/{y}")
+    public org.hastingtx.empire.engine.model.Sector editSector(@PathVariable long id, @PathVariable int x, @PathVariable int y,
+                                                               @RequestBody GameService.SectorEdit e, HttpServletRequest req) {
+        return games.editSector(id, x, y, e, admin(req));
+    }
+
+    /** Change a country's national figures. Logged, for the same reason. */
+    @PostMapping("/games/{id}/countries/{countryId}/edit")
+    public org.hastingtx.empire.engine.model.Country editCountry(@PathVariable long id, @PathVariable int countryId,
+                                                                 @RequestBody GameService.CountryEdit e, HttpServletRequest req) {
+        return games.editCountry(id, countryId, e, admin(req));
+    }
+
+    /** Mint a bot seat a new token, for one that lost the token it was given once. */
+    @PostMapping("/games/{id}/countries/{countryId}/token")
+    public Map<String, Object> reissueToken(@PathVariable long id, @PathVariable int countryId, HttpServletRequest req) {
+        return Map.of("countryId", countryId, "token", games.reissueToken(id, countryId, admin(req)));
+    }
+
+    /** Everything a deity has changed by hand in this game, newest first. */
+    @GetMapping("/games/{id}/edits")
+    public List<Map<String, Object>> edits(@PathVariable long id, HttpServletRequest req) {
+        admin(req);
+        return games.deityEdits(id);
+    }
+
     /** Delete a game and everything it owns. Irreversible (issue #109). */
     @DeleteMapping("/games/{id}")
     public Map<String, Object> delete(@PathVariable long id, HttpServletRequest req) {

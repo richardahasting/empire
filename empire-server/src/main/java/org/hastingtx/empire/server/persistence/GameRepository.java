@@ -59,6 +59,12 @@ public class GameRepository {
                 .param("a", accountId).param("g", gameId).param("c", countryId).update();
     }
 
+    /** Mark the deity's own country (issue #128). It is never a seat and never counts as one. */
+    public int seatDeity(long gameId, int countryId) {
+        return db.sql("UPDATE country SET controller = 'deity' WHERE game_id = :g AND country_id = :c")
+                .param("g", gameId).param("c", countryId).update();
+    }
+
     /** Seat a bot: the country is played by this account from the moment it exists (issue #113). */
     public int seatAgent(long gameId, int countryId, long accountId) {
         return db.sql("UPDATE country SET account_id = :a, controller = 'agent' WHERE game_id = :g AND country_id = :c")

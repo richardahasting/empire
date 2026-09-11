@@ -25,6 +25,17 @@ public class LogRepository {
                 gameId, countryId, updateNumber, source, verb, json.write(payload), accepted, error, btu);
     }
 
+    /** A deity's edit (issue #128). Recorded because it breaks conservation and determinism. */
+    public void deityEdit(long gameId, long updateNumber, String target, String changes, Long accountId) {
+        jdbc.update("INSERT INTO deity_edit (game_id, update_number, target, changes, account_id) VALUES (?,?,?,?,?)",
+                gameId, updateNumber, target, changes, accountId);
+    }
+
+    /** Every edit made to a game, newest first. */
+    public List<Map<String, Object>> deityEdits(long gameId) {
+        return jdbc.queryForList("SELECT id, update_number, target, changes, account_id, at FROM deity_edit WHERE game_id = ? ORDER BY id DESC", gameId);
+    }
+
     public record UpdateEntry(long updateNumber, long seed, String stateHash, String eventsJson, String flowsJson, long millis, String notesJson) {}
 
     public UpdateEntry lastUpdate(long gameId) {

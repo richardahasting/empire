@@ -35,6 +35,8 @@ Nobody moves "first". What you set up before the update is what happens in it.
 
 - **[For the deity](deity.html)** — creating a world, what each generation
   parameter does, seating players and bots, and ending a game.
+- **[POGO, the deity](pogo.html)** — the deity's own country at the origin: what
+  it can see, what it can change, and what changing things costs.
 
 ## A note on the rules
 
