@@ -19,6 +19,7 @@ PUBLIC=https://hastingtx.org/empire/
 
 build() {
   [ -f empire-server/.env ] || { echo "empire-server/.env missing (copy .env.example)"; exit 1; }
+  echo "== guide";    python3 tools/build-docs.py
   echo "== frontend"; (cd empire-web && npm ci --silent && npm run build --silent)
   echo "== server";   mvn -q -B -DskipTests package
 }

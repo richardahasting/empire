@@ -48,6 +48,8 @@
     <finalName>empire-server</finalName>
     <resources>
       <resource><directory>src/main/resources</directory></resource>
+      <!-- the player guide: commands.md is the one source of command syntax, read at runtime by Console -->
+      <resource><directory>../docs/guide</directory><targetPath>help</targetPath></resource>
       <!-- the built SPA (run `npm run build` in empire-web first; `make build` does) -->
       <resource><directory>../empire-web/dist</directory><targetPath>static</targetPath></resource>
     </resources>

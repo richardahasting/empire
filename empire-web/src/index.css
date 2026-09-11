@@ -26,3 +26,26 @@
 
 html, body, #root { height: 100%; }
 body { background: var(--background); color: var(--foreground); }
+
+/* The player guide (issue #118). The HTML comes from mdview at build time with no styling of its
+   own, so every rule here is a design token — the guide follows the theme like the rest of the app. */
+.guide { color: var(--foreground); line-height: 1.65; }
+.guide > :first-child { margin-top: 0; }
+.guide h1 { font-size: 1.6rem; font-weight: 600; letter-spacing: 0.02em; margin: 0 0 1rem; }
+.guide h2 { font-size: 1.2rem; font-weight: 600; margin: 2rem 0 0.75rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--border); }
+.guide h3 { font-size: 1rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+.guide p, .guide ul, .guide ol { margin: 0 0 1rem; }
+.guide ul, .guide ol { padding-left: 1.4rem; }
+.guide li { margin: 0.25rem 0; }
+.guide a { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
+.guide strong { color: var(--foreground); font-weight: 600; }
+.guide code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.875em;
+  background: var(--muted); color: var(--foreground); padding: 0.1em 0.35em; border-radius: calc(var(--radius) / 2); }
+.guide pre { background: var(--muted); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 0.9rem 1rem; overflow-x: auto; margin: 0 0 1rem; }
+.guide pre code { background: none; padding: 0; font-size: 0.8125rem; line-height: 1.5; }
+.guide table { border-collapse: collapse; width: 100%; margin: 0 0 1rem; font-size: 0.9rem; display: block; overflow-x: auto; }
+.guide th, .guide td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; vertical-align: top; }
+.guide th { background: var(--muted); font-weight: 600; }
+.guide blockquote { border-left: 3px solid var(--border); margin: 0 0 1rem; padding: 0.1rem 0 0.1rem 1rem; color: var(--muted-foreground); }
+.guide hr { border: 0; border-top: 1px solid var(--border); margin: 2rem 0; }
