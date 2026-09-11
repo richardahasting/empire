@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from "./api/auth";
 import { LoginPage } from "./pages/LoginPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { GamesPage } from "./pages/GamesPage";
+import { HelpPage } from "./pages/HelpPage";
 import { GamePage } from "./pages/GamePage";
 import DesignSystemPage from "./pages/DesignSystemPage";
 import { TooltipProvider } from "./components/ui/tooltip";
@@ -27,6 +28,8 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/" element={<Navigate to="/games" replace />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/verify" element={<VerifyPage />} />
+          <Route path="/help" element={<HelpPage />} />
+          <Route path="/help/:slug" element={<HelpPage />} />
           <Route path="/games" element={<Guard><GamesPage /></Guard>} />
           <Route path="/games/:id" element={<Guard><GamePage /></Guard>} />
           <Route path="/admin/design-system" element={<DesignSystemPage />} />

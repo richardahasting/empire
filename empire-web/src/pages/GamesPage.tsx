@@ -45,7 +45,7 @@ export function GamesPage() {
     <main className="mx-auto max-w-3xl space-y-6 p-6">
       <header className="flex items-center justify-between">
         <div><h1 className="text-2xl font-semibold tracking-widest">EMPIRE</h1><p className="text-sm text-muted-foreground">{me?.name} · {me?.email}{me?.admin && " · deity"}</p></div>
-        <div className="flex items-center gap-2"><ThemeToggle /><Button variant="soft" size="sm" onClick={() => void logout()}>Sign out</Button></div>
+        <div className="flex items-center gap-2"><Button asChild variant="soft" size="sm"><Link to="/help">Guide</Link></Button><ThemeToggle /><Button variant="soft" size="sm" onClick={() => void logout()}>Sign out</Button></div>
       </header>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <section className="space-y-3">

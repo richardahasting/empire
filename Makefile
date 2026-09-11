@@ -1,6 +1,8 @@
-.PHONY: build test sim clean
+.PHONY: build test sim clean guide web
 MVN ?= mvn -q -B
-web:
+guide:
+	python3 tools/build-docs.py
+web: guide
 	cd empire-web && npm ci --silent && npm run build --silent
 build: web
 	$(MVN) -DskipTests package

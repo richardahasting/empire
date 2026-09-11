@@ -194,32 +194,25 @@ public class Console {
 
     private static String glyph(SectorView s) { return s.designation().length() > 3 ? s.designation().substring(0, 3) : s.designation(); }
 
-    static final String HELP = """
-            map                          your map (relative coordinates, capital at 0,0)
-            census                       one line per owned sector
-            break                        break sanctuary
-            des SECTOR TYPE              designate (agribusiness, mine, light_manufacturing, warehouse, ...)
-            thresh SECTOR COMMODITY N    set a distribution threshold (negative clears)
-            dist SECTOR cx,cy | none     name a sector's distribution centre
-            deliver COMMODITY SECTOR DIR N   standing order: above N, push it one hex DIR (e ne nw w sw se) every update; DIR none clears
-            macro                        list your macros (recorded from the map); macro run N SECTOR runs one
-            ships                        your fleet: where each ship is, its load, where it is going, what it did
-            contacts                     other people's ships your radar and lookouts have seen, and how long ago
-            build HARBOUR CLASS [name]   lay a hull in your harbour (fishing_boat, cargo_ship, tanker, luxury_craft, ...; tech gates apply)
-            sail SHIP x,y | hold         sail to a sea hex or one of your harbours (speed × efficiency hexes per update)
-            load/unload SHIP COMMODITY N in your harbour only
-            lane SHIP x,y x2,y2 [COMMODITY ...]   shuttle: load surplus at x,y, unload at x2,y2, repeat; lane SHIP none clears
-            fish SHIP [x,y] | off        fishing mission: roam the grounds near the home harbour, fish, land the catch, repeat
-            scrap SHIP                   in harbour; the hold goes ashore
-            move COMMODITY x,y x2,y2 N   move now; the sending sector pays the route's mobility now
-            expl x,y x2,y2 N             explore into an adjacent unowned sector with N civilians
-            road SECTOR LEVEL            standing order: pave toward LEVEL (0 cancels)
-            rail SECTOR LEVEL            standing order: lay rail toward LEVEL (needs tech 60; 0 cancels)
-            SECTOR is x,y · * (all yours) · *:TYPE (all of one designation, id or glyph, e.g. *:a) · x1:x2,y1:y2 (a rectangle)
-              each sector pays its own BTU; e.g. road * 100 · thresh *:agribusiness hcm 50 · thresh -2:2,-2:2 food 100
-              thresh on * or a rectangle scales goods by designation (warehouse ×10, people ×1); *:warehouse or one sector sets it as typed
-            railship COMMODITY x,y x2,y2 N   train N units between two depots at the update (line checked now)
-            raillane x,y x2,y2 [COMM ...]    standing run between two depots, every update; no list = keep the far end's thresholds topped up
-            raillane x,y x2,y2 none          cancel that lane
-            """;
+    /**
+     * The command syntax, read from the player guide rather than held here (issue #118). The guide's
+     * {@code commands.md} owns the text and is packaged onto the classpath at {@code help/}; this
+     * prints the first fenced block from it, which is the quick reference. One source, two
+     * presentations — a command added to one cannot go missing from the other.
+     */
+    static final String HELP = loadHelp();
+
+    private static String loadHelp() {
+        try (java.io.InputStream in = Console.class.getClassLoader().getResourceAsStream("help/commands.md")) {
+            if (in == null) return "the command reference is missing from this build";
+            String md = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            int open = md.indexOf("```text");
+            if (open < 0) return "the command reference has no quick-reference block";
+            int from = md.indexOf('\n', open) + 1;
+            int to = md.indexOf("```", from);
+            return to < 0 ? md.substring(from) : md.substring(from, to).stripTrailing();
+        } catch (java.io.IOException e) {
+            return "the command reference could not be read: " + e.getMessage();
+        }
+    }
 }

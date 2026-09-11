@@ -18,6 +18,7 @@ public class WebConfig implements WebMvcConfigurer {
     /** SPA routes: anything that is not /api or a static file gets index.html. */
     @Override
     public void addViewControllers(ViewControllerRegistry r) {
-        for (String p : new String[] {"/", "/verify", "/games", "/games/*", "/login", "/admin/design-system"}) r.addViewController(p).setViewName("forward:/index.html");
+        // "/help/*" is safe to forward because the guide's own HTML is served from /guide, not /help
+        for (String p : new String[] {"/", "/verify", "/games", "/games/*", "/login", "/help", "/help/*", "/admin/design-system"}) r.addViewController(p).setViewName("forward:/index.html");
     }
 }
