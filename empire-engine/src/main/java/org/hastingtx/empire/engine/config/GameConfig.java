@@ -27,6 +27,7 @@ public record GameConfig(
         AgentsCfg agents,
         HandicapCfg handicapDefaults,
         ScoringCfg scoring,
+        NewsCfg news,
         OptionsCfg options) {
 
     public int etus() { return schedule.etusPerUpdate(); }

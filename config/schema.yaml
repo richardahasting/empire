@@ -892,6 +892,21 @@ handicap_defaults:
   session_windows_per_day: null            # null = unlimited (humans); agents default from agents.*
 
 # -----------------------------------------------------------------------------
+# NEWS — NEW (issue #121). What the whole world is told, as opposed to the private
+# per-country events the update already emits.
+# -----------------------------------------------------------------------------
+news:
+  enabled: true
+  # A milestone naming its country is a leak — "Johnny built the first oil refinery" says Johnny has
+  # the tech, the oil and the spare capacity for one. Here the leak IS the feature: bragging rights
+  # are the point, and a milestone nobody can attribute is not a milestone. Set false for a game that
+  # wants the achievement announced without the achiever.
+  name_countries: true
+  # Firsts are generated from economy.sector_types rather than listed, so a new designation cannot be
+  # added without its milestone. These are excluded: nobody brags about being given a capital.
+  milestone_exclude: [wilderness, sanctuary, wasteland, capital]
+
+# -----------------------------------------------------------------------------
 # SCORING — composite, never BTUs
 # -----------------------------------------------------------------------------
 scoring:
