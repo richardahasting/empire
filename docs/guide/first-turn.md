@@ -82,6 +82,21 @@ A sensible opening:
 
 Then wait for the update, and read what happened.
 
+## News
+
+The games page has a **News** button per game, with a count of anything you have
+not read. It carries what the whole world is told: who joined, who renamed their
+country, when the game began, and milestones — the first refinery in the game,
+the first harbour, the first bank.
+
+A milestone names the country that managed it, which is a genuine piece of
+intelligence: knowing somebody built the first refinery tells you they have the
+tech, the oil and the spare capacity for one. That is deliberate. Bragging
+rights are the point, and a milestone nobody can attribute is not a milestone.
+
+Names in the feed are always current. Rename your country and every earlier item
+about you says the new name — including the one announcing the rename.
+
 ## Reading what happened
 
 After each update, every sector you own can tell you what it did: what it ate,

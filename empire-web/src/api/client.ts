@@ -83,7 +83,11 @@ export interface CountrySeat { id: number; name: string; taken: boolean }
 export interface GameSummary {
   id: number; name: string; preset: string; status: string; updateNumber: number; width: number; height: number;
   countries: CountrySeat[]; myCountry: number | null; intervalSeconds: number; nextUpdateAt: string | null;
+  /** How much of this game's news you have not read (issue #121). */
+  unseenNews: number;
 }
+/** One item from the feed, with the country name resolved as it is now. */
+export interface NewsItem { id: number; updateNumber: number; at: string; type: string; text: string; unseen: boolean }
 export interface Projection {
   forUpdate: number; cashNow: number; cashAfter: number; civNow: number; civAfter: number; foodNow: number; foodAfter: number;
   btuNow: number; btuAfter: number; starvingSectors: number; spoilingSectors: number; flowsCompleted: number; flowsHeld: number;

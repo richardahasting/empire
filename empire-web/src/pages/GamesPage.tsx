@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, type GameSummary, type CountrySeat } from "@/api/client";
+import { api, type GameSummary, type CountrySeat, type NewsItem } from "@/api/client";
 import { useAuth } from "@/api/auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -69,6 +69,7 @@ export function GamesPage() {
                 {me?.admin && <Button size="sm" variant="ghost" onClick={() => reloadRules(g)} title="replace this game's rule snapshot with the preset as shipped now">Reload rules</Button>}
                 {me?.admin && <Button size="sm" variant="ghost" onClick={() => seedSea(g)} title="give the sea its fishing grounds (ocean fertility by region)">Seed fishing grounds</Button>}
                 {me?.admin && <Button size="sm" variant="secondary" onClick={() => runUpdate(g)}>Run update</Button>}
+                <News game={g} onRead={load} />
                 {me?.admin && <Button asChild size="sm" variant="ghost" title="the deity's screen: see everything, change anything"><Link to={`/admin/pogo/${g.id}`}>POGO</Link></Button>}
                 {me?.admin && <AddCountry game={g} onAdded={load} />}
                 {me?.admin && <DeleteGame game={g} onDeleted={load} />}
@@ -146,6 +147,57 @@ interface Seated { countryId: number; name: string; capital: { x: number; y: num
  * Renaming your own country after the fact (issue #119). Naming happens when a seat is claimed;
  * this is the "you can change it later" half, which the guide promises.
  */
+/**
+ * What has happened since you last looked (issue #121). Country names are resolved when the feed is
+ * read, not when an item is written, so a rename carries backwards through the whole history — the
+ * notice announcing it included.
+ */
+function News({ game, onRead }: { game: GameSummary; onRead: () => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<NewsItem[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const show = async (next: boolean) => {
+    setOpen(next);
+    if (!next) return;
+    setItems(null); setError(null);
+    try {
+      setItems(await api.get<NewsItem[]>(`/games/${game.id}/news`));
+      await api.post(`/games/${game.id}/news/seen`);
+      await onRead();
+    } catch (e) { setError((e as Error).message); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={show}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant={game.unseenNews > 0 ? "secondary" : "ghost"} title="what has happened in this game">
+          News{game.unseenNews > 0 ? ` · ${game.unseenNews}` : ""}
+        </Button>
+      </DialogTrigger>
+      <DialogContent size="lg">
+        <DialogHeader>
+          <DialogTitle>{game.name}</DialogTitle>
+          <DialogDescription>Newest first. Anything you have not seen before is marked.</DialogDescription>
+        </DialogHeader>
+        <div className="max-h-96 space-y-1 overflow-auto py-2 text-sm">
+          {error && <p className="text-destructive">{error}</p>}
+          {items === null && !error && <p className="text-muted-foreground">Loading…</p>}
+          {items?.length === 0 && <p className="text-muted-foreground">Nothing has happened yet.</p>}
+          {items?.map(i => (
+            <div key={i.id} className="flex items-baseline gap-2 border-t border-border py-1">
+              {i.unseen && <Badge tone="accent">new</Badge>}
+              <span className="text-xs text-muted-foreground">update {i.updateNumber}</span>
+              <span>{i.text}</span>
+            </div>
+          ))}
+        </div>
+        <DialogFooter><Button size="sm" onClick={() => void show(false)}>Close</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function RenameCountry({ game, onRenamed }: { game: GameSummary; onRenamed: () => Promise<void> }) {
   const current = game.countries.find(c => c.id === game.myCountry);
   const [open, setOpen] = useState(false);

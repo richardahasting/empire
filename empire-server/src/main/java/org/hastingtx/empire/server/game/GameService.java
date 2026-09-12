@@ -6,6 +6,7 @@ import org.hastingtx.empire.engine.command.Command;
 import org.hastingtx.empire.engine.command.CommandExecutor;
 import org.hastingtx.empire.engine.command.CommandResult;
 import org.hastingtx.empire.engine.config.GameConfig;
+import org.hastingtx.empire.engine.config.NewsCfg;
 import org.hastingtx.empire.engine.gen.WorldGenerator;
 import org.hastingtx.empire.engine.model.Commodities;
 import org.hastingtx.empire.engine.model.Coord;
@@ -65,8 +66,12 @@ public class GameService {
     private final Map<Long, Game> loaded = new ConcurrentHashMap<>();
 
     private final AuthService auth;
+    private final org.hastingtx.empire.server.persistence.NewsRepository news;
 
-    public GameService(GameRepository games, WorldRepository worlds, LogRepository logs, AuthService auth) { this.games = games; this.worlds = worlds; this.logs = logs; this.auth = auth; }
+    public GameService(GameRepository games, WorldRepository worlds, LogRepository logs, AuthService auth,
+                       org.hastingtx.empire.server.persistence.NewsRepository news) {
+        this.games = games; this.worlds = worlds; this.logs = logs; this.auth = auth; this.news = news;
+    }
 
     @PostConstruct
     void loadAll() {
@@ -437,6 +442,7 @@ public class GameService {
             World after = before.withSector(s);
             worlds.saveDiff(gameId, before, after, g.com);
             g.world = after;
+            postMilestones(g, before, after);
             log.warn("DEITY EDIT game {} sector {},{} by account {}: {}", gameId, x, y, by.id(), String.join("; ", changed));
             logs.deityEdit(gameId, after.updateNumber(), "sector " + x + "," + y, String.join("; ", changed), by.id());
             return s;
@@ -560,6 +566,7 @@ public class GameService {
             UpdateResult r = Update.run(g.world, g.cfg, seed);
             long ms = (System.nanoTime() - t0) / 1_000_000;
             worlds.saveDiff(gameId, g.world, r.next(), g.com);
+            postMilestones(g, g.world, r.next());
             // only pay for the hash if this game asked for it (issue #82); it is lazy, so not asking costs nothing
             String stateHash = g.cfg.options().stateHash() ? r.stateHash() : null;
             logs.update(gameId, n, seed, stateHash, r.events(), r.flows(), ms, r.notes());
@@ -572,7 +579,7 @@ public class GameService {
     // ------------------------------------------------------------------------------ players
     public record CountrySeat(int id, String name, boolean taken) {}
     public record Summary(long id, String name, String preset, String status, long updateNumber, int width, int height, List<CountrySeat> countries, Integer myCountry,
-                          long intervalSeconds, java.time.Instant nextUpdateAt) {}
+                          long intervalSeconds, java.time.Instant nextUpdateAt, int unseenNews) {}
 
     public Summary summary(Game g, Account a) {
         List<CountrySeat> seats = new ArrayList<>();
@@ -581,7 +588,8 @@ public class GameService {
             seats.add(new CountrySeat(s.countryId(), s.name(), s.accountId() != null));
             if (a != null && s.accountId() != null && s.accountId() == a.id()) mine = s.countryId();
         }
-        return new Summary(g.id, g.name, g.preset, g.status, g.world.updateNumber(), g.world.width(), g.world.height(), seats, mine, g.intervalSeconds, g.nextUpdateAt);
+        return new Summary(g.id, g.name, g.preset, g.status, g.world.updateNumber(), g.world.width(), g.world.height(), seats, mine, g.intervalSeconds, g.nextUpdateAt,
+                a == null ? 0 : news.unseen(a.id(), g.id));
     }
 
     /**
@@ -590,6 +598,73 @@ public class GameService {
      * all evening by somebody who wandered off.
      */
     public static final java.time.Duration RESERVATION = java.time.Duration.ofMinutes(30);
+
+    // ------------------------------------------------------------------------ news (issue #121)
+
+    /** Post an item, unless this game has the feed turned off. {@code {country}} is filled in on read. */
+    private void post(Game g, String type, Integer countryId, String message, String oneShotKey) {
+        if (g.cfg.news() != null && !g.cfg.news().enabled()) return;
+        news.post(g.id, g.world.updateNumber(), type, countryId, message, oneShotKey);
+    }
+
+    /**
+     * Firsts, found by comparing the world before and after an update (issue #121). This cannot live
+     * in the engine: "first" is a fact about the whole game's history, and the update is a pure
+     * function of one snapshot — it has no way to know whether anyone has ever built a refinery
+     * before. The one-shot key is what makes it fire once; the database, not a flag in memory.
+     *
+     * <p>The list of what counts is generated from the sector types, so a designation cannot be added
+     * without its milestone coming along.
+     *
+     * <p>Called wherever a designation can change — an update, a player's command, a deity's edit —
+     * because a first is a first however it came about, and hooking only the update misses the very
+     * command that does the designating.
+     */
+    private void postMilestones(Game g, World before, World after) {
+        if (g.cfg.news() != null && !g.cfg.news().enabled()) return;
+        List<String> exclude = g.cfg.news() == null ? NewsCfg.DEFAULT.milestoneExclude() : g.cfg.news().milestoneExclude();
+        for (int i = 0; i < after.sectors().size(); i++) {
+            Sector a = after.sectors().get(i), b = before.sectors().get(i);
+            if (!a.owned() || a.designation().equals(b.designation())) continue;
+            String d = a.designation();
+            if (exclude.contains(d)) continue;
+            post(g, "milestone", a.owner(), "{country} built the first " + d.replace('_', ' '), "first:" + d);
+        }
+    }
+
+    /** One item as a reader sees it: the name is filled in now, from the country as it is now. */
+    public record NewsItem(long id, long updateNumber, java.time.Instant at, String type, String text, boolean unseen) {}
+
+    /**
+     * The feed, newest first, with {@code {country}} resolved at read time (issue #121). Resolving
+     * now rather than at write time is what stops an old item crediting a name nobody recognises —
+     * including, pointedly, the item announcing a rename.
+     */
+    public List<NewsItem> newsFor(long gameId, Account a, int limit) {
+        Game g = get(gameId);
+        long seen = a == null ? 0 : news.lastSeen(a.id(), gameId);
+        boolean named = g.cfg.news() == null || g.cfg.news().nameCountries();
+        List<NewsItem> out = new ArrayList<>();
+        for (var i : news.since(gameId, 0, limit)) {
+            String who = i.countryId() == null || i.countryId() >= g.world.countries().size()
+                    ? null : g.world.country(i.countryId()).name();
+            String text = i.message().replace("{country}", who == null ? "somebody" : named ? who : "somebody");
+            out.add(new NewsItem(i.id(), i.updateNumber(), i.at(), i.type(), text, i.id() > seen));
+        }
+        return out;
+    }
+
+    /** How much of this game's news this account has not read. */
+    public int unseenNews(long gameId, Account a) {
+        return a == null ? 0 : news.unseen(a.id(), gameId);
+    }
+
+    /** Mark everything up to the newest item as read. */
+    public void markNewsSeen(long gameId, Account a) {
+        get(gameId);
+        var latest = news.since(gameId, 0, 1);
+        if (!latest.isEmpty()) news.markSeen(a.id(), gameId, latest.get(0).id());
+    }
 
     /** Free seats whose hold has run out. Called on a timer; safe to call at any time. */
     public void releaseStaleReservations() {
@@ -653,6 +728,7 @@ public class GameService {
                 if (games.confirm(gameId, countryId, accountId) != 1) continue;
                 if (pending != null) renameInWorld(g, countryId, pending);
                 log.info("game {}: seat {} confirmed as '{}' by account {}", gameId, countryId, pending, accountId);
+                post(g, "joined", countryId, "{country} joined the game", null);
                 if (unfilledSeats(gameId) == 0 && "setup".equals(g.status)) ring(g, "the last seat was confirmed");
             } finally { g.lock.unlock(); }
         }
@@ -673,7 +749,9 @@ public class GameService {
         g.lock.lock();
         try {
             if (games.bind(gameId, countryId, a.id()) != 1) throw new IllegalArgumentException("that country is taken");
+            String was = g.world.country(countryId).name();
             rename(g, countryId, name);
+            post(g, "joined", countryId, "{country} joined the game", null);
             if (unfilledSeats(gameId) == 0 && "setup".equals(g.status)) {
                 ring(g, "the last seat was taken");
             }
@@ -687,7 +765,11 @@ public class GameService {
         int country = myCountry(gameId, a);
         if (name == null || name.isBlank()) throw new IllegalArgumentException("your country needs a name");
         g.lock.lock();
-        try { rename(g, country, name); } finally { g.lock.unlock(); }
+        try {
+            String was = g.world.country(country).name();
+            rename(g, country, name);
+            post(g, "renamed", country, was + " is now known as {country}", null);
+        } finally { g.lock.unlock(); }
         return summary(g, a);
     }
 
@@ -765,6 +847,7 @@ public class GameService {
         g.nextUpdateAt = next;
         games.setSchedule(g.id, g.intervalSeconds, next);
         log.info("game {} '{}' started — {}", g.id, g.name, why);
+        post(g, "started", null, "The game has begun — " + why, "started");
     }
 
     /** The deity's bell, for when somebody is not coming (issue #123). */
@@ -813,7 +896,7 @@ public class GameService {
             World before = g.world;
             CommandResult r = g.exec.execute(before, country, cmd);
             logs.command(gameId, country, before.updateNumber(), source, cmd.verb(), cmd, r.ok(), r.error(), r.btuSpent());
-            if (r.ok()) { worlds.saveDiff(gameId, before, r.world(), g.com); g.world = r.world(); }
+            if (r.ok()) { worlds.saveDiff(gameId, before, r.world(), g.com); g.world = r.world(); postMilestones(g, before, r.world()); }
             Coord cap = g.world.country(country).capital();
             return new Outcome(r.ok(), relativise(g.world, cap, r.error()), r.btuSpent(), CountryView.of(g.world, g.cfg, country), relativise(g.world, cap, r.info()));
         } finally { g.lock.unlock(); }
@@ -847,7 +930,7 @@ public class GameService {
                 if (r.error().startsWith("not enough BTUs")) { outOfBtu = cmds.size() - i; break; }
                 skipped.add(relativise(before, cap, sectorOf(cmd) + ": " + r.error()));
             }
-            if (applied > 0) { worlds.saveDiff(gameId, before, cur, g.com); g.world = cur; }
+            if (applied > 0) { worlds.saveDiff(gameId, before, cur, g.com); g.world = cur; postMilestones(g, before, cur); }
             StringBuilder sb = new StringBuilder("applied " + applied + " of " + cmds.size() + (cmds.size() == 1 ? " command" : " commands"));
             if (!skipped.isEmpty()) {
                 sb.append("; skipped ").append(skipped.size()).append(" — ").append(String.join("; ", skipped.subList(0, Math.min(4, skipped.size()))));

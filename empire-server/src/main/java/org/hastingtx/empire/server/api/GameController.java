@@ -52,6 +52,21 @@ public class GameController {
         return games.renameMine(id, AuthInterceptor.current(req), r.name());
     }
 
+    /** What has happened in this game, newest first (issue #121). */
+    @GetMapping("/{id}/news")
+    public List<GameService.NewsItem> news(@PathVariable long id,
+                                           @RequestParam(defaultValue = "50") int limit,
+                                           HttpServletRequest req) {
+        return games.newsFor(id, AuthInterceptor.current(req), Math.min(Math.max(limit, 1), 200));
+    }
+
+    /** Mark this game's news read, so "since you last looked" moves on. */
+    @PostMapping("/{id}/news/seen")
+    public Map<String, Object> newsSeen(@PathVariable long id, HttpServletRequest req) {
+        games.markNewsSeen(id, AuthInterceptor.current(req));
+        return Map.of("status", "ok");
+    }
+
     @GetMapping("/{id}/view")
     public CountryView view(@PathVariable long id, HttpServletRequest req) { return games.view(id, AuthInterceptor.current(req)); }
 
