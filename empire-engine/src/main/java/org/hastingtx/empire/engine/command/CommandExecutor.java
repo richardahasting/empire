@@ -228,7 +228,7 @@ public final class CommandExecutor {
         // A sail happens now (issue #69). The ship goes as far as its own mobility and its tank will
         // carry it, this command, and the rest waits for the update — which is what makes a warship
         // able to answer something it has just seen instead of an update later.
-        if (sc.immediateSail()) {
+        if (sc.immediate()) {
             if (sc.crews() && ship.crew() < cls.crewOr0())
                 return new CommandResult(w.withShip(ship), null, 0, "ship #" + s.ship() + " is short-handed and stays at the quay; it will sail when it has a crew" + ended);
             double perHex = sc.fuel() ? cls.fuelPerHexOr0() : 0;

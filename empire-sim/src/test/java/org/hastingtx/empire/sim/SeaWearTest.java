@@ -20,7 +20,7 @@ class SeaWearTest {
 
     private static final GameConfig CFG = new ConfigLoader().loadPreset("sandbox").config();
     private static final long SEED = 11L;
-    private static final double WEAR = CFG.units().ships().seaWearPerUpdate();
+    private static final double WEAR = CFG.units().ships().seaWear();
 
     private static World world() { return new WorldGenerator(CFG).generate(List.of("A"), SEED); }
 

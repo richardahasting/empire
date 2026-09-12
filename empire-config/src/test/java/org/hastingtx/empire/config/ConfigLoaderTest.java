@@ -74,6 +74,41 @@ class ConfigLoaderTest {
         assertThatThrownBy(() -> loader.load(f)).isInstanceOf(ConfigException.class).hasMessageContaining("continent_count");
     }
 
+    /**
+     * A game keeps its own copy of the rules for life, so a snapshot written before a setting existed
+     * has no value for it. The binder is strict by design, and a primitive cannot hold "absent" — so
+     * a new primitive field stops every older game loading, and GameService.loadAll catches that per
+     * game and logs it, which makes the failure a world quietly missing rather than a crash.
+     *
+     * <p>That happened in production on 2026-09-11: three primitives added to units.ships took the
+     * live game off the server until they were boxed. This is the guard. Any setting added after a
+     * game could have been created must survive being absent.
+     */
+    @Test
+    void aSnapshotWrittenBeforeTodaysSettingsStillBinds() throws Exception {
+        Path dir = Files.createTempDirectory("empire-cfg");
+        Path f = dir.resolve("old-game.yaml");
+        // a units.ships block as it was before seabed mining, immediate sail and sea wear existed
+        Files.writeString(f, "extends: " + schemaPath() + "\n" + """
+                units:
+                  ships:
+                    mining_ore_per_etu_per_mineral_point: null
+                    sea_wear_per_update: null
+                    refit_below: null
+                    refit_resume_at: null
+                    immediate_sail: null
+                    mobility_cap_updates: null
+                    immediate_sail_mobility_multiplier: null
+                """);
+        GameConfig c = loader.load(f);
+        var ships = c.units().ships();
+        assertThat(ships.seaWear()).as("an older game simply has no sea wear").isZero();
+        assertThat(ships.immediate()).as("and keeps the update-time sailing it had").isFalse();
+        assertThat(ships.oreRate()).isZero();
+        assertThat(ships.rushCost()).isEqualTo(1.0);
+        assertThat(ships.refitUpTo()).isEqualTo(100.0);
+    }
+
     private static String schemaPath() {
         return Path.of("..", "config", "schema.yaml").toAbsolutePath().normalize().toString();
     }
