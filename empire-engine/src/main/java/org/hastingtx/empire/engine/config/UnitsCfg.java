@@ -25,19 +25,19 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
             /** Food a fishing boat of rate 1 at 100% makes per ETU per point of sea fertility. */
             double fishingFoodPerEtuPerFertilityPoint,
             /** Issue #112: ore per work-equivalent per ETU per point of a hex's nodules. */
-            double miningOrePerEtuPerMineralPoint,
+            Double miningOrePerEtuPerMineralPoint,
             /** Issue #69: a sail moves the ship now, from its own mobility pool. */
             /** Efficiency a hull loses each update at sea; harbours are exempt. */
-            double seaWearPerUpdate,
+            Double seaWearPerUpdate,
             /** At or below this, a mission breaks off for home to refit. */
-            double refitBelow,
+            Double refitBelow,
             /** And stays in harbour until this — fully refitted, not nearly. */
-            double refitResumeAt,
-            boolean immediateSail,
+            Double refitResumeAt,
+            Boolean immediateSail,
             /** How many updates' worth of movement a hull may bank. */
-            double mobilityCapUpdates,
+            Double mobilityCapUpdates,
             /** What a hex costs when ordered now rather than planned (issue #69). */
-            double immediateSailMobilityMultiplier,
+            Double immediateSailMobilityMultiplier,
             /** Speed multiplier from the ship's tech: at_0 + per_tech_point × tech, capped at max. */
             SpeedTech speedTechMultiplier,
             /** The fishing mission: how far from home a boat roams, how far it hops between casts, when it turns for home. */
@@ -66,12 +66,39 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
         public int range(ShipClassCfg cls, double tech, double efficiency) { return (int) Math.floor(cls.speed() * speedFactor(tech) * efficiency / 100.0); }
 
         /** Mobility per hex for a sail ordered now; a planned deployment pays 1. */
-        public double rushCost() { return immediateSailMobilityMultiplier <= 0 ? 1.0 : immediateSailMobilityMultiplier; }
+        /*
+         * Everything below reads a boxed field and supplies a default.
+         *
+         * A game keeps its own copy of the rules for life, so a snapshot written before a setting
+         * existed has no value for it — and a primitive cannot hold "absent". The loader binds
+         * strictly, by design, so a new primitive field stops every older game from loading at all:
+         * GameService.loadAll catches per game and logs, which makes the failure a world quietly
+         * missing rather than a crash. That is how this was found (issue #69, in production).
+         *
+         * So: a field added after any game could have been created is boxed, and defaults here.
+         */
+        public double rushCost() { return immediateSailMobilityMultiplier == null || immediateSailMobilityMultiplier <= 0 ? 1.0 : immediateSailMobilityMultiplier; }
+
+        /** Ore per ETU per point of nodules; 0 when the game predates seabed mining. */
+        public double oreRate() { return miningOrePerEtuPerMineralPoint == null ? 0 : miningOrePerEtuPerMineralPoint; }
+
+        /** Efficiency lost per update at sea; 0 when the game predates the rule. */
+        public double seaWear() { return seaWearPerUpdate == null ? 0 : seaWearPerUpdate; }
+
+        /** Break off below this; 0 disables it, which is what an older game gets. */
+        public double refitAtOrBelow() { return refitBelow == null ? 0 : refitBelow; }
+
+        /** Stay in until this. */
+        public double refitUpTo() { return refitResumeAt == null ? 100 : refitResumeAt; }
+
+        /** Whether a sail moves the ship now; older games keep the update-time behaviour they had. */
+        public boolean immediate() { return immediateSail != null && immediateSail; }
 
         /** The most a hull may bank: idling does not make a ship arbitrarily fast (issue #69). */
         public double mobilityCap(ShipClassCfg cls, double tech, double efficiency) {
             double per = cls.speed() * speedFactor(tech) * efficiency / 100.0;
-            return per * (mobilityCapUpdates <= 0 ? 1 : mobilityCapUpdates);
+            double caps = mobilityCapUpdates == null || mobilityCapUpdates <= 0 ? 1 : mobilityCapUpdates;
+            return per * caps;
         }
         public ShipClassCfg shipClass(String id) {
             for (ShipClassCfg c : classes) if (c.id().equals(id)) return c;

@@ -32,8 +32,8 @@ public final class ShipStep implements Step {
             // update, and a ship in its own harbour does not, because it is being looked after there.
             // Efficiency drives speed and the mobility cap, so a tired ship is a slow one before it is
             // anything else.
-            if (!docked && sc.seaWearPerUpdate() > 0 && ship.efficiency() > 0) {
-                double worn = Math.min(sc.seaWearPerUpdate(), ship.efficiency());
+            if (!docked && sc.seaWear() > 0 && ship.efficiency() > 0) {
+                double worn = Math.min(sc.seaWear(), ship.efficiency());
                 ship = ship.withEfficiency(ship.efficiency() - worn);
                 sep(note).append("worn by the sea, ").append(Ledger.q(ship.efficiency())).append("% left");
             }
@@ -76,7 +76,7 @@ public final class ShipStep implements Step {
             // fishing because it is the same mission — roam, work the water you are over, come home.
             if (cls.miningRateOr0() > 0 && here.terrain() == Terrain.OCEAN && eff > 0) {
                 double room = Math.max(0, cls.hold() - ship.load());
-                double ore = Math.min(room, cls.miningRateOr0() * here.resource("minerals") * ctx.etus * sc.miningOrePerEtuPerMineralPoint() * eff);
+                double ore = Math.min(room, cls.miningRateOr0() * here.resource("minerals") * ctx.etus * sc.oreRate() * eff);
                 ore = ctx.led().produceAtSea(ctx.com.index("iron"), ore);
                 if (ore > 0) { ship = ship.withStock(ship.stock().plus(ctx.com.index("iron"), ore)); sep(note).append("mined ").append(Ledger.q(ore)).append(" iron"); if (room - ore < 1e-9) note.append(" (hold full)"); }
                 else if (room <= 1e-9) sep(note).append("hold full, no mining");
@@ -107,8 +107,8 @@ public final class ShipStep implements Step {
                 // too worn to be out here: break off and make for home. The mission is kept, so the
                 // ship goes back to work by itself — but not until it is fully refitted, so a worn
                 // fleet is a real cost and not a rounding error.
-                boolean refitting = ship.efficiency() <= sc.refitBelow()
-                        || (docked && ship.efficiency() < sc.refitResumeAt());
+                boolean refitting = ship.efficiency() <= sc.refitAtOrBelow()
+                        || (docked && ship.efficiency() < sc.refitUpTo());
                 if (refitting) {
                     if (docked) {
                         if (ship.load() > 0) ship = unload(ctx, ship, here, hi, note);
