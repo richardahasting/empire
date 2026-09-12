@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, type GameSummary, type CountrySeat, type NewsItem, type Standing } from "@/api/client";
+import { api, type GameSummary, type CountrySeat, type NewsItem, type Standing, type Post } from "@/api/client";
 import { useAuth } from "@/api/auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -74,6 +74,7 @@ export function GamesPage() {
                 {me?.admin && <Button size="sm" variant="ghost" onClick={() => seedSea(g)} title="give the sea its fishing grounds (ocean fertility by region)">Seed fishing grounds</Button>}
                 {me?.admin && <Button size="sm" variant="ghost" onClick={() => seedNodules(g)} title="give the sea its nodule fields (ocean minerals by region)">Seed nodules</Button>}
                 {me?.admin && <Button size="sm" variant="secondary" onClick={() => runUpdate(g)}>Run update</Button>}
+                {g.myCountry != null && <Messages game={g} onRead={load} />}
                 <Nations game={g} />
                 <News game={g} onRead={load} />
                 {me?.admin && <Button asChild size="sm" variant="ghost" title="the deity's screen: see everything, change anything"><Link to={`/admin/pogo/${g.id}`}>POGO</Link></Button>}
@@ -163,6 +164,65 @@ interface Seated { countryId: number; name: string; capital: { x: number; y: num
  * who is asking — the server drops what you may not know before sending it, so anything null here is
  * genuinely not ours to show rather than something to hide in the markup.
  */
+/**
+ * The post (issue #140). Telegrams to you, announcements, and what you have sent.
+ *
+ * Nothing here says who is a person and who is a program, and that is deliberate: the spec's whole
+ * point is that a human should be able to negotiate for weeks without knowing. A sender type, a
+ * bot-shaped badge or a separate envelope would give it away, so there is none.
+ */
+function Messages({ game, onRead }: { game: GameSummary; onRead: () => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<Post[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const show = async (next: boolean) => {
+    setOpen(next);
+    if (!next) return;
+    setItems(null); setError(null);
+    try {
+      setItems(await api.get<Post[]>(`/games/${game.id}/messages`));
+      await api.post(`/games/${game.id}/messages/seen`);
+      await onRead();
+    } catch (e) { setError((e as Error).message); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={show}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant={game.unreadMessages > 0 ? "secondary" : "ghost"} title="telegrams and announcements">
+          Post{game.unreadMessages > 0 ? ` · ${game.unreadMessages}` : ""}
+        </Button>
+      </DialogTrigger>
+      <DialogContent size="lg">
+        <DialogHeader>
+          <DialogTitle>Post</DialogTitle>
+          <DialogDescription>
+            Send with <code>telegram COUNTRY "…"</code> or <code>announce "…"</code> from the game console.
+            Nobody is obliged to tell you the truth.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="max-h-96 space-y-2 overflow-auto py-2 text-sm">
+          {error && <p className="text-destructive">{error}</p>}
+          {items === null && !error && <p className="text-muted-foreground">Loading…</p>}
+          {items?.length === 0 && <p className="text-muted-foreground">Nobody has said anything.</p>}
+          {items?.map(m => (
+            <div key={m.id} className="border-t border-border pt-2">
+              <div className="flex flex-wrap items-baseline gap-2 text-xs text-muted-foreground">
+                {m.unread && <Badge tone="accent">new</Badge>}
+                <span className="font-medium text-foreground">{m.mine ? `you → ${m.to}` : `${m.from} → ${m.to}`}</span>
+                <span>update {m.updateNumber}</span>
+              </div>
+              <p className="whitespace-pre-wrap">{m.body}</p>
+            </div>
+          ))}
+        </div>
+        <DialogFooter><Button size="sm" onClick={() => void show(false)}>Close</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function Nations({ game }: { game: GameSummary }) {
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<Standing[] | null>(null);

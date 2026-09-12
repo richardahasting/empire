@@ -85,8 +85,14 @@ export interface GameSummary {
   countries: CountrySeat[]; myCountry: number | null; intervalSeconds: number; nextUpdateAt: string | null;
   /** How much of this game's news you have not read (issue #121). */
   unseenNews: number;
+  /** Telegrams and announcements you have not read (issue #140). */
+  unreadMessages: number;
 }
 /** One item from the feed, with the country name resolved as it is now. */
+/** One message as you see it: names resolved now, never stored. */
+export interface Post {
+  id: number; updateNumber: number; at: string; from: string; to: string; body: string; mine: boolean; unread: boolean;
+}
 export interface NewsItem { id: number; updateNumber: number; at: string; type: string; text: string; unseen: boolean }
 /**
  * One country's standing (issue #120). score/sectors/civilians/tech are null for anyone but you

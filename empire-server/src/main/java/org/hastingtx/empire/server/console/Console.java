@@ -58,6 +58,16 @@ public class Console {
                     need(t, 4, "lane SHIP x,y x2,y2 [COMMODITY ...]");
                     yield cmd(gameId, a, new Command.Lane(id, abs(v, t[2]), abs(v, t[3]), t.length > 4 ? List.of(Arrays.copyOfRange(t, 4, t.length)) : List.of()));
                 }
+                case "tel", "telegram" -> {
+                    need(t, 3, "telegram COUNTRY \"what you want to say\"");
+                    int to = games.countryNamed(gameId, t[1]);
+                    if (to < 0) yield new Reply("no country called " + t[1] + " in this game", false, null, null);
+                    yield cmd(gameId, a, new Command.Telegram(to, rest(line, 2)));
+                }
+                case "announce" -> {
+                    need(t, 2, "announce \"what you want everyone to hear\"");
+                    yield cmd(gameId, a, new Command.Announce(rest(line, 1)));
+                }
                 case "fish" -> { need(t, 2, "fish SHIP [x,y] | fish SHIP off"); long id = Long.parseLong(t[1].replace("#", "")); boolean off = t.length > 2 && t[2].equalsIgnoreCase("off"); yield cmd(gameId, a, new Command.Fish(id, !off && t.length > 2 ? abs(v, t[2]) : null, off)); }
                 case "mine" -> { need(t, 2, "mine SHIP [x,y] | mine SHIP off"); long id = Long.parseLong(t[1].replace("#", "")); boolean off = t.length > 2 && t[2].equalsIgnoreCase("off"); yield cmd(gameId, a, new Command.Mine(id, !off && t.length > 2 ? abs(v, t[2]) : null, off)); }
                 case "scrap" -> { need(t, 2, "scrap SHIP"); yield cmd(gameId, a, new Command.Scrap(Long.parseLong(t[1].replace("#", "")))); }
@@ -102,6 +112,15 @@ public class Console {
         } catch (IllegalArgumentException e) {
             return new Reply("", false, e.getMessage(), null);
         }
+    }
+
+    /** Everything after the first {@code n} words, unquoted: what somebody actually wants to say. */
+    private static String rest(String line, int n) {
+        String[] parts = line.trim().split("\\s+", n + 1);
+        String body = parts.length > n ? parts[n] : "";
+        body = body.strip();
+        if (body.length() >= 2 && body.startsWith("\"") && body.endsWith("\"")) body = body.substring(1, body.length() - 1);
+        return body;
     }
 
     private Reply cmd(long gameId, Account a, Command c) { return reply(games.command(gameId, a, c, "console")); }

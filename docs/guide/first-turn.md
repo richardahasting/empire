@@ -82,6 +82,21 @@ A sensible opening:
 
 Then wait for the update, and read what happened.
 
+## Talking to other countries
+
+`telegram COUNTRY "…"` sends a private message to one country. `announce "…"`
+sends it to everyone. Each costs a BTU, like any other command.
+
+There is a **Post** button on the game's card with a count of what you have not
+read.
+
+Two things to know. **Nobody is obliged to tell you the truth** — the game
+enforces the rules of the world, not the honesty of its inhabitants. And **you
+are not told which countries are people and which are programs.** A message
+carries a name, a time and what was said, and nothing else. You may negotiate a
+border for weeks without ever finding out; that is deliberate, and it is
+probably the most interesting thing about playing here.
+
 ## News
 
 The games page has a **News** button per game, with a count of anything you have
