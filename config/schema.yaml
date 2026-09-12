@@ -839,6 +839,16 @@ units:
     # spent either by a sail ordered now or by a standing mission at the update. A ship that has been
     # idle can dash; one that has been working all update cannot. Set immediate_sail false to go back
     # to everything happening at the update.
+    # The sea is hard on anything floating in it (Richard 2026-09-11). A hull at sea loses this much
+    # efficiency every update — nothing is free out there. A ship in one of its own harbours does not
+    # wear; it is being looked after, and the fit-out below puts the points back.
+    sea_wear_per_update: 3
+    # At or below this, a hull on a standing mission breaks off and makes for its home harbour to be
+    # refurbished. Richard, 2026-09-11: "it will return to the harbor, perform maintenance and not
+    # leave again until it's back at 100%" — so a ship that comes in for a refit comes in properly,
+    # and a fleet's readiness is something the harbour has to be able to pay for.
+    refit_below: 60
+    refit_resume_at: 100
     immediate_sail: true
     mobility_cap_updates: 2
     # Rushing costs more (Richard 2026-09-11). A sail ordered now spends this much mobility per hex;
