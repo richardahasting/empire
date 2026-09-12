@@ -52,6 +52,12 @@ public class GameController {
         return games.renameMine(id, AuthInterceptor.current(req), r.name());
     }
 
+    /** How everyone is doing, as far as you are allowed to know (issue #120). */
+    @GetMapping("/{id}/nations")
+    public List<org.hastingtx.empire.engine.score.NationsBoard.Standing> nations(@PathVariable long id, HttpServletRequest req) {
+        return games.nations(id, AuthInterceptor.current(req));
+    }
+
     /** What has happened in this game, newest first (issue #121). */
     @GetMapping("/{id}/news")
     public List<GameService.NewsItem> news(@PathVariable long id,

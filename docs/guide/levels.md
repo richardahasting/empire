@@ -67,3 +67,25 @@ Early on, the levels feel like a distraction: you have food to grow and iron to
 dig. But tech multiplies *every* production rate and ageing runs whether you
 participate or not, so the country that never builds a school is slowly getting
 worse at everything while its neighbour gets better.
+
+
+## How you are doing
+
+The games page has a **Nations** button. It ranks every country by a composite
+of population, total efficiency, tech, treasury and territory, weighted by
+`scoring.weights`, with a large bonus for simply still existing.
+
+**Your own figures are exact.** Everyone else is shown as well as the game
+allows and no better — by default a rank and a word (`struggling`, `holding`,
+`strong`, `leading`) and no numbers at all.
+
+That is deliberate. The score is worked out from the whole world, so publishing
+it in full would hand you an exact census of every rival — and territory and
+population are precisely what radar, scouting and map memory exist to make
+expensive to learn. A board that gave them away would quietly undo a large part
+of the game.
+
+A deity can set `scoring.visibility` to `exact` for an open game, `rank` for
+bare positions, or `none` for no board at all.
+
+**BTUs are never part of it.** There is no advantage in hoarding them.
