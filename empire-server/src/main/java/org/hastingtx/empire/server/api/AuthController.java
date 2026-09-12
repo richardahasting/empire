@@ -21,8 +21,20 @@ public class AuthController {
         static Me of(Account a) { return new Me(a.id(), a.email(), a.name(), a.admin()); }
     }
 
+    /**
+     * Health, and enough of it to be worth checking. "ok" alone was a lie once: the server came up
+     * answering every request with every game missing, because each had failed to bind and been
+     * logged past, and the deploy passed. So this reports what actually loaded — {@code games} is
+     * how many worlds are in memory and {@code gamesOnRecord} how many the database has. When they
+     * disagree, something did not come back, and a deployment check can see it.
+     */
     @GetMapping("/health")
-    public Map<String, String> health() { return Map.of("status", "ok"); }
+    public Map<String, Object> health() {
+        int loaded = games.all().size();
+        long onRecord = games.countOnRecord();
+        return Map.of("status", loaded == onRecord ? "ok" : "degraded",
+                "games", loaded, "gamesOnRecord", onRecord);
+    }
 
     @PostMapping("/auth/request-link")
     public Map<String, String> requestLink(@RequestBody LinkRequest r) {

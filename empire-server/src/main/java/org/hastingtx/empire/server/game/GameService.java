@@ -94,6 +94,9 @@ public class GameService {
         return g;
     }
 
+    /** How many games the database has, loaded or not — the number {@link #all()} ought to match. */
+    public long countOnRecord() { return games.count(); }
+
     public Collection<Game> all() { return loaded.values().stream().sorted(Comparator.comparingLong(g -> g.id)).toList(); }
 
     // ------------------------------------------------------------------------------ admin
