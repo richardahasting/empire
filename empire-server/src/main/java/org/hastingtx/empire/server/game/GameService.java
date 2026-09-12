@@ -585,6 +585,80 @@ public class GameService {
     }
 
     /**
+     * How long a seat is held for someone who has claimed it but not yet clicked their link
+     * (issue #126). Long enough to go and find the email; short enough that a game is not held up
+     * all evening by somebody who wandered off.
+     */
+    public static final java.time.Duration RESERVATION = java.time.Duration.ofMinutes(30);
+
+    /** Free seats whose hold has run out. Called on a timer; safe to call at any time. */
+    public void releaseStaleReservations() {
+        int freed = games.releaseStaleReservations();
+        if (freed > 0) log.info("released {} seat reservation(s) nobody came back for", freed);
+    }
+
+    public record Claimed(int countryId, String seat, String name, String email) {}
+
+    /**
+     * Take a seat before having an account (issue #126). A visitor gives the country a name and an
+     * email; the seat is held for them and a magic link goes out. Clicking it is what turns the hold
+     * into a seat and applies the name.
+     *
+     * <p>The hold is the whole point. This endpoint is open — it has to be, since the person has not
+     * proved anything yet — so without it a stranger could take every seat in a game with invented
+     * addresses, and because the starting bell fires on the last seat (#123), that would not merely
+     * be rude: it would start the game. A reserved seat does not count as filled, and lapses.
+     */
+    public Claimed claim(long gameId, int countryId, String countryName, String email, String personName) {
+        Game g = get(gameId);
+        if (countryName == null || countryName.isBlank()) throw new IllegalArgumentException("your country needs a name");
+        String wanted = countryName.trim();
+        if (wanted.length() > 40) throw new IllegalArgumentException("a country name is at most 40 characters");
+        if (!"setup".equals(g.status) && !"running".equals(g.status)) throw new IllegalArgumentException("this game is " + g.status);
+
+        java.time.Instant now = java.time.Instant.now();
+        List<GameRepository.Seat> seats = playerSeats(gameId);
+        GameRepository.Seat seat = seats.stream().filter(x -> x.countryId() == countryId).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("no such seat in this game"));
+        if (!seat.open(now)) throw new IllegalArgumentException(seat.held() ? "that country is taken" : "somebody is in the middle of taking that country");
+        for (GameRepository.Seat other : seats)
+            if (other.countryId() != countryId && nameTaken(other, wanted))
+                throw new IllegalArgumentException("there is already a country called " + wanted + " in this game");
+
+        Account a = auth.linkFor(email, personName == null || personName.isBlank() ? wanted : personName.trim());
+        if (games.reserve(gameId, countryId, a.id(), wanted, now.plus(RESERVATION)) != 1)
+            throw new IllegalArgumentException("somebody took that country just now");
+        log.info("game {}: seat {} reserved as '{}' for account {} — awaiting the link", gameId, countryId, wanted, a.id());
+        return new Claimed(countryId, seat.name(), wanted, a.email());
+    }
+
+    private static boolean nameTaken(GameRepository.Seat s, String wanted) {
+        return wanted.equalsIgnoreCase(s.name()) || (s.pendingName() != null && wanted.equalsIgnoreCase(s.pendingName()));
+    }
+
+    /**
+     * Settle any seats this account reserved, now that the link has been clicked (issue #126).
+     * Called from the verify path, so the act of proving an email is the act of taking the seat.
+     */
+    public void confirmReservations(long accountId) {
+        for (long[] r : games.reservationsFor(accountId)) {
+            long gameId = r[0];
+            int countryId = (int) r[1];
+            Game g = loaded.get(gameId);
+            if (g == null) continue;
+            g.lock.lock();
+            try {
+                List<GameRepository.Seat> before = games.seats(gameId);
+                String pending = before.stream().filter(x -> x.countryId() == countryId).map(GameRepository.Seat::pendingName).findFirst().orElse(null);
+                if (games.confirm(gameId, countryId, accountId) != 1) continue;
+                if (pending != null) renameInWorld(g, countryId, pending);
+                log.info("game {}: seat {} confirmed as '{}' by account {}", gameId, countryId, pending, accountId);
+                if (unfilledSeats(gameId) == 0 && "setup".equals(g.status)) ring(g, "the last seat was confirmed");
+            } finally { g.lock.unlock(); }
+        }
+    }
+
+    /**
      * Claim a seat and name it in one act (issue #119). A seat arrives called emp7 and nobody wants to
      * play as emp7, so the name is required rather than offered — and it is set in the same call as
      * the bind, because a seat that is claimed but still unnamed is the state this exists to prevent.
@@ -600,7 +674,7 @@ public class GameService {
         try {
             if (games.bind(gameId, countryId, a.id()) != 1) throw new IllegalArgumentException("that country is taken");
             rename(g, countryId, name);
-            if (openSeats(gameId) == 0 && "setup".equals(g.status)) {
+            if (unfilledSeats(gameId) == 0 && "setup".equals(g.status)) {
                 ring(g, "the last seat was taken");
             }
         } finally { g.lock.unlock(); }
@@ -629,6 +703,12 @@ public class GameService {
         for (Country c : g.world.countries())
             if (c.id() != countryId && c.name().equalsIgnoreCase(trimmed))
                 throw new IllegalArgumentException("there is already a country called " + c.name() + " in this game");
+        renameInWorld(g, countryId, trimmed);
+    }
+
+    /** The world half of a rename, without the uniqueness check the database has already made. */
+    private void renameInWorld(Game g, int countryId, String name) {
+        String trimmed = name.trim();
         World before = g.world;
         List<Country> next = new ArrayList<>(before.countries());
         next.set(countryId, next.get(countryId).withName(trimmed));
@@ -643,10 +723,27 @@ public class GameService {
     }
 
     /** Seats nobody has claimed yet. */
+    /**
+     * Seats a newcomer could take right now: nobody holds them and nobody is mid-claim. This is the
+     * number to show someone deciding whether to join.
+     */
     public int openSeats(long gameId) {
+        java.time.Instant now = java.time.Instant.now();
         int open = 0;
-        for (GameRepository.Seat s : playerSeats(gameId)) if (s.accountId() == null) open++;
+        for (GameRepository.Seat s : playerSeats(gameId)) if (s.open(now)) open++;
         return open;
+    }
+
+    /**
+     * Seats nobody actually holds yet — a reservation counts as unfilled, because the person has not
+     * proved their email (issue #126). This, not {@link #openSeats}, is what the starting bell waits
+     * on: "can anyone still join" and "is everybody here" are different questions, and answering the
+     * second with the first would start a game on a claim that might yet lapse.
+     */
+    public int unfilledSeats(long gameId) {
+        int unfilled = 0;
+        for (GameRepository.Seat s : playerSeats(gameId)) if (!s.held()) unfilled++;
+        return unfilled;
     }
 
     /** Every seat a person or a bot could hold: the deity's own country is not one (issue #128). */

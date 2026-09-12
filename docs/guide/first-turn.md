@@ -1,10 +1,20 @@
 # Your first turn
 
-## Signing in
+## Getting in
 
-Empire has no passwords. You give an email address, a link arrives, you click
-it, and you are signed in for three months. Signing in again means asking for
+Empire has no passwords, and no sign-up step either. **Taking a country is the
+sign-up.**
+
+Go to the join page, pick a game with a seat going, name your country and give
+an email address. A link arrives; clicking it signs you in and takes the seat.
+You are then signed in for three months, and signing in later means asking for
 another link.
+
+Between claiming and clicking, the seat is **held** for half an hour — nobody
+else can take it, and the game will not start without you. If the link goes
+unclicked the seat goes back on offer and you can simply claim it again. The
+hold exists so that a game cannot be started by someone who typed an address
+they do not own.
 
 ## Joining a game
 

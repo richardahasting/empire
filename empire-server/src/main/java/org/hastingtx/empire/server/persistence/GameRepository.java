@@ -46,12 +46,60 @@ public class GameRepository {
                 r.getLong("interval_seconds"), next == null ? null : next.toInstant());
     }
 
-    /** Who controls which country. Server-side only. */
-    public record Seat(int countryId, String name, Long accountId, String controller) {}
+    /**
+     * Who controls which country. Server-side only. {@code reservedBy} is someone who has claimed the
+     * seat but not yet proved their email (issue #126); the seat is theirs to confirm and nobody
+     * else's to take, but it does not count as filled.
+     */
+    public record Seat(int countryId, String name, Long accountId, String controller,
+                       Long reservedBy, java.time.Instant reservedUntil, String pendingName) {
+        public boolean held() { return accountId != null; }
+        public boolean reserved(java.time.Instant now) { return accountId == null && reservedBy != null && reservedUntil != null && reservedUntil.isAfter(now); }
+        /** Nobody has it and nobody is in the middle of taking it. */
+        public boolean open(java.time.Instant now) { return !held() && !reserved(now); }
+    }
 
     public List<Seat> seats(long gameId) {
-        return db.sql("SELECT country_id, name, account_id, controller FROM country WHERE game_id = :g ORDER BY country_id").param("g", gameId)
-                .query((r, i) -> { long a = r.getLong("account_id"); Long acct = r.wasNull() ? null : a; return new Seat(r.getInt("country_id"), r.getString("name"), acct, r.getString("controller")); }).list();
+        return db.sql("SELECT country_id, name, account_id, controller, reserved_by, reserved_until, pending_name FROM country WHERE game_id = :g ORDER BY country_id")
+                .param("g", gameId)
+                .query((r, i) -> {
+                    long a = r.getLong("account_id"); Long acct = r.wasNull() ? null : a;
+                    long rb = r.getLong("reserved_by"); Long res = r.wasNull() ? null : rb;
+                    var ru = r.getTimestamp("reserved_until");
+                    return new Seat(r.getInt("country_id"), r.getString("name"), acct, r.getString("controller"),
+                            res, ru == null ? null : ru.toInstant(), r.getString("pending_name"));
+                }).list();
+    }
+
+    /** Hold a seat for someone who has not proved their email yet. Fails if anyone already has it. */
+    public int reserve(long gameId, int countryId, long accountId, String pendingName, java.time.Instant until) {
+        return db.sql("""
+                UPDATE country SET reserved_by = :a, reserved_until = :u, pending_name = :n
+                WHERE game_id = :g AND country_id = :c AND account_id IS NULL
+                  AND (reserved_by IS NULL OR reserved_until < now() OR reserved_by = :a)""")
+                .param("a", accountId).param("u", until.atOffset(java.time.ZoneOffset.UTC)).param("n", pendingName)
+                .param("g", gameId).param("c", countryId).update();
+    }
+
+    /** Every live reservation this account holds, so clicking the link can settle them. */
+    public List<long[]> reservationsFor(long accountId) {
+        return db.sql("SELECT game_id, country_id FROM country WHERE reserved_by = :a AND account_id IS NULL AND reserved_until > now()")
+                .param("a", accountId).query((r, i) -> new long[]{r.getLong("game_id"), r.getInt("country_id")}).list();
+    }
+
+    /** Turn a reservation into a seat. The pending name becomes the country's name. */
+    public int confirm(long gameId, int countryId, long accountId) {
+        return db.sql("""
+                UPDATE country SET account_id = :a, controller = 'human',
+                                   name = COALESCE(pending_name, name),
+                                   reserved_by = NULL, reserved_until = NULL, pending_name = NULL
+                WHERE game_id = :g AND country_id = :c AND account_id IS NULL AND reserved_by = :a""")
+                .param("a", accountId).param("g", gameId).param("c", countryId).update();
+    }
+
+    /** Drop reservations nobody came back for. Returns how many seats were freed. */
+    public int releaseStaleReservations() {
+        return db.sql("UPDATE country SET reserved_by = NULL, reserved_until = NULL, pending_name = NULL WHERE account_id IS NULL AND reserved_until IS NOT NULL AND reserved_until < now()").update();
     }
 
     public int bind(long gameId, int countryId, long accountId) {

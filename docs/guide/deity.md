@@ -112,7 +112,10 @@ The bell rings on whichever comes first:
 Either way the game moves to `running` and the first update is scheduled from
 that moment.
 
-A seat is claimed by a player joining it and naming it. **Add country** seats
+A seat is claimed by a player naming it, on the public join page — they need no
+account first, and the emailed link that follows is what proves the address and
+turns the hold into a seat. A held seat does not count as filled, so the
+starting bell cannot be rung by somebody who typed an address they do not own. **Add country** seats
 someone in a game already running, beyond the seats it was built with. The capital goes on
 unowned land at the minimum distance from every other capital; if there is no
 such sector the request is **refused with the reason** — how many land sectors

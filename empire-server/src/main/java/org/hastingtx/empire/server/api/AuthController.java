@@ -12,7 +12,8 @@ import java.util.Map;
 @RequestMapping("/api")
 public class AuthController {
     private final AuthService auth;
-    public AuthController(AuthService auth) { this.auth = auth; }
+    private final org.hastingtx.empire.server.game.GameService games;
+    public AuthController(AuthService auth, org.hastingtx.empire.server.game.GameService games) { this.auth = auth; this.games = games; }
 
     public record LinkRequest(String email, String name) {}
     public record VerifyRequest(String token) {}
@@ -29,9 +30,15 @@ public class AuthController {
         return Map.of("status", "sent");
     }
 
+    /**
+     * Clicking the link is what proves the email — so it is also what turns any seat this person
+     * reserved into a seat they hold (issue #126). Settling the reservation here rather than in a
+     * later step means there is no window in which someone is signed in but still un-seated.
+     */
     @PostMapping("/auth/verify")
     public Map<String, Object> verify(@RequestBody VerifyRequest r) {
         AuthService.Session s = auth.verify(r.token());
+        games.confirmReservations(s.account().id());
         return Map.of("token", s.token(), "account", Me.of(s.account()));
     }
 
