@@ -834,6 +834,18 @@ units:
     # This is what finally gives the refinery a customer — 1 oil -> 10 pet made a commodity nothing
     # consumed. Fishing boats and cargo ships burn it too, which is the point and the cost.
     # Tanks are sized at roughly thirty hexes, so seven to ten updates of steady sailing. GUESS, all of it.
+    # A ship has a mobility pool of its own (issue #69, Richard 2026-09-11: "a move happens
+    # immediately"). It fills by the hull's speed each update, up to this many updates' worth, and is
+    # spent either by a sail ordered now or by a standing mission at the update. A ship that has been
+    # idle can dash; one that has been working all update cannot. Set immediate_sail false to go back
+    # to everything happening at the update.
+    immediate_sail: true
+    mobility_cap_updates: 2
+    # Rushing costs more (Richard 2026-09-11). A sail ordered now spends this much mobility per hex;
+    # a planned deployment — a standing mission, or the remainder of an order left to the update —
+    # spends one. So haste is available and never free, and a captain who plans gets further on the
+    # same fuel of movement.
+    immediate_sail_mobility_multiplier: 1.25
     fuel: true
     fuel_commodity: pet
     # Crews (issue #66). A hull needs people aboard to sail: civilians on a merchantman, military on a

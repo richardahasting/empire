@@ -26,6 +26,12 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
             double fishingFoodPerEtuPerFertilityPoint,
             /** Issue #112: ore per work-equivalent per ETU per point of a hex's nodules. */
             double miningOrePerEtuPerMineralPoint,
+            /** Issue #69: a sail moves the ship now, from its own mobility pool. */
+            boolean immediateSail,
+            /** How many updates' worth of movement a hull may bank. */
+            double mobilityCapUpdates,
+            /** What a hex costs when ordered now rather than planned (issue #69). */
+            double immediateSailMobilityMultiplier,
             /** Speed multiplier from the ship's tech: at_0 + per_tech_point × tech, capped at max. */
             SpeedTech speedTechMultiplier,
             /** The fishing mission: how far from home a boat roams, how far it hops between casts, when it turns for home. */
@@ -52,6 +58,15 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
         }
         /** Sea hexes per update for a ship of this class, tech and efficiency. */
         public int range(ShipClassCfg cls, double tech, double efficiency) { return (int) Math.floor(cls.speed() * speedFactor(tech) * efficiency / 100.0); }
+
+        /** Mobility per hex for a sail ordered now; a planned deployment pays 1. */
+        public double rushCost() { return immediateSailMobilityMultiplier <= 0 ? 1.0 : immediateSailMobilityMultiplier; }
+
+        /** The most a hull may bank: idling does not make a ship arbitrarily fast (issue #69). */
+        public double mobilityCap(ShipClassCfg cls, double tech, double efficiency) {
+            double per = cls.speed() * speedFactor(tech) * efficiency / 100.0;
+            return per * (mobilityCapUpdates <= 0 ? 1 : mobilityCapUpdates);
+        }
         public ShipClassCfg shipClass(String id) {
             for (ShipClassCfg c : classes) if (c.id().equals(id)) return c;
             throw new IllegalArgumentException("unknown ship class: " + id);

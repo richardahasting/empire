@@ -49,6 +49,10 @@ public final class ShipStep implements Step {
                 }
             }
             double eff = ship.efficiency() / 100.0;
+            // the pool fills by the hull's speed and is capped, so idling banks a dash but not a
+            // teleport (issue #69). Everything below spends from it, whether ordered now or run here.
+            ship = ship.withMobility(Math.min(sc.mobilityCap(cls, ship.tech(), ship.efficiency()),
+                    ship.mobility() + sc.range(cls, ship.tech(), ship.efficiency())));
 
             // fishing: food from the sea hex's fertility into the hold
             if (cls.fishingRateOr0() > 0 && here.terrain() == Terrain.OCEAN && eff > 0) {
@@ -111,7 +115,7 @@ public final class ShipStep implements Step {
                 List<Coord> path = SeaRoutes.path(ctx.snap, ctx.cfg, ship.owner(), ship.at(), ship.dest());
                 if (path == null) sep(note).append("no sea route to ").append(ship.dest());
                 else {
-                    int range = sc.range(cls, ship.tech(), ship.efficiency());
+                    int range = (int) Math.floor(ship.mobility());
                     int hops = Math.min(range, path.size() - 1);
                     // short-handed is not going anywhere (issue #66)
                     if (sc.crews() && ship.crew() < cls.crewOr0()) {
@@ -128,7 +132,7 @@ public final class ShipStep implements Step {
                     else if (hops <= 0) sep(note).append("too unfit to sail (").append(Ledger.q(ship.efficiency())).append("%)");
                     else {
                         Coord to = path.get(hops);
-                        ship = ship.withAt(to);
+                        ship = ship.withAt(to).withMobility(ship.mobility() - hops);
                         if (perHex > 0) {
                             double burned = hops * perHex;
                             ship = ship.withFuel(ship.fuel() - burned);
