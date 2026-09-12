@@ -22,6 +22,9 @@ public class GameRepository {
     }
 
     public List<GameRow> all() { return db.sql("SELECT * FROM game ORDER BY id").query(this::map).list(); }
+
+    /** Just the number, for the health check — {@link #all()} drags every game's config with it. */
+    public long count() { return db.sql("SELECT count(*) FROM game").query(Long.class).single(); }
     public Optional<GameRow> find(long id) { return db.sql("SELECT * FROM game WHERE id = :id").param("id", id).query(this::map).optional(); }
 
     public void setConfig(long id, String configYaml, String configHash) { db.sql("UPDATE game SET config_yaml = :y, config_hash = :h WHERE id = :id").param("y", configYaml).param("h", configHash).param("id", id).update(); }

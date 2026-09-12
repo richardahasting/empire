@@ -46,6 +46,21 @@ verify() {
     if sudo -n true 2>/dev/null; then sudo journalctl -u $SERVICE -n 30 --no-pager; else echo "(journalctl -u $SERVICE for the log)"; fi
     exit 1
   }
+  # A healthy process is not a working deployment. The server loads every game at startup and
+  # catches per game, so a config the stored worlds cannot bind leaves it up, answering, and empty —
+  # which is exactly how a deploy passed with the live game gone. Check the work came back.
+  local health loaded onrecord
+  health=$(curl -s $HEALTH)
+  loaded=$(printf '%s' "$health" | grep -o '"games":[0-9]*' | cut -d: -f2)
+  onrecord=$(printf '%s' "$health" | grep -o '"gamesOnRecord":[0-9]*' | cut -d: -f2)
+  echo "== games";  echo "loaded $loaded of $onrecord on record"
+  if [ -n "$onrecord" ] && [ "$loaded" != "$onrecord" ]; then
+    echo "DEPLOY FAILED: $onrecord game(s) on record, $loaded loaded — something did not bind" >&2
+    if sudo -n true 2>/dev/null; then sudo journalctl -u $SERVICE -n 20 --no-pager; fi
+    grep -E "cannot load game" /var/log/empire.log 2>/dev/null | tail -3 >&2 || true
+    exit 4
+  fi
+
   echo "== public"; curl -s -o /dev/null -w "$PUBLIC -> %{http_code}\n" $PUBLIC
   local a; a=$(curl -s $PUBLIC | grep -oE '/empire/assets/index-[A-Za-z0-9_-]+\.js' | head -1)
   echo "served bundle: $a"
