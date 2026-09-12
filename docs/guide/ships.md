@@ -28,6 +28,28 @@ improve ships already built.
 | submarine | 50 | — | 4 | hard to see |
 | battleship, carrier | 60, 70 | — | 4 | warships |
 
+## The sea wears a ship out
+
+The sea is a demanding place, and everything floating in it is falling apart
+slowly. **A hull at sea loses 3% efficiency every update.** A hull in one of your
+own harbours loses none — it is being looked after there.
+
+That matters more than it sounds, because efficiency drives almost everything a
+ship is: its speed is `class speed × efficiency`, and so is how much movement it
+can bank. A tired ship is a slow ship before it is anything else.
+
+**At 60% a ship on a standing mission breaks off and goes home.** It stops
+working, makes for its home harbour, and **will not go out again until it is back
+at 100%**. A harbour restores 20 points an update and charges materials and cash
+for each, so a badly worn hull is in dock for several updates and a worn fleet is
+a real bill.
+
+It keeps its orders throughout. Once it is fully refitted it goes back to what it
+was doing, unbidden — you do not have to send it out again.
+
+A ship you are sailing by hand is not managed for you: it will wear down to
+nothing if you let it.
+
 ## Fuel
 
 **Every hull burns petrol by the hex**, including fishing boats and freighters.

@@ -28,6 +28,16 @@ public final class ShipStep implements Step {
             int hi = ctx.idx(ship.at());
             boolean docked = here.owner() == ship.owner() && SeaRoutes.isHarbor(ctx.cfg, here);
 
+            // the sea wears a hull down (Richard 2026-09-11): everything afloat loses efficiency every
+            // update, and a ship in its own harbour does not, because it is being looked after there.
+            // Efficiency drives speed and the mobility cap, so a tired ship is a slow one before it is
+            // anything else.
+            if (!docked && sc.seaWearPerUpdate() > 0 && ship.efficiency() > 0) {
+                double worn = Math.min(sc.seaWearPerUpdate(), ship.efficiency());
+                ship = ship.withEfficiency(ship.efficiency() - worn);
+                sep(note).append("worn by the sea, ").append(Ledger.q(ship.efficiency())).append("% left");
+            }
+
             // fit out: a docked hull gains efficiency from the harbour's materials and cash
             if (docked && ship.efficiency() < 100 && here.efficiency() >= sc.harborMinEfficiency()) {
                 double points = Math.min(sc.dockPointsPerUpdate(), 100 - ship.efficiency());
@@ -94,6 +104,21 @@ public final class ShipStep implements Step {
                 // water, turning for home when the hold fills. Only the weighting differs.
                 boolean mining = org.hastingtx.empire.engine.model.Ship.MINE.equals(ship.mission());
                 var fc = mining ? sc.miningOrDefault() : sc.fishingOrDefault();
+                // too worn to be out here: break off and make for home. The mission is kept, so the
+                // ship goes back to work by itself — but not until it is fully refitted, so a worn
+                // fleet is a real cost and not a rounding error.
+                boolean refitting = ship.efficiency() <= sc.refitBelow()
+                        || (docked && ship.efficiency() < sc.refitResumeAt());
+                if (refitting) {
+                    if (docked) {
+                        if (ship.load() > 0) ship = unload(ctx, ship, here, hi, note);
+                        sep(note).append("refitting; it will not go out again until it is at 100%");
+                        ship = ship.withDest(null);
+                    } else {
+                        sep(note).append("too worn to work, making for ").append(ship.home());
+                        ship = ship.withDest(ship.home());
+                    }
+                } else {
                 if (ship.at().equals(ship.home()) && ship.load() > 0) ship = unload(ctx, ship, here, hi, note);
                 boolean full = ship.load() >= cls.hold() * fc.returnWhenHoldFraction() - 1e-9;
                 if (full) { if (!ship.home().equals(ship.dest())) sep(note).append("hold ").append(Ledger.q(100 * ship.load() / cls.hold())).append("% full, heading home to ").append(ship.home()); ship = ship.withDest(ship.home()); }
@@ -101,6 +126,7 @@ public final class ShipStep implements Step {
                     Coord next = pickWaters(ctx, ship, fc, mining);
                     if (next == null) { sep(note).append(mining ? "no nodule fields within " : "no fishing grounds within ").append(fc.radius()).append(" of ").append(ship.home()); ship = ship.withDest(null); }
                     else ship = ship.withDest(next);
+                }
                 }
             } else if (docked && sc.autoUnloadInHarbor() && cls.worksTheSea() && ship.load() > 0) {
                 ship = unload(ctx, ship, here, hi, note);   // home from the water, the load goes ashore

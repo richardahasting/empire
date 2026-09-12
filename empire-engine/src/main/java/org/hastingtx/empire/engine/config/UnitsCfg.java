@@ -27,6 +27,12 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
             /** Issue #112: ore per work-equivalent per ETU per point of a hex's nodules. */
             double miningOrePerEtuPerMineralPoint,
             /** Issue #69: a sail moves the ship now, from its own mobility pool. */
+            /** Efficiency a hull loses each update at sea; harbours are exempt. */
+            double seaWearPerUpdate,
+            /** At or below this, a mission breaks off for home to refit. */
+            double refitBelow,
+            /** And stays in harbour until this — fully refitted, not nearly. */
+            double refitResumeAt,
             boolean immediateSail,
             /** How many updates' worth of movement a hull may bank. */
             double mobilityCapUpdates,
