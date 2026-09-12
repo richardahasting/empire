@@ -32,6 +32,31 @@ public interface OpeningBook {
     default double exploreMinMobility() { return 10; }
     default double exploreCivs() { return 20; }
 
+    // ---- coverage knobs (issue #73) ---------------------------------------------------------
+    // These exist so a sim run touches the sea and the rails at all, not so the agent plays better.
+    // Every one is a coverage decision: reach the feature, exercise it, stop. Turning any of them
+    // off is how a golden-hash run pins the old behaviour.
+
+    /** Designate this many coastal sectors as harbours, so ships have somewhere to be built. */
+    default int harborsWanted() { return 1; }
+
+    /** Which hull to lay. Skipped entirely when the game has units off or the tech is not there. */
+    default String shipClass() { return "fishing_boat"; }
+
+    /** How many hulls to keep. A fishing boat that is built and sent out exercises most of the sea. */
+    default int shipsWanted() { return 1; }
+
+    /** Pave owned sectors toward this road level; 0 leaves roads alone. */
+    default double roadTarget() { return 20; }
+
+    /** Lay rail toward this level once the country's tech allows it; 0 leaves rail alone. */
+    default double railTarget() { return 20; }
+
+    /** A standing delivery order for a producing sector: commodity, direction, and the threshold. */
+    default String deliverCommodity() { return "food"; }
+    default int deliverDirection() { return 0; }
+    default double deliverThreshold() { return 400; }
+
     OpeningBook DEFAULT = new OpeningBook() {
         // Farms where it is fertile, mines where it is not, and every fourth sector a
         // light-manufacturing plant so the iron goes somewhere. Good enough to exercise the engine.
@@ -48,7 +73,9 @@ public interface OpeningBook {
             t.put("civ", 150.0);     // pull settlers from the capital
             t.put("food", 100.0);    // keep a buffer, push the surplus home
             t.put("iron", 0.0);      // ore goes home
-            t.put("lcm", s.designation().equals("light_manufacturing") ? 0.0 : 10.0);
+            // a harbour that exports all its lcm can never lay a hull, and the sea goes untested
+            t.put("lcm", s.designation().equals("light_manufacturing") ? 0.0
+                    : s.designation().equals("harbor") ? 300.0 : 10.0);
             return t;
         }
         @Override public Map<String, Double> capitalThresholds(SectorView s, CountryView v) {
