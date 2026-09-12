@@ -10,7 +10,7 @@ public sealed interface Command permits
         Command.BreakSanctuary, Command.Designate, Command.Threshold, Command.Distribute,
         Command.Move, Command.Explore, Command.BuildRoad, Command.BuildRail, Command.RailShip, Command.Deliver,
         Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine,
-        Command.RailLane, Command.Telegram, Command.Announce {
+        Command.RailLane, Command.Telegram, Command.Announce, Command.DeclareWar, Command.OfferPeace {
 
     String verb();
 
@@ -60,6 +60,18 @@ public sealed interface Command permits
 
     /** Issue #112: work the nodule fields near {@code home}, mine, land the ore, repeat. */
     record Mine(long ship, Coord home, boolean off) implements Command { public String verb() { return "mine"; } }
+
+    /**
+     * Declare war on a country (issue #137). Unilateral to do, mutual in effect: the other side is at
+     * war with you whether they like it or not, and their ships will defend themselves.
+     */
+    record DeclareWar(int on) implements Command { public String verb() { return "declare_war"; } }
+
+    /**
+     * Offer to stop (issue #137). Peace needs both: a war you can end alone costs nothing to start.
+     * Offering when the other side has already offered is what actually ends it.
+     */
+    record OfferPeace(int with) implements Command { public String verb() { return "offer_peace"; } }
 
     /**
      * A private message to one country (issue #140). The engine validates and charges for it; the

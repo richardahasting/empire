@@ -34,6 +34,7 @@ public class WorldRepository {
         writeContacts(gameId, w);
         writeSeen(gameId, w);
         writeRailLanes(gameId, w, com);
+        writeRelations(gameId, w);
         jdbc.update("UPDATE game SET update_number = ? WHERE id = ?", w.updateNumber(), gameId);
     }
 
@@ -52,7 +53,23 @@ public class WorldRepository {
         if (!after.contacts().equals(before.contacts())) writeContacts(gameId, after);
         if (!after.seen().equals(before.seen())) writeSeen(gameId, after);
         if (!after.railLanes().equals(before.railLanes())) writeRailLanes(gameId, after, com);
+        if (!after.relations().equals(before.relations())) writeRelations(gameId, after);
         jdbc.update("UPDATE game SET update_number = ? WHERE id = ?", after.updateNumber(), gameId);
+    }
+
+    /** Relations are few and change rarely: replace them wholesale rather than diffing (issue #137). */
+    private void writeRelations(long gameId, World w) {
+        jdbc.update("DELETE FROM relation WHERE game_id = ?", gameId);
+        if (w.relations().isEmpty()) return;
+        List<Object[]> rows = new ArrayList<>();
+        for (var r : w.relations()) rows.add(new Object[]{gameId, r.a(), r.b(), r.state(), r.sinceUpdate(), r.peaceOfferedBy()});
+        jdbc.batchUpdate("INSERT INTO relation (game_id, a, b, state, since_update, peace_offered_by) VALUES (?,?,?,?,?,?)", rows);
+    }
+
+    private List<org.hastingtx.empire.engine.model.Relation> readRelations(long gameId) {
+        return jdbc.query("SELECT a, b, state, since_update, peace_offered_by FROM relation WHERE game_id = ? ORDER BY a, b",
+                (r, i) -> new org.hastingtx.empire.engine.model.Relation(r.getInt("a"), r.getInt("b"), r.getString("state"),
+                        r.getLong("since_update"), (Integer) r.getObject("peace_offered_by")), gameId);
     }
 
     private static String laneKey(int owner, int fx, int fy, int tx, int ty) { return owner + ":" + fx + "," + fy + ">" + tx + "," + ty; }
@@ -283,6 +300,6 @@ public class WorldRepository {
             int o = rs.getInt("owner"), fx = rs.getInt("from_x"), fy = rs.getInt("from_y"), tx = rs.getInt("to_x"), ty = rs.getInt("to_y");
             return new RailLane(o, new Coord(fx, fy), new Coord(tx, ty), laneCargo.getOrDefault(laneKey(o, fx, fy, tx, ty), List.of()));
         }, g.id());
-        return new World(g.width(), g.height(), g.wrapX(), g.wrapY(), list, countries, moves, g.updateNumber(), rail, ships, nextShip == null ? 1 : nextShip, contacts, seen, lanes);
+        return new World(g.width(), g.height(), g.wrapX(), g.wrapY(), list, countries, moves, g.updateNumber(), rail, ships, nextShip == null ? 1 : nextShip, contacts, seen, lanes, readRelations(g.id()));
     }
 }

@@ -634,7 +634,12 @@ public class GameService {
      * unchanged world, because a message is not world state — so this is where it actually goes.
      */
     private void deliver(Game g, int from, Command cmd) {
-        if (cmd instanceof Command.Telegram t)
+        if (cmd instanceof Command.DeclareWar d && d.on() < g.world.countries().size())
+            post(g, "war", from, "{country} has declared war on " + g.world.country(d.on()).name(), null);
+        else if (cmd instanceof Command.OfferPeace o && o.with() < g.world.countries().size()
+                && !g.world.atWar(from, o.with()))
+            post(g, "peace", from, "{country} and " + g.world.country(o.with()).name() + " have made peace", null);
+        else if (cmd instanceof Command.Telegram t)
             messages.post(g.id, g.world.updateNumber(), from, t.to(), t.body().strip());
         else if (cmd instanceof Command.Announce a)
             messages.post(g.id, g.world.updateNumber(), from, null, a.body().strip());
@@ -1073,6 +1078,8 @@ public class GameService {
             case Command.Mine m -> null;
             case Command.Telegram t -> null;
             case Command.Announce a -> null;
+            case Command.DeclareWar d -> null;
+            case Command.OfferPeace o -> null;
             case Command.BreakSanctuary b -> null;
         };
         return at == null ? c.verb() : at.x() + "," + at.y();
