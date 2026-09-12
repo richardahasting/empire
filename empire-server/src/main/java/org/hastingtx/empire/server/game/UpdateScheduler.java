@@ -13,4 +13,11 @@ public class UpdateScheduler {
 
     @Scheduled(fixedDelay = 10_000, initialDelay = 15_000)
     public void tick() { games.tick(); }
+
+    /**
+     * Free seats nobody came back to confirm (issue #126). Without this a seat claimed and abandoned
+     * is gone for good, and a game waits for the bell forever.
+     */
+    @Scheduled(fixedDelay = 60_000, initialDelay = 60_000)
+    public void sweepReservations() { games.releaseStaleReservations(); }
 }

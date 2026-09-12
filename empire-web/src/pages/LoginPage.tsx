@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api } from "@/api/client";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 
 /** Passwordless: name + email, then a one-time link by mail. */
@@ -27,6 +28,10 @@ export function LoginPage() {
           <label className="block text-sm">Email<Input type="email" required value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" /></label>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button type="submit" disabled={busy || !email}>Send me a sign-in link</Button>
+          <p className="pt-1 text-sm text-muted-foreground">
+            Not playing yet? <Link className="underline" to="/join">Take a country</Link> — naming one is
+            all the sign-up there is.
+          </p>
         </form>
       )}
     </main>

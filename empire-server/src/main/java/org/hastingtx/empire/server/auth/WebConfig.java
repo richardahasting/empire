@@ -12,13 +12,13 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry r) {
-        r.addInterceptor(auth).addPathPatterns("/api/**").excludePathPatterns("/api/auth/request-link", "/api/auth/verify", "/api/health");
+        r.addInterceptor(auth).addPathPatterns("/api/**").excludePathPatterns("/api/auth/request-link", "/api/auth/verify", "/api/health", "/api/public/**");
     }
 
     /** SPA routes: anything that is not /api or a static file gets index.html. */
     @Override
     public void addViewControllers(ViewControllerRegistry r) {
         // "/help/*" is safe to forward because the guide's own HTML is served from /guide, not /help
-        for (String p : new String[] {"/", "/verify", "/games", "/games/*", "/login", "/help", "/help/*", "/admin/design-system", "/admin/pogo/*"}) r.addViewController(p).setViewName("forward:/index.html");
+        for (String p : new String[] {"/", "/verify", "/games", "/games/*", "/login", "/help", "/help/*", "/join", "/admin/design-system", "/admin/pogo/*"}) r.addViewController(p).setViewName("forward:/index.html");
     }
 }

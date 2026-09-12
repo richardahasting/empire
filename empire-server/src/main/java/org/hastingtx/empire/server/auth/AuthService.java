@@ -21,7 +21,15 @@ public class AuthService {
 
     /** Step 1: request a link. Creates the account on first contact. Always succeeds from the caller's view. */
     @Transactional
-    public void requestLink(String email, String name) {
+    public void requestLink(String email, String name) { linkFor(email, name); }
+
+    /**
+     * As {@link #requestLink}, but returns the account it belongs to — so a caller that is doing
+     * something on the visitor's behalf at the same time, like holding a seat for them (issue #126),
+     * knows who to hold it for.
+     */
+    @Transactional
+    public Account linkFor(String email, String name) {
         String e = AccountRepository.normalise(email);
         if (e == null || !e.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) throw new IllegalArgumentException("that does not look like an email address");
         Optional<Account> existing = accounts.byEmail(e);
@@ -30,6 +38,7 @@ public class AuthService {
         Account a = existing.orElseGet(() -> accounts.create(e, name, props.isAdmin(e)));
         TokenRepository.Issued t = tokens.issue(a.id(), "magic", Instant.now().plus(Duration.ofMinutes(props.magicLinkTtlMinutes())));
         mailer.sendMagicLink(e, a.name(), t.raw(), first);
+        return a;
     }
 
     /**

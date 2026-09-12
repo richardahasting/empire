@@ -7,6 +7,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { GamesPage } from "./pages/GamesPage";
 import { HelpPage } from "./pages/HelpPage";
+import { JoinPage } from "./pages/JoinPage";
 import { PogoPage } from "./pages/PogoPage";
 import { GamePage } from "./pages/GamePage";
 import DesignSystemPage from "./pages/DesignSystemPage";
@@ -28,6 +29,7 @@ createRoot(document.getElementById("root")!).render(
         <Routes>
           <Route path="/" element={<Navigate to="/games" replace />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/join" element={<JoinPage />} />
           <Route path="/verify" element={<VerifyPage />} />
           <Route path="/help" element={<HelpPage />} />
           <Route path="/help/:slug" element={<HelpPage />} />
