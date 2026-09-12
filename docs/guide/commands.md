@@ -25,6 +25,7 @@ sail SHIP x,y | hold         sail to a sea hex or one of your harbours (speed ×
 load/unload SHIP COMMODITY N in your harbour only
 lane SHIP x,y x2,y2 [COMMODITY ...]   shuttle: load surplus at x,y, unload at x2,y2, repeat; lane SHIP none clears
 fish SHIP [x,y] | off        fishing mission: roam the grounds near the home harbour, fish, land the catch, repeat
+mine SHIP [x,y] | off        seabed mining: roam the nodule fields near home, mine, land the ore, repeat
 scrap SHIP                   in harbour; the hold goes ashore
 move COMMODITY x,y x2,y2 N   move now; the sending sector pays the route's mobility now
 expl x,y x2,y2 N             explore into an adjacent unowned sector with N civilians

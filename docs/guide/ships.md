@@ -62,6 +62,28 @@ worth more.
 Catch is `rate × the hex's fertility × ETUs × efficiency`, so a fully fitted
 boat in rich water lands several hundred food an update.
 
+## Mining the sea floor
+
+`mine SHIP` sends a deep sea miner out on a standing mission, exactly as `fish`
+does: roam the water near its home harbour, work whatever it is over, come home
+when the hold is full, land the load, repeat.
+
+What it brings up is **iron**, from **polymetallic nodules** — the lumps of
+manganese, nickel, copper and cobalt that lie loose on the sea floor. Ore comes
+up at half the rate fish come up, and the ship burns petrol to earn it, which is
+the trade.
+
+Nodules are **rarer than fish and come in fields**. Fishing grounds vary by
+region and there is some fertility almost everywhere; nodules are drawn over
+larger regions and about two thirds of the sea has none at all. Finding a field
+is worth something, and a miner sitting over barren water brings up nothing —
+its history will say so.
+
+They do not run out. Nodules form over millions of years, so nothing here
+depletes them.
+
+A deep sea miner needs tech 35, and costs rather more than a trawler.
+
 ## Cargo runs
 
 `lane SHIP from to [COMMODITY ...]` sets a shuttle: load surplus at one end,

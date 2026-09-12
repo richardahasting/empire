@@ -232,6 +232,33 @@ public class GameService {
         } finally { g.lock.unlock(); }
     }
 
+    /**
+     * Give an existing game's ocean its nodule fields (issue #112), for worlds generated before the
+     * sea had minerals. The same shape as seeding the fishing grounds, and like it, land is untouched
+     * — this only fills in a value that has always been there and always been zero.
+     */
+    public Summary seedSeaMinerals(long gameId, Account a) {
+        if (!a.admin()) throw new SecurityException("deity only");
+        Game g = get(gameId);
+        g.lock.lock();
+        try {
+            World w = g.world;
+            int[] nodules = new WorldGenerator(g.cfg).seaMinerals(w.width(), w.height(), new java.util.SplittableRandom(g.seed ^ 0x4D696E65L));
+            List<Sector> next = new ArrayList<>(w.sectors());
+            for (int i = 0; i < next.size(); i++) {
+                Sector s2 = next.get(i);
+                if (s2.terrain() != org.hastingtx.empire.engine.model.Terrain.OCEAN) continue;
+                Resources r = s2.resources();
+                next.set(i, s2.withTerrain(s2.terrain(), s2.elevation(), new Resources(r.fertility(), nodules[i], 0, 0, 0)));
+            }
+            World after = w.withSectors(next);
+            worlds.saveDiff(gameId, w, after, g.com);
+            g.world = after;
+            log.info("game {}: nodule fields seeded", gameId);
+            return summary(g, a);
+        } finally { g.lock.unlock(); }
+    }
+
     /** "24h", "15m", "90s", "1h30m"; "0" or blank = manual. */
     public static long parseInterval(String spec) {
         if (spec == null || spec.isBlank() || spec.trim().equals("0")) return 0;
@@ -990,6 +1017,7 @@ public class GameService {
             case Command.Lane l -> null;
             case Command.Scrap s -> null;
             case Command.Fish f -> null;
+            case Command.Mine m -> null;
             case Command.BreakSanctuary b -> null;
         };
         return at == null ? c.verb() : at.x() + "," + at.y();

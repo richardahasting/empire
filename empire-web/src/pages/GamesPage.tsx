@@ -33,6 +33,10 @@ export function GamesPage() {
     if (!window.confirm(`Seed fishing grounds in "${g.name}"? Ocean fertility is set from the game's seed; land is untouched.`)) return;
     try { await api.post(`/admin/games/${g.id}/sea-fertility`); await load(); } catch (e) { setError((e as Error).message); }
   };
+  const seedNodules = async (g: GameSummary) => {
+    if (!window.confirm(`Seed nodule fields in "${g.name}"? Ocean minerals are set from the game's seed; land is untouched.`)) return;
+    try { await api.post(`/admin/games/${g.id}/sea-minerals`); await load(); } catch (e) { setError((e as Error).message); }
+  };
   const reloadRules = async (g: GameSummary) => {
     if (!window.confirm(`Reload the rules of "${g.name}" from the ${g.preset} preset as shipped now? The game keeps its map and stocks; only the rules change.`)) return;
     try { await api.post(`/admin/games/${g.id}/config/refresh`); await load(); } catch (e) { setError((e as Error).message); }
@@ -68,6 +72,7 @@ export function GamesPage() {
                 {me?.admin && g.status === "paused" && <Button size="sm" variant="ghost" onClick={() => setStatus(g, "running")}>Resume</Button>}
                 {me?.admin && <Button size="sm" variant="ghost" onClick={() => reloadRules(g)} title="replace this game's rule snapshot with the preset as shipped now">Reload rules</Button>}
                 {me?.admin && <Button size="sm" variant="ghost" onClick={() => seedSea(g)} title="give the sea its fishing grounds (ocean fertility by region)">Seed fishing grounds</Button>}
+                {me?.admin && <Button size="sm" variant="ghost" onClick={() => seedNodules(g)} title="give the sea its nodule fields (ocean minerals by region)">Seed nodules</Button>}
                 {me?.admin && <Button size="sm" variant="secondary" onClick={() => runUpdate(g)}>Run update</Button>}
                 <Nations game={g} />
                 <News game={g} onRead={load} />

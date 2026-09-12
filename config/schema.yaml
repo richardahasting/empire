@@ -89,6 +89,12 @@ world:
     # NEW (Richard 2026-09-09, issue #56): fishing grounds. One draw per region of region_size² sea
     # hexes, jittered per hex, so "different areas of ocean have different fertility".
     sea_fertility: { region_size: 4, triangular: [5, 40, 90], jitter: 10 }
+    # NEW (Richard 2026-09-11, issue #112): polymetallic nodules — the potato-sized lumps that lie
+    # loose on abyssal plains carrying manganese, nickel, copper and cobalt. Ocean sectors have always
+    # had a minerals field and it has always been zero; this is it. Bigger regions and a lower base
+    # than the fishing grounds, plus a coverage roll, so fields are rare and worth going to rather
+    # than a uniform dusting. Nodules form over geological time, so nothing depletes them here.
+    sea_minerals: { region_size: 8, triangular: [0, 15, 70], jitter: 8, coverage: 0.35 }
 
 # -----------------------------------------------------------------------------
 # SCHEDULE / TIME
@@ -835,9 +841,15 @@ units:
     # ashore when it is scrapped. A short-handed ship stays at the quay — which makes a fleet compete
     # with a factory for the same population, and that is the cost the feature is for.
     crews: true
-    crew_civ_roles: [fishing, cargo, tanker, luxury]   # everything else musters military
+    crew_civ_roles: [fishing, mining, cargo, tanker, luxury]   # everything else musters military
     auto_unload_in_harbor: true        # a fishing boat home from the grounds lands its catch
     fishing_food_per_etu_per_fertility_point: 0.1   # rate 1, fertility 50, 60 ETUs, 100% -> 300 food per update
+    # Seabed mining (issue #112). Half the fishing rate: ore should come up slower than fish, and a
+    # miner burns petrol to earn iron, which is the trade. Gated on the nodules in the hex, which are
+    # rarer than fishing grounds and come in fields.
+    mining_ore_per_etu_per_mineral_point: 0.05
+    # The mission's shape, as fishing's: roam near home, hop between casts, turn for home when full.
+    mining: { radius: 8, wander_hops: 2, return_when_hold_fraction: 0.9 }
     # A hull keeps the tech it was laid at (KNOWN: ship tech) and sails class speed × this multiplier
     # (Richard 2026-09-09: "each ship has a speed, based on tech level"). GUESS at the numbers.
     speed_tech_multiplier: { at_0: 1.0, per_tech_point: 0.01, max: 2.5 }
@@ -850,6 +862,7 @@ units:
     sight: 2
     classes:
       - { id: fishing_boat,            name: fishing boat,            glyph: f, role: fishing, tech_required: 0,  build: { lcm: 25, cash: 300 },             hold: 300,  speed: 3, fishing_rate: 1.0, tank: 60, fuel_per_hex: 2, crew: 5 }
+      - { id: mining_ship,             name: deep sea miner,          glyph: M, role: mining,  tech_required: 35, build: { lcm: 150, hcm: 120, cash: 6000 }, hold: 1500, speed: 3, mining_rate: 1.0, tank: 250, fuel_per_hex: 9, crew: 25 }
       - { id: industrial_fishing_boat, name: industrial fishing boat, glyph: F, role: fishing, tech_required: 20, build: { lcm: 60, hcm: 30, cash: 1500 },   hold: 1200, speed: 4, fishing_rate: 3.0, tank: 150, fuel_per_hex: 5, crew: 15 }
       - { id: cargo_ship,              name: cargo ship,              glyph: c, role: cargo,   tech_required: 0,  build: { lcm: 60, hcm: 30, cash: 1000 },   hold: 600,  speed: 3, carries: [all], tank: 120, fuel_per_hex: 4, crew: 10 }
       - { id: super_cargo,             name: super cargo ship,        glyph: C, role: cargo,   tech_required: 25, build: { lcm: 150, hcm: 100, cash: 4000 }, hold: 2400, speed: 4, carries: [all], tank: 400, fuel_per_hex: 12, crew: 30 }
