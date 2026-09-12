@@ -910,6 +910,18 @@ news:
 # SCORING — composite, never BTUs
 # -----------------------------------------------------------------------------
 scoring:
+  # Who may know what about whom (issue #120). The composite is computed from full world knowledge —
+  # every sector's owner, population and efficiency, plus cash and tech — so publishing it raw hands
+  # every player an exact census of every rival. Territory and population are precisely what detection
+  # and map memory exist to make expensive to learn, so a careless board is a bigger intelligence leak
+  # than any radar station.
+  #   exact  — real numbers for everyone. Simplest, and wrong for a game with fog in it.
+  #   banded — an ordered list with a word for how each rival is doing, and exact figures for yourself.
+  #   rank   — the order only, no numbers at all.
+  #   none   — no board.
+  # Your own country is always exact, whatever this says: it is your own census.
+  visibility: banded
+  bands: ["struggling", "holding", "strong", "leading"]
   weights: { civilians: 1.0, total_efficiency: 0.5, tech: 20.0, treasury: 0.01, territory: 5.0, survival: 1000.0 }
   # When units enabled, survival+territory dominate:
   weights_with_units: { civilians: 0.5, total_efficiency: 0.25, tech: 10.0, treasury: 0.005, territory: 20.0, survival: 5000.0 }

@@ -1,4 +1,4 @@
-package org.hastingtx.empire.sim;
+package org.hastingtx.empire.engine.score;
 
 import org.hastingtx.empire.engine.config.GameConfig;
 import org.hastingtx.empire.engine.model.Commodities;

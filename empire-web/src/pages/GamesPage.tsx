@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, type GameSummary, type CountrySeat, type NewsItem } from "@/api/client";
+import { api, type GameSummary, type CountrySeat, type NewsItem, type Standing } from "@/api/client";
 import { useAuth } from "@/api/auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -69,6 +69,7 @@ export function GamesPage() {
                 {me?.admin && <Button size="sm" variant="ghost" onClick={() => reloadRules(g)} title="replace this game's rule snapshot with the preset as shipped now">Reload rules</Button>}
                 {me?.admin && <Button size="sm" variant="ghost" onClick={() => seedSea(g)} title="give the sea its fishing grounds (ocean fertility by region)">Seed fishing grounds</Button>}
                 {me?.admin && <Button size="sm" variant="secondary" onClick={() => runUpdate(g)}>Run update</Button>}
+                <Nations game={g} />
                 <News game={g} onRead={load} />
                 {me?.admin && <Button asChild size="sm" variant="ghost" title="the deity's screen: see everything, change anything"><Link to={`/admin/pogo/${g.id}`}>POGO</Link></Button>}
                 {me?.admin && <AddCountry game={g} onAdded={load} />}
@@ -152,6 +153,72 @@ interface Seated { countryId: number; name: string; capital: { x: number; y: num
  * read, not when an item is written, so a rename carries backwards through the whole history — the
  * notice announcing it included.
  */
+/**
+ * How everyone is doing (issue #120). What arrives depends on the game's disclosure setting and on
+ * who is asking — the server drops what you may not know before sending it, so anything null here is
+ * genuinely not ours to show rather than something to hide in the markup.
+ */
+function Nations({ game }: { game: GameSummary }) {
+  const [open, setOpen] = useState(false);
+  const [rows, setRows] = useState<Standing[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const show = async (next: boolean) => {
+    setOpen(next);
+    if (!next) return;
+    setRows(null); setError(null);
+    try { setRows(await api.get<Standing[]>(`/games/${game.id}/nations`)); }
+    catch (e) { setError((e as Error).message); }
+  };
+
+  const anyNumbers = rows?.some(r => r.score != null && !r.you);
+
+  return (
+    <Dialog open={open} onOpenChange={show}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="ghost" title="how everyone is doing">Nations</Button>
+      </DialogTrigger>
+      <DialogContent size="lg">
+        <DialogHeader>
+          <DialogTitle>Nations of {game.name}</DialogTitle>
+          <DialogDescription>
+            {anyNumbers
+              ? "This game publishes exact figures."
+              : "Your own figures are exact. Everyone else is shown only as well as this game allows — territory and population are things you are meant to find out by looking."}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="max-h-96 overflow-auto py-2 text-sm">
+          {error && <p className="text-destructive">{error}</p>}
+          {rows === null && !error && <p className="text-muted-foreground">Loading…</p>}
+          {rows && (
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-muted-foreground">
+                  <th className="py-1 pr-2">#</th><th className="pr-2">country</th><th className="pr-2">standing</th>
+                  <th className="pr-2 text-right">score</th><th className="pr-2 text-right">sectors</th><th className="pr-2 text-right">people</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.countryId} className={`border-t border-border ${r.you ? "bg-muted font-medium" : ""}`}>
+                    <td className="py-1 pr-2">{r.rank}</td>
+                    <td className="pr-2">{r.name}{r.you ? " (you)" : ""}{r.bankrupt ? " · bankrupt" : ""}</td>
+                    <td className="pr-2">{r.band ?? "—"}</td>
+                    <td className="pr-2 text-right">{r.score == null ? "—" : Math.round(r.score)}</td>
+                    <td className="pr-2 text-right">{r.sectors ?? "—"}</td>
+                    <td className="pr-2 text-right">{r.civilians == null ? "—" : Math.round(r.civilians)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <DialogFooter><Button size="sm" onClick={() => void show(false)}>Close</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function News({ game, onRead }: { game: GameSummary; onRead: () => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NewsItem[] | null>(null);

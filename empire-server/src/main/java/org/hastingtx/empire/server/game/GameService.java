@@ -632,6 +632,30 @@ public class GameService {
         }
     }
 
+    /**
+     * The nations board as the calling country may see it (issue #120). The deity sees it whole; a
+     * game with {@code scoring.visibility: none} has no board at all. The trimming happens in the
+     * engine, not here — a view that is allowed to carry a rival's exact census is one that
+     * eventually does.
+     */
+    public List<org.hastingtx.empire.engine.score.NationsBoard.Standing> nations(long gameId, Account a) {
+        Game g = get(gameId);
+        if ("none".equals(g.cfg.scoring().visibilityOrDefault())) throw new IllegalArgumentException("this game does not publish a board");
+        int viewer;
+        if (a != null && a.admin() && games.countryOf(gameId, a.id()).isEmpty())
+            viewer = org.hastingtx.empire.engine.score.NationsBoard.DEITY;
+        else
+            viewer = games.countryOf(gameId, a == null ? -1 : a.id())
+                    .orElse(org.hastingtx.empire.engine.score.NationsBoard.OUTSIDER);
+        List<org.hastingtx.empire.engine.score.NationsBoard.Standing> board =
+                org.hastingtx.empire.engine.score.NationsBoard.of(g.cfg, g.world, viewer);
+        // the deity's own country is not a nation and does not belong on a league table
+        int deity = deityCountryOrMinusOne(gameId);
+        List<org.hastingtx.empire.engine.score.NationsBoard.Standing> out = new ArrayList<>();
+        for (var st : board) if (st.countryId() != deity) out.add(st);
+        return out;
+    }
+
     /** One item as a reader sees it: the name is filled in now, from the country as it is now. */
     public record NewsItem(long id, long updateNumber, java.time.Instant at, String type, String text, boolean unseen) {}
 

@@ -88,6 +88,15 @@ export interface GameSummary {
 }
 /** One item from the feed, with the country name resolved as it is now. */
 export interface NewsItem { id: number; updateNumber: number; at: string; type: string; text: string; unseen: boolean }
+/**
+ * One country's standing (issue #120). score/sectors/civilians/tech are null for anyone but you
+ * unless the game publishes exact figures — null rather than zero, so "not telling you" cannot be
+ * mistaken for "nothing".
+ */
+export interface Standing {
+  countryId: number; name: string; rank: number; you: boolean; band: string | null;
+  score: number | null; sectors: number | null; civilians: number | null; tech: number | null; bankrupt: boolean;
+}
 export interface Projection {
   forUpdate: number; cashNow: number; cashAfter: number; civNow: number; civAfter: number; foodNow: number; foodAfter: number;
   btuNow: number; btuAfter: number; starvingSectors: number; spoilingSectors: number; flowsCompleted: number; flowsHeld: number;
