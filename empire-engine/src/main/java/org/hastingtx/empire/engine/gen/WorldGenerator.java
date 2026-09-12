@@ -63,12 +63,15 @@ public final class WorldGenerator {
         List<Sector> sectors = new ArrayList<>(w * h);
         Set<Coord> capitalSet = new HashSet<>(capitals);
         int[] sea = seaFertility(w, h, rng);
+        // its own stream, not the shared one (issue #112): drawing from rng here would shift every
+        // later draw, so adding nodules would silently change the land every existing seed generates
+        int[] nodules = seaMinerals(w, h, Rng.stream("seaminerals", seed));
         for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) {
             Coord c = new Coord(x, y);
             Terrain t = terrain[dims.index(c)];
             if (t != Terrain.OCEAN) t = capitalSet.contains(c) ? Terrain.PLAINS : pickLandType(rng);
             int elev = elevation(t, rng);
-            Resources res = t == Terrain.OCEAN ? new Resources(sea[dims.index(c)], 0, 0, 0, 0) : resources(t, rng);
+            Resources res = t == Terrain.OCEAN ? new Resources(sea[dims.index(c)], nodules[dims.index(c)], 0, 0, 0) : resources(t, rng);
             sectors.add(Sector.blank(c, t, elev, res, com.size()));
         }
         World world = new World(w, h, wc.wrapX(), wc.wrapY(), sectors, List.of(), List.of(), 0);
@@ -309,19 +312,46 @@ public final class WorldGenerator {
      */
     public int[] seaFertility(int w, int h, SplittableRandom rng) {
         WorldCfg.SeaFertilityCfg sf = cfg.world().resources().seaFertility();
+        if (sf == null) return new int[w * h];
+        return seaRegions(w, h, rng, sf.regionSize(), sf.triangular(), sf.jitter(), 1.0);
+    }
+
+    /**
+     * Nodule fields (issue #112): the sea's minerals, drawn the same way as its fertility but with
+     * bigger regions, a lower base and a coverage roll — so a field is somewhere worth sailing to
+     * rather than a property of the ocean in general. Ocean sectors have always carried a minerals
+     * value and it has always been zero; this fills it in.
+     */
+    public int[] seaMinerals(int w, int h, SplittableRandom rng) {
+        WorldCfg.SeaMineralsCfg sm = cfg.world().resources().seaMinerals();
+        if (sm == null) return new int[w * h];
+        return seaRegions(w, h, rng, sm.regionSize(), sm.triangular(), sm.jitter(), sm.coverage());
+    }
+
+    /**
+     * One triangular draw per {@code regionSize}×{@code regionSize} block, jittered per hex. The sea
+     * is patchy by region rather than by hex so that finding good water is worth something and
+     * staying in it is worth more. {@code coverage} below 1 leaves whole regions empty, which is what
+     * separates a field from a gradient.
+     */
+    private int[] seaRegions(int w, int h, SplittableRandom rng, int regionSize, List<Integer> tri, int jitter, double coverage) {
         int[] out = new int[w * h];
-        if (sf == null) return out;
-        int rs = Math.max(1, sf.regionSize());
+        int rs = Math.max(1, regionSize);
         int rw = (w + rs - 1) / rs, rh = (h + rs - 1) / rs;
         int[] region = new int[rw * rh];
-        for (int i = 0; i < region.length; i++) region[i] = (int) Math.round(Rng.triangular(rng, sf.triangular().get(0), sf.triangular().get(1), sf.triangular().get(2)));
+        for (int i = 0; i < region.length; i++)
+            region[i] = coverage >= 1.0 || rng.nextDouble() < coverage
+                    ? (int) Math.round(Rng.triangular(rng, tri.get(0), tri.get(1), tri.get(2)))
+                    : 0;
         for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) {
             int base = region[(y / rs) * rw + (x / rs)];
-            int j = sf.jitter() > 0 ? rng.nextInt(2 * sf.jitter() + 1) - sf.jitter() : 0;
+            // an empty region stays empty: jitter must not sprinkle nodules across barren water
+            int j = base > 0 && jitter > 0 ? rng.nextInt(2 * jitter + 1) - jitter : 0;
             out[y * w + x] = Math.max(0, Math.min(100, base + j));
         }
         return out;
     }
+
 
     private int elevation(Terrain t, SplittableRandom rng) {
         WorldCfg.Range r = cfg.world().elevationByTerrain().get(t.id());

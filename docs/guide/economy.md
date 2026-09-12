@@ -55,6 +55,10 @@ wells on oil, uranium mines on uranium.
 
 Manufacturing sectors have no resource gate: a factory works as well anywhere.
 
+The sea has two of its own. **Fertility** feeds fishing boats, and **minerals** —
+nodule fields — feed deep sea miners, which land iron. Both are drawn by region
+rather than by hex, so good water comes in patches. See **[Ships](ships.html)**.
+
 **4. Inputs.** A refinery with no oil makes no petrol. Inputs are consumed in
 proportion to what is actually made.
 

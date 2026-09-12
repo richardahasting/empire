@@ -24,10 +24,13 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
             boolean autoUnloadInHarbor,
             /** Food a fishing boat of rate 1 at 100% makes per ETU per point of sea fertility. */
             double fishingFoodPerEtuPerFertilityPoint,
+            /** Issue #112: ore per work-equivalent per ETU per point of a hex's nodules. */
+            double miningOrePerEtuPerMineralPoint,
             /** Speed multiplier from the ship's tech: at_0 + per_tech_point × tech, capped at max. */
             SpeedTech speedTechMultiplier,
             /** The fishing mission: how far from home a boat roams, how far it hops between casts, when it turns for home. */
             FishingCfg fishing,
+            FishingCfg mining,
             /** How far a ship sees, in hexes, unless its class says otherwise (issue #62: "the fog is lifted"). */
             Integer sight,
             List<ShipClassCfg> classes) {
@@ -40,6 +43,8 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
         }
         public record FishingCfg(int radius, int wanderHops, double returnWhenHoldFraction) {}
         public FishingCfg fishingOrDefault() { return fishing == null ? new FishingCfg(6, 2, 0.9) : fishing; }
+        /** The mining mission's shape; nodule fields are rarer, so it roams further by default. */
+        public FishingCfg miningOrDefault() { return mining == null ? new FishingCfg(8, 2, 0.9) : mining; }
         public record SpeedTech(double at0, double perTechPoint, double max) {}
         public double speedFactor(double tech) {
             if (speedTechMultiplier == null) return 1.0;
@@ -67,6 +72,8 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
             double speed,
             /** fishing: multiplier on the fishing rate. */
             Double fishingRate,
+            /** mining: multiplier on the seabed mining rate (issue #112). */
+            Double miningRate,
             /** luxury: happiness produced per ETU at 100% while at sea. */
             Double happinessPerEtu,
             /** What it may carry: commodity ids, or "all" / "goods" / "people". Empty = nothing. */
@@ -84,6 +91,9 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
         public double tankOr0() { return tank == null ? 0 : tank; }
         public double fuelPerHexOr0() { return fuelPerHex == null ? 0 : fuelPerHex; }
         public double fishingRateOr0() { return fishingRate == null ? 0 : fishingRate; }
+        public double miningRateOr0() { return miningRate == null ? 0 : miningRate; }
+        /** A hull that works the sea and comes home loaded, whichever thing it is working. */
+        public boolean worksTheSea() { return fishingRateOr0() > 0 || miningRateOr0() > 0; }
         public double happinessOr0() { return happinessPerEtu == null ? 0 : happinessPerEtu; }
         public List<String> carriesOrEmpty() { return carries == null ? List.of() : carries; }
         public Map<String, Double> buildOrEmpty() { return build == null ? Map.of() : build; }

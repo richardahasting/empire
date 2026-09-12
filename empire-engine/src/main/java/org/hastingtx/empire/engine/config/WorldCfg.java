@@ -35,8 +35,17 @@ public record WorldCfg(
             Map<String, List<Integer>> oil,
             Map<String, List<Integer>> uranium,
             /** Fishing grounds (issue #56): the sea is fertile by region, not by hex. */
-            SeaFertilityCfg seaFertility) {}
+            SeaFertilityCfg seaFertility,
+            /** Nodule fields (issue #112): the sea has minerals by region too, and rarer ones. */
+            SeaMineralsCfg seaMinerals) {}
 
     /** Sea fertility: one triangular draw per {@code region_size}×{@code region_size} block, jittered per hex. */
     public record SeaFertilityCfg(int regionSize, List<Integer> triangular, int jitter) {}
+
+    /**
+     * Nodule fields (issue #112). Same shape as the fishing grounds plus {@code coverage}: the
+     * fraction of regions that have any nodules at all, which is what makes a field somewhere to go
+     * rather than a property of the sea in general.
+     */
+    public record SeaMineralsCfg(int regionSize, List<Integer> triangular, int jitter, double coverage) {}
 }

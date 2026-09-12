@@ -80,6 +80,12 @@ public class AdminController {
         return games.refreshConfig(id, admin(req));
     }
 
+    /** Seed nodule fields for an existing game (issue #112). */
+    @PostMapping("/games/{id}/sea-minerals")
+    public GameService.Summary seaMinerals(@PathVariable long id, HttpServletRequest req) {
+        return games.seedSeaMinerals(id, admin(req));
+    }
+
     /** Seed fishing grounds for an existing game (issue #56). */
     @PostMapping("/games/{id}/sea-fertility")
     public GameService.Summary seaFertility(@PathVariable long id, HttpServletRequest req) {

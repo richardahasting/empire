@@ -58,6 +58,16 @@ public final class ShipStep implements Step {
                 if (fish > 0) { ship = ship.withStock(ship.stock().plus(ctx.com.food, fish)); sep(note).append("fished ").append(Ledger.q(fish)).append(" food"); if (room - fish < 1e-9) note.append(" (hold full)"); }
                 else if (room <= 1e-9) sep(note).append("hold full, no fishing");
             }
+            // seabed mining (issue #112): iron from the hex's nodules into the hold. The same shape as
+            // fishing because it is the same mission — roam, work the water you are over, come home.
+            if (cls.miningRateOr0() > 0 && here.terrain() == Terrain.OCEAN && eff > 0) {
+                double room = Math.max(0, cls.hold() - ship.load());
+                double ore = Math.min(room, cls.miningRateOr0() * here.resource("minerals") * ctx.etus * sc.miningOrePerEtuPerMineralPoint() * eff);
+                ore = ctx.led().produceAtSea(ctx.com.index("iron"), ore);
+                if (ore > 0) { ship = ship.withStock(ship.stock().plus(ctx.com.index("iron"), ore)); sep(note).append("mined ").append(Ledger.q(ore)).append(" iron"); if (room - ore < 1e-9) note.append(" (hold full)"); }
+                else if (room <= 1e-9) sep(note).append("hold full, no mining");
+                else if (here.resource("minerals") <= 0) sep(note).append("no nodules here");
+            }
             // luxury: happiness while at sea
             if (cls.happinessOr0() > 0 && here.terrain() == Terrain.OCEAN && eff > 0) {
                 double h = cls.happinessOr0() * ctx.etus * eff;
@@ -75,19 +85,21 @@ public final class ShipStep implements Step {
                     ship = ship.withLane(lane.turned(false));
                 }
                 ship = ship.withDest(ship.lane().target());
-            } else if (ship.fishing() && ship.home() != null) {
-                // the fishing mission: land the catch at home, then roam the grounds; turn for home when the hold fills
-                var fc = sc.fishingOrDefault();
+            } else if (ship.roaming() && ship.home() != null) {
+                // one mission, two things to look for (issue #112): land the load at home, then roam the
+                // water, turning for home when the hold fills. Only the weighting differs.
+                boolean mining = org.hastingtx.empire.engine.model.Ship.MINE.equals(ship.mission());
+                var fc = mining ? sc.miningOrDefault() : sc.fishingOrDefault();
                 if (ship.at().equals(ship.home()) && ship.load() > 0) ship = unload(ctx, ship, here, hi, note);
                 boolean full = ship.load() >= cls.hold() * fc.returnWhenHoldFraction() - 1e-9;
                 if (full) { if (!ship.home().equals(ship.dest())) sep(note).append("hold ").append(Ledger.q(100 * ship.load() / cls.hold())).append("% full, heading home to ").append(ship.home()); ship = ship.withDest(ship.home()); }
                 else if (ship.dest() == null || ship.at().equals(ship.dest()) || ship.dest().equals(ship.home())) {
-                    Coord next = pickGrounds(ctx, ship, fc);
-                    if (next == null) { sep(note).append("no fishing grounds within ").append(fc.radius()).append(" of ").append(ship.home()); ship = ship.withDest(null); }
+                    Coord next = pickWaters(ctx, ship, fc, mining);
+                    if (next == null) { sep(note).append(mining ? "no nodule fields within " : "no fishing grounds within ").append(fc.radius()).append(" of ").append(ship.home()); ship = ship.withDest(null); }
                     else ship = ship.withDest(next);
                 }
-            } else if (docked && sc.autoUnloadInHarbor() && cls.fishingRateOr0() > 0 && ship.load() > 0) {
-                ship = unload(ctx, ship, here, hi, note);   // a fishing boat home from the grounds lands its catch
+            } else if (docked && sc.autoUnloadInHarbor() && cls.worksTheSea() && ship.load() > 0) {
+                ship = unload(ctx, ship, here, hi, note);   // home from the water, the load goes ashore
             }
             // refuel (issue #65): a harbour pumps from its own stock, a tanker from its hold at sea
             if (sc.fuel() && docked) ship = refuel(ctx, ship, cls, hi, note);
@@ -208,8 +220,8 @@ public final class ShipStep implements Step {
      * grounds) and within {@code radius} of home, drawn with probability ∝ fertility + 1 from a seeded
      * stream per ship and update — a random path that still favours rich water.
      */
-    static Coord pickGrounds(Ctx ctx, Ship ship, UnitsCfg.ShipsCfg.FishingCfg fc) {
-        java.util.SplittableRandom rng = org.hastingtx.empire.engine.update.Rng.stream("fishing:" + ship.id() + ":" + ctx.snap.updateNumber(), ctx.seed);
+    static Coord pickWaters(Ctx ctx, Ship ship, UnitsCfg.ShipsCfg.FishingCfg fc, boolean mining) {
+        java.util.SplittableRandom rng = org.hastingtx.empire.engine.update.Rng.stream((mining ? "mining:" : "fishing:") + ship.id() + ":" + ctx.snap.updateNumber(), ctx.seed);
         boolean atHome = ship.at().equals(ship.home());
         int hops = atHome ? fc.radius() : fc.wanderHops();
         List<Coord> cands = new ArrayList<>(); List<Double> weights = new ArrayList<>(); double total = 0;
@@ -218,7 +230,8 @@ public final class ShipStep implements Step {
             if (org.hastingtx.empire.engine.geo.Hex.distance(ctx.snap, s.at(), ship.home()) > fc.radius()) continue;
             if (org.hastingtx.empire.engine.geo.Hex.distance(ctx.snap, s.at(), ship.at()) > hops) continue;
             if (SeaRoutes.path(ctx.snap, ctx.cfg, ship.owner(), ship.at(), s.at()) == null) continue;
-            double wgt = s.fertility() + 1.0;
+            // richer water more often; a mission looks for what it is there for
+            double wgt = (mining ? s.resource("minerals") : s.fertility()) + 1.0;
             cands.add(s.at()); weights.add(wgt); total += wgt;
         }
         if (cands.isEmpty()) return null;

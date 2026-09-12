@@ -39,6 +39,7 @@ public final class CommandExecutor {
             case Command.Lane l -> lane(w, c, l);
             case Command.Scrap s -> scrap(w, c, s);
             case Command.Fish f -> fish(w, c, f);
+            case Command.Mine m -> mine(w, c, m);
             case Command.Move m -> move(w, c, m);
             case Command.Explore e -> explore(w, c, e);
             case Command.BuildRoad br -> buildRoad(w, c, br);
@@ -216,7 +217,7 @@ public final class CommandExecutor {
         var cls = cfg.units().ships().shipClass(ship.cls());
         double perUpdate = cfg.units().ships().range(cls, ship.tech(), ship.efficiency());
         String eta = perUpdate <= 0 ? "it cannot sail until it is fitter" : "about " + (int) Math.ceil((path.size() - 1) / perUpdate) + " update(s)";
-        return new CommandResult(w.withShip(ship.withDest(s.dest()).withMission(null, null)), null, 0, "ship #" + s.ship() + " sails for " + s.dest() + ": " + (path.size() - 1) + " hexes, " + eta + (ship.fishing() ? " (fishing mission ended)" : ""));
+        return new CommandResult(w.withShip(ship.withDest(s.dest()).withMission(null, null)), null, 0, "ship #" + s.ship() + " sails for " + s.dest() + ": " + (path.size() - 1) + " hexes, " + eta + (ship.roaming() ? " (" + ship.mission() + "ing mission ended)" : ""));
     }
 
     /** The harbour, then any dockside warehouse of yours next to it (issue #78). */
@@ -322,6 +323,25 @@ public final class CommandExecutor {
         var fc = cfg.units().ships().fishingOrDefault();
         return new CommandResult(w.withShip(ship.withMission(Ship.FISH, home).withLane(null).withDest(null)), null, 0,
                 "ship #" + f.ship() + " fishes the grounds within " + fc.radius() + " of " + home + " and lands the catch there");
+    }
+
+    /**
+     * Seabed mining (issue #112). The same mission as fishing with a different quarry, so it is the
+     * same checks — a hull that can do it, a home harbour, and a sea route back to it.
+     */
+    private CommandResult mine(World w, Country c, Command.Mine m) {
+        Ship ship = myShip(w, c, m.ship());
+        if (ship == null) return CommandResult.fail(w, "no ship #" + m.ship() + " of yours");
+        if (m.off()) return new CommandResult(w.withShip(ship.withMission(null, null).withDest(null)), null, 0, "ship #" + m.ship() + " stops mining and holds position");
+        var cls = cfg.units().ships().shipClass(ship.cls());
+        if (cls.miningRateOr0() <= 0) return CommandResult.fail(w, "a " + cls.name() + " cannot work the sea floor");
+        Coord home = m.home() != null ? m.home() : harborOf(w, c, w.sector(ship.at())) ? ship.at() : null;
+        if (home == null) return CommandResult.fail(w, "name a home harbour, or give the order while the ship is in one");
+        if (!harborOf(w, c, w.sector(home))) return CommandResult.fail(w, home + " is not one of your harbours");
+        if (org.hastingtx.empire.engine.update.SeaRoutes.path(w, cfg, c.id(), ship.at(), home) == null) return CommandResult.fail(w, "ship #" + m.ship() + " has no sea route to " + home);
+        var mc = cfg.units().ships().miningOrDefault();
+        return new CommandResult(w.withShip(ship.withMission(Ship.MINE, home).withLane(null).withDest(null)), null, 0,
+                "ship #" + m.ship() + " works the nodule fields within " + mc.radius() + " of " + home + " and lands the ore there");
     }
 
     private CommandResult scrap(World w, Country c, Command.Scrap s) {
