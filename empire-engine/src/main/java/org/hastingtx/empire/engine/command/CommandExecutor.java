@@ -215,9 +215,42 @@ public final class CommandExecutor {
         List<Coord> path = org.hastingtx.empire.engine.update.SeaRoutes.path(w, cfg, c.id(), ship.at(), s.dest());
         if (path == null) return CommandResult.fail(w, "no sea route from " + ship.at() + " to " + s.dest() + " (sea and your harbours only)");
         var cls = cfg.units().ships().shipClass(ship.cls());
-        double perUpdate = cfg.units().ships().range(cls, ship.tech(), ship.efficiency());
-        String eta = perUpdate <= 0 ? "it cannot sail until it is fitter" : "about " + (int) Math.ceil((path.size() - 1) / perUpdate) + " update(s)";
-        return new CommandResult(w.withShip(ship.withDest(s.dest()).withMission(null, null)), null, 0, "ship #" + s.ship() + " sails for " + s.dest() + ": " + (path.size() - 1) + " hexes, " + eta + (ship.roaming() ? " (" + ship.mission() + "ing mission ended)" : ""));
+        var sc = cfg.units().ships();
+        double perUpdate = sc.range(cls, ship.tech(), ship.efficiency());
+        String ended = ship.roaming() ? " (" + ship.mission() + "ing mission ended)" : "";
+        int hexes = path.size() - 1;
+        ship = ship.withDest(s.dest()).withMission(null, null);
+
+        // A sail happens now (issue #69). The ship goes as far as its own mobility and its tank will
+        // carry it, this command, and the rest waits for the update — which is what makes a warship
+        // able to answer something it has just seen instead of an update later.
+        if (sc.immediateSail()) {
+            if (sc.crews() && ship.crew() < cls.crewOr0())
+                return new CommandResult(w.withShip(ship), null, 0, "ship #" + s.ship() + " is short-handed and stays at the quay; it will sail when it has a crew" + ended);
+            double perHex = sc.fuel() ? cls.fuelPerHexOr0() : 0;
+            int byFuel = perHex > 0 ? (int) Math.floor(ship.fuel() / perHex) : hexes;
+            // haste is dearer than planning: a hex ordered now costs rushCost, a planned one costs 1
+            double rush = sc.rushCost();
+            int hops = Math.min(Math.min((int) Math.floor(ship.mobility() / rush), hexes), byFuel);
+            if (hops > 0) {
+                Coord to = path.get(hops);
+                ship = ship.withAt(to).withMobility(ship.mobility() - hops * rush);
+                if (perHex > 0) ship = ship.withFuel(ship.fuel() - hops * perHex);
+                boolean there = to.equals(s.dest());
+                if (there) ship = ship.withDest(null);
+                return new CommandResult(w.withShip(ship), null, 0,
+                        "ship #" + s.ship() + " sails " + hops + (hops == 1 ? " hex" : " hexes") + " to " + to
+                                + (there ? ", arrived" : "; " + (hexes - hops) + " to go, at the update") + ended);
+            }
+            String why = perHex > 0 && byFuel <= 0 ? "its tank is dry"
+                    : perUpdate <= 0 ? "it is too unfit to sail"
+                    : "it has no way on it yet";
+            return new CommandResult(w.withShip(ship), null, 0,
+                    "ship #" + s.ship() + " is bound for " + s.dest() + " (" + hexes + " hexes) but " + why + "; it will start at the update" + ended);
+        }
+
+        String eta = perUpdate <= 0 ? "it cannot sail until it is fitter" : "about " + (int) Math.ceil(hexes / perUpdate) + " update(s)";
+        return new CommandResult(w.withShip(ship), null, 0, "ship #" + s.ship() + " sails for " + s.dest() + ": " + hexes + " hexes, " + eta + ended);
     }
 
     /** The harbour, then any dockside warehouse of yours next to it (issue #78). */

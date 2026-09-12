@@ -62,6 +62,25 @@ worth more.
 Catch is `rate × the hex's fertility × ETUs × efficiency`, so a fully fitted
 boat in rich water lands several hundred food an update.
 
+## Sailing
+
+`sail SHIP x,y` moves the ship **now**, not at the update. It goes as far as its
+own mobility and its tank will carry it, this command, and whatever is left of
+the journey happens at the update.
+
+Every hull has a **mobility pool** of its own, as a sector does. It fills by the
+ship's speed each update — `class speed × efficiency`, adjusted for the tech it
+was laid at — and is capped at two updates' worth. So a ship that has been
+sitting in harbour can dash, and one that has been working all update cannot.
+
+**Haste costs more.** A hex ordered now spends **1.25 mobility**; a hex sailed
+as part of a plan — a standing mission, or the remainder of an order left to the
+update — spends 1. Rushing is always available and never free, and a captain who
+plans gets further on the same movement.
+
+A ship that is short-handed, out of fuel or out of mobility does not refuse the
+order: it takes the destination and starts at the update.
+
 ## Mining the sea floor
 
 `mine SHIP` sends a deep sea miner out on a standing mission, exactly as `fish`
