@@ -38,6 +38,8 @@ public final class CommandExecutor {
             case Command.Unload u -> unload(w, c, u);
             case Command.Lane l -> lane(w, c, l);
             case Command.Scrap s -> scrap(w, c, s);
+            case Command.DeclareWar d -> declareWar(w, c, d);
+            case Command.OfferPeace o -> offerPeace(w, c, o);
             case Command.Telegram t -> telegram(w, c, t);
             case Command.Announce a -> announce(w, c, a);
             case Command.Fish f -> fish(w, c, f);
@@ -377,6 +379,50 @@ public final class CommandExecutor {
         var mc = cfg.units().ships().miningOrDefault();
         return new CommandResult(w.withShip(ship.withMission(Ship.MINE, home).withLane(null).withDest(null)), null, 0,
                 "ship #" + m.ship() + " works the nodule fields within " + mc.radius() + " of " + home + " and lands the ore there");
+    }
+
+    /**
+     * Declare war (issue #137). One row per pair, so the state is mutual by construction — there is
+     * no way to record a war the other side is not in.
+     */
+    private CommandResult declareWar(World w, Country c, Command.DeclareWar d) {
+        Country them = target(w, d.on());
+        if (them == null) return CommandResult.fail(w, "no such country");
+        if (them.id() == c.id()) return CommandResult.fail(w, "you cannot declare war on yourself");
+        if (c.inSanctuary()) return CommandResult.fail(w, "break sanctuary before you go to war");
+        if (them.inSanctuary()) return CommandResult.fail(w, them.name() + " is still in sanctuary and cannot be touched");
+        if (w.atWar(c.id(), them.id())) return CommandResult.fail(w, "you are already at war with " + them.name());
+        return new CommandResult(withRelation(w, c.id(), them.id(), Relation.WAR, null), null, 0,
+                "war declared on " + them.name());
+    }
+
+    /**
+     * Offer peace, and take it if it was already offered. Both sides have to want it, so a war cannot
+     * be switched off the moment it goes badly — which is what makes declaring one a decision.
+     */
+    private CommandResult offerPeace(World w, Country c, Command.OfferPeace o) {
+        Country them = target(w, o.with());
+        if (them == null) return CommandResult.fail(w, "no such country");
+        if (them.id() == c.id()) return CommandResult.fail(w, "you are at peace with yourself");
+        Relation r = w.relation(c.id(), them.id());
+        if (r == null || !r.atWar()) return CommandResult.fail(w, "you are not at war with " + them.name());
+        if (r.peaceOfferedBy() != null && r.peaceOfferedBy() == them.id())
+            return new CommandResult(withRelation(w, c.id(), them.id(), Relation.PEACE, null), null, 0,
+                    "peace with " + them.name() + " — they had offered, and you have accepted");
+        if (r.peaceOfferedBy() != null && r.peaceOfferedBy() == c.id())
+            return CommandResult.fail(w, "you have already offered " + them.name() + " peace; it is theirs to accept");
+        return new CommandResult(withRelation(w, c.id(), them.id(), Relation.WAR, c.id()), null, 0,
+                "peace offered to " + them.name() + "; it holds until they accept");
+    }
+
+    private Country target(World w, int id) { return id < 0 || id >= w.countries().size() ? null : w.country(id); }
+
+    /** Replace the pair's relation, keeping the one-row-per-pair invariant. */
+    private static World withRelation(World w, int x, int y, String state, Integer offeredBy) {
+        List<Relation> next = new java.util.ArrayList<>();
+        for (Relation r : w.relations()) if (!r.between(x, y)) next.add(r);
+        next.add(Relation.of(x, y, state, w.updateNumber(), offeredBy));
+        return w.withRelations(next);
     }
 
     /** The longest thing anybody may say at once. A telegram is a message, not a pamphlet. */

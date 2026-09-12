@@ -97,6 +97,23 @@ carries a name, a time and what was said, and nothing else. You may negotiate a
 border for weeks without ever finding out; that is deliberate, and it is
 probably the most interesting thing about playing here.
 
+## War and peace
+
+`declare war COUNTRY` puts you at war. **You declare it alone and you are both in
+it** — they are at war with you whether they like it or not, and from that moment
+their warships will defend themselves without being told.
+
+`peace COUNTRY` offers to stop. **It takes both of you.** Offering does not end
+anything; the war continues until the other side offers too, and then it is over
+for both. A war you could end by yourself would cost nothing to start.
+
+You cannot declare war from sanctuary, and you cannot declare it on somebody who
+is still in theirs. Both declarations and the peace that ends them are news, so
+everyone hears.
+
+Who you are at war with is never a secret once declared — it is in your view
+every turn, and in theirs.
+
 ## News
 
 The games page has a **News** button per game, with a count of anything you have

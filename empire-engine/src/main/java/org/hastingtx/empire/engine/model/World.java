@@ -22,7 +22,9 @@ public record World(
         /** What each country remembers of sectors it has seen and can no longer see (issue #64). */
         List<SeenSector> seen,
         /** Standing depot-to-depot rail runs (issue #70). */
-        List<RailLane> railLanes) {
+        List<RailLane> railLanes,
+        /** Who is at war with whom (issue #137). One row per pair; absent means peace. */
+        List<Relation> relations) {
 
     public World(int width, int height, boolean wrapX, boolean wrapY, List<Sector> sectors, List<Country> countries, List<MoveOrder> pendingMoves, long updateNumber) {
         this(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, List.of());
@@ -31,7 +33,7 @@ public record World(
         this(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, List.of(), 1);
     }
     public World(int width, int height, boolean wrapX, boolean wrapY, List<Sector> sectors, List<Country> countries, List<MoveOrder> pendingMoves, long updateNumber, List<RailOrder> pendingRail, List<Ship> ships, long nextShipId) {
-        this(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, List.of(), List.of(), List.of());
+        this(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, List.of(), List.of(), List.of(), List.of());
     }
 
 
@@ -43,6 +45,7 @@ public record World(
         pendingMoves = List.copyOf(pendingMoves);
         pendingRail = List.copyOf(pendingRail);
         ships = List.copyOf(ships);
+        relations = List.copyOf(relations);
         contacts = List.copyOf(contacts);
         // Both of these are sets, not sequences: a country's chart and its standing lanes have no natural
         // order, and the order they happen to arrive in — the order a player typed them, or whatever the
@@ -67,25 +70,39 @@ public record World(
     public Sector sector(int x, int y) { return sectors.get(index(x, y)); }
     public Country country(int id) { return countries.get(id); }
 
-    public World withSectors(List<Sector> s) { return new World(width, height, wrapX, wrapY, s, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen, railLanes); }
-    public World withCountries(List<Country> c) { return new World(width, height, wrapX, wrapY, sectors, c, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen, railLanes); }
-    public World withPendingMoves(List<MoveOrder> m) { return new World(width, height, wrapX, wrapY, sectors, countries, m, updateNumber, pendingRail, ships, nextShipId, contacts, seen, railLanes); }
-    public World withPendingRail(List<RailOrder> r) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, r, ships, nextShipId, contacts, seen, railLanes); }
-    public World withUpdateNumber(long n) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, n, pendingRail, ships, nextShipId, contacts, seen, railLanes); }
+    public World withSectors(List<Sector> s) { return new World(width, height, wrapX, wrapY, s, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen, railLanes, relations); }
+    public World withCountries(List<Country> c) { return new World(width, height, wrapX, wrapY, sectors, c, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen, railLanes, relations); }
+    public World withPendingMoves(List<MoveOrder> m) { return new World(width, height, wrapX, wrapY, sectors, countries, m, updateNumber, pendingRail, ships, nextShipId, contacts, seen, railLanes, relations); }
+    public World withPendingRail(List<RailOrder> r) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, r, ships, nextShipId, contacts, seen, railLanes, relations); }
+    public World withUpdateNumber(long n) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, n, pendingRail, ships, nextShipId, contacts, seen, railLanes, relations); }
 
-    public World withShips(List<Ship> sh) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, sh, nextShipId, contacts, seen, railLanes); }
-    public World withShips(List<Ship> sh, long next) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, sh, next, contacts, seen, railLanes); }
+    public World withShips(List<Ship> sh) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, sh, nextShipId, contacts, seen, railLanes, relations); }
+    public World withShips(List<Ship> sh, long next) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, sh, next, contacts, seen, railLanes, relations); }
     public Ship ship(long id) { for (Ship sh : ships) if (sh.id() == id) return sh; return null; }
     public World withShip(Ship sh) { List<Ship> copy = new ArrayList<>(ships); for (int i = 0; i < copy.size(); i++) if (copy.get(i).id() == sh.id()) { copy.set(i, sh); return withShips(copy); } copy.add(sh); return withShips(copy); }
-    public World withContacts(List<Contact> cs) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, cs, seen, railLanes); }
-    public World withSeen(List<SeenSector> ss) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, ss, railLanes); }
-    public World withRailLanes(List<RailLane> ls) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen, ls); }
+    public World withContacts(List<Contact> cs) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, cs, seen, railLanes, relations); }
+    public World withSeen(List<SeenSector> ss) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, ss, railLanes, relations); }
+    public World withRailLanes(List<RailLane> ls) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen, ls, relations); }
     /** {@code owner}'s standing rail runs (issue #70). */
     public List<RailLane> railLanesOf(int owner) { List<RailLane> out = new ArrayList<>(); for (RailLane l : railLanes) if (l.owner() == owner) out.add(l); return out; }
     /** What {@code owner} remembers of sectors it can no longer see (issue #64). */
     public List<SeenSector> seenBy(int owner) { List<SeenSector> out = new ArrayList<>(); for (SeenSector s : seen) if (s.owner() == owner) out.add(s); return out; }
     /** The sightings {@code owner} currently holds. */
     public List<Contact> contactsOf(int owner) { List<Contact> out = new ArrayList<>(); for (Contact c : contacts) if (c.owner() == owner) out.add(c); return out; }
+
+    public World withRelations(List<Relation> rs) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen, railLanes, rs); }
+
+    /** The pair's relation, or null when they have never had one — which means peace (issue #137). */
+    public Relation relation(int x, int y) {
+        for (Relation r : relations) if (r.between(x, y)) return r;
+        return null;
+    }
+
+    /** Absent means peace, so this is the only question most code needs to ask. */
+    public boolean atWar(int x, int y) {
+        Relation r = relation(x, y);
+        return r != null && r.atWar();
+    }
 
     public World withoutShip(long id) { List<Ship> copy = new ArrayList<>(ships); copy.removeIf(x -> x.id() == id); return withShips(copy); }
     public List<Ship> shipsAt(Coord c) { List<Ship> out = new ArrayList<>(); for (Ship sh : ships) if (sh.at().equals(c)) out.add(sh); return out; }

@@ -31,6 +31,8 @@ public record CountryView(
         List<String> commodityIds,
         List<SectorView> sectors,
         List<String> otherCountryNames,
+        /** Who you are at war with, by name (issue #137). Not a secret once declared. */
+        List<String> atWarWith,
         /** Your ships (issue #56). */
         List<ShipView> ships,
         /** What your radar and lookouts have seen of other people's ships (issue #75). */
@@ -210,8 +212,13 @@ public record CountryView(
             }
         }
 
+        // who you are at war with: public the moment it was declared, and useful every turn after
+        List<String> atWar = new ArrayList<>();
+        for (var r : w.relations())
+            if (r.atWar() && r.involves(countryId)) atWar.add(w.country(r.other(countryId)).name());
+
         return new CountryView(countryId, c.name(), w.updateNumber(), c.capital(), w.wrapX(), w.wrapY(), w.width(), w.height(), c.cash(), c.btu(), c.levels(), c.handicap(),
-                c.inSanctuary(), c.bankrupt(), ids, views, others, ships, contacts, railLanes, trains);
+                c.inSanctuary(), c.bankrupt(), ids, views, others, atWar, ships, contacts, railLanes, trains);
     }
 
     /**

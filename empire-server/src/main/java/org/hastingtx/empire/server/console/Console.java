@@ -58,6 +58,19 @@ public class Console {
                     need(t, 4, "lane SHIP x,y x2,y2 [COMMODITY ...]");
                     yield cmd(gameId, a, new Command.Lane(id, abs(v, t[2]), abs(v, t[3]), t.length > 4 ? List.of(Arrays.copyOfRange(t, 4, t.length)) : List.of()));
                 }
+                case "declare" -> {
+                    need(t, 3, "declare war COUNTRY");
+                    if (!t[1].equalsIgnoreCase("war")) yield new Reply("declare war COUNTRY", false, null, null);
+                    int on = games.countryNamed(gameId, rest(line, 2));
+                    if (on < 0) yield new Reply("no country called " + rest(line, 2) + " in this game", false, null, null);
+                    yield cmd(gameId, a, new Command.DeclareWar(on));
+                }
+                case "peace" -> {
+                    need(t, 2, "peace COUNTRY");
+                    int with = games.countryNamed(gameId, rest(line, 1));
+                    if (with < 0) yield new Reply("no country called " + rest(line, 1) + " in this game", false, null, null);
+                    yield cmd(gameId, a, new Command.OfferPeace(with));
+                }
                 case "tel", "telegram" -> {
                     need(t, 3, "telegram COUNTRY \"what you want to say\"");
                     int to = games.countryNamed(gameId, t[1]);

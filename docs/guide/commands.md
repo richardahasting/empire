@@ -17,6 +17,8 @@ des SECTOR TYPE              designate (agribusiness, mine, light_manufacturing,
 thresh SECTOR COMMODITY N    set a distribution threshold (negative clears)
 dist SECTOR cx,cy | none     name a sector's distribution centre
 deliver COMMODITY SECTOR DIR N   standing order: above N, push it one hex DIR (e ne nw w sw se) every update; DIR none clears
+declare war COUNTRY          go to war; they are at war with you whether they like it or not
+peace COUNTRY                offer peace, or accept theirs — it takes both of you
 telegram COUNTRY "..."       a private message to one country; they see who it is from
 announce "..."               the same, to everybody in the game
 macro                        list your macros (recorded from the map); macro run N SECTOR runs one

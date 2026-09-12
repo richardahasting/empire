@@ -65,7 +65,7 @@ public final class ApplyStep {
             countries.add(new Country(c.id(), c.name(), c.capital(), c.cash() + led.cash[c.id()], c.btu() + led.btu[c.id()], lv,
                     c.handicap(), c.inSanctuary(), led.bankruptNext[c.id()], led.plagueLeft[c.id()]));
         }
-        World out = new World(snap.width(), snap.height(), snap.wrapX(), snap.wrapY(), next, countries, List.of(), snap.updateNumber() + 1, List.of(), ctx.ships, snap.nextShipId(), ctx.contacts, ctx.seen, snap.railLanes());   // lanes are standing orders: they survive the update
+        World out = new World(snap.width(), snap.height(), snap.wrapX(), snap.wrapY(), next, countries, List.of(), snap.updateNumber() + 1, List.of(), ctx.ships, snap.nextShipId(), ctx.contacts, ctx.seen, snap.railLanes(), snap.relations());   // lanes and relations are standing: they survive the update
         checkConservation(ctx, out, rebuilt, nRebuilt);
         // the last line of a sector's story: what it wanted and did not get
         for (var e : led.shortages.entrySet()) {
