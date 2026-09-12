@@ -67,10 +67,12 @@ public class GameService {
 
     private final AuthService auth;
     private final org.hastingtx.empire.server.persistence.NewsRepository news;
+    private final org.hastingtx.empire.server.persistence.MessageRepository messages;
 
     public GameService(GameRepository games, WorldRepository worlds, LogRepository logs, AuthService auth,
-                       org.hastingtx.empire.server.persistence.NewsRepository news) {
-        this.games = games; this.worlds = worlds; this.logs = logs; this.auth = auth; this.news = news;
+                       org.hastingtx.empire.server.persistence.NewsRepository news,
+                       org.hastingtx.empire.server.persistence.MessageRepository messages) {
+        this.games = games; this.worlds = worlds; this.logs = logs; this.auth = auth; this.news = news; this.messages = messages;
     }
 
     @PostConstruct
@@ -606,7 +608,7 @@ public class GameService {
     // ------------------------------------------------------------------------------ players
     public record CountrySeat(int id, String name, boolean taken) {}
     public record Summary(long id, String name, String preset, String status, long updateNumber, int width, int height, List<CountrySeat> countries, Integer myCountry,
-                          long intervalSeconds, java.time.Instant nextUpdateAt, int unseenNews) {}
+                          long intervalSeconds, java.time.Instant nextUpdateAt, int unseenNews, int unreadMessages) {}
 
     public Summary summary(Game g, Account a) {
         List<CountrySeat> seats = new ArrayList<>();
@@ -616,7 +618,8 @@ public class GameService {
             if (a != null && s.accountId() != null && s.accountId() == a.id()) mine = s.countryId();
         }
         return new Summary(g.id, g.name, g.preset, g.status, g.world.updateNumber(), g.world.width(), g.world.height(), seats, mine, g.intervalSeconds, g.nextUpdateAt,
-                a == null ? 0 : news.unseen(a.id(), g.id));
+                a == null ? 0 : news.unseen(a.id(), g.id),
+                mine == null ? 0 : messages.unread(g.id, mine));
     }
 
     /**
@@ -625,6 +628,56 @@ public class GameService {
      * all evening by somebody who wandered off.
      */
     public static final java.time.Duration RESERVATION = java.time.Duration.ofMinutes(30);
+
+    /**
+     * Keep what was said (issue #140). The engine validated it and charged for it and handed back an
+     * unchanged world, because a message is not world state — so this is where it actually goes.
+     */
+    private void deliver(Game g, int from, Command cmd) {
+        if (cmd instanceof Command.Telegram t)
+            messages.post(g.id, g.world.updateNumber(), from, t.to(), t.body().strip());
+        else if (cmd instanceof Command.Announce a)
+            messages.post(g.id, g.world.updateNumber(), from, null, a.body().strip());
+    }
+
+    /** A country by the name a player would type, case-insensitively. -1 if there is no such one. */
+    public int countryNamed(long gameId, String name) {
+        Game g = get(gameId);
+        if (name == null) return -1;
+        String wanted = name.strip();
+        for (Country c : g.world.countries()) if (c.name().equalsIgnoreCase(wanted)) return c.id();
+        return -1;
+    }
+
+    /** One message as its reader sees it, with names resolved now rather than when it was sent. */
+    public record Post(long id, long updateNumber, java.time.Instant at, String from, String to, String body, boolean mine, boolean unread) {}
+
+    public List<Post> messagesFor(long gameId, Account a, int limit) {
+        Game g = get(gameId);
+        int me = myCountry(gameId, a);
+        long seen = messages.lastSeen(gameId, me);
+        List<Post> out = new ArrayList<>();
+        for (var m : messages.forCountry(gameId, me, limit)) {
+            String from = nameOf(g, m.fromCountry());
+            String to = m.toCountry() == null ? "everyone" : nameOf(g, m.toCountry());
+            boolean mine = m.fromCountry() == me;
+            out.add(new Post(m.id(), m.updateNumber(), m.at(), from, to, m.body(), mine, !mine && m.id() > seen));
+        }
+        return out;
+    }
+
+    private static String nameOf(Game g, int id) {
+        return id >= 0 && id < g.world.countries().size() ? g.world.country(id).name() : "somebody";
+    }
+
+    public int unreadMessages(long gameId, Account a) {
+        var mine = games.countryOf(gameId, a == null ? -1 : a.id());
+        return mine.isEmpty() ? 0 : messages.unread(gameId, mine.get());
+    }
+
+    public void markMessagesSeen(long gameId, Account a) {
+        messages.markSeen(gameId, myCountry(gameId, a), messages.newestId(gameId));
+    }
 
     // ------------------------------------------------------------------------ news (issue #121)
 
@@ -947,7 +1000,7 @@ public class GameService {
             World before = g.world;
             CommandResult r = g.exec.execute(before, country, cmd);
             logs.command(gameId, country, before.updateNumber(), source, cmd.verb(), cmd, r.ok(), r.error(), r.btuSpent());
-            if (r.ok()) { worlds.saveDiff(gameId, before, r.world(), g.com); g.world = r.world(); postMilestones(g, before, r.world()); }
+            if (r.ok()) { worlds.saveDiff(gameId, before, r.world(), g.com); g.world = r.world(); postMilestones(g, before, r.world()); deliver(g, country, cmd); }
             Coord cap = g.world.country(country).capital();
             return new Outcome(r.ok(), relativise(g.world, cap, r.error()), r.btuSpent(), CountryView.of(g.world, g.cfg, country), relativise(g.world, cap, r.info()));
         } finally { g.lock.unlock(); }
@@ -1018,6 +1071,8 @@ public class GameService {
             case Command.Scrap s -> null;
             case Command.Fish f -> null;
             case Command.Mine m -> null;
+            case Command.Telegram t -> null;
+            case Command.Announce a -> null;
             case Command.BreakSanctuary b -> null;
         };
         return at == null ? c.verb() : at.x() + "," + at.y();

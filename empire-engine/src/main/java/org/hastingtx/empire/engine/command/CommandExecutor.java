@@ -38,6 +38,8 @@ public final class CommandExecutor {
             case Command.Unload u -> unload(w, c, u);
             case Command.Lane l -> lane(w, c, l);
             case Command.Scrap s -> scrap(w, c, s);
+            case Command.Telegram t -> telegram(w, c, t);
+            case Command.Announce a -> announce(w, c, a);
             case Command.Fish f -> fish(w, c, f);
             case Command.Mine m -> mine(w, c, m);
             case Command.Move m -> move(w, c, m);
@@ -375,6 +377,32 @@ public final class CommandExecutor {
         var mc = cfg.units().ships().miningOrDefault();
         return new CommandResult(w.withShip(ship.withMission(Ship.MINE, home).withLane(null).withDest(null)), null, 0,
                 "ship #" + m.ship() + " works the nodule fields within " + mc.radius() + " of " + home + " and lands the ore there");
+    }
+
+    /** The longest thing anybody may say at once. A telegram is a message, not a pamphlet. */
+    public static final int MAX_MESSAGE = 2000;
+
+    /**
+     * Validate and charge for a telegram (issue #140). The world comes back unchanged: what was said
+     * is the server's to keep, because the update must be a pure function of the world and a state
+     * hash must not move because somebody sent a letter.
+     */
+    private CommandResult telegram(World w, Country c, Command.Telegram t) {
+        if (!cfg.agents().diplomacy()) return CommandResult.fail(w, "this game has diplomacy switched off");
+        if (t.to() < 0 || t.to() >= w.countries().size()) return CommandResult.fail(w, "no such country");
+        if (t.to() == c.id()) return CommandResult.fail(w, "you are already talking to yourself");
+        String body = t.body() == null ? "" : t.body().strip();
+        if (body.isEmpty()) return CommandResult.fail(w, "say something");
+        if (body.length() > MAX_MESSAGE) return CommandResult.fail(w, "that is longer than " + MAX_MESSAGE + " characters");
+        return new CommandResult(w, null, 0, "sent to " + w.country(t.to()).name());
+    }
+
+    private CommandResult announce(World w, Country c, Command.Announce a) {
+        if (!cfg.agents().diplomacy()) return CommandResult.fail(w, "this game has diplomacy switched off");
+        String body = a.body() == null ? "" : a.body().strip();
+        if (body.isEmpty()) return CommandResult.fail(w, "say something");
+        if (body.length() > MAX_MESSAGE) return CommandResult.fail(w, "that is longer than " + MAX_MESSAGE + " characters");
+        return new CommandResult(w, null, 0, "announced to everyone");
     }
 
     private CommandResult scrap(World w, Country c, Command.Scrap s) {

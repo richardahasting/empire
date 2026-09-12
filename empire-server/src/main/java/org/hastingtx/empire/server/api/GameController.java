@@ -52,6 +52,20 @@ public class GameController {
         return games.renameMine(id, AuthInterceptor.current(req), r.name());
     }
 
+    /** Your post: telegrams to you, announcements, and what you have sent (issue #140). */
+    @GetMapping("/{id}/messages")
+    public List<GameService.Post> messages(@PathVariable long id,
+                                           @RequestParam(defaultValue = "100") int limit,
+                                           HttpServletRequest req) {
+        return games.messagesFor(id, AuthInterceptor.current(req), Math.min(Math.max(limit, 1), 300));
+    }
+
+    @PostMapping("/{id}/messages/seen")
+    public Map<String, Object> messagesSeen(@PathVariable long id, HttpServletRequest req) {
+        games.markMessagesSeen(id, AuthInterceptor.current(req));
+        return Map.of("status", "ok");
+    }
+
     /** How everyone is doing, as far as you are allowed to know (issue #120). */
     @GetMapping("/{id}/nations")
     public List<org.hastingtx.empire.engine.score.NationsBoard.Standing> nations(@PathVariable long id, HttpServletRequest req) {

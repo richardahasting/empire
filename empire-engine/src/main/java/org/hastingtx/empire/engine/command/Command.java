@@ -10,7 +10,7 @@ public sealed interface Command permits
         Command.BreakSanctuary, Command.Designate, Command.Threshold, Command.Distribute,
         Command.Move, Command.Explore, Command.BuildRoad, Command.BuildRail, Command.RailShip, Command.Deliver,
         Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine,
-        Command.RailLane {
+        Command.RailLane, Command.Telegram, Command.Announce {
 
     String verb();
 
@@ -60,6 +60,16 @@ public sealed interface Command permits
 
     /** Issue #112: work the nodule fields near {@code home}, mine, land the ore, repeat. */
     record Mine(long ship, Coord home, boolean off) implements Command { public String verb() { return "mine"; } }
+
+    /**
+     * A private message to one country (issue #140). The engine validates and charges for it; the
+     * message itself is not world state and is stored by the server — an update must not depend on
+     * what anybody said, and a state hash must not change because somebody was rude.
+     */
+    record Telegram(int to, String body) implements Command { public String verb() { return "telegram"; } }
+
+    /** The same, to everybody in the game. */
+    record Announce(String body) implements Command { public String verb() { return "announce"; } }
 
     /** Break the ship up in harbour; the hold goes ashore. */
     record Scrap(long ship) implements Command { public String verb() { return "scrap"; } }
