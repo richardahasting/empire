@@ -48,7 +48,7 @@ class AutoWireTest {
         assertThat(pit.threshold(IRON)).describedAs("keeps none of what it digs — the surplus is the point").isZero();
         assertThat(pit.hasThreshold(COM.civ)).isTrue();
         assertThat(pit.hasThreshold(COM.food)).isTrue();
-        assertThat(r.info()).contains("surplus goes to").contains("thresholds");
+        assertThat(r.info()).startsWith("now mine (").contains("auto-wired:").contains("surplus goes to").contains("thresholds");
     }
 
     @Test

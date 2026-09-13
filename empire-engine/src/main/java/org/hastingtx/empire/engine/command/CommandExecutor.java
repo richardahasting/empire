@@ -82,7 +82,12 @@ public final class CommandExecutor {
         if (cfg.distribution().autoWireOn()) { Sector[] box = {designated}; wired = autoWire(w, c, box, t); designated = box[0]; }
         World next = w.withSector(designated);
         if (t.hasFlag("one_per_country_active")) next = next.withCountry(c.withCapital(s.at()));
-        return new CommandResult(next, null, 0, wired);
+        // the ack leads with what was done; whatever auto-wiring did is a secondary note (issue #149)
+        StringBuilder info = new StringBuilder("now ").append(d.type()).append(" (").append(t.glyph()).append(")");
+        if (!"wilderness".equals(s.designation())) info.append(", was ").append(s.designation());
+        if (Math.abs(eff - s.efficiency()) > 1e-9) info.append("; efficiency ").append(Math.round(s.efficiency())).append(" → ").append(Math.round(eff));
+        if (wired != null) info.append(" — auto-wired: ").append(wired);
+        return new CommandResult(next, null, 0, info.toString());
     }
 
     /**

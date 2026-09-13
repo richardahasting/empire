@@ -13,7 +13,8 @@ disagree, something is broken.
 map                          your map (relative coordinates, capital at 0,0)
 census                       one line per owned sector
 break                        break sanctuary
-des SECTOR TYPE              designate (agribusiness, mine, light_manufacturing, warehouse, ...)
+des SECTOR TYPE              designate (agribusiness, mine, light_manufacturing, warehouse, ...); the ack says
+                             "now TYPE (glyph)", any efficiency change, then what auto-wiring set as a note
 thresh SECTOR COMMODITY N    set a distribution threshold (negative clears)
 dist SECTOR cx,cy | none     name a sector's distribution centre
 deliver COMMODITY SECTOR DIR N   standing order: above N, push it one hex DIR (e ne nw w sw se) every update; DIR none clears
