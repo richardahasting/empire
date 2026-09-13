@@ -11,5 +11,6 @@ players:
   starting_levels: { tech: 40, research: 40, education: 40, happiness: 0 }
 economy:
   btu: { accrual_per_capital_civ_per_etu: 0.0012, max: 640, start: 640 }
+  population: { max_pop_research_curve: { type: res_pop } }   # issue #153: research = room to grow (790 a sector at research 40)
 agents: { turn_window_seconds: 120, session_windows_per_day_default: null }
 units: { enabled: true }

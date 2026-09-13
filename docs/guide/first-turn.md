@@ -78,7 +78,9 @@ A sensible opening:
 4. **`break`** when you are ready to exist. Until you do, nothing outside your
    two sectors is yours to touch.
 5. **`expl 0,0 1,0 100`** — send 100 civilians into an empty neighbouring
-   sector to claim it. Territory comes from walking onto it.
+   sector to claim it. Territory comes from walking onto it. They take half a
+   food a head; give the new sector a centre and a food threshold before the
+   update, or watch `census`'s `days` column go to 0.
 
 Then wait for the update, and read what happened.
 
@@ -136,6 +138,35 @@ what it built, what it made, what it sent and what it received, in the order
 those things happened. That per-sector history is the single most useful thing
 in the game when something is not working. A sector that is not producing will
 usually say why.
+
+## Five things that burn a first evening
+
+Each of these was learned the slow way in a playtest. The game now warns about
+most of them; this is the list anyway.
+
+1. **A road order paves nothing until the materials are in the sector.**
+   `road 1,2 100` is accepted at once and the level stays at 0 until about
+   2 lcm + 2 hcm *per point* (more on rough terrain) are sitting in that
+   sector. The ack says what is needed; `census` lists orders that are
+   waiting. Set a threshold for lcm and hcm where you are paving, or `move`
+   some in.
+2. **An explore party takes food with it — half a food a head — and that is
+   all it has.** Barren ground cannot feed them by foraging, so wire the new
+   sector to a centre with a food threshold the same turn, or they starve at
+   the next update. The `expl` ack says how long the food lasts.
+3. **Mountains cap out: road 60, rail 50.** Swamp is 60 / 40, forest 90 / 80.
+   The order is silently capped to the limit, not refused, and the ack says
+   so. It is Kansas versus the Rockies, not a bug — do not keep reissuing it.
+4. **A tunnel is a one-time bill before the first point of rail:** 400 hcm +
+   50 lcm + $5,000 from the sector, on top of the per-point cost — and it
+   needs tech 120 (a bridge: 200 hcm + 50 lcm + $2,000, tech 90). Stocking
+   *exactly* 400 hcm leaves nothing for the points that follow; keep the hcm
+   threshold at 500 or so.
+5. **Research and tech are different stocks.** Tech gates what you may build
+   (rail at 60, ships by class) and scales every production rate. Research
+   raises the population ceiling in classic and blitz worlds (550 a sector at
+   research 0, toward 1,000) and does nothing else — in a teaching world it is
+   nearly inert. See **[Levels](levels.html)**.
 
 ## The three things that surprise people
 

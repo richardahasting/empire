@@ -51,9 +51,10 @@ Per sector, in this order:
    civ, mil. Food goes to zero.
 4. **Births.** Civilians grow at `0.005 per ETU`, uw at `0.0025`, compounded
    over the update, each birth eating `0.006` food. Births that cannot be fed
-   do not happen. Growth stops at the sector's population ceiling — flat per
+   do not happen. Growth stops at the sector's population ceiling — per
    sector type (1,000 for most, 100 for mountain and wilderness), **not**
-   scaled by efficiency.
+   scaled by efficiency; in classic and blitz worlds it is scaled by research
+   (550 at research 0, toward 1,000 — see **[Levels](levels.html)**).
 
 ### 4. Building up
 A designated sector below 100% efficiency spends **half its available work** at

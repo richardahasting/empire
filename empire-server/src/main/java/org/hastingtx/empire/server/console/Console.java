@@ -338,25 +338,29 @@ public class Console {
      * the ack that set it.
      */
     static String census(CountryView v, GameConfig cfg) {
-        StringBuilder sb = new StringBuilder(String.format("%-8s %-3s %-4s %4s %4s %6s %6s %6s %6s %6s %6s %5s  %s%n", "sect", "des", "eff", "mob", "road", "civ", "mil", "food", "iron", "lcm", "hcm", "days", "deliver"));
+        StringBuilder sb = new StringBuilder(String.format("%-8s %-3s %-4s %4s %4s %6s %5s %6s %6s %6s %6s %6s %5s  %s%n", "sect", "des", "eff", "mob", "road", "civ", "cap", "mil", "food", "iron", "lcm", "hcm", "days", "deliver"));
         List<String> stalled = new ArrayList<>();
+        double popScale = cfg.economy().population().maxPopResearchCurve().eval(v.levels().research());
         for (SectorView s : v.sectors()) {
             if (!s.full()) continue;
+            var st = cfg.hasSectorType(s.designation()) ? cfg.sectorType(s.designation()) : null;
+            double cap = st == null ? 0 : st.maxPopulation() * popScale;
             double eats = org.hastingtx.empire.engine.update.FoodMath.eatsPerUpdate(cfg, s.stock().getOrDefault("civ", 0.0), s.stock().getOrDefault("mil", 0.0), s.stock().getOrDefault("uw", 0.0),
                     s.resources() == null ? 0 : s.resources().fertility(), !"ocean".equals(s.terrain()));
             double food = s.stock().getOrDefault("food", 0.0);
             String days = eats <= 0 ? "∞" : food / eats >= 100 ? "99+" : String.format("%.0f", food / eats);
             StringBuilder del = new StringBuilder();
             s.deliveries().forEach((c, d) -> del.append(del.isEmpty() ? "" : " ").append(c).append("→").append(d.dir()).append(">").append(Math.round(d.threshold())));
-            sb.append(String.format("%-8s %-3s %4.0f %4.0f %4.0f %6.0f %6.0f %6.0f %6.0f %6.0f %6.0f %5s  %s%n", s.relative().x() + "," + s.relative().y(), glyph(s), s.efficiency(), s.mobility(), s.roadLevel(),
-                    s.stock().getOrDefault("civ", 0.0), s.stock().getOrDefault("mil", 0.0), food, s.stock().getOrDefault("iron", 0.0), s.stock().getOrDefault("lcm", 0.0), s.stock().getOrDefault("hcm", 0.0), days, del));
+            sb.append(String.format("%-8s %-3s %4.0f %4.0f %4.0f %6.0f %5.0f %6.0f %6.0f %6.0f %6.0f %6.0f %5s  %s%n", s.relative().x() + "," + s.relative().y(), glyph(s), s.efficiency(), s.mobility(), s.roadLevel(),
+                    s.stock().getOrDefault("civ", 0.0), cap, s.stock().getOrDefault("mil", 0.0), food, s.stock().getOrDefault("iron", 0.0), s.stock().getOrDefault("lcm", 0.0), s.stock().getOrDefault("hcm", 0.0), days, del));
             String r = shortForOnePoint(cfg, s, true), l = shortForOnePoint(cfg, s, false);
             if (r != null) stalled.add(rel(s.relative()) + " road→" + Math.round(s.roadTarget()) + " " + r);
             if (l != null) stalled.add(rel(s.relative()) + " rail→" + Math.round(s.railTarget()) + " " + l);
         }
         // a standing order that cannot lay a point looks exactly like a finished one; say which are waiting (issue #150)
         if (!stalled.isEmpty()) sb.append("waiting for materials: ").append(String.join("; ", stalled)).append('\n');
-        sb.append("days: updates the food lasts at what the people here eat (∞ = they live off the land); census res for the ground; food for basins and deficits\n");
+        sb.append("cap: the population ceiling here").append(popScale == 1.0 ? "" : String.format(" (research %.0f → ×%.2f of the flat cap)", v.levels().research(), popScale))
+          .append("; days: updates the food lasts at what the people here eat (∞ = they live off the land); census res for the ground; food for basins and deficits\n");
         return sb.toString();
     }
 

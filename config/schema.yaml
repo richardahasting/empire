@@ -210,6 +210,8 @@ economy:
     max_pop_scales_with_efficiency: false       # KNOWN: max_population() is flat except big cities
     # Population ceiling per sector = sector_type.max_population, flat (KNOWN: res_pop.c),
     # optionally scaled by research with the original's RES_POP formula.
+    # Teaching and sandbox keep it flat; classic and blitz turn RES_POP on (issue #153): ceiling ×
+    # (0.4 + 0.6 × (50 + 4R) / (200 + 3R)) — 0.55 at research 0, toward 1.0 — so research is room to grow.
     max_pop_research_curve: { type: none }      # KNOWN: option RES_POP (off by default) would be { type: res_pop }
     # Plague. KNOWN mechanic; GUESS defaults. options.plague toggles.
     plague:

@@ -47,7 +47,8 @@ public record EconomyCfg(
         public record MaxPopCurve(String type, Double base, Double perResearchPoint, Double cap) {
             public double eval(double research) {
                 if (type == null || type.equals("none")) return 1.0;
-                if (type.equals("res_pop")) return 0.4 + 0.6 * (50.0 + 4.0 * research) / (200.0 + 3.0 * research);
+                // KNOWN (res_pop.c): min(1000, 400 + 600 × (4R + 50) / (3R + 200)) — the cap matters: uncapped it passes 1.0 at research 150
+                if (type.equals("res_pop")) return Math.min(1.0, 0.4 + 0.6 * (50.0 + 4.0 * research) / (200.0 + 3.0 * research));
                 double b = base == null ? 1 : base, per = perResearchPoint == null ? 0 : perResearchPoint, c = cap == null ? 2 : cap;
                 return Math.min(c, b + per * research);
             }

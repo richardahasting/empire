@@ -21,6 +21,13 @@ Two things temper it:
 Tech gates what you can build — rail at 60, most warships at 40 and above — and
 **scales every production rate in the game**. Tech is not a side activity.
 
+**Research is room to grow.** In the classic and blitz worlds a sector's
+population ceiling is the flat 1,000 scaled by research, the original's
+RES_POP rule: `0.4 + 0.6 × (50 + 4R) / (200 + 3R)` — **550 a sector at
+research 0**, 790 at 40, approaching 1,000. The census `cap` column and the
+sector inspector show the ceiling for your research now. Teaching and sandbox
+worlds keep the flat ceiling, so research there is only what tech needs.
+
 ## Moving averages: education and happiness
 
 Education and happiness are **not** stocks. They are moving averages of a

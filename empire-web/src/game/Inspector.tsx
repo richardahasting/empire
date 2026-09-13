@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { estimate, prospects, type Estimate } from "@/game/production";
+import { estimate, popCeiling, prospects, type Estimate } from "@/game/production";
 
 interface Props { sector: SectorView | null; view: CountryView; rules: Rules; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean; history?: string[]; historyUpdate?: number }
 
@@ -48,6 +48,11 @@ export function Inspector({ sector: s, view, rules, onCommand, busy, history, hi
         {s.roadLevel > 0 && <Badge tone="neutral">road {s.roadLevel.toFixed(0)}</Badge>}
       </div>
       {s.resources && <p className="text-xs text-muted-foreground">fert {s.resources.fertility} · min {s.resources.minerals} · gold {s.resources.gold} · oil {s.resources.oil} · uran {s.resources.uranium}</p>}
+      {type && (() => {
+        const { cap, scale } = popCeiling(type, rules, view.levels.research);
+        const people = (s.stock["civ"] ?? 0) + (s.stock["uw"] ?? 0);
+        return <p className={"text-xs " + (people >= cap * 0.98 ? "text-destructive" : "text-muted-foreground")} title={scale === 1 ? "the type's flat ceiling" : `research ${view.levels.research.toFixed(0)} → ×${scale.toFixed(2)} of the flat ceiling; more research, more room`}>people {Math.round(people)} / {Math.round(cap)} ceiling{scale !== 1 ? ` (research ×${scale.toFixed(2)})` : ""}{people >= cap * 0.98 ? " — full; births stop" : ""}</p>;
+      })()}
       <table className="w-full text-xs">
         <thead><tr className="text-muted-foreground"><th className="text-left">commodity</th><th className="text-right">stock</th><th className="text-right">threshold</th><th className="text-right">deliver</th><th className="text-right">in transit</th></tr></thead>
         <tbody>
