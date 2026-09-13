@@ -101,7 +101,15 @@ public class Console {
                     yield new Reply(sb.toString(), true, null, null);
                 }
                 case "deliver", "del" -> {
-                    need(t, 4, "deliver COMMODITY SECTOR DIR N   (DIR e ne nw w sw se, or none to clear)");
+                    need(t, 4, "deliver COMMODITY SECTOR DIR N   (DIR e ne nw w sw se, or none to clear; add 'check' to look without ordering)");
+                    // a dry run (playtest game 82, issue #155): the only way to learn what lay in a
+                    // direction used to be to write a standing order there and read the reply
+                    if (t[t.length - 1].equalsIgnoreCase("check")) {
+                        need(t, 5, "deliver COMMODITY SECTOR DIR [N] check");
+                        int pd = org.hastingtx.empire.engine.geo.Hex.parseDir(t[3]);
+                        if (pd < 0) throw new IllegalArgumentException("direction is e, ne, nw, w, sw, se — got '" + t[3] + "'");
+                        yield new Reply(probeDeliver(v, abs(v, t[2]), pd, t[1]), true, null, null);
+                    }
                     boolean clear = t[3].equalsIgnoreCase("none") || t[3].equalsIgnoreCase("off");
                     if (!clear) need(t, 5, "deliver COMMODITY SECTOR DIR N");
                     int dir = clear ? -1 : org.hastingtx.empire.engine.geo.Hex.parseDir(t[3]);
@@ -119,6 +127,10 @@ public class Console {
                     yield cmd(gameId, a, new Command.RailLane(from, to, off || t.length <= 3 ? List.of() : List.of(Arrays.copyOfRange(t, 3, t.length)), off));
                 }
                 case "road" -> { need(t, 3, "road SECTOR LEVEL"); double lvl = Double.parseDouble(t[2]); yield many(gameId, a, v, cfg, t[1], at -> new Command.BuildRoad(at, lvl)); }
+                case "adjacent", "adj" -> {
+                    need(t, 2, "adjacent SECTOR");
+                    yield new Reply(adjacent(v, abs(v, t[1])), true, null, null);
+                }
                 case "expl", "explore" -> { need(t, 4, "expl from_x,y to_x,y civs"); yield cmd(gameId, a, new Command.Explore(abs(v, t[1]), abs(v, t[2]), Double.parseDouble(t[3]))); }
                 default -> new Reply("", false, "unknown command '" + verb + "' (try help)", null);
             };
@@ -153,6 +165,81 @@ public class Console {
     private static void need(String[] t, int n, String usage) { if (t.length < n) throw new IllegalArgumentException("usage: " + usage); }
 
     /** "x,y" relative to the capital -> absolute, using the view's own relative table. */
+    /** Step one hex, respecting the wrap the view describes; null if it falls off an unwrapped edge. */
+    private static Coord stepInView(CountryView v, Coord from, int dir) {
+        Coord raw = org.hastingtx.empire.engine.geo.Hex.stepRaw(from, dir);
+        int x = raw.x(), y = raw.y();
+        if (v.wrapX()) x = Math.floorMod(x, v.width()); else if (x < 0 || x >= v.width()) return null;
+        if (v.wrapY()) y = Math.floorMod(y, v.height()); else if (y < 0 || y >= v.height()) return null;
+        return new Coord(x, y);
+    }
+
+    private static SectorView inView(CountryView v, Coord at) {
+        if (at == null) return null;
+        for (SectorView sv : v.sectors()) if (sv.at().equals(at)) return sv;
+        return null;
+    }
+
+    /** One word for what a hex is to this player. Adjacent hexes are always in view, so this is honest. */
+    private static String describe(CountryView v, SectorView sv) {
+        if (sv == null) return "unknown (not in view)";
+        if (!sv.terrain().equals("ocean") && sv.owner() == v.countryId()) return "yours: " + sv.designation() + (sv.full() ? "" : "");
+        if (sv.terrain().equals("ocean")) return "sea";
+        if (sv.sanctuary()) return "sanctuary of " + (sv.ownerName() == null ? "somebody" : sv.ownerName());
+        if (sv.owner() >= 0 && sv.ownerName() != null) return sv.ownerName() + "'s " + sv.terrain();
+        if (sv.owner() >= 0) return "somebody's " + sv.terrain();
+        return "unowned " + sv.terrain() + (sv.remembered() ? " (as remembered)" : "");
+    }
+
+    /**
+     * What lies each way from a sector (playtest game 82, issue #154). Before this the only way to
+     * learn adjacency was to explore with one civilian — claiming a starve shell — or to write a
+     * delivery order and read the refusal. This writes nothing and costs nothing.
+     */
+    static String adjacent(CountryView v, Coord at) {
+        SectorView here = inView(v, at);
+        StringBuilder out = new StringBuilder("around " + rel(rel(v, at)) + (here == null ? "" : " (" + describe(v, here) + ")") + ":\n");
+        for (int d = 0; d < 6; d++) {
+            Coord n = stepInView(v, at, d);
+            SectorView sv = inView(v, n);
+            out.append("  ").append(String.format("%-3s", org.hastingtx.empire.engine.geo.Hex.dirName(d))).append(' ')
+               .append(n == null ? "—  (edge of the world)" : rel(rel(v, n)) + "  " + describe(v, sv));
+            if (sv != null && sv.resources() != null && sv.owner() < 0 && !sv.terrain().equals("ocean"))
+                out.append("  fert ").append(sv.resources().fertility()).append(" min ").append(sv.resources().minerals());
+            out.append('\n');
+        }
+        return out.toString().stripTrailing();
+    }
+
+    /** A delivery order, described but not made (issue #155). */
+    static String probeDeliver(CountryView v, Coord from, int dir, String commodity) {
+        SectorView src = inView(v, from);
+        if (src == null || src.owner() != v.countryId()) return "you do not own " + rel(rel(v, from)) + "; nothing to deliver from";
+        Coord n = stepInView(v, from, dir);
+        SectorView sv = inView(v, n);
+        String what = describe(v, sv);
+        boolean would = sv != null && !sv.terrain().equals("ocean") && sv.owner() == v.countryId();
+        StringBuilder out = new StringBuilder(org.hastingtx.empire.engine.geo.Hex.dirName(dir) + " of " + rel(rel(v, from)) + " is "
+                + (n == null ? "the edge of the world" : rel(rel(v, n)) + ", " + what) + ". ");
+        out.append(would ? "A " + commodity + " order that way would deliver." : "An order that way would be REFUSED — nothing would move.");
+        if (src.deliveries() != null && src.deliveries().containsKey(commodity)) {
+            var cur = src.deliveries().get(commodity);
+            out.append(" Note: ").append(rel(rel(v, from))).append(" already delivers ").append(commodity).append(' ').append(cur.dir())
+               .append(" above ").append(fmtQ(cur.threshold())).append("; a new order would replace it.");
+        }
+        out.append(" Nothing was written.");
+        return out.toString();
+    }
+
+    /** The same fold as CountryView.relative, from the view's own dimensions — there is no World here. */
+    static Coord rel(CountryView v, Coord abs) {
+        int dx = abs.x() - v.capital().x(), dy = abs.y() - v.capital().y();
+        if (v.wrapX()) { if (dx > v.width() / 2) dx -= v.width(); else if (dx < -v.width() / 2) dx += v.width(); }
+        if (v.wrapY()) { if (dy > v.height() / 2) dy -= v.height(); else if (dy < -v.height() / 2) dy += v.height(); }
+        return new Coord(dx, dy);
+    }
+    private static String fmtQ(double d) { return d == Math.rint(d) ? String.valueOf((long) d) : String.valueOf(d); }
+
     static Coord abs(CountryView v, String s) {
         String[] p = s.split(",");
         if (p.length != 2) throw new IllegalArgumentException("coordinates look like x,y — got '" + s + "'");

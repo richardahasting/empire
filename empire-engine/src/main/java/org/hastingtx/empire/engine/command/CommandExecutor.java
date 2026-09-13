@@ -175,9 +175,17 @@ public final class CommandExecutor {
         Coord to = Hex.normalise(w, Hex.stepRaw(s.at(), d.dir()));
         if (to == null) return CommandResult.fail(w, "nothing lies " + Hex.dirName(d.dir()) + " of " + d.sector());
         Sector t = w.sector(to);
-        String info = t.owner() != c.id() ? "noted, but nothing moves until you own " + to
-                    : !t.terrain().isLand() ? "noted, but " + to + " is sea; nothing will move"
-                    : d.commodity() + " above " + fmt(d.threshold()) + " goes " + Hex.dirName(d.dir()) + " to " + to + " every update";
+        // A standing order toward somewhere it can never deliver used to be "noted" and then kept —
+        // a dead pipe that looked like a success (playtest game 82, issue #147). It is refused now:
+        // nothing is written, and the reason names the hex so the player can look at it.
+        if (!t.terrain().isLand()) return CommandResult.fail(w, to + " is sea; nothing can be delivered there (deliver … check to look before you order)");
+        if (t.owner() != c.id()) return CommandResult.fail(w, "you do not own " + to + "; explore it first, or deliver … check to see what lies " + Hex.dirName(d.dir()));
+        // One order per commodity per sector. Replacing one used to be silent, and probing a
+        // direction quietly destroyed a working chain (issue #148). It still replaces — but says so.
+        String replaced = s.deliver().has(ci) && (s.deliver().dir(ci) != d.dir() || s.deliver().threshold(ci) != d.threshold())
+                ? " — REPLACES the previous order (" + d.commodity() + " above " + fmt(s.deliver().threshold(ci)) + " went " + Hex.dirName(s.deliver().dir(ci)) + ")"
+                : "";
+        String info = d.commodity() + " above " + fmt(d.threshold()) + " goes " + Hex.dirName(d.dir()) + " to " + to + " every update" + replaced;
         return new CommandResult(w.withSector(s.withDeliver(s.deliver().with(ci, d.dir(), d.threshold()))), null, 0, info);
     }
 
@@ -666,9 +674,29 @@ public final class CommandExecutor {
         org.hastingtx.empire.engine.update.Ctx ectx = new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0);
         double mobCost = mobCharge(e.civs() * ectx.weightLeaving(com.civ, from) * moveCostInto(to));
         if (from.mobility() < mobCost) return CommandResult.fail(w, "need " + fmt(mobCost) + " mobility in " + e.from() + ", have " + fmt(from.mobility()));
-        World next = w.withSector(from.withMobility(from.mobility() - mobCost).withStock(from.stock().plus(com.civ, -e.civs())));
-        next = next.withSector(to.withOwner(c.id()).withStock(to.stock().plus(com.civ, e.civs())));
-        return new CommandResult(next, null, 0);
+        // Food walks with the party (playtest game 82, issue #151). Civilians on ground that cannot
+        // feed them by foraging were starving at the very next update; half a food a head is nothing
+        // to the source and about sixteen updates to the party. Sent from the source, as much as it has.
+        double wanted = e.civs() * cfg.economy().population().exploreFoodPerCivOrDefault();
+        double food = Math.min(wanted, Math.max(0, from.stock().get(com.food)));
+        World next = w.withSector(from.withMobility(from.mobility() - mobCost)
+                .withStock(from.stock().plus(com.civ, -e.civs()).plus(com.food, -food)));
+        next = next.withSector(to.withOwner(c.id()).withStock(to.stock().plus(com.civ, e.civs()).plus(com.food, food)));
+
+        // and say whether they will be all right: the first N people forage for free, the rest eat stock
+        var sub = cfg.economy().population().subsistence();
+        double forage = sub == null ? 0 : sub.civsPerSector() * (sub.scaleByFertility() ? to.resource("fertility") / 100.0 : 1.0);
+        StringBuilder info = new StringBuilder(fmt(e.civs()) + " civilians settle " + e.to());
+        if (food > 0) info.append(" with ").append(fmt(food)).append(" food");
+        if (e.civs() > forage) {
+            double eating = (e.civs() - forage) * cfg.economy().population().foodPerCivPerEtu() * cfg.schedule().etusPerUpdate();
+            if (food <= 0) info.append(" — WARNING: ").append(fmt(from.stock().get(com.food))).append(" food at ").append(e.from())
+                    .append(", none to send, and fertility ").append(to.resource("fertility")).append(" feeds only ").append(fmt(Math.floor(forage)))
+                    .append(" of them: they will starve at the next update");
+            else info.append(" (fertility ").append(to.resource("fertility")).append(" feeds ").append(fmt(Math.floor(forage)))
+                    .append("; the rest eat about ").append(fmt(eating)).append(" a update, so that lasts ~").append(fmt(Math.floor(food / Math.max(eating, 1e-9)))).append(" updates)");
+        }
+        return new CommandResult(next, null, 0, info.toString());
     }
 
     /**

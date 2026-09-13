@@ -17,6 +17,8 @@ des SECTOR TYPE              designate (agribusiness, mine, light_manufacturing,
 thresh SECTOR COMMODITY N    set a distribution threshold (negative clears)
 dist SECTOR cx,cy | none     name a sector's distribution centre
 deliver COMMODITY SECTOR DIR N   standing order: above N, push it one hex DIR (e ne nw w sw se) every update; DIR none clears
+deliver COMMODITY SECTOR DIR N check   the same, described but not made: what lies that way, and whether it would deliver
+adjacent SECTOR              what lies each way — yours, unowned, sea, or somebody's — without claiming or ordering anything
 declare war COUNTRY          go to war; they are at war with you whether they like it or not
 peace COUNTRY                offer peace, or accept theirs — it takes both of you
 telegram COUNTRY "..."       a private message to one country; they see who it is from

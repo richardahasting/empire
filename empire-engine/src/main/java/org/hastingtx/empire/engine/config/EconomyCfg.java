@@ -27,6 +27,8 @@ public record EconomyCfg(
             java.util.List<String> starvationOrder,
             /** Births are limited to food / (factor × food_per_birth) (KNOWN: 2). */
             Double birthFoodReserveFactor,
+            /** Food sent with each explored civilian, so a landing party is not starved by the next update (#151). */
+            Double exploreFoodPerCiv,
             /** Population cap scales with efficiency? KNOWN: no, except big cities. */
             Boolean maxPopScalesWithEfficiency,
             MaxPopCurve maxPopResearchCurve,
@@ -47,6 +49,7 @@ public record EconomyCfg(
             }
         }
         public java.util.List<String> starvationOrderOrDefault() { return starvationOrder == null ? java.util.List.of("uw", "civ", "mil") : starvationOrder; }
+        public double exploreFoodPerCivOrDefault() { return exploreFoodPerCiv == null ? 0.5 : exploreFoodPerCiv; }
         public double birthFoodReserveFactorOr2() { return birthFoodReserveFactor == null ? 2.0 : birthFoodReserveFactor; }
         public record PlagueCfg(double baseProbabilityPerEtu, double crowdingExponent, double mortality, int durationUpdates) {}
     }

@@ -202,6 +202,11 @@ economy:
     starvation_max_fraction_per_update: 0.5   # KNOWN: famine_victims() starves at most half
     starvation_order: [uw, civ, mil]            # KNOWN: feed_people() order
     birth_food_reserve_factor: 2                # KNOWN: babies() allows food / (2 × babyeat) births
+    # NEW (playtest game 82, issue #151): an explore party takes food with it. Civilians landed on
+    # ground that cannot feed them by foraging were starving at the very next update, through no
+    # fault of anyone's. Half a food per head is about sixteen updates' eating at 0.0005/ETU, which is
+    # nothing to the source sector and everything to the party. Moved from the source with the civs.
+    explore_food_per_civ: 0.5
     max_pop_scales_with_efficiency: false       # KNOWN: max_population() is flat except big cities
     # Population ceiling per sector = sector_type.max_population, flat (KNOWN: res_pop.c),
     # optionally scaled by research with the original's RES_POP formula.
