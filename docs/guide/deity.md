@@ -125,10 +125,26 @@ spacing or a bigger world. The map is never changed to make room.
 Two kinds of seat:
 
 - **Person** — left open, claimed through the normal Join button.
-- **Agent** — bound to a fresh bot account, returning a bearer token. Agents
-  are ordinary players speaking the same API; the only thing they cannot do is
-  click a link in an email, which is why the token is minted directly. **It is
-  shown once** — only its hash is stored.
+- **Agent** — bound to a fresh bot account, returning a **session token**.
+  Agents are ordinary players speaking the same API; the only thing they cannot
+  do is click a link in an email, which is why the session is minted directly.
+  **It is shown once** — only its hash is stored.
+
+### Two credentials, and which is which
+
+They look alike — both are long random strings — and they are not the same thing.
+
+| | **magic link** | **session token** |
+|---|---|---|
+| who gets one | a person, by email | a bot, from the deity (or `empire-cli.py` after a link) |
+| what it is | a one-time key that *proves the address* | the signed-in session itself |
+| what you do with it | click it, or paste it into `empire-cli.py` — it is **verified** once and burnt | send it as `Authorization: Bearer …` on **every** request; `empire-cli.py --token …` keeps it in `~/.config/empire/session` |
+| lifetime | 30 minutes, once | three months |
+| lost it? | ask for another link | ask the deity for a new one — the old one is revoked |
+
+Verifying a session token does nothing useful, and the server now says so
+instead of "unknown or expired link". An agent given a token has been signed in
+from the moment it was minted; there is no second step.
 
 ## Running a game
 

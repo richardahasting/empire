@@ -281,14 +281,40 @@ public class Console {
     }
 
     /** One line per ship, relative coordinates. */
+    /**
+     * The fleet, one line a hull. Says what standing mission each is on and which its class
+     * <em>can</em> run (issue #162): a player who did not know {@code mine} existed sat driving a
+     * miner by hand, and the listing was the natural place to have told them.
+     */
     static String fleet(CountryView v, GameConfig cfg) {
         if (v.ships().isEmpty()) return "no ships — build one in a harbour: build x,y fishing_boat";
-        StringBuilder sb = new StringBuilder(String.format("%-4s %-24s %-8s %5s %5s %-11s %-18s %s%n", "id", "class", "at", "eff", "speed", "load/hold", "going", "last update"));
+        StringBuilder sb = new StringBuilder(String.format("%-4s %-24s %-8s %5s %5s %-11s %-8s %-18s %-14s %s%n", "id", "class", "at", "eff", "speed", "load/hold", "on", "going", "can", "last update"));
         for (var s : v.ships()) {
+            String on = s.lane() != null ? "lane" : s.mission() != null && !s.mission().isBlank() ? s.mission() : "—";
             String going = s.lane() != null ? "lane " + rel(s.lane().fromRelative()) + (s.lane().outbound() ? " → " : " ← ") + rel(s.lane().toRelative()) : s.mission() != null && !s.mission().isBlank() ? ("fish".equals(s.mission()) ? "fishing" : "mining") + " from " + rel(s.homeRelative()) + (s.destRelative() != null ? " → " + rel(s.destRelative()) : "") : s.destRelative() != null ? "to " + rel(s.destRelative()) : s.docked() ? "in harbour" : "holding";
-            sb.append(String.format("%-4d %-24s %-8s %5.0f %5d %-11s %-18s %s%n", s.id(), s.cls() + (s.name() == null || s.name().isBlank() ? "" : " " + s.name()), rel(s.relative()), s.efficiency(), s.hexesPerUpdate(), (int) s.load() + "/" + (int) s.hold(), going, s.note()));
+            sb.append(String.format("%-4d %-24s %-8s %5.0f %5d %-11s %-8s %-18s %-14s %s%n", s.id(), s.cls() + (s.name() == null || s.name().isBlank() ? "" : " " + s.name()), rel(s.relative()), s.efficiency(), s.hexesPerUpdate(), (int) s.load() + "/" + (int) s.hold(), on, going, missionsOf(cfg, s.cls()), s.note()));
         }
+        sb.append("on: the standing mission the hull is running; can: the ones its class may be given (plus sail, always)\n");
         return sb.toString();
+    }
+
+    /**
+     * The standing missions a class can be given — decided by the same facts the engine checks when
+     * the order arrives (a fishing rate, a mining rate, something it may carry), not by the role
+     * label, so the listing cannot promise what the command would then refuse.
+     */
+    static String missionsOf(GameConfig cfg, String clsId) {
+        var ships = cfg.units() == null ? null : cfg.units().ships();
+        if (ships == null || ships.classes() == null) return "sail";
+        for (var c : ships.classes()) {
+            if (!c.id().equals(clsId)) continue;
+            List<String> can = new ArrayList<>();
+            if (c.fishingRateOr0() > 0) can.add("fish");
+            if (c.miningRateOr0() > 0) can.add("mine");
+            if (!c.carriesOrEmpty().isEmpty()) can.add("lane");
+            return can.isEmpty() ? "sail only" : String.join(", ", can);
+        }
+        return "sail";
     }
     private static String rel(Coord c) { return c.x() + "," + c.y(); }
 

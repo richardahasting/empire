@@ -148,7 +148,8 @@ public class AdminController {
     /** Mint a bot seat a new token, for one that lost the token it was given once. */
     @PostMapping("/games/{id}/countries/{countryId}/token")
     public Map<String, Object> reissueToken(@PathVariable long id, @PathVariable int countryId, HttpServletRequest req) {
-        return Map.of("countryId", countryId, "token", games.reissueToken(id, countryId, admin(req)));
+        return Map.of("countryId", countryId, "token", games.reissueToken(id, countryId, admin(req)),
+                "kind", "session", "use", "Authorization: Bearer <token> on every request; not a sign-in link, nothing to verify");
     }
 
     /** Everything a deity has changed by hand in this game, newest first. */

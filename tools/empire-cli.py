@@ -8,6 +8,8 @@ game's own console API, so every command you type here is the same command the w
 
 Sign-in is by magic link: the client asks for your email, the server mails you a link, you
 paste the token (or the whole link) back. The session token is kept in ~/.config/empire/.
+A bot has no inbox: the deity mints it a SESSION token instead, which is already signed in —
+start with  --token SESSION_TOKEN  (or paste it at the sign-in prompt) and it is saved the same way.
 Taking a seat asks for a country name — seats are handed out numbered (emp1, emp2, ...) and
 are named by whoever claims them.
 Inside the prompt: help, map, census, des, thresh, dist, move, expl, road, rail, railship,
@@ -41,18 +43,40 @@ class Api:
     def get(self, path): return self.call("GET", path)
     def post(self, path, body=None): return self.call("POST", path, body or {})
 
+def save_session(api, token):
+    api.token = token
+    os.makedirs(CONF, exist_ok=True)
+    with open(SESSION, "w") as f: f.write(token)
+    os.chmod(SESSION, 0o600)
+
+def adopt_session(api, token):
+    """A session token (a bot's, from the deity) is already signed in: prove it with /me and keep it."""
+    api.token = token
+    try: me = api.get("/me")
+    except RuntimeError: api.token = None; return None
+    save_session(api, token)
+    return me
+
 def sign_in(api):
-    email = input("email: ").strip()
+    email = input("email (or paste a session token the deity minted for a bot): ").strip()
+    if "@" not in email:
+        me = adopt_session(api, email)
+        if me: print("signed in as", me["name"], "(session token)"); return
+        print("that is not an email address, and not a live session token either"); sys.exit(1)
     name = input("name (first time only, else Enter): ").strip()
     api.post("/auth/request-link", {"email": email, "name": name})
     print("A sign-in link is on its way to", email)
     raw = input("paste the link or the token: ").strip()
     token = urllib.parse.parse_qs(urllib.parse.urlparse(raw).query).get("token", [raw])[0] if "token=" in raw else raw
-    r = api.post("/auth/verify", {"token": token})
-    api.token = r["token"]
-    os.makedirs(CONF, exist_ok=True)
-    with open(SESSION, "w") as f: f.write(api.token)
-    os.chmod(SESSION, 0o600)
+    try:
+        r = api.post("/auth/verify", {"token": token})
+    except RuntimeError as e:
+        # a session token pasted where a link was expected is not an error, just the other credential
+        if "session token" in str(e):
+            me = adopt_session(api, token)
+            if me: print("signed in as", me["name"], "(that was a session token — kept as is)"); return
+        raise
+    save_session(api, r["token"])
     print("signed in as", r["account"]["name"])
 
 def pick_game(api):
@@ -78,11 +102,15 @@ def show(view):
 def main():
     ap = argparse.ArgumentParser(description="Empire terminal client")
     ap.add_argument("--url", default="https://hastingtx.org/empire"); ap.add_argument("--game", type=int)
+    ap.add_argument("--token", help="a session token the deity minted (for a bot); saved to ~/.config/empire/session")
     a = ap.parse_args()
     token = open(SESSION).read().strip() if os.path.exists(SESSION) else None
     api = Api(a.url, token)
     me = None
-    if token:
+    if a.token:
+        me = adopt_session(api, a.token)
+        if not me: print("that session token is not live — ask the deity for a new one"); sys.exit(1)
+    elif token:
         try: me = api.get("/me")
         except RuntimeError: api.token = None
     if not api.token: sign_in(api); me = api.get("/me")

@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Radio, RadioGroup } from "@/components/ui/radio";
 import { FieldLabel } from "@/components/ui/tooltip";
+import { SessionTokenBox, SessionTokenNote } from "@/components/session-token";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Countdown } from "@/game/Dashboard";
@@ -438,11 +439,10 @@ function AddCountry({ game, onAdded }: { game: GameSummary; onAdded: () => Promi
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [seated, setSeated] = useState<Seated | null>(null);
-  const [copied, setCopied] = useState(false);
 
   const close = (next: boolean) => {
     setOpen(next);
-    if (!next) { setName(""); setController("human"); setError(null); setSeated(null); setCopied(false); }
+    if (!next) { setName(""); setController("human"); setError(null); setSeated(null); }
   };
 
   const add = async () => {
@@ -457,11 +457,6 @@ function AddCountry({ game, onAdded }: { game: GameSummary; onAdded: () => Promi
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
 
-  const copy = async () => {
-    if (!seated?.token) return;
-    try { await navigator.clipboard.writeText(seated.token); setCopied(true); } catch { setCopied(false); }
-  };
-
   return (
     <Dialog open={open} onOpenChange={close}>
       <DialogTrigger asChild>
@@ -473,15 +468,10 @@ function AddCountry({ game, onAdded }: { game: GameSummary; onAdded: () => Promi
             <DialogHeader>
               <DialogTitle>{seated.name} is seated</DialogTitle>
               <DialogDescription>
-                Capital at {seated.capital.x},{seated.capital.y}. Give the bot this token as
-                {" "}<code>Authorization: Bearer …</code>. It is shown once — only its hash is stored,
-                so if it is lost the seat needs a new one.
+                Capital at {seated.capital.x},{seated.capital.y}. <SessionTokenNote />
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-2 py-2">
-              <code className="block break-all rounded-[var(--radius)] border border-border bg-muted p-2 text-xs">{seated.token}</code>
-              <Button size="sm" variant="soft" onClick={() => void copy()}>{copied ? "Copied" : "Copy token"}</Button>
-            </div>
+            <SessionTokenBox token={seated.token} />
             <DialogFooter><Button size="sm" onClick={() => close(false)}>Done</Button></DialogFooter>
           </>
         ) : (
@@ -507,7 +497,7 @@ function AddCountry({ game, onAdded }: { game: GameSummary; onAdded: () => Promi
                 </label>
                 <label className="flex items-center gap-2 text-sm">
                   <Radio name={`ac-ctl-${game.id}`} checked={controller === "agent"} onChange={() => setController("agent")} />
-                  <span>Agent — bound to a bot account, with a token</span>
+                  <span>Agent — bound to a bot account, with a session token</span>
                 </label>
               </RadioGroup>
               {error && <p className="text-sm text-destructive">{error}</p>}
