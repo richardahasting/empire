@@ -25,7 +25,10 @@ public record SectorTypeCfg(
         /** Cash charged per unit produced (KNOWN: product.config cost). */
         Double productionCashPerUnit,
         /** Cash charged per ETU just for existing (KNOWN: sect.config maint; the capital pays 1). */
-        Double maintenanceCashPerEtu) {
+        Double maintenanceCashPerEtu,
+        /** Other names {@code des} accepts (issue #157). Boxed: older snapshots have none. */
+        List<String> aliases) {
+    public List<String> aliasesOrEmpty() { return aliases == null ? List.of() : aliases; }
 
     public record LevelEffect(String level, String curve) {}
 

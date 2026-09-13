@@ -112,8 +112,8 @@ public final class SectorSelector {
     /** A designation by id ("agribusiness") or by map glyph ("a"). */
     static String resolveType(GameConfig cfg, String t) {
         if (t.isEmpty()) throw new IllegalArgumentException("*:TYPE needs a designation, e.g. *:agribusiness or *:a");
-        if (cfg.hasSectorType(t)) return t;
-        for (SectorTypeCfg st : cfg.economy().sectorTypes()) if (st.glyph().equals(t)) return st.id();
+        SectorTypeCfg st = cfg.resolveSectorType(t);   // id, alias or glyph (issue #157)
+        if (st != null) return st.id();
         throw new IllegalArgumentException("unknown designation '" + t + "'");
     }
 

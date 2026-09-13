@@ -46,4 +46,14 @@ public record GameConfig(
         for (SectorTypeCfg s : economy.sectorTypes()) if (s.id().equals(id)) return true;
         return false;
     }
+
+    /** A sector type by id, alias or map glyph (issue #157); null when nothing matches. */
+    public SectorTypeCfg resolveSectorType(String name) {
+        if (name == null) return null;
+        String n = name.trim();
+        for (SectorTypeCfg s : economy.sectorTypes()) if (s.id().equals(n)) return s;
+        for (SectorTypeCfg s : economy.sectorTypes()) if (s.aliasesOrEmpty().contains(n)) return s;
+        for (SectorTypeCfg s : economy.sectorTypes()) if (s.glyph() != null && s.glyph().equals(n)) return s;
+        return null;
+    }
 }
