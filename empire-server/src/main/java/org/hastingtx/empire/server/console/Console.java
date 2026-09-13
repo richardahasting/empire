@@ -35,7 +35,8 @@ public class Console {
             return switch (verb) {
                 case "help", "?" -> new Reply(HELP, true, null, null);
                 case "map" -> new Reply(map(v, cfg), true, null, null);
-                case "census", "cen" -> new Reply(census(v, cfg), true, null, null);
+                case "census", "cen" -> new Reply(t.length > 1 && t[1].toLowerCase(Locale.ROOT).startsWith("res") ? censusResources(v, cfg) : census(v, cfg), true, null, null);
+                case "food" -> new Reply(food(games.foodReport(gameId, a)), true, null, null);
                 case "break" -> cmd(gameId, a, new Command.BreakSanctuary());
                 case "des", "designate" -> { need(t, 3, "des SECTOR type"); yield many(gameId, a, v, cfg, t[1], at -> new Command.Designate(at, t[2])); }
                 case "thresh", "threshold" -> {
@@ -330,19 +331,76 @@ public class Console {
         return sb.toString();
     }
 
+    /**
+     * One line per owned sector (issue #156): the stocks, then {@code days} — how many updates the
+     * food lasts at what the people here eat, ∞ when they live off the land — and any standing
+     * delivery orders, so a self-starving pipe or a stalled road shows in the table and not only in
+     * the ack that set it.
+     */
     static String census(CountryView v, GameConfig cfg) {
-        StringBuilder sb = new StringBuilder(String.format("%-8s %-3s %-4s %4s %4s %6s %6s %6s %6s %6s %6s%n", "sect", "des", "eff", "mob", "road", "civ", "mil", "food", "iron", "lcm", "hcm"));
+        StringBuilder sb = new StringBuilder(String.format("%-8s %-3s %-4s %4s %4s %6s %6s %6s %6s %6s %6s %5s  %s%n", "sect", "des", "eff", "mob", "road", "civ", "mil", "food", "iron", "lcm", "hcm", "days", "deliver"));
         List<String> stalled = new ArrayList<>();
         for (SectorView s : v.sectors()) {
             if (!s.full()) continue;
-            sb.append(String.format("%-8s %-3s %4.0f %4.0f %4.0f %6.0f %6.0f %6.0f %6.0f %6.0f %6.0f%n", s.relative().x() + "," + s.relative().y(), glyph(s), s.efficiency(), s.mobility(), s.roadLevel(),
-                    s.stock().getOrDefault("civ", 0.0), s.stock().getOrDefault("mil", 0.0), s.stock().getOrDefault("food", 0.0), s.stock().getOrDefault("iron", 0.0), s.stock().getOrDefault("lcm", 0.0), s.stock().getOrDefault("hcm", 0.0)));
+            double eats = org.hastingtx.empire.engine.update.FoodMath.eatsPerUpdate(cfg, s.stock().getOrDefault("civ", 0.0), s.stock().getOrDefault("mil", 0.0), s.stock().getOrDefault("uw", 0.0),
+                    s.resources() == null ? 0 : s.resources().fertility(), !"ocean".equals(s.terrain()));
+            double food = s.stock().getOrDefault("food", 0.0);
+            String days = eats <= 0 ? "∞" : food / eats >= 100 ? "99+" : String.format("%.0f", food / eats);
+            StringBuilder del = new StringBuilder();
+            s.deliveries().forEach((c, d) -> del.append(del.isEmpty() ? "" : " ").append(c).append("→").append(d.dir()).append(">").append(Math.round(d.threshold())));
+            sb.append(String.format("%-8s %-3s %4.0f %4.0f %4.0f %6.0f %6.0f %6.0f %6.0f %6.0f %6.0f %5s  %s%n", s.relative().x() + "," + s.relative().y(), glyph(s), s.efficiency(), s.mobility(), s.roadLevel(),
+                    s.stock().getOrDefault("civ", 0.0), s.stock().getOrDefault("mil", 0.0), food, s.stock().getOrDefault("iron", 0.0), s.stock().getOrDefault("lcm", 0.0), s.stock().getOrDefault("hcm", 0.0), days, del));
             String r = shortForOnePoint(cfg, s, true), l = shortForOnePoint(cfg, s, false);
             if (r != null) stalled.add(rel(s.relative()) + " road→" + Math.round(s.roadTarget()) + " " + r);
             if (l != null) stalled.add(rel(s.relative()) + " rail→" + Math.round(s.railTarget()) + " " + l);
         }
         // a standing order that cannot lay a point looks exactly like a finished one; say which are waiting (issue #150)
         if (!stalled.isEmpty()) sb.append("waiting for materials: ").append(String.join("; ", stalled)).append('\n');
+        sb.append("days: updates the food lasts at what the people here eat (∞ = they live off the land); census res for the ground; food for basins and deficits\n");
+        return sb.toString();
+    }
+
+    /** The ground under each owned sector (issue #156): the five endowments, and which gated designations it is poor for. */
+    static String censusResources(CountryView v, GameConfig cfg) {
+        double poor = cfg.economy().poorGroundBelowOrDefault();
+        StringBuilder sb = new StringBuilder(String.format("%-8s %-3s %-10s %4s %4s %4s %4s %4s  %s%n", "sect", "des", "terrain", "fert", "min", "gold", "oil", "uran", "poor ground for"));
+        for (SectorView s : v.sectors()) {
+            if (!s.full() || s.resources() == null) continue;
+            var r = s.resources();
+            List<String> poorFor = new ArrayList<>();
+            for (var t : cfg.economy().sectorTypes()) {
+                if (t.resourceGate() == null || t.produces().isEmpty() || t.hasFlag("no_designate")) continue;
+                if (t.terrainRequired() != null && !t.terrainRequired().contains(s.terrain())) continue;
+                int val = switch (t.resourceGate()) { case "fertility" -> r.fertility(); case "minerals" -> r.minerals(); case "gold" -> r.gold(); case "oil" -> r.oil(); case "uranium" -> r.uranium(); default -> 100; };
+                if (val < poor) poorFor.add(t.id());
+            }
+            sb.append(String.format("%-8s %-3s %-10s %4d %4d %4d %4d %4d  %s%n", rel(s.relative()), glyph(s), s.terrain(), r.fertility(), r.minerals(), r.gold(), r.oil(), r.uranium(), String.join(", ", poorFor)));
+        }
+        sb.append("poor ground: a gated designation below ").append(Math.round(poor)).append(" makes that percent of what a hex at 100 would\n");
+        return sb.toString();
+    }
+
+    /** Basins and deficits, then a deliver hint for each deficit (issue #160). */
+    static String food(org.hastingtx.empire.engine.update.FoodReport.Result r) {
+        StringBuilder sb = new StringBuilder();
+        if (r.deficits().isEmpty()) sb.append("no sector loses food next update\n");
+        else {
+            sb.append("DEFICIT (losing food next update; worst first)\n");
+            for (var l : r.deficits())
+                sb.append(String.format("  %-8s %-18s food %6.0f → %6.0f  eats %5.0f  %s%n", rel(l.relative()), l.designation(), l.foodNow(), l.foodAfter(), l.eats(),
+                        l.starving() ? "STARVING next update" : Double.isNaN(l.updatesLeft()) ? "" : String.format("~%.0f more updates", l.updatesLeft())));
+        }
+        if (r.basins().isEmpty()) sb.append("no sector gains food next update — nothing to move; grow some (agribusiness on fertile ground, or fish)\n");
+        else {
+            sb.append("BASINS (gaining food next update; biggest first)\n");
+            for (var l : r.basins()) sb.append(String.format("  %-8s %-18s food %6.0f → %6.0f  (+%.0f)%n", rel(l.relative()), l.designation(), l.foodNow(), l.foodAfter(), l.delta()));
+        }
+        if (!r.hints().isEmpty()) {
+            sb.append("HINTS — nearest basin to each deficit, and the first hop toward it\n");
+            for (var h : r.hints())
+                sb.append(String.format("  %-8s ← %-8s %d hex%s: deliver food %s %s N   (or move food %s %s N, or dist %s to a warehouse that has some)%n",
+                        rel(h.deficit()), rel(h.basin()), h.distance(), h.distance() == 1 ? "" : "es", rel(h.basin()), h.dir(), rel(h.basin()), rel(h.deficit()), rel(h.deficit())));
+        }
         return sb.toString();
     }
 
