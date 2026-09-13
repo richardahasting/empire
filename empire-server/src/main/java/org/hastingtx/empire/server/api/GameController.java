@@ -94,14 +94,17 @@ public class GameController {
     public record Rules(List<SectorTypeCfg> sectorTypes, List<CommodityCfg> commodities, int etusPerUpdate, Map<String, Integer> btuCosts,
                         org.hastingtx.empire.engine.config.InfrastructureCfg.RoadCfg road, double defaultCapacity,
                         org.hastingtx.empire.engine.config.InfrastructureCfg.RailCfg rail, double productionMinEfficiency,
-                        Map<String, Double> massThresholdMultiplierByType, org.hastingtx.empire.engine.config.UnitsCfg.ShipsCfg ships) {}
+                        Map<String, Double> massThresholdMultiplierByType, org.hastingtx.empire.engine.config.UnitsCfg.ShipsCfg ships,
+                        /** Work per person and the happiness curve, and every named curve — so the inspector can say what a sector will make and which limit binds (issue #163). */
+                        org.hastingtx.empire.engine.config.EconomyCfg.WorkCfg work, Map<String, org.hastingtx.empire.engine.config.CurveCfg> curves) {}
 
     @GetMapping("/{id}/rules")
     public Rules rules(@PathVariable long id) {
         var cfg = games.get(id).cfg;
         Double minEff = cfg.economy().efficiency().productionMinEfficiency();
         return new Rules(cfg.economy().sectorTypes(), cfg.commodities(), cfg.etus(), cfg.economy().btu().costByCommand(), cfg.infrastructure().road(), cfg.economy().defaultCapacity(),
-                cfg.infrastructure().rail(), minEff == null ? 0 : minEff, cfg.distribution().massThresholdMultiplierByType() == null ? Map.of() : cfg.distribution().massThresholdMultiplierByType(), cfg.units().ships());
+                cfg.infrastructure().rail(), minEff == null ? 0 : minEff, cfg.distribution().massThresholdMultiplierByType() == null ? Map.of() : cfg.distribution().massThresholdMultiplierByType(), cfg.units().ships(),
+                cfg.economy().work(), cfg.economy().curves() == null ? Map.of() : cfg.economy().curves());
     }
 
     /**

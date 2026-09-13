@@ -36,7 +36,8 @@ There are also sectors that make no goods: `capital`, `warehouse`, `harbor`,
 ## The four limits on production
 
 A sector produces the **smallest** of these. Knowing which one is binding is
-most of playing well.
+most of playing well. Click any sector you own on the map: the inspector's
+**Makes** panel works the four out for that hex and names the one that binds.
 
 **1. Efficiency.** Below 60% a sector produces *nothing at all*. Above it,
 output scales linearly: an 80% mine makes 80% of what a 100% mine would.
