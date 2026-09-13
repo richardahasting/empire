@@ -18,6 +18,15 @@ export interface Estimate {
   producing: boolean;
 }
 
+/** The population ceiling for a sector: the type's flat cap, scaled by research the way Ctx.maxPopulation does (issue #153). */
+export function popCeiling(t: SectorType, rules: Rules, research: number): { cap: number; scale: number } {
+  const c = rules.maxPopCurve;
+  let scale = 1;
+  if (c && c.type === "res_pop") scale = 0.4 + 0.6 * (50 + 4 * research) / (200 + 3 * research);
+  else if (c && c.type !== "none") scale = Math.min(c.cap ?? 2, (c.base ?? 1) + (c.perResearchPoint ?? 0) * research);
+  return { cap: t.maxPopulation * scale, scale };
+}
+
 export function wording(value: number): string { return value >= 60 ? "rich" : value >= 30 ? "fair" : "poor"; }
 
 /** The same formulas as CurveCfg.eval on the server; anything unknown counts as 1 so a new curve type cannot blank the panel. */
