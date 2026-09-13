@@ -35,8 +35,10 @@ mine SHIP [x,y] | off        seabed mining: roam the nodule fields near home, mi
 scrap SHIP                   in harbour; the hold goes ashore
 move COMMODITY x,y x2,y2 N   move now; the sending sector pays the route's mobility now
 expl x,y x2,y2 N             explore into an adjacent unowned sector with N civilians
-road SECTOR LEVEL            standing order: pave toward LEVEL (0 cancels)
-rail SECTOR LEVEL            standing order: lay rail toward LEVEL (needs tech 60; 0 cancels)
+road SECTOR LEVEL            standing order: pave toward LEVEL (0 cancels); nothing is laid until a whole point's
+                             materials are in the sector — the ack says the cost here and what is still needed
+rail SECTOR LEVEL            standing order: lay rail toward LEVEL (needs tech 60; 0 cancels); same rule, and a
+                             tunnel or bridge pays its one-time materials with the first points
 SECTOR is x,y · * (all yours) · *:TYPE (all of one designation, id or glyph, e.g. *:a) · x1:x2,y1:y2 (a rectangle)
   each sector pays its own BTU; e.g. road * 100 · thresh *:agribusiness hcm 50 · thresh -2:2,-2:2 food 100
   thresh on * or a rectangle scales goods by designation (warehouse ×10, people ×1); *:warehouse or one sector sets it as typed
