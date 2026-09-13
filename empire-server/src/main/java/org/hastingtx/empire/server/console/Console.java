@@ -85,6 +85,8 @@ public class Console {
                     yield cmd(gameId, a, new Command.Announce(rest(line, 1)));
                 }
                 case "fish" -> { need(t, 2, "fish SHIP [x,y] | fish SHIP off"); long id = Long.parseLong(t[1].replace("#", "")); boolean off = t.length > 2 && t[2].equalsIgnoreCase("off"); yield cmd(gameId, a, new Command.Fish(id, !off && t.length > 2 ? abs(v, t[2]) : null, off)); }
+                case "supply" -> { need(t, 2, "supply SHIP [x,y] | supply SHIP off"); long id = Long.parseLong(t[1].replace("#", "")); boolean off = t.length > 2 && t[2].equalsIgnoreCase("off"); yield cmd(gameId, a, new Command.Supply(id, !off && t.length > 2 ? abs(v, t[2]) : null, off)); }
+                case "history", "log" -> { need(t, 2, "history SHIP [UPDATES]"); yield new Reply(history(Long.parseLong(t[1].replace("#", "")), games.shipHistory(gameId, a, Long.parseLong(t[1].replace("#", "")), t.length > 2 ? Integer.parseInt(t[2]) : 5)), true, null, null); }
                 case "mine" -> { need(t, 2, "mine SHIP [x,y] | mine SHIP off"); long id = Long.parseLong(t[1].replace("#", "")); boolean off = t.length > 2 && t[2].equalsIgnoreCase("off"); yield cmd(gameId, a, new Command.Mine(id, !off && t.length > 2 ? abs(v, t[2]) : null, off)); }
                 case "scrap" -> { need(t, 2, "scrap SHIP"); yield cmd(gameId, a, new Command.Scrap(Long.parseLong(t[1].replace("#", "")))); }
                 case "macro", "macros" -> {
@@ -294,7 +296,7 @@ public class Console {
         StringBuilder sb = new StringBuilder(String.format("%-4s %-24s %-8s %5s %5s %-11s %-8s %-18s %-14s %s%n", "id", "class", "at", "eff", "speed", "load/hold", "on", "going", "can", "last update"));
         for (var s : v.ships()) {
             String on = s.lane() != null ? "lane" : s.mission() != null && !s.mission().isBlank() ? s.mission() : "—";
-            String going = s.lane() != null ? "lane " + rel(s.lane().fromRelative()) + (s.lane().outbound() ? " → " : " ← ") + rel(s.lane().toRelative()) : s.mission() != null && !s.mission().isBlank() ? ("fish".equals(s.mission()) ? "fishing" : "mining") + " from " + rel(s.homeRelative()) + (s.destRelative() != null ? " → " + rel(s.destRelative()) : "") : s.destRelative() != null ? "to " + rel(s.destRelative()) : s.docked() ? "in harbour" : "holding";
+            String going = s.lane() != null ? "lane " + rel(s.lane().fromRelative()) + (s.lane().outbound() ? " → " : " ← ") + rel(s.lane().toRelative()) : "supply".equals(s.mission()) ? "supply" + (s.destRelative() != null ? " → " + rel(s.destRelative()) : s.docked() ? ", in harbour" : "") : s.mission() != null && !s.mission().isBlank() ? ("fish".equals(s.mission()) ? "fishing" : "mining") + " from " + rel(s.homeRelative()) + (s.destRelative() != null ? " → " + rel(s.destRelative()) : "") : s.destRelative() != null ? "to " + rel(s.destRelative()) : s.docked() ? "in harbour" : "holding";
             sb.append(String.format("%-4d %-24s %-8s %5.0f %5d %-11s %-8s %-18s %-14s %s%n", s.id(), s.cls() + (s.name() == null || s.name().isBlank() ? "" : " " + s.name()), rel(s.relative()), s.efficiency(), s.hexesPerUpdate(), (int) s.load() + "/" + (int) s.hold(), on, going, missionsOf(cfg, s.cls()), s.note()));
         }
         sb.append("on: the standing mission the hull is running; can: the ones its class may be given (plus sail, always)\n");
@@ -314,12 +316,23 @@ public class Console {
             List<String> can = new ArrayList<>();
             if (c.fishingRateOr0() > 0) can.add("fish");
             if (c.miningRateOr0() > 0) can.add("mine");
-            if (!c.carriesOrEmpty().isEmpty()) can.add("lane");
+            if (!c.carriesOrEmpty().isEmpty()) { can.add("lane"); can.add("supply"); }
             return can.isEmpty() ? "sail only" : String.join(", ", can);
         }
         return "sail";
     }
     private static String rel(Coord c) { return c.x() + "," + c.y(); }
+
+    /** A ship's logbook, newest update first, a numbered line for each thing she did (issue #67). */
+    static String history(long ship, List<org.hastingtx.empire.server.persistence.LogRepository.ShipLogEntry> book) {
+        if (book.isEmpty()) return "ship #" + ship + " has no log yet — it is written at each update";
+        StringBuilder sb = new StringBuilder();
+        for (var e : book) {
+            sb.append("update ").append(e.updateNumber()).append('\n');
+            for (int i = 0; i < e.lines().size(); i++) sb.append(String.format("  %d. %s%n", i + 1, e.lines().get(i)));
+        }
+        return sb.toString();
+    }
 
     /** What radar and the lookouts have: where a ship was last seen, not where it is now (issue #75). */
     static String contacts(CountryView v) {

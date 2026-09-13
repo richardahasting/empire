@@ -1,11 +1,12 @@
-import { useState } from "react";
-import type { CommandRequest, CountryView, Rules, ShipView } from "@/api/client";
+import { useEffect, useState } from "react";
+import { shipHistory, type CommandRequest, type CountryView, type Rules, type ShipLogEntry, type ShipView } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface Props {
+  gameId: number;
   view: CountryView; rules: Rules; busy: boolean;
   onCommand: (c: CommandRequest) => Promise<void>;
   /** Start picking a destination on the map for this ship. */
@@ -17,7 +18,8 @@ export const shipGlyph = (rules: Rules, cls: string) => rules.ships?.classes.fin
 const className = (rules: Rules, cls: string) => rules.ships?.classes.find(c => c.id === cls)?.name ?? cls;
 
 /** Your fleet (issue #56): every ship, where it is, what it carries, where it is going, what it did last update; and the orders. */
-export function Fleet({ view, rules, busy, onCommand, onSail }: Props) {
+export function Fleet({ gameId, view, rules, busy, onCommand, onSail }: Props) {
+  const [logbook, setLogbook] = useState<number | null>(null);
   const [dialog, setDialog] = useState<{ kind: "load" | "unload" | "lane"; ship: ShipView } | null>(null);
   const [pendingScrap, setPendingScrap] = useState<number | null>(null);
   const harbors = view.sectors.filter(s => s.full && (rules.sectorTypes.find(t => t.id === s.designation)?.flags ?? []).includes("builds_ships"));
@@ -25,8 +27,9 @@ export function Fleet({ view, rules, busy, onCommand, onSail }: Props) {
   return (
     <div className="space-y-2 text-xs">
       {view.ships.map(s => {
-        const going = s.lane ? `lane ${rel(s.lane.fromRelative)} ${s.lane.outbound ? "→" : "←"} ${rel(s.lane.toRelative)}${s.lane.cargo.length ? ` (${s.lane.cargo.join(", ")})` : ""}` : s.mission === "fish" ? `fishing from ${rel(s.homeRelative)}${s.destRelative ? ` → ${rel(s.destRelative)}` : ""}` : s.destRelative ? `to ${rel(s.destRelative)}` : s.docked ? "in harbour" : "holding";
+        const going = s.lane ? `lane ${rel(s.lane.fromRelative)} ${s.lane.outbound ? "→" : "←"} ${rel(s.lane.toRelative)}${s.lane.cargo.length ? ` (${s.lane.cargo.join(", ")})` : ""}` : s.mission === "fish" || s.mission === "mine" ? `${s.mission === "fish" ? "fishing" : "mining"} from ${rel(s.homeRelative)}${s.destRelative ? ` → ${rel(s.destRelative)}` : ""}` : s.mission === "supply" ? `supply${s.destRelative ? ` → ${rel(s.destRelative)}` : ""}, refits at ${rel(s.homeRelative)}` : s.destRelative ? `to ${rel(s.destRelative)}` : s.docked ? "in harbour" : "holding";
         const fisher = !!rules.ships?.classes.find(c => c.id === s.cls)?.fishingRate;
+        const carrier = (rules.ships?.classes.find(c => c.id === s.cls)?.carries ?? []).length > 0;
         const cargo = Object.entries(s.stock).map(([c, q]) => `${Math.floor(q)} ${c}`).join(", ");
         return (
           <div key={s.id} className="rounded-md border border-border p-2">
@@ -41,6 +44,9 @@ export function Fleet({ view, rules, busy, onCommand, onSail }: Props) {
               {fisher && (s.mission === "fish"
                 ? <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: "fish", ship: s.id, clear: true })}>Stop fishing</Button>
                 : <Button size="sm" variant="secondary" disabled={busy || !s.docked} title={s.docked ? "roam the grounds near this harbour, fish, land the catch here, repeat" : "give the order while docked in the home harbour"} onClick={() => void onCommand({ verb: "fish", ship: s.id, x: s.at.x, y: s.at.y })}>Fish from here</Button>)}
+              {carrier && (s.mission === "supply"
+                ? <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: "supply", ship: s.id, clear: true })}>Stop supply</Button>
+                : <Button size="sm" variant="secondary" disabled={busy || !s.docked} title={s.docked ? "carry whatever your harbours' thresholds are short of, from any harbour that can spare it; refit here" : "give the order while docked in the harbour it should refit at"} onClick={() => void onCommand({ verb: "supply", ship: s.id, x: s.at.x, y: s.at.y })}>Supply from here</Button>)}
               {s.dest && !s.lane && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: "sail", ship: s.id, clear: true })}>Hold</Button>}
               <Button size="sm" variant="ghost" disabled={busy || !s.docked} onClick={() => setDialog({ kind: "load", ship: s })}>Load…</Button>
               <Button size="sm" variant="ghost" disabled={busy || !s.docked || s.load <= 0} onClick={() => setDialog({ kind: "unload", ship: s })}>Unload…</Button>
@@ -49,13 +55,39 @@ export function Fleet({ view, rules, busy, onCommand, onSail }: Props) {
               {s.docked && (pendingScrap === s.id
                 ? <Button size="sm" variant="danger" disabled={busy} onClick={() => { setPendingScrap(null); void onCommand({ verb: "scrap", ship: s.id }); }}>Confirm scrap</Button>
                 : <Button size="sm" variant="ghost" disabled={busy} onClick={() => setPendingScrap(s.id)}>Scrap</Button>)}
+              <Button size="sm" variant="ghost" onClick={() => setLogbook(l => l === s.id ? null : s.id)}>{logbook === s.id ? "Hide history" : "History"}</Button>
             </div>
+            {logbook === s.id && <Logbook gameId={gameId} ship={s.id} updateNumber={view.updateNumber} />}
           </div>
         );
       })}
       {dialog && (dialog.kind === "lane"
         ? <LaneDialog ship={dialog.ship} harbors={harbors} view={view} rules={rules} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />
         : <CargoDialog kind={dialog.kind} ship={dialog.ship} view={view} rules={rules} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />)}
+    </div>
+  );
+}
+
+/** The ship's last few updates, a numbered line for each thing she did (issue #67). Refetched after each update. */
+function Logbook({ gameId, ship, updateNumber }: { gameId: number; ship: number; updateNumber: number }) {
+  const [book, setBook] = useState<ShipLogEntry[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    shipHistory(gameId, ship).then(b => { if (live) { setBook(b); setError(null); } }).catch(e => { if (live) setError(String(e)); });
+    return () => { live = false; };
+  }, [gameId, ship, updateNumber]);
+  if (error) return <p className="mt-1 text-destructive">{error}</p>;
+  if (!book) return <p className="mt-1 text-muted-foreground">Reading the log…</p>;
+  if (book.length === 0) return <p className="mt-1 text-muted-foreground">No log yet — it is written at each update.</p>;
+  return (
+    <div className="mt-1 space-y-1 border-t border-border pt-1">
+      {book.map(e => (
+        <div key={e.updateNumber}>
+          <div className="font-medium">Update {e.updateNumber}</div>
+          <ol className="list-decimal pl-4 text-muted-foreground">{e.lines.map((l, i) => <li key={i}>{l}</li>)}</ol>
+        </div>
+      ))}
     </div>
   );
 }
@@ -109,11 +141,11 @@ function LaneDialog({ ship, harbors, view, rules, busy, onClose, onCommand }: { 
   return (
     <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent>
-        <DialogHeader><DialogTitle>Shipping lane for ship #{ship.id}</DialogTitle><DialogDescription>A standing order: at the first harbour it loads whatever is above the harbour's thresholds, sails to the second, unloads everything, and comes back — every update, until you clear it.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>Shipping lane for ship #{ship.id}</DialogTitle><DialogDescription>A standing order: load at the first harbour, sail to the second, unload, come back — every update, until you clear it. With nothing ticked it carries only what the second harbour's thresholds are short of, and waits when it wants nothing.</DialogDescription></DialogHeader>
         <div className="grid gap-3 text-sm">
           <label>Load at<Select value={from} onChange={e => setFrom(e.target.value)}>{harbors.map(h => <option key={key(h)} value={key(h)}>{rel(h.relative)} · {h.designation}</option>)}</Select></label>
           <label>Unload at<Select value={to} onChange={e => setTo(e.target.value)}>{harbors.map(h => <option key={key(h)} value={key(h)}>{rel(h.relative)} · {h.designation}</option>)}</Select></label>
-          <div>Carry <span className="text-muted-foreground">(none ticked = anything it can)</span>
+          <div>Carry <span className="text-muted-foreground">(none ticked = what the far end's thresholds want)</span>
             <div className="mt-1 flex flex-wrap gap-2">
               {carriable.map(c => <label key={c} className="flex items-center gap-1"><input type="checkbox" checked={cargo.includes(c)} onChange={e => setCargo(cs => e.target.checked ? [...cs, c] : cs.filter(x => x !== c))} />{c}</label>)}
             </div>

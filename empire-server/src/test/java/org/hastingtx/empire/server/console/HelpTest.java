@@ -25,7 +25,7 @@ class HelpTest {
     void everyConsoleCommandAppearsInTheReference() {
         // the commands a player can type, as the console dispatches them
         String[] commands = {"map", "census", "break", "des", "thresh", "dist", "deliver", "macro", "ships",
-                "contacts", "build", "sail", "load", "unload", "lane", "fish", "scrap", "move", "expl",
+                "contacts", "build", "sail", "load", "unload", "lane", "fish", "mine", "supply", "history", "scrap", "move", "expl",
                 "road", "rail", "railship", "raillane", "adjacent", "food", "census res"};
         for (String c : commands)
             assertTrue(Console.HELP.contains(c), "'" + c + "' is dispatched by the console but not in the reference");

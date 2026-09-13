@@ -7,14 +7,16 @@ import java.util.function.Supplier;
 
 /**
  * {@code notes}: per owned sector ("x,y" absolute), what happened there this update in step order (issue #49).
+ * {@code shipNotes}: per ship id, what she did this update, a line at a time (issue #67) — her logbook.
  *
  * <p>The state hash is <b>lazy</b> (issue #82). Hashing a world means walking every sector, and on a
  * million-sector map that was most of the cost of an update — paid whether or not anyone asked for the
  * value. It is now computed on the first call to {@link #stateHash()} and remembered, so a caller that
  * never asks never pays.
  */
-public record UpdateResult(World next, List<Event> events, List<Flow> flows, Supplier<String> hash, java.util.Map<String, List<String>> notes) {
+public record UpdateResult(World next, List<Event> events, List<Flow> flows, Supplier<String> hash, java.util.Map<String, List<String>> notes, java.util.Map<Long, List<String>> shipNotes) {
 
+    public UpdateResult(World next, List<Event> events, List<Flow> flows, Supplier<String> hash, java.util.Map<String, List<String>> notes) { this(next, events, flows, hash, notes, java.util.Map.of()); }
     public UpdateResult(World next, List<Event> events, List<Flow> flows, Supplier<String> hash) { this(next, events, flows, hash, java.util.Map.of()); }
 
     /** The world's state hash, computed once on demand. */

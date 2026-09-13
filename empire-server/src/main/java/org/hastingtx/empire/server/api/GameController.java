@@ -144,6 +144,8 @@ public class GameController {
                 case "lane" -> new Command.Lane(needShip(), Boolean.TRUE.equals(clear) || x == null ? null : at(x, y), x2 == null ? null : at(x2, y2), cargo == null ? List.of() : cargo);
                 case "scrap" -> new Command.Scrap(needShip());
                 case "fish" -> new Command.Fish(needShip(), x == null || y == null ? null : at(x, y), Boolean.TRUE.equals(clear));
+                case "mine" -> new Command.Mine(needShip(), x == null || y == null ? null : at(x, y), Boolean.TRUE.equals(clear));
+                case "supply" -> new Command.Supply(needShip(), x == null || y == null ? null : at(x, y), Boolean.TRUE.equals(clear));
                 default -> throw new IllegalArgumentException("unknown verb: " + verb);
             };
         }
@@ -201,6 +203,12 @@ public class GameController {
     @PostMapping("/{id}/console")
     public Console.Reply console(@PathVariable long id, @RequestBody ConsoleRequest r, HttpServletRequest req) {
         return console.run(id, AuthInterceptor.current(req), r.line() == null ? "" : r.line());
+    }
+
+    /** A ship's logbook for her last few updates, newest first (issue #67). */
+    @GetMapping("/{id}/ships/{ship}/history")
+    public List<LogRepository.ShipLogEntry> shipHistory(@PathVariable long id, @PathVariable long ship, @RequestParam(defaultValue = "5") int updates, HttpServletRequest req) {
+        return games.shipHistory(id, AuthInterceptor.current(req), ship, updates);
     }
 
     @GetMapping("/{id}/projection")

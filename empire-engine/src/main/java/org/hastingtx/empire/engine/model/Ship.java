@@ -9,6 +9,7 @@ import java.util.List;
  * {@code tech} is the tech level it was laid at; speed scales with it (KNOWN: the original's ship tech).
  * {@code mission} "fish" (Richard 2026-09-09): wander the grounds near {@code home}, fish, land the catch, repeat.
  * {@code mission} "mine" (issue #112): the same, over the nodule fields, landing ore instead of food.
+ * {@code mission} "supply" (issue #67): carry between your own harbours whatever their thresholds are short of.
  * {@code fuel} is what is in the tank (issue #65) — petrol drawn from a harbour or a tanker, burned by
  * the hex. It is not cargo: it is counted in conservation like stock, but a hold full of petrol is
  * freight and a full tank is not. {@code crew} is the people signed on (issue #66) — civilians on a
@@ -40,8 +41,15 @@ public record Ship(long id, int owner, String cls, String name, Coord at, double
     /** Issue #112: roam the nodule fields near {@code home}, mine, land the ore, repeat. */
     public static final String MINE = "mine";
 
+    /**
+     * Issue #67: keep your harbours' thresholds filled from whichever harbour can spare it, without a
+     * shipment ever being ordered. {@code home} is where she goes to be refitted.
+     */
+    public static final String SUPPLY = "supply";
+
     /** A standing mission that roams the sea near home and comes back loaded. */
     public boolean roaming() { return FISH.equals(mission) || MINE.equals(mission); }
+    public boolean supplying() { return SUPPLY.equals(mission); }
 
     /** Shuttle between two harbours: load {@code cargo} (commodity indices; empty = everything it may carry) above the harbour's thresholds at {@code from}, unload all at {@code to}. */
     public record Lane(Coord from, Coord to, List<Integer> cargo, boolean outbound) {

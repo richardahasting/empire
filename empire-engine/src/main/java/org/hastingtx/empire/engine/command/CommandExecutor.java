@@ -44,6 +44,7 @@ public final class CommandExecutor {
             case Command.Announce a -> announce(w, c, a);
             case Command.Fish f -> fish(w, c, f);
             case Command.Mine m -> mine(w, c, m);
+            case Command.Supply sp -> supply(w, c, sp);
             case Command.Move m -> move(w, c, m);
             case Command.Explore e -> explore(w, c, e);
             case Command.BuildRoad br -> buildRoad(w, c, br);
@@ -257,7 +258,7 @@ public final class CommandExecutor {
         var cls = cfg.units().ships().shipClass(ship.cls());
         var sc = cfg.units().ships();
         double perUpdate = sc.range(cls, ship.tech(), ship.efficiency());
-        String ended = ship.roaming() ? " (" + ship.mission() + "ing mission ended)" : "";
+        String ended = ship.roaming() || ship.supplying() ? " (" + ship.mission() + (ship.supplying() ? " mission" : "ing mission") + " ended)" : "";
         int hexes = path.size() - 1;
         ship = ship.withDest(s.dest()).withMission(null, null);
 
@@ -415,6 +416,28 @@ public final class CommandExecutor {
         var mc = cfg.units().ships().miningOrDefault();
         return new CommandResult(w.withShip(ship.withMission(Ship.MINE, home).withLane(null).withDest(null)), null, 0,
                 "ship #" + m.ship() + " works the nodule fields within " + mc.radius() + " of " + home + " and lands the ore there");
+    }
+
+    /**
+     * The supply mission (issue #67). Needs a hull that carries something and a harbour to call home,
+     * where she goes to be refitted; what she carries and where is decided at the update, from the
+     * thresholds, so there is nothing else to say here.
+     */
+    private CommandResult supply(World w, Country c, Command.Supply m) {
+        Ship ship = myShip(w, c, m.ship());
+        if (ship == null) return CommandResult.fail(w, "no ship #" + m.ship() + " of yours");
+        if (m.off()) return new CommandResult(w.withShip(ship.withMission(null, null).withDest(null)), null, 0, "ship #" + m.ship() + " comes off supply and holds position");
+        var cls = cfg.units().ships().shipClass(ship.cls());
+        if (cls.carriesOrEmpty().isEmpty()) return CommandResult.fail(w, "a " + cls.name() + " carries no cargo");
+        Coord home = m.home() != null ? m.home() : harborOf(w, c, w.sector(ship.at())) ? ship.at() : null;
+        if (home == null) return CommandResult.fail(w, "name a home harbour, or give the order while the ship is in one");
+        if (!harborOf(w, c, w.sector(home))) return CommandResult.fail(w, home + " is not one of your harbours");
+        if (org.hastingtx.empire.engine.update.SeaRoutes.path(w, cfg, c.id(), ship.at(), home) == null) return CommandResult.fail(w, "ship #" + m.ship() + " has no sea route to " + home);
+        long harbours = w.sectors().stream().filter(s -> harborOf(w, c, s)).count();
+        String what = cls.carriesOrEmpty().contains("all") ? "anything" : String.join(" and ", cls.carriesOrEmpty());
+        return new CommandResult(w.withShip(ship.withMission(Ship.SUPPLY, home).withLane(null).withDest(null)), null, 0,
+                "ship #" + m.ship() + " carries " + what + " between your harbours wherever a threshold is short, refitting at " + home
+                        + (harbours < 2 ? " — you have one harbour, so there is nowhere to carry anything yet" : ""));
     }
 
     /**

@@ -4,8 +4,8 @@ Ships need a **harbour** at 60% efficiency or better. Everything else follows
 from that.
 
 **Standing missions** — given once, run every update until told `off`:
-`fish` (fishing boats), `mine` (deep sea miners) and `lane` (anything with a
-hold: cargo ships, tankers, luxury craft). `sail` is the one-off order. The
+`fish` (fishing boats), `mine` (deep sea miners), and `lane` and `supply`
+(anything with a hold: cargo ships, tankers, luxury craft). `sail` is the one-off order. The
 `ships` listing shows what each hull is **on** and what its class **can** be
 given, so nobody has to steer a miner by hand.
 
@@ -133,12 +133,78 @@ A deep sea miner needs tech 35, and costs rather more than a trawler.
 
 ## Cargo runs
 
-`lane SHIP from to [COMMODITY ...]` sets a shuttle: load surplus at one end,
-unload at the other, turn round, repeat, every update without further orders.
-With no commodities named it keeps the far end's thresholds topped up.
+`lane SHIP from to [COMMODITY ...]` sets a shuttle between two of your harbours:
+load at one end, unload at the other, turn round, repeat, every update without
+further orders.
+
+- **With no commodities named, the far end's thresholds decide.** The ship loads
+  only what the second harbour is short of — less anything already on its way
+  there in your other ships — and **waits at the loading end** when it wants
+  nothing, instead of burning petrol on an empty round trip. This is the same
+  rule as a rail lane: the destination says what it wants with `thresh`, and the
+  lane fills it.
+- **With commodities named**, it pushes those: everything above the loading
+  harbour's own thresholds, up to the hold.
+
+A ship does the harbour's business **the update it arrives**: it unloads (or
+loads) and turns round straight away, rather than sitting at the quay for an
+update first.
 
 `sail SHIP x,y` sends a ship somewhere once. `load` and `unload` work **only in
 a harbour**.
+
+## Supply: islands that feed themselves
+
+`supply SHIP [home]` puts a ship on the supply round. You never order a
+shipment. Instead:
+
+1. Set **thresholds** on the harbours that need things — `thresh 12,-4 lcm 400`
+   on the island harbour, say.
+2. Put one or more ships on `supply`.
+
+Every update, each supply ship looks at all your harbours. In a harbour it first
+**lands what that harbour is short of** — only that much, so the rest can go on
+— then **takes on what other harbours are short of** and this one can spare.
+Then it sails for whichever shortage is most pressing: to the harbour that
+wants what it carries, or, empty, to the harbour that can fill it.
+
+- **Most nearly empty goes first.** A harbour at a tenth of its threshold is
+  served before one at eight tenths, however big the numbers; after that, the
+  shorter trip.
+- **A harbour keeps what its own thresholds say.** Everything above them is
+  spare. A harbour with no threshold for something will give all of it away.
+- **Ships do not pile onto one shortage.** Cargo already bound for a harbour in
+  any of your ships counts against what it is short of.
+- The harbour's **warehouse next door** counts with it, for both what it wants
+  and what it can spare.
+- **Nothing to do** keeps a supply ship waiting in harbour, or sends it home from
+  sea. It carries on by itself as soon as a threshold goes short.
+- **It only carries what its class carries.** A tanker on supply moves oil and
+  petrol and nothing else, which makes it the refinery's supply line: set an
+  `oil` threshold on the refinery's harbour and a `pet` threshold wherever your
+  ships refuel.
+- `home` is where it goes to **refit** when the sea wears it to 60%, exactly as a
+  fishing boat does. Give the order in that harbour, or name it.
+
+`supply SHIP off` takes it off the round. A `sail` order also ends it.
+
+## Tankers
+
+Tankers carry only oil and petrol, but a lot of it, and they do three jobs:
+
+- **Bulk carriers** for a lane or the supply round.
+- **Refuelling at sea**: a ship with a dry tank in the same hex as your tanker
+  is filled from the tanker's hold.
+- **They never run dry with petrol aboard.** A tanker that cannot make another
+  hex fills its own tank from its hold. Only then, so most of what it was
+  carrying for someone else still arrives.
+
+## The logbook
+
+`history SHIP [N]` shows what a ship did over its last N updates (5 unless you
+say otherwise), a numbered line for each thing: fitted out, loaded, bound for,
+sailed, arrived, unloaded. The Fleet panel has the same thing under **History**.
+The `ships` listing still shows the last update run together on one line.
 
 ## Being seen
 
