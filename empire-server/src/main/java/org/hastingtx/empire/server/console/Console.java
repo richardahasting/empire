@@ -42,7 +42,9 @@ public class Console {
                     need(t, 4, "thresh SECTOR commodity amount");
                     double n = Double.parseDouble(t[3]);
                     boolean mixed = SectorSelector.isMixed(t[1]);
-                    yield many(gameId, a, v, cfg, t[1], at -> new Command.Threshold(at, t[2], mixed ? SectorSelector.massThreshold(v, cfg, at, t[2], n) : n), mixed && n >= 0 ? SectorSelector.massThresholdNote(cfg) : null);
+                    List<Coord> targets = SectorSelector.expand(v, cfg, t[1]);
+                    // the ack says what each kind of sector actually got, not just that something was applied (issue #146)
+                    yield many(gameId, a, v, cfg, t[1], at -> new Command.Threshold(at, t[2], mixed ? SectorSelector.massThreshold(v, cfg, at, t[2], n) : n), mixed ? SectorSelector.effectiveNote(v, cfg, targets, t[2], n) : null);
                 }
                 case "dist", "distribute" -> { need(t, 3, "dist SECTOR cx,cy|none"); Coord ctr = t[2].equalsIgnoreCase("none") ? null : abs(v, t[2]); yield many(gameId, a, v, cfg, t[1], at -> new Command.Distribute(at, ctr)); }
                 case "ships", "fleet" -> new Reply(fleet(v, cfg), true, null, null);

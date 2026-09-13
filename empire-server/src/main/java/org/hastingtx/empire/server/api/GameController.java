@@ -184,9 +184,11 @@ public class GameController {
         CountryView v = games.view(id, a);
         var cfg = games.get(id).cfg;
         boolean scaled = "threshold".equals(r.verb()) && SectorSelector.isMixed(r.scope()) && !Boolean.TRUE.equals(r.clear());
-        List<Command> cmds = SectorSelector.expand(v, cfg, r.scope()).stream()
-                .map(at -> scaled ? new Command.Threshold(at, r.commodity(), SectorSelector.massThreshold(v, cfg, at, r.commodity(), r.amount() == null ? 0 : r.amount())) : r.toCommand(at)).toList();
-        return games.commandAll(id, a, cmds, "panel", scaled ? SectorSelector.massThresholdNote(cfg) : null);
+        List<Coord> targets = SectorSelector.expand(v, cfg, r.scope());
+        double amount = r.amount() == null ? 0 : r.amount();
+        List<Command> cmds = targets.stream()
+                .map(at -> scaled ? new Command.Threshold(at, r.commodity(), SectorSelector.massThreshold(v, cfg, at, r.commodity(), amount)) : r.toCommand(at)).toList();
+        return games.commandAll(id, a, cmds, "panel", scaled ? SectorSelector.effectiveNote(v, cfg, targets, r.commodity(), amount) : null);
     }
 
     public record ConsoleRequest(String line) {}
