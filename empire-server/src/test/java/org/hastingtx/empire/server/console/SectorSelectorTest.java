@@ -65,6 +65,12 @@ class SectorSelectorTest {
         assertThat(SectorSelector.massThreshold(V, CFG, cap.at(), "food", 400)).isEqualTo(400.0);   // the capital is not a warehouse
         assertThat(SectorSelector.massThreshold(v2, CFG, cap.at(), "food", -1)).isEqualTo(-1.0);    // clearing passes through
         assertThat(SectorSelector.massThresholdNote(CFG)).isEqualTo("warehouse ×10, city ×10, goods only");
+
+        // issue #146: the ack names the effective numbers, per kind of sector
+        assertThat(SectorSelector.effectiveNote(v2, CFG, List.of(cap.at()), "lcm", 400)).isEqualTo("lcm 4000 in 1 warehouse sector (×10; thresh *:warehouse lcm 400 sets it as typed)");
+        assertThat(SectorSelector.effectiveNote(v2, CFG, List.of(cap.at()), "civ", 700)).isEqualTo("civ 700 in 1 sector");
+        assertThat(SectorSelector.effectiveNote(V, CFG, SectorSelector.expand(V, CFG, "*"), "food", 400)).isEqualTo("food 400 in " + MINE.size() + " sectors");
+        assertThat(SectorSelector.effectiveNote(v2, CFG, List.of(cap.at()), "food", -1)).as("clearing has nothing to report").isNull();
     }
 
     @Test

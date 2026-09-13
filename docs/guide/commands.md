@@ -40,6 +40,7 @@ rail SECTOR LEVEL            standing order: lay rail toward LEVEL (needs tech 6
 SECTOR is x,y · * (all yours) · *:TYPE (all of one designation, id or glyph, e.g. *:a) · x1:x2,y1:y2 (a rectangle)
   each sector pays its own BTU; e.g. road * 100 · thresh *:agribusiness hcm 50 · thresh -2:2,-2:2 food 100
   thresh on * or a rectangle scales goods by designation (warehouse ×10, people ×1); *:warehouse or one sector sets it as typed
+  the ack says what each kind of sector actually got, e.g. lcm 400 in 43 sectors, 4000 in 2 warehouse sectors
 railship COMMODITY x,y x2,y2 N   train N units between two depots at the update (line checked now)
 raillane x,y x2,y2 [COMM ...]    standing run between two depots, every update; no list = keep the far end's thresholds topped up
 raillane x,y x2,y2 none          cancel that lane

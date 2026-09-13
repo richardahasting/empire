@@ -6,9 +6,7 @@ import org.hastingtx.empire.engine.model.Coord;
 import org.hastingtx.empire.engine.view.CountryView;
 import org.hastingtx.empire.engine.view.CountryView.SectorView;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 
 /**
  * Where a command names one sector, it may name many (issue #38). The same syntax serves the
@@ -41,6 +39,44 @@ public final class SectorSelector {
         for (SectorView s : v.sectors()) if (s.at().equals(at)) return amount * cfg.distribution().massThresholdMultiplier(s.designation());
         return amount;
     }
+
+    /**
+     * What a mass threshold actually set, sector by sector, for the ack (issue #146). "applied 45 of
+     * 45" with a footnote saying "warehouse ×10" read as success while the warehouses sat at 4000
+     * soaking up road materials; the player had to go and look. So the ack now says the effective
+     * numbers: {@code lcm 400 in 43 sectors, 4000 in 2 warehouse sectors (×10; thresh *:warehouse lcm 400 sets it as typed)}.
+     */
+    public static String effectiveNote(CountryView v, GameConfig cfg, List<Coord> targets, String commodity, double amount) {
+        if (amount < 0) return null;
+        Map<Coord, SectorView> byAt = new HashMap<>();
+        for (SectorView s : v.sectors()) byAt.put(s.at(), s);
+        // effective value -> (count, designations that got it)
+        Map<Double, int[]> counts = new TreeMap<>();
+        Map<Double, Set<String>> types = new TreeMap<>();
+        for (Coord at : targets) {
+            SectorView s = byAt.get(at);
+            double eff = massThreshold(v, cfg, at, commodity, amount);
+            counts.computeIfAbsent(eff, k -> new int[1])[0]++;
+            if (eff != amount && s != null) types.computeIfAbsent(eff, k -> new TreeSet<>()).add(s.designation());
+        }
+        StringBuilder sb = new StringBuilder(commodity).append(' ');
+        boolean first = true;
+        for (var e : counts.entrySet()) {
+            double eff = e.getKey(); int n = e.getValue()[0];
+            if (!first) sb.append(", ");
+            first = false;
+            sb.append(fmt(eff)).append(" in ").append(n);
+            Set<String> t = types.get(eff);
+            if (t == null) sb.append(n == 1 ? " sector" : " sectors");
+            else {
+                sb.append(' ').append(String.join("/", t)).append(n == 1 ? " sector" : " sectors")
+                  .append(" (×").append(fmt(eff / amount)).append("; thresh *:").append(t.iterator().next()).append(' ').append(commodity).append(' ').append(fmt(amount)).append(" sets it as typed)");
+            }
+        }
+        return sb.toString();
+    }
+
+    private static String fmt(double d) { return d % 1 == 0 ? String.valueOf((long) d) : String.valueOf(d); }
 
     /** "warehouse ×10, goods only" or null — for replies and dialogs. */
     public static String massThresholdNote(GameConfig cfg) {
