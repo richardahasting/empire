@@ -106,7 +106,10 @@ export interface Standing {
 export interface Projection {
   forUpdate: number; cashNow: number; cashAfter: number; civNow: number; civAfter: number; foodNow: number; foodAfter: number;
   btuNow: number; btuAfter: number; starvingSectors: number; spoilingSectors: number; flowsCompleted: number; flowsHeld: number;
+  /** Where it will hurt, in your own coordinates, worst first, with a reason (issue #152). */
+  starving: Trouble[]; spoiling: Trouble[];
 }
+export interface Trouble { at: { x: number; y: number }; designation: string; amount: number; hint: string }
 export interface SectorType {
   id: string; glyph: string; category: string; maxPopulation: number; minTech: number | null;
   produces: Record<string, number> | null; consumes: Record<string, number> | null; build: Record<string, number> | null;
