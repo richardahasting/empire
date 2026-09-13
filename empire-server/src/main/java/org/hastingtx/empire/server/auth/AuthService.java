@@ -69,10 +69,20 @@ public class AuthService {
 
     public record Session(String token, Account account) {}
 
+    /**
+     * What a bot is told when it hands its session token to the link-verifying step (issue #161):
+     * the two credentials look alike and an agent given one has, more than once, gone looking for
+     * a verify flow to put it through. There is none; the token it has is already the session.
+     */
+    public static final String SESSION_NOT_A_LINK =
+            "that is a session token, not a sign-in link — there is nothing to verify. Send it as "
+            + "'Authorization: Bearer <token>' on every request (empire-cli: save it to ~/.config/empire/session)";
+
     /** Step 2: the link is clicked. Burns the magic token, issues a long-lived session token. */
     @Transactional
     public Session verify(String rawMagic) {
         TokenRepository.Found f = tokens.find(rawMagic).orElseThrow(() -> new IllegalArgumentException("unknown or expired link"));
+        if (f.kind().equals("session")) throw new IllegalArgumentException(SESSION_NOT_A_LINK);
         if (!f.kind().equals("magic") || f.expiresAt().isBefore(Instant.now())) throw new IllegalArgumentException("unknown or expired link");
         if (!tokens.consume(rawMagic)) throw new IllegalArgumentException("that link was already used");
         Account a = accounts.byId(f.accountId()).orElseThrow();

@@ -64,11 +64,14 @@ left out is left alone.
 Cash, BTUs, tech, research, education, happiness, and the sanctuary and
 bankrupt flags.
 
-### Reissue a bot's token
+### Reissue a bot's session token
 
-An agent seat is given a bearer token once, and only its hash is kept — so an
-agent that lost its token previously had no way back in, and the only fix was a
-second country and a wasted seat. The deity can now mint it a fresh one.
+An agent seat is given a **session token** once, and only its hash is kept — so
+an agent that lost its token previously had no way back in, and the only fix
+was a second country and a wasted seat. The deity can mint it a fresh one; the
+old one stops working. It is a session, not a sign-in link: the bot sends it as
+`Authorization: Bearer …` and never verifies it (see *Two credentials* in
+[For the deity](deity.html)).
 
 A person who loses access does not need this: they ask for another magic link.
 

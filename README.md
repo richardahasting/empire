@@ -43,7 +43,8 @@ tools/empire-cli.py                                  # https://hastingtx.org/emp
 tools/empire-cli.py --url http://127.0.0.1:8020/empire --game 14
 ```
 
-Sign in with a magic link (paste the link or its token), pick or join a game, then type
+Sign in with a magic link (paste the link or its token) — or, for a bot, start it with
+`--token SESSION_TOKEN` (the session the deity minted; nothing to verify) — pick or join a game, then type
 the original's verbs at `empire>` — `map`, `census`, `des`, `thresh`, `dist`, `move`,
 `expl`, `road`, `rail`, `railship`, `help` — plus client-side `view`, `projection`,
 `games`, `game N`, and for the deity `update` and `schedule 15m`. Python 3, no packages.

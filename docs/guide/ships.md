@@ -3,6 +3,12 @@
 Ships need a **harbour** at 60% efficiency or better. Everything else follows
 from that.
 
+**Standing missions** — given once, run every update until told `off`:
+`fish` (fishing boats), `mine` (deep sea miners) and `lane` (anything with a
+hold: cargo ships, tankers, luxury craft). `sail` is the one-off order. The
+`ships` listing shows what each hull is **on** and what its class **can** be
+given, so nobody has to steer a miner by hand.
+
 ## Building one
 
 `build HARBOUR CLASS [name]` lays down a hull. It costs materials and cash from

@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { FieldLabel } from "@/components/ui/tooltip";
+import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { SessionTokenBox, SessionTokenNote } from "@/components/session-token";
 
 interface Roster { countryId: number; name: string; controller: string; taken: boolean; deity: boolean }
 interface Edit { id: number; update_number: number; target: string; changes: string; account_id: number | null; at: string }
@@ -238,12 +240,14 @@ function CountryEditor({ gameId, roster, onDone, onError }:
     } catch (e) { onError((e as Error).message); } finally { setBusy(false); }
   };
 
+  // the minted token stays on screen until dismissed: it is shown once, so a blink-and-miss prompt is not enough
+  const [minted, setMinted] = useState<string | null>(null);
   const reissue = async () => {
     if (countryId == null) return;
     try {
       const r = await api.post<{ token: string }>(`/admin/games/${gameId}/countries/${countryId}/token`);
-      window.prompt(`New token for ${chosen?.name}. It is shown once — copy it now.`, r.token);
-      onDone(`${chosen?.name} has a new token.`);
+      setMinted(r.token);
+      onDone(`${chosen?.name} has a new session token.`);
     } catch (e) { onError((e as Error).message); }
   };
 
@@ -264,11 +268,21 @@ function CountryEditor({ gameId, roster, onDone, onError }:
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="danger" disabled={busy} onClick={() => void save()}>{busy ? "Saving…" : "Change"}</Button>
             {chosen?.controller === "agent" && (
-              <Button size="sm" variant="soft" onClick={() => void reissue()} title="mint this bot a replacement token">New token</Button>
+              <Button size="sm" variant="soft" onClick={() => void reissue()} title="mint this bot a replacement session token; the old one stops working">New session token</Button>
             )}
           </div>
         </>
       )}
+      <Dialog open={minted != null} onOpenChange={o => { if (!o) setMinted(null); }}>
+        <DialogContent size="sm">
+          <DialogHeader>
+            <DialogTitle>{chosen?.name} has a new session token</DialogTitle>
+            <DialogDescription><SessionTokenNote /> The old token no longer works.</DialogDescription>
+          </DialogHeader>
+          {minted && <SessionTokenBox token={minted} />}
+          <DialogFooter><Button size="sm" onClick={() => setMinted(null)}>Done</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
