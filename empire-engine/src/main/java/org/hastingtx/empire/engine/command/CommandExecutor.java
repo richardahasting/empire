@@ -207,12 +207,7 @@ public final class CommandExecutor {
      */
     private String selfStarveWarning(Sector s, int ci, double threshold) {
         if (ci != com.food) return "";
-        var p = cfg.economy().population();
-        var sub = p.subsistenceOrNone();
-        double limit = s.terrain().isLand() ? sub.limit(s.fertility()) : 0;
-        double civ = s.stock().get(com.civ), mil = s.stock().get(com.mil), uw = s.stock().get(com.uw);
-        double fed = Math.min(civ + mil + uw, limit);   // roughly: whoever forages first, the same number of mouths are covered
-        double eats = Math.max(0, civ + mil + uw - fed) * p.foodPerCivPerEtu() * cfg.etus();
+        double eats = org.hastingtx.empire.engine.update.FoodMath.eatsPerUpdate(cfg, com, s);
         if (eats <= 0) return "";
         StringBuilder sb = new StringBuilder();
         if (threshold < eats)

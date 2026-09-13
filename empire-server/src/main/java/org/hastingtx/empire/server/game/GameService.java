@@ -312,6 +312,14 @@ public class GameService {
         }
     }
 
+    /** Basins and deficits of food, with a deliver hint for each deficit (issue #160). Same seed discipline as the projection. */
+    public org.hastingtx.empire.engine.update.FoodReport.Result foodReport(long gameId, Account a) {
+        Game g = get(gameId);
+        int country = myCountry(gameId, a);
+        World w = g.world;
+        return org.hastingtx.empire.engine.update.FoodReport.of(w, g.cfg, country, g.seed * 1_000_003L + w.updateNumber() + 1);
+    }
+
     public org.hastingtx.empire.engine.update.Projection.Result projection(long gameId, Account a) {
         Game g = get(gameId);
         int country = myCountry(gameId, a);

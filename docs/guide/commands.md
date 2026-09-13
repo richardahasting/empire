@@ -11,7 +11,9 @@ disagree, something is broken.
 
 ```text
 map                          your map (relative coordinates, capital at 0,0)
-census                       one line per owned sector
+census                       one line per owned sector: stocks, days of food left, standing deliveries, stalled roads
+census res                   the ground: fert / min / gold / oil / uran per sector, and what it is poor for
+food                         where the food is and is not: basins, deficits, and the deliver that would help
 break                        break sanctuary
 des SECTOR TYPE              designate (agribusiness, mine, light_manufacturing, warehouse, ...); the ack says
                              "now TYPE (glyph)", any efficiency change, then what auto-wiring set as a note;
@@ -20,8 +22,8 @@ des SECTOR TYPE              designate (agribusiness, mine, light_manufacturing,
 thresh SECTOR COMMODITY N    set a distribution threshold (negative clears)
 dist SECTOR cx,cy | none     name a sector's distribution centre
 deliver COMMODITY SECTOR DIR N   standing order: above N, push it one hex DIR (e ne nw w sw se) every update; DIR none clears
-deliver COMMODITY SECTOR DIR N check   the same, described but not made
-  food out of a sector that keeps less than its own people eat in an update WARNS (a self-starving pipe): what lies that way, and whether it would deliver
+deliver COMMODITY SECTOR DIR N check   the same, described but not made: what lies that way, and whether it would deliver
+  food out of a sector that keeps less than its own people eat in an update WARNS (a self-starving pipe)
 adjacent SECTOR              what lies each way — yours, unowned, sea, or somebody's — without claiming or ordering anything
 declare war COUNTRY          go to war; they are at war with you whether they like it or not
 peace COUNTRY                offer peace, or accept theirs — it takes both of you
