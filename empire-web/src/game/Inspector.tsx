@@ -1,9 +1,10 @@
 import { useState } from "react";
-import type { CommandRequest, CountryView, Rules, SectorView } from "@/api/client";
+import type { CommandRequest, CountryView, Rules, SectorType, SectorView } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { estimate, prospects, type Estimate } from "@/game/production";
 
 interface Props { sector: SectorView | null; view: CountryView; rules: Rules; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean; history?: string[]; historyUpdate?: number }
 
@@ -61,6 +62,7 @@ export function Inspector({ sector: s, view, rules, onCommand, busy, history, hi
         </tbody>
       </table>
       {short.length > 0 && <p className="text-xs">Short of: <span className="text-destructive">{short.join(", ")}</span></p>}
+      {type && <Production s={s} type={type} rules={rules} view={view} />}
       {history && history.length > 0 && (
         <div className="text-xs">
           <div className="font-medium">Last update{historyUpdate ? ` (${historyUpdate})` : ""}</div>
@@ -99,6 +101,54 @@ export function Inspector({ sector: s, view, rules, onCommand, busy, history, hi
         <Button size="sm" disabled={busy || thrAmount === ""} onClick={() => onCommand({ verb: "threshold", x: s.at.x, y: s.at.y, commodity: thrCommodity, amount: Number(thrAmount) })}>Set</Button>
         {s.thresholds[thrCommodity] !== undefined && <Button size="sm" variant="ghost" disabled={busy} onClick={() => onCommand({ verb: "threshold", x: s.at.x, y: s.at.y, commodity: thrCommodity, clear: true })}>clear</Button>}
       </div>
+    </div>
+  );
+}
+
+/**
+ * What this sector needs to make what it makes, as the guide's four limits, and which one binds
+ * right now (issue #163). For a sector that makes nothing: what its ground would be good for.
+ */
+function Production({ s, type, rules, view }: { s: SectorView; type: SectorType; rules: Rules; view: CountryView }) {
+  const e: Estimate | null = estimate(s, type, rules, view.levels);
+  if (!e) {
+    const p = prospects(s, rules).slice(0, 4);
+    if (p.length === 0) return null;
+    return (
+      <div className="text-xs">
+        <div className="font-medium">Makes nothing</div>
+        <p className="text-muted-foreground">
+          This ground: {p.map(x => `${x.type.resourceGate} ${x.value} — ${x.wording} for a ${x.type.id.replace(/_/g, " ")}`).join("; ")}.
+        </p>
+      </div>
+    );
+  }
+  const makes = e.makes.map(m => `${m.id} ~${Math.round(m.perUpdate)}`).concat(e.raises.map(r => `${r.level} ~${r.perUpdate.toFixed(1)}`)).join(", ");
+  const recipe = e.inputs.length ? " from " + e.inputs.map(i => `${i.perUnit} ${i.id}`).join(" + ") + " each" : "";
+  return (
+    <div className="text-xs">
+      <div className="font-medium">Makes {Object.keys(type.produces ?? {}).concat(Object.keys(type.producesLevel ?? {})).join(", ")}{recipe}</div>
+      <table className="w-full">
+        <tbody>
+          {e.limits.map(l => (
+            <tr key={l.name} className={l.ok ? "" : "text-destructive"}>
+              <td className="w-20 text-muted-foreground">{l.name}</td>
+              <td>{l.ok ? "✓ " : "✗ "}{l.note}</td>
+            </tr>
+          ))}
+          {e.inputs.map(i => (
+            <tr key={i.id} className={i.stock <= 0 ? "text-destructive" : ""}>
+              <td className="w-20 text-muted-foreground">· {i.id}</td>
+              <td>{Math.round(i.stock)} in stock{Number.isFinite(i.covers) ? ` → ~${Math.round(i.covers)} units possible` : ""}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="mt-1">
+        {e.producing ? <>roughly <strong>{makes}</strong> next update</> : <span className="text-destructive">nothing next update</span>}
+        {e.binding && <> — limited by <strong>{e.binding.name}</strong></>}
+        <span className="text-muted-foreground"> (before construction's share of the work)</span>
+      </p>
     </div>
   );
 }

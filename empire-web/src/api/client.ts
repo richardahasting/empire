@@ -114,14 +114,19 @@ export interface SectorType {
   id: string; glyph: string; category: string; maxPopulation: number; minTech: number | null;
   produces: Record<string, number> | null; consumes: Record<string, number> | null; build: Record<string, number> | null;
   terrainRequired: string[] | null; flags: string[] | null;
+  /** Which of the hex's five endowments scales output (extraction only); levels it raises instead of goods; the level curve that scales it. */
+  resourceGate?: string | null; producesLevel?: Record<string, number> | null; levelEffect?: { level: string; curve: string } | null;
+  storeMultiplier?: number | null; productionCashPerUnit?: number | null;
 }
+export interface Curve { type: string; k?: number | null; baseline?: number | null; base?: number | null; easy?: number | null; value?: number | null; minMultiplier?: number | null; min?: number | null; lag?: number | null; at0?: number | null; at100?: number | null }
+export interface WorkRules { perCiv: number; perUw: number; perMil: number; happinessEffectCurve: { neutralAt: number; slopePerPoint: number; min: number; max: number } }
 export interface Commodity { id: string; name: string; weight: number; priority: number; isPerson?: boolean | null }
 export interface RoadRules { buildMaterialsPerPoint: Record<string, number>; workPerPoint: number; maxPointsPerUpdate: number; costMultiplierByTerrain: Record<string, number>; maxLevelByTerrain: Record<string, number>; decayPerUpdate: number; maintenanceCashPerPointPerUpdate: number }
 export interface Crossing { techRequired: number; materials: Record<string, number> }
 export interface RailRules { bridge?: Crossing | null; tunnel?: Crossing | null; techRequired: number; buildMaterialsPerPoint: Record<string, number>; maxPointsPerUpdate: number; minLevelToCarry: number; capacityPerUpdateAt100: number; cashPer100UnitsShipped: number; maxSectorsPerUpdate: { base: number; perTechPoint: number }; costMultiplierByTerrain: Record<string, number>; maxLevelByTerrain: Record<string, number>; decayPerUpdate: number; maintenanceCashPerPointPerUpdate: number }
 export interface ShipClass { id: string; name: string; glyph: string; role: string; techRequired: number; build: Record<string, number> | null; hold: number; speed: number; fishingRate?: number | null; happinessPerEtu?: number | null; carries?: string[] | null }
 export interface ShipsRules { startEfficiency: number; dockPointsPerUpdate: number; harborMinEfficiency: number; classes: ShipClass[] }
-export interface Rules { sectorTypes: SectorType[]; commodities: Commodity[]; etusPerUpdate: number; btuCosts: Record<string, number>; road?: RoadRules; defaultCapacity?: number; rail?: RailRules; productionMinEfficiency?: number; massThresholdMultiplierByType?: Record<string, number>; ships?: ShipsRules | null }
+export interface Rules { sectorTypes: SectorType[]; commodities: Commodity[]; etusPerUpdate: number; btuCosts: Record<string, number>; road?: RoadRules; defaultCapacity?: number; rail?: RailRules; productionMinEfficiency?: number; massThresholdMultiplierByType?: Record<string, number>; ships?: ShipsRules | null; work?: WorkRules; curves?: Record<string, Curve> }
 export interface Outcome { accepted: boolean; error?: string; btuSpent: number; view: CountryView; info?: string | null }
 export interface ConsoleReply { output: string; accepted: boolean; error?: string; view?: CountryView }
 export interface CommandRequest {
