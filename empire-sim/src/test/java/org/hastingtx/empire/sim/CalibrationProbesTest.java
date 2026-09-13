@@ -117,7 +117,8 @@ class CalibrationProbesTest {
         assertThat(r.world().sector(at).roadTarget()).isEqualTo(cap);
         assertThat(r.info()).contains("mountain cap").contains("100 asked");
         var ok = new org.hastingtx.empire.engine.command.CommandExecutor(cfg).execute(w, 0, new org.hastingtx.empire.engine.command.Command.BuildRoad(at, cap));
-        assertThat(ok.info()).as("an order at the cap needs no note").isNull();
+        // an order at the cap gets no cap note — but it still says what paving costs here (issue #150)
+        assertThat(ok.info()).doesNotContain("cap (").contains("paving costs");
     }
 
     /** A manual move is immediate: the goods land now, the sending sector pays mobility now, and its mobility caps the quantity. */

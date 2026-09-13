@@ -559,10 +559,42 @@ public final class CommandExecutor {
         if (!s.terrain().isLand()) return CommandResult.fail(w, "cannot pave the sea");
         if (r.targetLevel() < 0 || r.targetLevel() > 100) return CommandResult.fail(w, "road level is 0..100");
         // Above the terrain's cap the order is the cap, not a refusal (Richard 2026-09-08, issue #43): "road * 100" paves every sector as far as it can go.
-        Double cap = cfg.infrastructure().road().maxLevelByTerrain().get(s.terrain().id());
+        var road = cfg.infrastructure().road();
+        Double cap = road.maxLevelByTerrain().get(s.terrain().id());
         double target = cap != null && r.targetLevel() > cap ? cap : r.targetLevel();
-        String info = target < r.targetLevel() ? "road ordered to " + Math.round(target) + ", the " + s.terrain().id() + " cap (" + Math.round(r.targetLevel()) + " asked)" : null;
-        return new CommandResult(w.withSector(s.withRoadTarget(target)), null, 0, info);
+        if (target <= 0) return new CommandResult(w.withSector(s.withRoadTarget(0)), null, 0, s.roadTarget() > 0 ? "road order at " + r.sector() + " cancelled" : null);
+        String capped = target < r.targetLevel() ? "road ordered to " + Math.round(target) + ", the " + s.terrain().id() + " cap (" + Math.round(r.targetLevel()) + " asked)" : "road ordered to " + Math.round(target) + " from " + Math.round(s.roadLevel());
+        if (target <= s.roadLevel() + 1e-9) return new CommandResult(w.withSector(s.withRoadTarget(target)), null, 0, capped + " — already there");
+        Double mult = road.costMultiplierByTerrain().get(s.terrain().id());
+        return new CommandResult(w.withSector(s.withRoadTarget(target)), null, 0,
+                capped + "; " + materialsNote(w, c, s, road.buildMaterialsPerPoint(), mult == null ? 1 : mult, road.maxPointsPerUpdate(), "paving"));
+    }
+
+    /**
+     * What a standing road or rail order costs here and whether the sector can pay for a point yet
+     * (issue #150). The order is accepted at once but nothing is built until a whole point's worth
+     * of materials is in the sector, and a player who did not know that thought roads were broken.
+     */
+    private String materialsNote(World w, Country c, Sector s, java.util.Map<String, Double> perPoint, double m, double maxPoints, String doing) {
+        StringBuilder cost = new StringBuilder();
+        double points = maxPoints;
+        StringBuilder have = new StringBuilder(), need = new StringBuilder();
+        for (var e : perPoint.entrySet()) {
+            double per = e.getValue() * m;
+            if (per <= 0) continue;
+            boolean cash = e.getKey().equals("cash");
+            cost.append(cost.isEmpty() ? "" : ", ").append(cash ? "$" : "").append(fmt(per)).append(cash ? "" : " " + e.getKey());
+            double avail = cash ? c.cash() : s.stock().get(com.index(e.getKey()));
+            points = Math.min(points, avail / per);
+            if (cash) continue;
+            have.append(have.isEmpty() ? "" : ", ").append(Math.round(avail)).append(' ').append(e.getKey());
+            if (avail < per) need.append(need.isEmpty() ? "" : " and ").append((long) Math.ceil(per - avail)).append(" more ").append(e.getKey());
+        }
+        String terrain = m == 1 ? "" : " (" + s.terrain().id() + " ×" + fmt(m) + ")";
+        String head = doing + " costs " + cost + " a point here" + terrain + ", up to " + Math.round(maxPoints) + " points an update — the sector has " + have;
+        if (need.length() > 0) return head + ": NEEDS " + need + " in-sector before the first point is laid (nothing happens until then)";
+        if (points < 1) return head + ": not enough cash for a point";
+        return head + ": enough for " + (long) Math.floor(Math.min(points, maxPoints)) + (points >= 2 ? " points" : " point") + " next update";
     }
 
     private CommandResult buildRail(World w, Country c, Command.BuildRail r) {
@@ -590,8 +622,13 @@ public final class CommandExecutor {
             var x = bridge ? rail.bridge() : s.terrain() == Terrain.MOUNTAIN ? rail.tunnel() : null;
             if (x != null) crossing = (bridge ? "a bridge: the first points also pay " : "a tunnel: the first points also pay ") + x.materials().entrySet().stream().map(e -> (e.getKey().equals("cash") ? "$" : "") + Math.round(e.getValue()) + (e.getKey().equals("cash") ? "" : " " + e.getKey())).collect(java.util.stream.Collectors.joining(", ")) + (bridge ? " from your adjacent sector with the most rail" : "");
         }
-        String info = capped == null ? crossing : crossing == null ? capped : capped + "; " + crossing;
-        return new CommandResult(w.withSector(s.withRailTarget(target)), null, 0, info);
+        String materials = null;
+        if (target > 0 && !bridge && target > s.railLevel() + 1e-9) {
+            Double mult = rail.costMultiplierByTerrain() == null ? null : rail.costMultiplierByTerrain().get(s.terrain().id());
+            materials = materialsNote(w, c, s, rail.buildMaterialsPerPoint(), mult == null ? 1 : mult, rail.maxPointsPerUpdate(), "laying rail");
+        }
+        String info = java.util.stream.Stream.of(capped, crossing, materials).filter(java.util.Objects::nonNull).collect(java.util.stream.Collectors.joining("; "));
+        return new CommandResult(w.withSector(s.withRailTarget(target)), null, 0, info.isEmpty() ? null : info);
     }
 
     /** Validated at issue time: both ends are working depots and a contiguous line joins them, or the reply names where it breaks. */

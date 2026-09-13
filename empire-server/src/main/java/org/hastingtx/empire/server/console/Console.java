@@ -35,7 +35,7 @@ public class Console {
             return switch (verb) {
                 case "help", "?" -> new Reply(HELP, true, null, null);
                 case "map" -> new Reply(map(v, cfg), true, null, null);
-                case "census", "cen" -> new Reply(census(v), true, null, null);
+                case "census", "cen" -> new Reply(census(v, cfg), true, null, null);
                 case "break" -> cmd(gameId, a, new Command.BreakSanctuary());
                 case "des", "designate" -> { need(t, 3, "des SECTOR type"); yield many(gameId, a, v, cfg, t[1], at -> new Command.Designate(at, t[2])); }
                 case "thresh", "threshold" -> {
@@ -330,14 +330,37 @@ public class Console {
         return sb.toString();
     }
 
-    static String census(CountryView v) {
+    static String census(CountryView v, GameConfig cfg) {
         StringBuilder sb = new StringBuilder(String.format("%-8s %-3s %-4s %4s %4s %6s %6s %6s %6s %6s %6s%n", "sect", "des", "eff", "mob", "road", "civ", "mil", "food", "iron", "lcm", "hcm"));
+        List<String> stalled = new ArrayList<>();
         for (SectorView s : v.sectors()) {
             if (!s.full()) continue;
             sb.append(String.format("%-8s %-3s %4.0f %4.0f %4.0f %6.0f %6.0f %6.0f %6.0f %6.0f %6.0f%n", s.relative().x() + "," + s.relative().y(), glyph(s), s.efficiency(), s.mobility(), s.roadLevel(),
                     s.stock().getOrDefault("civ", 0.0), s.stock().getOrDefault("mil", 0.0), s.stock().getOrDefault("food", 0.0), s.stock().getOrDefault("iron", 0.0), s.stock().getOrDefault("lcm", 0.0), s.stock().getOrDefault("hcm", 0.0)));
+            String r = shortForOnePoint(cfg, s, true), l = shortForOnePoint(cfg, s, false);
+            if (r != null) stalled.add(rel(s.relative()) + " road→" + Math.round(s.roadTarget()) + " " + r);
+            if (l != null) stalled.add(rel(s.relative()) + " rail→" + Math.round(s.railTarget()) + " " + l);
         }
+        // a standing order that cannot lay a point looks exactly like a finished one; say which are waiting (issue #150)
+        if (!stalled.isEmpty()) sb.append("waiting for materials: ").append(String.join("; ", stalled)).append('\n');
         return sb.toString();
+    }
+
+    /** "needs 3 more lcm" when a sector's road (or rail) order is above its level and one point is not affordable from its own stock; null otherwise. */
+    static String shortForOnePoint(GameConfig cfg, SectorView s, boolean road) {
+        double target = road ? s.roadTarget() : s.railTarget(), level = road ? s.roadLevel() : s.railLevel();
+        if (target <= level + 1e-9) return null;
+        var per = road ? cfg.infrastructure().road().buildMaterialsPerPoint() : cfg.infrastructure().rail().buildMaterialsPerPoint();
+        var mults = road ? cfg.infrastructure().road().costMultiplierByTerrain() : cfg.infrastructure().rail().costMultiplierByTerrain();
+        Double mult = mults == null ? null : mults.get(s.terrain());
+        double m = mult == null ? 1 : mult;
+        StringBuilder need = new StringBuilder();
+        for (var e : per.entrySet()) {
+            if (e.getKey().equals("cash") || e.getValue() * m <= 0) continue;
+            double avail = s.stock().getOrDefault(e.getKey(), 0.0), want = e.getValue() * m;
+            if (avail < want) need.append(need.isEmpty() ? "needs " : " and ").append((long) Math.ceil(want - avail)).append(" more ").append(e.getKey());
+        }
+        return need.isEmpty() ? null : need.toString();
     }
 
     private static String glyph(SectorView s) { return s.designation().length() > 3 ? s.designation().substring(0, 3) : s.designation(); }
