@@ -65,11 +65,13 @@ public final class CommandExecutor {
         return new CommandResult(next.withCountry(c.withSanctuary(false)), null, 0);
     }
 
-    private CommandResult designate(World w, Country c, Command.Designate d) {
-        Sector s = owned(w, c, d.sector());
-        if (s == null) return CommandResult.fail(w, "you do not own " + d.sector());
-        if (!cfg.hasSectorType(d.type())) return CommandResult.fail(w, "unknown designation: " + d.type());
-        SectorTypeCfg t = cfg.sectorType(d.type());
+    private CommandResult designate(World w, Country c, Command.Designate d0) {
+        Sector s = owned(w, c, d0.sector());
+        if (s == null) return CommandResult.fail(w, "you do not own " + d0.sector());
+        // id, alias or glyph (issue #157): "manufacturer" is light_manufacturing, and the ack says so
+        SectorTypeCfg t = cfg.resolveSectorType(d0.type());
+        if (t == null) return CommandResult.fail(w, "unknown designation: " + d0.type());
+        Command.Designate d = t.id().equals(d0.type()) ? d0 : new Command.Designate(d0.sector(), t.id());
         if (t.hasFlag("no_designate")) return CommandResult.fail(w, "cannot designate a sector as " + d.type());
         if (t.minTechOr0() > c.levels().tech()) return CommandResult.fail(w, d.type() + " requires tech " + t.minTechOr0());
         if (t.terrainRequired() != null && !t.terrainRequired().contains(s.terrain().id()))
@@ -84,8 +86,13 @@ public final class CommandExecutor {
         if (t.hasFlag("one_per_country_active")) next = next.withCountry(c.withCapital(s.at()));
         // the ack leads with what was done; whatever auto-wiring did is a secondary note (issue #149)
         StringBuilder info = new StringBuilder("now ").append(d.type()).append(" (").append(t.glyph()).append(")");
+        if (d != d0) info.append(" — '").append(d0.type()).append("' means ").append(d.type());
         if (!"wilderness".equals(s.designation())) info.append(", was ").append(s.designation());
         if (Math.abs(eff - s.efficiency()) > 1e-9) info.append("; efficiency ").append(Math.round(s.efficiency())).append(" → ").append(Math.round(eff));
+        // poor ground (issue #157): the gate scales output, so 8 minerals is 8% of a real mine — say so now, not after three updates of nothing
+        if (t.resourceGate() != null && s.resource(t.resourceGate()) < cfg.economy().poorGroundBelowOrDefault())
+            info.append(" — WARNING: ").append(t.resourceGate()).append(' ').append(s.resource(t.resourceGate())).append(" is poor ground for ").append(d.type().replace('_', ' '))
+                .append("; it will make about ").append(s.resource(t.resourceGate())).append("% of what a hex at 100 would");
         if (wired != null) info.append(" — auto-wired: ").append(wired);
         return new CommandResult(next, null, 0, info.toString());
     }
@@ -190,8 +197,29 @@ public final class CommandExecutor {
         String replaced = s.deliver().has(ci) && (s.deliver().dir(ci) != d.dir() || s.deliver().threshold(ci) != d.threshold())
                 ? " — REPLACES the previous order (" + d.commodity() + " above " + fmt(s.deliver().threshold(ci)) + " went " + Hex.dirName(s.deliver().dir(ci)) + ")"
                 : "";
-        String info = d.commodity() + " above " + fmt(d.threshold()) + " goes " + Hex.dirName(d.dir()) + " to " + to + " every update" + replaced;
+        String info = d.commodity() + " above " + fmt(d.threshold()) + " goes " + Hex.dirName(d.dir()) + " to " + to + " every update" + replaced + selfStarveWarning(s, ci, d.threshold());
         return new CommandResult(w.withSector(s.withDeliver(s.deliver().with(ci, d.dir(), d.threshold()))), null, 0, info);
+    }
+
+    /**
+     * A food delivery that leaves less than the sector's own people eat in an update is a pipe that
+     * starves its source (issue #158). It is allowed — a player may mean it — but it is said out loud.
+     */
+    private String selfStarveWarning(Sector s, int ci, double threshold) {
+        if (ci != com.food) return "";
+        var p = cfg.economy().population();
+        var sub = p.subsistenceOrNone();
+        double limit = s.terrain().isLand() ? sub.limit(s.fertility()) : 0;
+        double civ = s.stock().get(com.civ), mil = s.stock().get(com.mil), uw = s.stock().get(com.uw);
+        double fed = Math.min(civ + mil + uw, limit);   // roughly: whoever forages first, the same number of mouths are covered
+        double eats = Math.max(0, civ + mil + uw - fed) * p.foodPerCivPerEtu() * cfg.etus();
+        if (eats <= 0) return "";
+        StringBuilder sb = new StringBuilder();
+        if (threshold < eats)
+            sb.append(" — WARNING: the people here eat about ").append(Math.round(eats)).append(" food an update and this keeps only ").append(fmt(threshold)).append("; they will starve once the stock is gone");
+        if (s.hasThreshold(ci) && s.stock().get(ci) < s.threshold(ci))
+            sb.append(sb.isEmpty() ? " — WARNING: " : "; also ").append("this sector is under its own food threshold (").append(Math.round(s.stock().get(ci))).append(" of ").append(Math.round(s.threshold(ci))).append(") and is still asking its centre for more");
+        return sb.toString();
     }
 
     // ---- ships (issue #56) ----

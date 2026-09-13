@@ -6,6 +6,8 @@ import java.util.Map;
 public record EconomyCfg(
         PopulationCfg population,
         WorkCfg work,
+        /** Below this, a resource gate is "poor ground" and designating on it warns (issue #157). Boxed: older snapshots default. */
+        Double poorGroundBelow,
         double defaultCapacity,
         List<SectorTypeCfg> sectorTypes,
         Map<String, CurveCfg> curves,
@@ -14,6 +16,8 @@ public record EconomyCfg(
         MoneyCfg money,
         LevelsCfg levels,
         BtuCfg btu) {
+
+    public double poorGroundBelowOrDefault() { return poorGroundBelow == null ? 30 : poorGroundBelow; }
 
     public record PopulationCfg(
             double foodPerCivPerEtu,

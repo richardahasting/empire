@@ -242,11 +242,15 @@ economy:
   #   capacity         per-commodity storage max; unlisted = default_capacity
   #   store_multiplier warehouse-style storage bonus (applies to all commodities)
   #   flags            special behaviours the engine knows by name
+  #   aliases          other names `des` accepts for it (NEW, issue #157: nobody guessed "light_manufacturing")
   #
   # PROVENANCE: glyphs, the categories, and the input→output chains are KNOWN
   # (iron→lcm/hcm, oil→pet, dust→bar, lcm+hcm+oil→shell, etc.). Every numeric
   # rate is a GUESS calibrated against nothing yet — the M0 balance harness
   # exists to fix that. Treat the numbers as placeholders.
+  # NEW (issue #157): a designation gated on a resource this low gets a WARNING in the ack — "minerals 8
+  # is poor ground for a mine" — and the map inspector calls it poor. It is a warning, not a refusal.
+  poor_ground_below: 30
   default_capacity: 10000     # Richard 2026-09-10 (issue #91): the original's 1000 was a consequence of packing
                               # quantities into ten bits, not a design choice. We are not packing, so the cap is
                               # ours to pick. A warehouse or city still stores ten times, so the real ceiling is
@@ -409,6 +413,7 @@ economy:
     # --- manufacturing -------------------------------------------------------
     - id: light_manufacturing
       glyph: "j"
+      aliases: [manufacturer, manufacturing, light_industry, factory]
       category: manufacturing
       build: { cash: 1 }
       max_population: 1000
