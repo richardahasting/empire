@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { CountryView, GameSummary, Projection } from "@/api/client";
+import type { CountryView, GameSummary, Projection, Trouble } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 
 /** Nation dashboard: treasury, BTUs, levels, the countdown, and what the next update will do to you. */
@@ -29,12 +29,22 @@ export function Dashboard({ view, game, projection }: { view: CountryView; game:
         {view.inSanctuary && <Badge tone="accent">in sanctuary</Badge>}
         {view.bankrupt && <Badge tone="signal">bankrupt</Badge>}
         {held > 0 && <Badge tone="neutral">{held.toFixed(0)} units in transit</Badge>}
-        {p && p.starvingSectors > 0 && <Badge tone="signal">next update: starvation in {p.starvingSectors} sector{p.starvingSectors === 1 ? "" : "s"}</Badge>}
-        {p && p.spoilingSectors > 0 && <Badge tone="signal">next update: spoilage in {p.spoilingSectors} sector{p.spoilingSectors === 1 ? "" : "s"}</Badge>}
+        {p && p.starvingSectors > 0 && <Badge tone="signal" title={hints(p.starving)}>next update: starvation in {p.starvingSectors} sector{p.starvingSectors === 1 ? "" : "s"} — {where(p.starving)}</Badge>}
+        {p && p.spoilingSectors > 0 && <Badge tone="signal" title={hints(p.spoiling)}>next update: spoilage in {p.spoilingSectors} sector{p.spoilingSectors === 1 ? "" : "s"} — {where(p.spoiling)}</Badge>}
         {p && p.flowsHeld > 0 && <Badge tone="neutral">next update: {p.flowsHeld} shipment{p.flowsHeld === 1 ? "" : "s"} will stall</Badge>}
       </div>
     </div>
   );
+}
+
+/** The first few sectors by coordinate, worst first; the rest are in the tooltip. */
+function where(list: Trouble[] | undefined) {
+  if (!list || list.length === 0) return "";
+  const shown = list.slice(0, 5).map(t => `${t.at.x},${t.at.y}`).join(" · ");
+  return list.length > 5 ? `${shown} +${list.length - 5} more` : shown;
+}
+function hints(list: Trouble[] | undefined) {
+  return (list ?? []).map(t => `${t.at.x},${t.at.y} ${t.designation}: ${t.hint}`).join("\n");
 }
 
 function delta(d: number, unit: string) {

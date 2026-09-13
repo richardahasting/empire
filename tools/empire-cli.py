@@ -152,6 +152,9 @@ def main():
                 p = api.get(f"/games/{gid}/projection")
                 print(f"next update: ${p['cashAfter'] - p['cashNow']:+.0f}  civ {p['civAfter'] - p['civNow']:+.0f}  food {p['foodAfter'] - p['foodNow']:+.0f}  "
                       f"starving sectors {p['starvingSectors']}  spoiling {p['spoilingSectors']}  stalled shipments {p['flowsHeld']}")
+                for kind in ("starving", "spoiling"):
+                    for t in p.get(kind, []):
+                        print(f"  {kind} {t['at']['x']},{t['at']['y']} {t['designation']} ({t['amount']:.0f}): {t['hint']}")
             elif verb == "update":
                 r = api.post(f"/admin/games/{gid}/update"); print(f"update {r['updateNumber']} ran ({r['events']} events, {r['flows']} flows)"); show(api.get(f"/games/{gid}/view"))
             elif verb == "schedule" and rest:
