@@ -102,14 +102,19 @@ class DeliverTest {
     @Test
     void commandValidatesSetsAndClears() {
         Coord a = Hex.stepRaw(CAP, 0, 1);
-        World w = own(base(), a, 500);
+        Coord b = Hex.stepRaw(a, 1, 1);
+        World w = own(own(base(), a, 500), b, 0);
         CommandExecutor ex = new CommandExecutor(CFG);
         CommandResult r = ex.execute(w, 0, new Command.Deliver(a, "iron", 1, 300));
         assertThat(r.error()).isNull();
         assertThat(r.world().sector(a).deliver().has(IRON)).isTrue();
         assertThat(r.world().sector(a).deliver().dir(IRON)).isEqualTo(1);
         assertThat(r.world().sector(a).deliver().threshold(IRON)).isEqualTo(300);
-        assertThat(r.info()).contains("until you own");                // north-east of a is unowned
+        // issue #147: an order toward land you do not own is refused outright, not "noted"
+        World alone = own(base(), a, 500);
+        CommandResult refused = ex.execute(alone, 0, new Command.Deliver(a, "iron", 1, 300));
+        assertThat(refused.error()).contains("do not own");
+        assertThat(refused.world().sector(a).deliver().has(IRON)).isFalse();
         assertThat(ex.execute(w, 0, new Command.Deliver(a, "iron", 7, 0)).error()).contains("direction");
         assertThat(ex.execute(w, 0, new Command.Deliver(a, "iron", 0, -5)).error()).contains("threshold");
         assertThat(ex.execute(w, 0, new Command.Deliver(a, "plutonium", 0, 5)).error()).contains("unknown commodity");
