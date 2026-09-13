@@ -9,7 +9,7 @@ import org.hastingtx.empire.engine.model.Coord;
 public sealed interface Command permits
         Command.BreakSanctuary, Command.Designate, Command.Threshold, Command.Distribute,
         Command.Move, Command.Explore, Command.BuildRoad, Command.BuildRail, Command.RailShip, Command.Deliver,
-        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine,
+        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply,
         Command.RailLane, Command.Telegram, Command.Announce, Command.DeclareWar, Command.OfferPeace {
 
     String verb();
@@ -60,6 +60,9 @@ public sealed interface Command permits
 
     /** Issue #112: work the nodule fields near {@code home}, mine, land the ore, repeat. */
     record Mine(long ship, Coord home, boolean off) implements Command { public String verb() { return "mine"; } }
+
+    /** Issue #67: fill your harbours' thresholds from whichever harbour can spare it; {@code home} (null = the harbour it is in) is where she refits. */
+    record Supply(long ship, Coord home, boolean off) implements Command { public String verb() { return "supply"; } }
 
     /**
      * Declare war on a country (issue #137). Unilateral to do, mutual in effect: the other side is at

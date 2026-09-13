@@ -57,6 +57,8 @@ public final class Ledger {
     /** Plain-language lines per sector, in the order the steps wrote them (issue #49): "made 430 lcm using 430 iron". */
     public final java.util.Map<Integer, List<String>> notes = new java.util.HashMap<>();
     public void note(int sector, String line) { notes.computeIfAbsent(sector, k -> new ArrayList<>()).add(line); }
+    /** A ship's lines for this update, in the order it did things (issue #67) — its logbook, by ship id. */
+    public final java.util.Map<Long, List<String>> shipNotes = new java.util.TreeMap<>();
     /** What a sector wanted and did not get this update, by commodity — summarised as its last note (Richard 2026-09-09). */
     public final java.util.Map<Integer, double[]> shortages = new java.util.HashMap<>();
     public void shortOf(int sector, int c, double qty) { if (qty > 1e-9) shortages.computeIfAbsent(sector, k -> new double[nCom])[c] += qty; }

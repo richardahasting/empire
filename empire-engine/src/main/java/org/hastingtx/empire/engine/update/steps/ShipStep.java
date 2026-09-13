@@ -1,6 +1,7 @@
 package org.hastingtx.empire.engine.update.steps;
 
 import org.hastingtx.empire.engine.config.UnitsCfg;
+import org.hastingtx.empire.engine.geo.Hex;
 import org.hastingtx.empire.engine.model.*;
 import org.hastingtx.empire.engine.update.Ctx;
 import org.hastingtx.empire.engine.update.Ledger;
@@ -8,11 +9,15 @@ import org.hastingtx.empire.engine.update.SeaRoutes;
 import org.hastingtx.empire.engine.update.Step;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Step 7c (issue #56): ships. In id order — few ships, and a harbour's stock is the only thing two
- * ships can contend for. For each ship: fit out in a harbour, fish, cheer, run its lane, sail.
+ * ships can contend for. For each ship: fit out in a harbour, fish, cheer, run its lane or its supply
+ * round, sail — and, having arrived, do the harbour's business in the same update (issue #67).
  */
 public final class ShipStep implements Step {
     public String name() { return "ships"; }
@@ -21,9 +26,11 @@ public final class ShipStep implements Step {
         UnitsCfg.ShipsCfg sc = ctx.cfg.units().ships();
         if (sc == null) return;
         List<Ship> out = new ArrayList<>();
-        for (Ship ship : ctx.ships) {
+        Map<Integer, List<Sector>> harbours = new HashMap<>();   // per owner, found once an update
+        for (int si = 0; si < ctx.ships.size(); si++) {
+            Ship ship = ctx.ships.get(si);
             UnitsCfg.ShipClassCfg cls = sc.shipClass(ship.cls());
-            StringBuilder note = new StringBuilder();
+            Log note = new Log();
             Sector here = ctx.snap.sector(ship.at());
             int hi = ctx.idx(ship.at());
             boolean docked = here.owner() == ship.owner() && SeaRoutes.isHarbor(ctx.cfg, here);
@@ -35,7 +42,7 @@ public final class ShipStep implements Step {
             if (!docked && sc.seaWear() > 0 && ship.efficiency() > 0) {
                 double worn = Math.min(sc.seaWear(), ship.efficiency());
                 ship = ship.withEfficiency(ship.efficiency() - worn);
-                sep(note).append("worn by the sea, ").append(Ledger.q(ship.efficiency())).append("% left");
+                note.next().append("worn by the sea, ").append(Ledger.q(ship.efficiency())).append("% left");
             }
 
             // fit out: a docked hull gains efficiency from the harbour's materials and cash
@@ -54,7 +61,7 @@ public final class ShipStep implements Step {
                         else { ctx.led().consume(hi, ctx.com.index(e.getKey()), points * e.getValue()); used.append(used.isEmpty() ? "" : ", ").append(Ledger.q(points * e.getValue())).append(' ').append(e.getKey()); }
                     }
                     ship = ship.withEfficiency(ship.efficiency() + points);
-                    note.append("fitted out to ").append(Ledger.q(ship.efficiency())).append('%').append(used.isEmpty() ? "" : " using " + used);
+                    note.next().append("fitted out to ").append(Ledger.q(ship.efficiency())).append('%').append(used.isEmpty() ? "" : " using " + used);
                     ctx.led().note(hi, label(ship) + " fitted out to " + Ledger.q(ship.efficiency()) + "%" + (used.isEmpty() ? "" : " using " + used));
                 }
             }
@@ -69,8 +76,8 @@ public final class ShipStep implements Step {
                 double room = Math.max(0, cls.hold() - ship.load());
                 double fish = Math.min(room, cls.fishingRateOr0() * here.fertility() * ctx.etus * sc.fishingFoodPerEtuPerFertilityPoint() * eff);
                 fish = ctx.led().produceAtSea(ctx.com.food, fish);   // whole units, tallied where it is made (issue #77)
-                if (fish > 0) { ship = ship.withStock(ship.stock().plus(ctx.com.food, fish)); sep(note).append("fished ").append(Ledger.q(fish)).append(" food"); if (room - fish < 1e-9) note.append(" (hold full)"); }
-                else if (room <= 1e-9) sep(note).append("hold full, no fishing");
+                if (fish > 0) { ship = ship.withStock(ship.stock().plus(ctx.com.food, fish)); note.next().append("fished ").append(Ledger.q(fish)).append(" food"); if (room - fish < 1e-9) note.last().append(" (hold full)"); }
+                else if (room <= 1e-9) note.next().append("hold full, no fishing");
             }
             // seabed mining (issue #112): iron from the hex's nodules into the hold. The same shape as
             // fishing because it is the same mission — roam, work the water you are over, come home.
@@ -78,75 +85,65 @@ public final class ShipStep implements Step {
                 double room = Math.max(0, cls.hold() - ship.load());
                 double ore = Math.min(room, cls.miningRateOr0() * here.resource("minerals") * ctx.etus * sc.oreRate() * eff);
                 ore = ctx.led().produceAtSea(ctx.com.index("iron"), ore);
-                if (ore > 0) { ship = ship.withStock(ship.stock().plus(ctx.com.index("iron"), ore)); sep(note).append("mined ").append(Ledger.q(ore)).append(" iron"); if (room - ore < 1e-9) note.append(" (hold full)"); }
-                else if (room <= 1e-9) sep(note).append("hold full, no mining");
-                else if (here.resource("minerals") <= 0) sep(note).append("no nodules here");
+                if (ore > 0) { ship = ship.withStock(ship.stock().plus(ctx.com.index("iron"), ore)); note.next().append("mined ").append(Ledger.q(ore)).append(" iron"); if (room - ore < 1e-9) note.last().append(" (hold full)"); }
+                else if (room <= 1e-9) note.next().append("hold full, no mining");
+                else if (here.resource("minerals") <= 0) note.next().append("no nodules here");
             }
             // luxury: happiness while at sea
             if (cls.happinessOr0() > 0 && here.terrain() == Terrain.OCEAN && eff > 0) {
                 double h = cls.happinessOr0() * ctx.etus * eff;
                 ctx.led().level[ship.owner()][3] += h;
-                sep(note).append("cruised: +").append(Ledger.q(h)).append(" happiness");
+                note.next().append("cruised: +").append(Ledger.q(h)).append(" happiness");
             }
-            // lane: load at from, unload at to, and always know where to go next
+            boolean refitting = false;
             if (ship.lane() != null) {
-                Ship.Lane lane = ship.lane();
-                if (!lane.outbound() && ship.at().equals(lane.from())) {
-                    ship = load(ctx, ship, cls, here, hi, lane.cargo(), note);
-                    ship = ship.withLane(lane.turned(true));
-                } else if (lane.outbound() && ship.at().equals(lane.to())) {
-                    ship = unload(ctx, ship, here, hi, note);
-                    ship = ship.withLane(lane.turned(false));
-                }
-                ship = ship.withDest(ship.lane().target());
+                ship = runLane(ctx, ship, cls, si, out, note);
+            } else if (ship.supplying() && ship.home() != null) {
+                refitting = refitDue(sc, ship, docked);
+                if (refitting) ship = goForRefit(ship, docked, note);
+                else ship = runSupply(ctx, ship, cls, si, out, harbours, note);
             } else if (ship.roaming() && ship.home() != null) {
                 // one mission, two things to look for (issue #112): land the load at home, then roam the
                 // water, turning for home when the hold fills. Only the weighting differs.
-                boolean mining = org.hastingtx.empire.engine.model.Ship.MINE.equals(ship.mission());
+                boolean mining = Ship.MINE.equals(ship.mission());
                 var fc = mining ? sc.miningOrDefault() : sc.fishingOrDefault();
                 // too worn to be out here: break off and make for home. The mission is kept, so the
                 // ship goes back to work by itself — but not until it is fully refitted, so a worn
                 // fleet is a real cost and not a rounding error.
-                boolean refitting = ship.efficiency() <= sc.refitAtOrBelow()
-                        || (docked && ship.efficiency() < sc.refitUpTo());
-                if (refitting) {
-                    if (docked) {
-                        if (ship.load() > 0) ship = unload(ctx, ship, here, hi, note);
-                        sep(note).append("refitting; it will not go out again until it is at 100%");
-                        ship = ship.withDest(null);
-                    } else {
-                        sep(note).append("too worn to work, making for ").append(ship.home());
-                        ship = ship.withDest(ship.home());
-                    }
+                if (refitDue(sc, ship, docked)) {
+                    if (docked && ship.load() > 0) ship = unload(ctx, ship, here, hi, null, note);
+                    ship = goForRefit(ship, docked, note);
                 } else {
-                if (ship.at().equals(ship.home()) && ship.load() > 0) ship = unload(ctx, ship, here, hi, note);
-                boolean full = ship.load() >= cls.hold() * fc.returnWhenHoldFraction() - 1e-9;
-                if (full) { if (!ship.home().equals(ship.dest())) sep(note).append("hold ").append(Ledger.q(100 * ship.load() / cls.hold())).append("% full, heading home to ").append(ship.home()); ship = ship.withDest(ship.home()); }
-                else if (ship.dest() == null || ship.at().equals(ship.dest()) || ship.dest().equals(ship.home())) {
-                    Coord next = pickWaters(ctx, ship, fc, mining);
-                    if (next == null) { sep(note).append(mining ? "no nodule fields within " : "no fishing grounds within ").append(fc.radius()).append(" of ").append(ship.home()); ship = ship.withDest(null); }
-                    else ship = ship.withDest(next);
-                }
+                    if (ship.at().equals(ship.home()) && ship.load() > 0) ship = unload(ctx, ship, here, hi, null, note);
+                    boolean full = ship.load() >= cls.hold() * fc.returnWhenHoldFraction() - 1e-9;
+                    if (full) { if (!ship.home().equals(ship.dest())) note.next().append("hold ").append(Ledger.q(100 * ship.load() / cls.hold())).append("% full, heading home to ").append(ship.home()); ship = ship.withDest(ship.home()); }
+                    else if (ship.dest() == null || ship.at().equals(ship.dest()) || ship.dest().equals(ship.home())) {
+                        Coord next = pickWaters(ctx, ship, fc, mining);
+                        if (next == null) { note.next().append(mining ? "no nodule fields within " : "no fishing grounds within ").append(fc.radius()).append(" of ").append(ship.home()); ship = ship.withDest(null); }
+                        else ship = ship.withDest(next);
+                    }
                 }
             } else if (docked && sc.autoUnloadInHarbor() && cls.worksTheSea() && ship.load() > 0) {
-                ship = unload(ctx, ship, here, hi, note);   // home from the water, the load goes ashore
+                ship = unload(ctx, ship, here, hi, null, note);   // home from the water, the load goes ashore
             }
             // refuel (issue #65): a harbour pumps from its own stock, a tanker from its hold at sea
             if (sc.fuel() && docked) ship = refuel(ctx, ship, cls, hi, note);
             else if (sc.fuel()) ship = refuelAtSea(ctx, ship, cls, out, note);
+            // a tanker never runs dry with petrol in its own hold (issue #67)
+            if (sc.fuel()) ship = refuelFromOwnHold(ctx, ship, cls, note);
             // sign on a crew (issue #66): only a harbour can, and only from the people who are there
             if (sc.crews() && docked) ship = muster(ctx, ship, cls, hi, note);
             // sail
             if (ship.dest() != null && !ship.dest().equals(ship.at())) {
                 List<Coord> path = SeaRoutes.path(ctx.snap, ctx.cfg, ship.owner(), ship.at(), ship.dest());
-                if (path == null) sep(note).append("no sea route to ").append(ship.dest());
+                if (path == null) note.next().append("no sea route to ").append(ship.dest());
                 else {
                     int range = (int) Math.floor(ship.mobility());
                     int hops = Math.min(range, path.size() - 1);
                     // short-handed is not going anywhere (issue #66)
                     if (sc.crews() && ship.crew() < cls.crewOr0()) {
-                        sep(note).append("short-handed: ").append(Ledger.q(ship.crew())).append(" of ").append(Ledger.q(cls.crewOr0()))
-                                 .append(' ').append(ctx.com.id(crewCommodity(ctx, cls))).append(" aboard");
+                        note.next().append("short-handed: ").append(Ledger.q(ship.crew())).append(" of ").append(Ledger.q(cls.crewOr0()))
+                                   .append(' ').append(ctx.com.id(crewCommodity(ctx, cls))).append(" aboard");
                         hops = 0;
                     }
                     // a dry tank holds the ship where it is (issue #65)
@@ -154,8 +151,8 @@ public final class ShipStep implements Step {
                     int fuelled = perHex > 0 ? (int) Math.floor(ship.fuel() / perHex) : hops;
                     if (perHex > 0 && fuelled < hops) hops = Math.max(0, fuelled);
                     if (hops <= 0 && sc.crews() && ship.crew() < cls.crewOr0()) { /* already said so */ }
-                    else if (hops <= 0 && perHex > 0 && ship.fuel() < perHex) sep(note).append("out of fuel, holding at ").append(ship.at());
-                    else if (hops <= 0) sep(note).append("too unfit to sail (").append(Ledger.q(ship.efficiency())).append("%)");
+                    else if (hops <= 0 && perHex > 0 && ship.fuel() < perHex) note.next().append("out of fuel, holding at ").append(ship.at());
+                    else if (hops <= 0) note.next().append("too unfit to sail (").append(Ledger.q(ship.efficiency())).append("%)");
                     else {
                         Coord to = path.get(hops);
                         ship = ship.withAt(to).withMobility(ship.mobility() - hops);
@@ -164,32 +161,286 @@ public final class ShipStep implements Step {
                             ship = ship.withFuel(ship.fuel() - burned);
                             ctx.led().destroyed(ctx.com.index(sc.fuelId()), burned);   // burned fuel leaves the world
                         }
-                        sep(note).append("sailed ").append(hops).append(hops == 1 ? " hex" : " hexes").append(" to ").append(to);
-                        if (perHex > 0 && ship.fuel() < perHex) note.append(" (tank dry)");
-                        if (to.equals(ship.dest())) { note.append(", arrived"); if (ship.lane() == null) ship = ship.withDest(null); }
+                        note.next().append("sailed ").append(hops).append(hops == 1 ? " hex" : " hexes").append(" to ").append(to);
+                        if (perHex > 0 && ship.fuel() < perHex) note.last().append(" (tank dry)");
+                        if (to.equals(ship.dest())) {
+                            note.last().append(", arrived");
+                            // the harbour's business is done the update she gets there, not the one after
+                            // (issue #67): a lane unloads on arrival and a supply ship takes the next job
+                            if (ship.lane() != null) ship = runLane(ctx, ship, cls, si, out, note);
+                            else {
+                                ship = ship.withDest(null);
+                                if (ship.supplying() && ship.home() != null && !refitting) ship = runSupply(ctx, ship, cls, si, out, harbours, note);
+                            }
+                        }
                     }
                 }
             } else if (ship.dest() != null) { if (ship.lane() == null) ship = ship.withDest(null); }
             // upkeep
             if (cls.upkeepPerUpdate() != null) for (var e : cls.upkeepPerUpdate().entrySet()) if (e.getKey().equals("cash")) ctx.led().cash[ship.owner()] -= e.getValue();
-            out.add(ship.withNote(note.isEmpty() ? (docked ? "in harbour" : "holding") : note.toString()));
+            List<String> lines = note.isEmpty() ? List.of(docked ? "in harbour" : "holding") : note.lines();
+            ctx.led().shipNotes.put(ship.id(), lines);
+            out.add(ship.withNote(String.join("; ", lines)));
         }
         ctx.ships.clear(); ctx.ships.addAll(out);
     }
+
+    /**
+     * What a ship did this update, a line at a time (issue #67). The lines are its logbook; joined, they
+     * are the one-line note the fleet listing has always shown, character for character.
+     */
+    static final class Log {
+        private final List<StringBuilder> lines = new ArrayList<>();
+        /** Start a new line. */
+        StringBuilder next() { StringBuilder b = new StringBuilder(); lines.add(b); return b; }
+        /** Add to the line just written — "sailed 3 hexes to 4,5" + ", arrived". */
+        StringBuilder last() { return lines.isEmpty() ? next() : lines.get(lines.size() - 1); }
+        boolean isEmpty() { return lines.isEmpty(); }
+        List<String> lines() { return lines.stream().map(StringBuilder::toString).toList(); }
+    }
+
+    // ---------------------------------------------------------------------------------- refits
+
+    /** Worn to the refit line, or in dock and not yet back to full: either way, no work (Richard 2026-09-11). */
+    private static boolean refitDue(UnitsCfg.ShipsCfg sc, Ship ship, boolean docked) {
+        return ship.efficiency() <= sc.refitAtOrBelow() || (docked && ship.efficiency() < sc.refitUpTo());
+    }
+
+    private static Ship goForRefit(Ship ship, boolean docked, Log note) {
+        if (docked) {
+            note.next().append("refitting; it will not go out again until it is at 100%");
+            return ship.withDest(null);
+        }
+        note.next().append("too worn to work, making for ").append(ship.home());
+        return ship.withDest(ship.home());
+    }
+
+    // ---------------------------------------------------------------------------------- lanes
+
+    /**
+     * Do the lane's business if the ship is at the end it is bound for, and point it at the next end.
+     * Called before sailing and again on arrival, so a ship that reaches the far harbour unloads there
+     * that same update (issue #67) instead of sitting at the quay for one.
+     *
+     * <p>A lane with no cargo named keeps the far end's thresholds topped up, as a rail lane does
+     * (issue #70): it loads only what that harbour is short of, less what is already on its way there.
+     * A ship with nothing to carry waits at the loading end rather than sailing an empty hull there and
+     * back on petrol.
+     */
+    private static Ship runLane(Ctx ctx, Ship ship, UnitsCfg.ShipClassCfg cls, int si, List<Ship> out, Log note) {
+        Ship.Lane lane = ship.lane();
+        Coord end = lane.target();
+        if (ship.at().equals(end)) {
+            Sector harbor = ctx.sector(ctx.idx(end));
+            int hi = ctx.idx(end);
+            if (!ownHarbor(ctx, ship.owner(), harbor)) {
+                note.next().append(end).append(" is no longer one of your harbours; the lane waits");
+                return ship.withDest(null);
+            }
+            if (!lane.outbound()) {
+                double[] limit = null;
+                if (lane.cargo().isEmpty()) {
+                    limit = new double[ctx.com.size()];
+                    for (int c = 0; c < ctx.com.size(); c++)
+                        if (carries(ctx, cls, c)) limit[c] = Math.max(0, shortfall(ctx, lane.to(), ship.owner(), c) - inbound(ctx, ship, lane.to(), c, si, out, true));
+                }
+                ship = load(ctx, ship, cls, harbor, hi, lane.cargo(), limit, note);
+                if (ship.load() < 1) {
+                    if (lane.cargo().isEmpty()) note.last().append(" — ").append(lane.to()).append(" is short of nothing it can carry; waiting");
+                    return ship.withDest(null);
+                }
+                ship = ship.withLane(lane.turned(true));
+            } else {
+                ship = unload(ctx, ship, harbor, hi, null, note);
+                ship = ship.withLane(lane.turned(false));
+            }
+        }
+        return ship.withDest(ship.lane().target());
+    }
+
+    // ---------------------------------------------------------------------------------- supply
+
+    /**
+     * The supply round (issue #67). Nobody orders a shipment: a harbour's thresholds say what it wants,
+     * and a ship on supply goes and gets it from whichever of your harbours has it to spare.
+     *
+     * <p>In a harbour she first lands what that harbour is short of — only what it is short of, so the
+     * rest can go on to the next one — then takes on what other harbours want and this one can spare.
+     * Then she picks where to go: with cargo, the harbour that wants it most; empty, the harbour that
+     * can fill the most pressing want. Nothing wanted anywhere keeps her where she is in harbour, or
+     * sends her home from sea.
+     *
+     * <p>Wants are counted net of cargo already bound there in any of your ships, so two supply ships
+     * do not both answer the same shortage. It is all recomputed every update from the thresholds, so
+     * a player who changes one changes where the fleet goes, with no orders to cancel.
+     */
+    private static Ship runSupply(Ctx ctx, Ship ship, UnitsCfg.ShipClassCfg cls, int si, List<Ship> out, Map<Integer, List<Sector>> harbours, Log note) {
+        int owner = ship.owner();
+        List<Sector> mine = harbours.computeIfAbsent(owner, o -> ownHarbors(ctx, o));
+        Sector here = ctx.sector(ctx.idx(ship.at()));
+        int hi = ctx.idx(ship.at());
+        boolean docked = ownHarbor(ctx, owner, here);
+        int n = ctx.com.size();
+
+        if (docked) {
+            if (ship.load() >= 1) {
+                double[] limit = new double[n];
+                boolean any = false;
+                for (int c = 0; c < n; c++) if (ship.stock().get(c) >= 1) { limit[c] = shortfall(ctx, here.at(), owner, c); any |= limit[c] >= 1; }
+                if (any) ship = unload(ctx, ship, here, hi, limit, note);
+            }
+            if (cls.hold() - ship.load() >= 1) {
+                double[] limit = new double[n];
+                boolean any = false;
+                for (int c = 0; c < n; c++) {
+                    if (!carries(ctx, cls, c) || spare(ctx, here.at(), owner, c) < 1) continue;
+                    for (Sector d : mine) if (!d.at().equals(here.at())) limit[c] += Math.max(0, shortfall(ctx, d.at(), owner, c) - inbound(ctx, ship, d.at(), c, si, out, true));
+                    any |= limit[c] >= 1;
+                }
+                if (any) ship = load(ctx, ship, cls, here, hi, List.of(), limit, note);
+            }
+        }
+
+        List<Job> jobs = new ArrayList<>();
+        if (ship.load() >= 1) {
+            // she has cargo: who wants it
+            for (Sector d : mine) {
+                if (docked && d.at().equals(here.at())) continue;
+                for (int c = 0; c < n; c++) {
+                    if (ship.stock().get(c) < 1) continue;
+                    double want = shortfall(ctx, d.at(), owner, c) - inbound(ctx, ship, d.at(), c, si, out, false);
+                    if (want >= 1) jobs.add(new Job(ship.at(), d.at(), c, want, thresholds(ctx, d.at(), owner, c), Hex.distance(ctx.snap, ship.at(), d.at())));
+                }
+            }
+        } else {
+            // empty: a want somewhere, and a harbour that can fill it
+            for (Sector d : mine) for (int c = 0; c < n; c++) {
+                if (!carries(ctx, cls, c)) continue;
+                double want = shortfall(ctx, d.at(), owner, c) - inbound(ctx, ship, d.at(), c, si, out, true);
+                if (want < 1) continue;
+                for (Sector s : mine) {
+                    if (s.at().equals(d.at()) || (docked && s.at().equals(here.at())) || spare(ctx, s.at(), owner, c) < 1) continue;
+                    jobs.add(new Job(s.at(), d.at(), c, want, thresholds(ctx, d.at(), owner, c),
+                            Hex.distance(ctx.snap, ship.at(), s.at()) + Hex.distance(ctx.snap, s.at(), d.at())));
+                }
+            }
+        }
+        jobs.sort(ShipStep::compareJobs);
+        for (Job j : jobs) {
+            if (SeaRoutes.path(ctx.snap, ctx.cfg, owner, ship.at(), j.from()) == null) continue;
+            if (!j.from().equals(ship.at()) && SeaRoutes.path(ctx.snap, ctx.cfg, owner, j.from(), j.to()) == null) continue;
+            Coord go = ship.load() >= 1 ? j.to() : j.from();
+            if (!go.equals(ship.dest())) {
+                if (ship.load() >= 1) note.next().append("bound for ").append(j.to()).append(", short of ").append(Ledger.q(j.want())).append(' ').append(ctx.com.id(j.commodity()));
+                else note.next().append("bound for ").append(j.from()).append(" to fetch ").append(ctx.com.id(j.commodity())).append(" for ").append(j.to());
+            }
+            return ship.withDest(go);
+        }
+        if (docked) {
+            if (ship.dest() != null || note.isEmpty()) note.next().append(ship.load() >= 1 ? "no harbour of yours is short of what she carries; waiting" : "no harbour of yours is short of anything she can carry; waiting");
+            return ship.withDest(null);
+        }
+        if (!ship.home().equals(ship.dest())) note.next().append("nothing to carry, making for ").append(ship.home());
+        return ship.withDest(ship.home());
+    }
+
+    /**
+     * A shortage a supply ship could answer: {@code want} of {@code commodity} at {@code to}, fetched
+     * from {@code from} (her own position when she already has it aboard). {@code threshold} is what
+     * {@code to} asked for, so {@code want / threshold} is how empty it is; {@code hexes} is the trip.
+     */
+    record Job(Coord from, Coord to, int commodity, double want, double threshold, int hexes) {}
+
+    /**
+     * Which shortage a supply ship answers first; the smaller sorts first. This is the one real policy in
+     * the supply mission, and every other part of it is bookkeeping.
+     *
+     * <p>Most nearly empty first — a harbour at 10% of its threshold before one at 80%, however large
+     * either number is, since an island down to its last tenth of food is the emergency. Then the shorter
+     * trip, so a fleet does not cross the map for what is nearby. Then place and commodity, so the answer
+     * never depends on the order the harbours were found in.
+     */
+    private static final Comparator<Job> JOB_ORDER = Comparator
+            .comparingDouble((Job j) -> j.threshold() > 0 ? -j.want() / j.threshold() : 0)
+            .thenComparingInt(Job::hexes)
+            .thenComparing(Job::to)
+            .thenComparing(Job::from)
+            .thenComparingInt(Job::commodity);
+
+    static int compareJobs(Job a, Job b) {
+        return JOB_ORDER.compare(a, b);
+    }
+
+    /** Your harbours, in canonical sector order. */
+    private static List<Sector> ownHarbors(Ctx ctx, int owner) {
+        List<Sector> out = new ArrayList<>();
+        for (Sector s : ctx.snap.sectors()) if (ownHarbor(ctx, owner, s)) out.add(s);
+        return out;
+    }
+
+    private static boolean ownHarbor(Ctx ctx, int owner, Sector s) { return s.owner() == owner && SeaRoutes.isHarbor(ctx.cfg, s); }
+
+    /** What a harbour and its dockside warehouses are short of their thresholds, now (issue #67). */
+    static double shortfall(Ctx ctx, Coord harbor, int owner, int c) {
+        double sum = 0;
+        for (int i : dockside(ctx, ctx.sector(ctx.idx(harbor)), owner)) {
+            Sector s = ctx.sector(i);
+            if (s.hasThreshold(c)) sum += Math.max(0, s.threshold(c) - (s.stock().get(c) + ctx.led().st(i, c)));
+        }
+        return Math.floor(sum);
+    }
+
+    /** What a harbour and its dockside warehouses asked for. */
+    private static double thresholds(Ctx ctx, Coord harbor, int owner, int c) {
+        double sum = 0;
+        for (int i : dockside(ctx, ctx.sector(ctx.idx(harbor)), owner)) { Sector s = ctx.sector(i); if (s.hasThreshold(c)) sum += s.threshold(c); }
+        return sum;
+    }
+
+    /** What a harbour and its dockside warehouses hold above their own thresholds — what a threshold keeps back. */
+    static double spare(Ctx ctx, Coord harbor, int owner, int c) {
+        double sum = 0;
+        for (int i : dockside(ctx, ctx.sector(ctx.idx(harbor)), owner)) {
+            Sector s = ctx.sector(i);
+            sum += Math.max(0, s.stock().get(c) + ctx.led().st(i, c) - (s.hasThreshold(c) ? s.threshold(c) : 0));
+        }
+        return Math.floor(sum);
+    }
+
+    /**
+     * Cargo of {@code c} already on its way to {@code harbor} in the owner's other ships — bound there,
+     * or on a lane whose next end it is. Ships this step has already moved are read from {@code done};
+     * the rest from the snapshot, so the count is the same whichever ship asks. {@code self} says
+     * whether this ship's own hold counts: it does when deciding what to load, not when deciding where
+     * to take what is already aboard.
+     */
+    private static double inbound(Ctx ctx, Ship ship, Coord harbor, int c, int si, List<Ship> done, boolean self) {
+        double sum = self && harbor.equals(ship.dest()) ? ship.stock().get(c) : 0;
+        for (int k = 0; k < ctx.ships.size(); k++) {
+            if (k == si) continue;
+            Ship o = k < done.size() ? done.get(k) : ctx.ships.get(k);
+            if (o.owner() != ship.owner()) continue;
+            Coord bound = o.lane() != null ? o.lane().target() : o.dest();
+            if (harbor.equals(bound)) sum += o.stock().get(c);
+        }
+        return sum;
+    }
+
+    // ---------------------------------------------------------------------------------- fuel and crews
 
     /**
      * Top the tank up from the harbour's own stock (issue #65). The fuel is not consumed here — it moves
      * from a sector into a tank, and a tank is counted in conservation exactly like a hold, because fuel
      * sitting in a ship is still fuel. It leaves the world when it is burned, a hex at a time.
      */
-    private static Ship refuel(Ctx ctx, Ship ship, UnitsCfg.ShipClassCfg cls, int hi, StringBuilder note) {
+    private static Ship refuel(Ctx ctx, Ship ship, UnitsCfg.ShipClassCfg cls, int hi, Log note) {
         double room = cls.tankOr0() - ship.fuel();
         if (room < 1) return ship;
         int pet = ctx.com.index(ctx.cfg.units().ships().fuelId());
         double have = ctx.sector(hi).stock().get(pet) + ctx.led().st(hi, pet);
         double took = ctx.led().toShip(hi, pet, Math.min(room, Math.max(0, have)));
-        if (took <= 0) { if (ship.fuel() < cls.fuelPerHexOr0()) sep(note).append("no ").append(ctx.com.id(pet)).append(" in the harbour to refuel"); return ship; }
-        sep(note).append("took on ").append(Ledger.q(took)).append(' ').append(ctx.com.id(pet));
+        if (took <= 0) { if (ship.fuel() < cls.fuelPerHexOr0()) note.next().append("no ").append(ctx.com.id(pet)).append(" in the harbour to refuel"); return ship; }
+        note.next().append("took on ").append(Ledger.q(took)).append(' ').append(ctx.com.id(pet));
         return ship.withFuel(ship.fuel() + took);
     }
 
@@ -202,7 +453,7 @@ public final class ShipStep implements Step {
      * that has not moved yet is not in {@code done}. That keeps it deterministic — who fuels whom cannot
      * depend on anything but the order the ships were built.
      */
-    private static Ship refuelAtSea(Ctx ctx, Ship ship, UnitsCfg.ShipClassCfg cls, List<Ship> done, StringBuilder note) {
+    private static Ship refuelAtSea(Ctx ctx, Ship ship, UnitsCfg.ShipClassCfg cls, List<Ship> done, Log note) {
         double room = cls.tankOr0() - ship.fuel();
         if (room < 1 || ship.fuel() >= cls.fuelPerHexOr0()) return ship;   // only a ship that needs it
         int pet = ctx.com.index(ctx.cfg.units().ships().fuelId());
@@ -213,10 +464,26 @@ public final class ShipStep implements Step {
             double give = Math.floor(Math.min(room, t.stock().get(pet)));
             if (give < 1) continue;
             done.set(k, t.withStock(t.stock().plus(pet, -give)));
-            sep(note).append("refuelled ").append(Ledger.q(give)).append(' ').append(ctx.com.id(pet)).append(" from ").append(label(t));
+            note.next().append("refuelled ").append(Ledger.q(give)).append(' ').append(ctx.com.id(pet)).append(" from ").append(label(t));
             return ship.withFuel(ship.fuel() + give);
         }
         return ship;
+    }
+
+    /**
+     * A tanker that cannot make another hex drinks from its own cargo (issue #67). It would be absurd for
+     * a hull carrying six thousand tons of petrol to sit dead in the water for want of a tankful. Only
+     * when it needs it, as at sea, so what it was carrying for someone else mostly arrives.
+     */
+    private static Ship refuelFromOwnHold(Ctx ctx, Ship ship, UnitsCfg.ShipClassCfg cls, Log note) {
+        if (!"tanker".equals(cls.role())) return ship;
+        double room = cls.tankOr0() - ship.fuel();
+        if (room < 1 || ship.fuel() >= cls.fuelPerHexOr0()) return ship;
+        int pet = ctx.com.index(ctx.cfg.units().ships().fuelId());
+        double take = Math.floor(Math.min(room, ship.stock().get(pet)));
+        if (take < 1) return ship;
+        note.next().append("filled her own tank with ").append(Ledger.q(take)).append(' ').append(ctx.com.id(pet)).append(" from the hold");
+        return ship.withStock(ship.stock().plus(pet, -take)).withFuel(ship.fuel() + take);
     }
 
     /** Civilians on a merchantman, military on a warship (issue #66). */
@@ -232,18 +499,18 @@ public final class ShipStep implements Step {
      * <p>They come out of the harbour's own population, so a fleet competes with a factory for the same
      * civilians. That is the cost the feature exists to impose.
      */
-    private static Ship muster(Ctx ctx, Ship ship, UnitsCfg.ShipClassCfg cls, int hi, StringBuilder note) {
+    private static Ship muster(Ctx ctx, Ship ship, UnitsCfg.ShipClassCfg cls, int hi, Log note) {
         double want = cls.crewOr0() - ship.crew();
         if (want < 1) return ship;
         int who = crewCommodity(ctx, cls);
         double have = ctx.sector(hi).stock().get(who) + ctx.led().st(hi, who);
         double got = ctx.led().toShip(hi, who, Math.min(want, Math.max(0, have)));
-        if (got <= 0) { sep(note).append("no ").append(ctx.com.id(who)).append(" in the harbour to crew her"); return ship; }
-        sep(note).append("signed on ").append(Ledger.q(got)).append(' ').append(ctx.com.id(who));
+        if (got <= 0) { note.next().append("no ").append(ctx.com.id(who)).append(" in the harbour to crew her"); return ship; }
+        note.next().append("signed on ").append(Ledger.q(got)).append(' ').append(ctx.com.id(who));
         return ship.withCrew(ship.crew() + got);
     }
 
-    private static StringBuilder sep(StringBuilder sb) { if (!sb.isEmpty()) sb.append("; "); return sb; }
+    // ---------------------------------------------------------------------------------- the water
 
     /**
      * The next cast: a sea hex within {@code wander_hops} of the boat (or, from home, anywhere in the
@@ -257,8 +524,8 @@ public final class ShipStep implements Step {
         List<Coord> cands = new ArrayList<>(); List<Double> weights = new ArrayList<>(); double total = 0;
         for (Sector s : ctx.snap.sectors()) {
             if (s.terrain() != Terrain.OCEAN || s.at().equals(ship.at())) continue;
-            if (org.hastingtx.empire.engine.geo.Hex.distance(ctx.snap, s.at(), ship.home()) > fc.radius()) continue;
-            if (org.hastingtx.empire.engine.geo.Hex.distance(ctx.snap, s.at(), ship.at()) > hops) continue;
+            if (Hex.distance(ctx.snap, s.at(), ship.home()) > fc.radius()) continue;
+            if (Hex.distance(ctx.snap, s.at(), ship.at()) > hops) continue;
             if (SeaRoutes.path(ctx.snap, ctx.cfg, ship.owner(), ship.at(), s.at()) == null) continue;
             // richer water more often; a mission looks for what it is there for
             double wgt = (mining ? s.resource("minerals") : s.fertility()) + 1.0;
@@ -271,6 +538,8 @@ public final class ShipStep implements Step {
     }
     static String label(Ship s) { return "ship #" + s.id() + (s.name() == null || s.name().isBlank() ? "" : " " + s.name()); }
 
+    // ---------------------------------------------------------------------------------- the quay
+
     /**
      * The sectors a docked ship may work, in a fixed order: its harbour first, then any {@code dockside}
      * sector of the same country in an adjacent hex — the warehouse next door (issue #78). Neighbour
@@ -280,7 +549,7 @@ public final class ShipStep implements Step {
     static List<Integer> dockside(Ctx ctx, Sector harbor, int owner) {
         List<Integer> out = new ArrayList<>();
         out.add(ctx.idx(harbor.at()));
-        for (Coord nb : org.hastingtx.empire.engine.geo.Hex.neighbours(ctx.snap, harbor.at())) {
+        for (Coord nb : Hex.neighbours(ctx.snap, harbor.at())) {
             int i = ctx.idx(nb);
             Sector s = ctx.sector(i);
             if (s.owner() == owner && ctx.type(s).hasFlag("dockside")) out.add(i);
@@ -299,61 +568,73 @@ public final class ShipStep implements Step {
         return false;
     }
 
-    /** Load surplus (above each sector's thresholds) from the harbour, then any dockside warehouse, up to the hold. */
-    private static Ship load(Ctx ctx, Ship ship, UnitsCfg.ShipClassCfg cls, Sector harbor, int hi, List<Integer> wanted, StringBuilder note) {
+    /**
+     * Load surplus (above each sector's thresholds) from the harbour, then any dockside warehouse, up to
+     * the hold. {@code limit}, when given, caps each commodity — what the far end actually wants (issue #67).
+     */
+    private static Ship load(Ctx ctx, Ship ship, UnitsCfg.ShipClassCfg cls, Sector harbor, int hi, List<Integer> wanted, double[] limit, Log note) {
         double room = cls.hold() - ship.load();
+        double[] taken = new double[ctx.com.size()];
         StringBuilder took = new StringBuilder();
-        for (int si : dockside(ctx, harbor, ship.owner())) {
+        for (int sx : dockside(ctx, harbor, ship.owner())) {
             if (room <= 1e-9) break;
-            Sector src = ctx.sector(si);
+            Sector src = ctx.sector(sx);
             StringBuilder here = new StringBuilder();
             for (int c = 0; c < ctx.com.size() && room > 1e-9; c++) {
                 if (!wanted.isEmpty() && !wanted.contains(c)) continue;
                 if (!carries(ctx, cls, c)) continue;
                 double keep = src.hasThreshold(c) ? src.threshold(c) : 0;
-                double avail = src.stock().get(c) + ctx.led().st(si, c) - keep;
+                double avail = src.stock().get(c) + ctx.led().st(sx, c) - keep;
                 double q = Math.min(room, avail);
+                if (limit != null) q = Math.min(q, limit[c] - taken[c]);
                 if (q <= 1e-9) continue;
-                q = ctx.led().toShip(si, c, q);              // whole units both sides, or the two disagree (issue #77)
+                q = ctx.led().toShip(sx, c, q);              // whole units both sides, or the two disagree (issue #77)
                 if (q <= 0) continue;
                 room -= q;
+                taken[c] += q;
                 ship = ship.withStock(ship.stock().plus(c, q));
                 here.append(here.isEmpty() ? "" : ", ").append(Ledger.q(q)).append(' ').append(ctx.com.id(c));
             }
             if (here.isEmpty()) continue;
-            took.append(took.isEmpty() ? "" : "; ").append(here).append(si == hi ? "" : " from the warehouse at " + src.at());
-            ctx.led().note(si, label(ship) + " loaded " + here);
+            took.append(took.isEmpty() ? "" : "; ").append(here).append(sx == hi ? "" : " from the warehouse at " + src.at());
+            ctx.led().note(sx, label(ship) + " loaded " + here);
         }
-        if (!took.isEmpty()) sep(note).append("loaded ").append(took).append(" at ").append(harbor.at());
-        else sep(note).append("nothing to load at ").append(harbor.at());
+        if (!took.isEmpty()) note.next().append("loaded ").append(took).append(" at ").append(harbor.at());
+        else note.next().append("nothing to load at ").append(harbor.at());
         return ship;
     }
 
-    /** Unload into the harbour, then into any dockside warehouse that still has room (issue #78). */
-    private static Ship unload(Ctx ctx, Ship ship, Sector harbor, int hi, StringBuilder note) {
+    /**
+     * Unload into the harbour, then into any dockside warehouse that still has room (issue #78).
+     * {@code limit}, when given, caps each commodity — what this harbour is short of (issue #67).
+     */
+    private static Ship unload(Ctx ctx, Ship ship, Sector harbor, int hi, double[] limit, Log note) {
         StringBuilder put = new StringBuilder();
         Stocks st = ship.stock();
-        for (int si : dockside(ctx, harbor, ship.owner())) {
-            Sector dst = ctx.sector(si);
+        double[] given = new double[ctx.com.size()];
+        for (int sx : dockside(ctx, harbor, ship.owner())) {
+            Sector dst = ctx.sector(sx);
             StringBuilder here = new StringBuilder();
             for (int c = 0; c < ctx.com.size(); c++) {
                 double q = st.get(c);
+                if (limit != null) q = Math.min(q, limit[c] - given[c]);
                 if (q <= 1e-9) continue;
                 double room = ctx.com.isPerson(c)
-                        ? Math.max(0, ctx.maxPopulation(dst) - (dst.stock().get(ctx.com.civ) + ctx.led().st(si, ctx.com.civ) + dst.stock().get(ctx.com.uw) + ctx.led().st(si, ctx.com.uw)))
-                        : Math.max(0, ctx.capacity(dst, c) - (dst.stock().get(c) + ctx.led().st(si, c)));
+                        ? Math.max(0, ctx.maxPopulation(dst) - (dst.stock().get(ctx.com.civ) + ctx.led().st(sx, ctx.com.civ) + dst.stock().get(ctx.com.uw) + ctx.led().st(sx, ctx.com.uw)))
+                        : Math.max(0, ctx.capacity(dst, c) - (dst.stock().get(c) + ctx.led().st(sx, c)));
                 double u = Math.min(q, room);
                 if (u <= 1e-9) continue;
-                u = ctx.led().fromShip(si, c, u);
+                u = ctx.led().fromShip(sx, c, u);
                 if (u <= 0) continue;
                 st = st.plus(c, -u);
+                given[c] += u;
                 here.append(here.isEmpty() ? "" : ", ").append(Ledger.q(u)).append(' ').append(ctx.com.id(c));
             }
             if (here.isEmpty()) continue;
-            put.append(put.isEmpty() ? "" : "; ").append(here).append(si == hi ? "" : " into the warehouse at " + dst.at());
-            ctx.led().note(si, label(ship) + " unloaded " + here);
+            put.append(put.isEmpty() ? "" : "; ").append(here).append(sx == hi ? "" : " into the warehouse at " + dst.at());
+            ctx.led().note(sx, label(ship) + " unloaded " + here);
         }
-        if (!put.isEmpty()) sep(note).append("unloaded ").append(put).append(" at ").append(harbor.at());
+        if (!put.isEmpty()) note.next().append("unloaded ").append(put).append(" at ").append(harbor.at());
         return ship.withStock(st);
     }
 }

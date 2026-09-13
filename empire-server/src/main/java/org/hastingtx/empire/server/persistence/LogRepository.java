@@ -15,9 +15,23 @@ public class LogRepository {
     private final Json json;
     public LogRepository(JdbcTemplate jdbc, Json json) { this.jdbc = jdbc; this.json = json; }
 
-    public void update(long gameId, long updateNumber, long seed, String hash, List<Event> events, List<Flow> flows, long millis, Map<String, List<String>> notes) {
-        jdbc.update("INSERT INTO update_log (game_id, update_number, seed, state_hash, events, flows, millis, notes) VALUES (?,?,?,?,?::jsonb,?::jsonb,?,?::jsonb)",
-                gameId, updateNumber, seed, hash, json.write(events), json.write(flows), millis, json.write(notes));
+    public void update(long gameId, long updateNumber, long seed, String hash, List<Event> events, List<Flow> flows, long millis, Map<String, List<String>> notes, Map<Long, List<String>> shipNotes) {
+        jdbc.update("INSERT INTO update_log (game_id, update_number, seed, state_hash, events, flows, millis, notes, ship_notes) VALUES (?,?,?,?,?::jsonb,?::jsonb,?,?::jsonb,?::jsonb)",
+                gameId, updateNumber, seed, hash, json.write(events), json.write(flows), millis, json.write(notes), json.write(shipNotes));
+    }
+
+    /** One update of a ship's logbook. */
+    public record ShipLogEntry(long updateNumber, List<String> lines) {}
+
+    /**
+     * A ship's logbook, newest first, for the last {@code updates} updates she has an entry in (issue #67).
+     * A ship writes a line every update she exists, so this reads a handful of the newest rows.
+     */
+    @SuppressWarnings("unchecked")
+    public List<ShipLogEntry> shipHistory(long gameId, long shipId, int updates) {
+        String key = Long.toString(shipId);
+        return jdbc.query("SELECT update_number, (ship_notes -> ?)::text FROM update_log WHERE game_id = ? AND ship_notes -> ? IS NOT NULL ORDER BY update_number DESC LIMIT ?",
+                (rs, i) -> new ShipLogEntry(rs.getLong(1), json.read(rs.getString(2), List.class)), key, gameId, key, updates);
     }
 
     public void command(long gameId, int countryId, long updateNumber, String source, String verb, Object payload, boolean accepted, String error, double btu) {

@@ -609,7 +609,7 @@ public class GameService {
             postMilestones(g, g.world, r.next());
             // only pay for the hash if this game asked for it (issue #82); it is lazy, so not asking costs nothing
             String stateHash = g.cfg.options().stateHash() ? r.stateHash() : null;
-            logs.update(gameId, n, seed, stateHash, r.events(), r.flows(), ms, r.notes());
+            logs.update(gameId, n, seed, stateHash, r.events(), r.flows(), ms, r.notes(), r.shipNotes());
             g.world = r.next();
             log.info("game {} update {} in {} ms{}", gameId, n, ms, stateHash == null ? "" : ", hash " + stateHash.substring(0, 12));
             return r;
@@ -1087,6 +1087,7 @@ public class GameService {
             case Command.Scrap s -> null;
             case Command.Fish f -> null;
             case Command.Mine m -> null;
+            case Command.Supply sp -> null;
             case Command.Telegram t -> null;
             case Command.Announce a -> null;
             case Command.DeclareWar d -> null;
@@ -1098,4 +1099,20 @@ public class GameService {
 
     public Country country(long gameId, int id) { return get(gameId).world.country(id); }
     public LogRepository.UpdateEntry lastUpdate(long gameId) { return logs.lastUpdate(gameId); }
+
+    /**
+     * One of your ships' logbooks, newest update first, coordinates relative to your capital (issue #67).
+     * Only a ship that is yours now: the book goes with the hull.
+     */
+    public List<LogRepository.ShipLogEntry> shipHistory(long gameId, Account a, long shipId, int updates) {
+        Game g = get(gameId);
+        int country = myCountry(gameId, a);
+        var ship = g.world.ships().stream().filter(s -> s.id() == shipId && s.owner() == country).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("no ship #" + shipId + " of yours"));
+        Coord cap = g.world.country(country).capital();
+        int n = Math.max(1, Math.min(updates, 50));
+        return logs.shipHistory(gameId, ship.id(), n).stream()
+                .map(e -> new LogRepository.ShipLogEntry(e.updateNumber(), e.lines().stream().map(l -> relativise(g.world, cap, l)).toList()))
+                .toList();
+    }
 }

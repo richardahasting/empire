@@ -14,8 +14,8 @@ class FleetListingTest {
     void missionsFollowWhatTheEngineWouldAccept() {
         assertThat(Console.missionsOf(CFG, "fishing_boat")).isEqualTo("fish");
         assertThat(Console.missionsOf(CFG, "mining_ship")).isEqualTo("mine");
-        assertThat(Console.missionsOf(CFG, "cargo_ship")).isEqualTo("lane");
-        assertThat(Console.missionsOf(CFG, "tanker")).isEqualTo("lane");
+        assertThat(Console.missionsOf(CFG, "cargo_ship")).isEqualTo("lane, supply");
+        assertThat(Console.missionsOf(CFG, "tanker")).isEqualTo("lane, supply");
         assertThat(Console.missionsOf(CFG, "destroyer")).isEqualTo("sail only");
         assertThat(Console.missionsOf(CFG, "no_such_class")).isEqualTo("sail");
     }

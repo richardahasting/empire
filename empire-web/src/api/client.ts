@@ -66,7 +66,7 @@ export interface ShipView {
   note: string; docked: boolean;
   /** Tech it was laid at, and how many sea hexes it makes per update now. */
   tech: number; hexesPerUpdate: number;
-  /** "fish": roaming the grounds near homeRelative, landing the catch there. */
+  /** "fish" / "mine": roaming near homeRelative, landing the load there. "supply": filling your harbours' thresholds, refitting at homeRelative. */
   mission: string | null; homeRelative: Coord | null;
 }
 export interface CountryView {
@@ -124,7 +124,7 @@ export interface Commodity { id: string; name: string; weight: number; priority:
 export interface RoadRules { buildMaterialsPerPoint: Record<string, number>; workPerPoint: number; maxPointsPerUpdate: number; costMultiplierByTerrain: Record<string, number>; maxLevelByTerrain: Record<string, number>; decayPerUpdate: number; maintenanceCashPerPointPerUpdate: number }
 export interface Crossing { techRequired: number; materials: Record<string, number> }
 export interface RailRules { bridge?: Crossing | null; tunnel?: Crossing | null; techRequired: number; buildMaterialsPerPoint: Record<string, number>; maxPointsPerUpdate: number; minLevelToCarry: number; capacityPerUpdateAt100: number; cashPer100UnitsShipped: number; maxSectorsPerUpdate: { base: number; perTechPoint: number }; costMultiplierByTerrain: Record<string, number>; maxLevelByTerrain: Record<string, number>; decayPerUpdate: number; maintenanceCashPerPointPerUpdate: number }
-export interface ShipClass { id: string; name: string; glyph: string; role: string; techRequired: number; build: Record<string, number> | null; hold: number; speed: number; fishingRate?: number | null; happinessPerEtu?: number | null; carries?: string[] | null }
+export interface ShipClass { id: string; name: string; glyph: string; role: string; techRequired: number; build: Record<string, number> | null; hold: number; speed: number; fishingRate?: number | null; miningRate?: number | null; happinessPerEtu?: number | null; carries?: string[] | null }
 export interface ShipsRules { startEfficiency: number; dockPointsPerUpdate: number; harborMinEfficiency: number; classes: ShipClass[] }
 export interface Rules { sectorTypes: SectorType[]; commodities: Commodity[]; etusPerUpdate: number; btuCosts: Record<string, number>; road?: RoadRules; defaultCapacity?: number; rail?: RailRules; productionMinEfficiency?: number; massThresholdMultiplierByType?: Record<string, number>; ships?: ShipsRules | null; work?: WorkRules; curves?: Record<string, Curve>; maxPopCurve?: { type: string; base?: number | null; perResearchPoint?: number | null; cap?: number | null } | null }
 export interface Outcome { accepted: boolean; error?: string; btuSpent: number; view: CountryView; info?: string | null }
@@ -158,6 +158,12 @@ export function estimate(gameId: number, q: { verb: "move" | "explore" | "rail" 
   if (q.commodity) p.set("commodity", q.commodity);
   if (q.ship !== undefined) p.set("ship", String(q.ship));
   return api.get<Estimate>(`/games/${gameId}/estimate?${p}`);
+}
+
+/** One update of a ship's logbook (issue #67). */
+export interface ShipLogEntry { updateNumber: number; lines: string[] }
+export function shipHistory(gameId: number, ship: number, updates = 5): Promise<ShipLogEntry[]> {
+  return api.get<ShipLogEntry[]>(`/games/${gameId}/ships/${ship}/history?updates=${updates}`);
 }
 
 export interface FlowOut { kind: string; commodity: string; qtyPlanned: number; qtyMoved: number; path: Coord[]; hopsDelivered: number; completed: boolean; holdReason: string | null }

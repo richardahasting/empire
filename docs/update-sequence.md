@@ -252,17 +252,34 @@ a harbour's stock is the only thing two ships can contend for. For each ship:
    (`world.resources.sea_fertility`).
 3. **Cruise.** A luxury class at sea adds `happiness_per_etu × ETUs × efficiency`
    to the country's happiness production for step 9.
-4. **Lane.** At the lane's first harbour it loads the harbour's surplus above
-   its thresholds of the lane's cargo (or anything it may carry), up to the
-   hold, and turns outbound; at the second it unloads everything (capacity and
-   population room apply) and turns back. The lane's current end is its destination.
+4. **Lane.** At the end it is bound for it does that end's business and turns.
+   At the loading end it loads, up to the hold, the harbour's surplus above its
+   thresholds of the lane's cargo — or, with no cargo named, only what the far
+   harbour's thresholds are short of, less cargo already bound there in the
+   owner's other ships (issue #67). Nothing to load holds it at the quay. At the
+   unloading end it unloads everything (capacity and population room apply).
+   The lane's current end is its destination.
    A fishing boat with no lane lands its catch when docked (`auto_unload_in_harbor`).
-5. **Sail.** Toward its destination over sea hexes and its owner's harbours by
-   the shortest hop count, `floor(speed × efficiency)` hexes per update; no
-   route or no range holds it in place with a note. Arrival clears a plain
-   destination; a lane keeps going.
-Conservation counts holds with sector stocks. Harbours get sector-history
-lines for what docked ships did; each ship keeps its own last-update note.
+5. **Supply** (issue #67). A ship on `supply` in one of its owner's harbours lands
+   what that harbour is short of, then loads what the owner's other harbours are
+   short of and this one can spare. Then it picks a job: with cargo, the harbour
+   that wants it; empty, a harbour that can fill a want. Wants are net of cargo
+   bound there in the owner's other ships (read from ships already processed this
+   step, and the snapshot for the rest). Jobs are ordered by the fraction of the
+   threshold missing, then trip length, then coordinates and commodity. Nothing to
+   do holds it in harbour or sends it home from sea. A harbour's dockside
+   warehouses count with it for both wants and spare.
+6. **Fuel.** A docked ship refuels from the harbour; at sea, from an owner's
+   tanker already processed in the same hex; a tanker that cannot make a hex
+   fills its own tank from its hold.
+7. **Sail.** Toward its destination over sea hexes and its owner's harbours by
+   the shortest hop count, spending the ship's mobility; no route or no range
+   holds it in place with a note. **On arrival it does the harbour's business the
+   same update**: a lane unloads or loads and turns, a supply ship lands and
+   takes on cargo and picks its next job. Arrival clears a plain destination.
+Conservation counts holds and tanks with sector stocks. Harbours get sector-history
+lines for what docked ships did; each ship's lines for the update are its logbook
+(`UpdateResult.shipNotes`, stored per update), and joined they are its note.
 
 ### 8. Money
 Country-level:

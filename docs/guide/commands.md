@@ -31,11 +31,15 @@ telegram COUNTRY "..."       a private message to one country; they see who it i
 announce "..."               the same, to everybody in the game
 macro                        list your macros (recorded from the map); macro run N SECTOR runs one
 ships                        your fleet: where each ship is, its load, where it is going, what it did
+history SHIP [N]             a ship's logbook: what it did, a line at a time, for its last N updates (5)
 contacts                     other people's ships your radar and lookouts have seen, and how long ago
 build HARBOUR CLASS [name]   lay a hull in your harbour (fishing_boat, cargo_ship, tanker, luxury_craft, ...; tech gates apply)
 sail SHIP x,y | hold         sail to a sea hex or one of your harbours (speed × efficiency hexes per update)
 load/unload SHIP COMMODITY N in your harbour only
-lane SHIP x,y x2,y2 [COMMODITY ...]   shuttle: load surplus at x,y, unload at x2,y2, repeat; lane SHIP none clears
+lane SHIP x,y x2,y2 [COMMODITY ...]   shuttle between two harbours, repeat; lane SHIP none clears
+                             with no commodities it carries only what x2,y2's thresholds are short of
+supply SHIP [x,y] | off      supply mission: fill any of your harbours short of a threshold from one that can
+                             spare it, carrying only what the class carries; x,y is home, where it refits
 fish SHIP [x,y] | off        fishing mission: roam the grounds near the home harbour, fish, land the catch, repeat
 mine SHIP [x,y] | off        seabed mining: roam the nodule fields near home, mine, land the ore, repeat
 scrap SHIP                   in harbour; the hold goes ashore

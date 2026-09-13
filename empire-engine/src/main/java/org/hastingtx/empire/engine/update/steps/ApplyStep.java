@@ -75,7 +75,7 @@ public final class ApplyStep {
         }
         java.util.Map<String, List<String>> notes = new java.util.TreeMap<>();
         for (var e : led.notes.entrySet()) { Sector s = ctx.sector(e.getKey()); if (s.owned()) notes.put(s.at().x() + "," + s.at().y(), List.copyOf(e.getValue())); }
-        return new UpdateResult(out, List.copyOf(led.events), List.copyOf(led.flows), UpdateResult.lazyHash(out), notes);
+        return new UpdateResult(out, List.copyOf(led.events), List.copyOf(led.flows), UpdateResult.lazyHash(out), notes, java.util.Collections.unmodifiableMap(new java.util.TreeMap<>(led.shipNotes)));
     }
 
     /** Nothing in the ledger moved this sector: no stock, no level, no change to its parcels. */
