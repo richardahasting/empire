@@ -7,36 +7,51 @@ milestone; the issue carries the detail, this page carries the order.
 
 ## Order of work
 
-1. **Ships phase 3 — warships and submarines** (#68). Detection, combat,
-   missions, harbour defence. The core of the milestone; everything below feeds it.
-   Too big for one branch, so it lands in three, in this order (Richard 2026-09-09):
-   **detection** (#75) — radar and lookouts find enemy ships, contacts age and go
-   stale; then **combat** — engagement, simultaneous resolution, sinking, capture of
-   cargo, with battle damage carried on the hull's existing efficiency so a harbour
-   repairs what a battle broke; then **missions** — patrol, escort, blockade,
-   interdiction and harbour defence. A warship fights when its mission says to, not
-   on sight, so the fishing fleet never blunders into a war.
-2. **Fuel** (#65). Petrol per hex, tanks, refuelling in harbour and from tankers.
-   Gives refineries a purpose and makes tankers matter. Changes the whole economy,
-   so it lands early, before balance work.
-3. **Crews** (#66). People aboard, loaded in harbour; crewless hulls hold.
-4. **Map memory** (#64). Seen sectors stay on the chart, dimmed as they go stale —
-   the natural partner to ships lifting the fog (#62) and to detection.
-5. **Ships phase 2** (#67). Lanes as distribution links so islands are supplied
-   without orders; same-update load/unload; tankers for refinery supply; per-ship
-   history.
-6. **Rail follow-ups** (#70). Standing rail lanes, depots as distribution links,
-   train markers on the map.
-7. **Planes and land units** (#71). The rest of the units table.
-8. **Unrest** (#72). Loyalty and revolt from the happiness requirement, so
-   happiness has teeth.
-9. **Immediate navigation** (#69). A per-ship mobility pool if update-time
-   movement proves too slow at the keyboard. Decide after playing phase 3.
-10. **Agents and the terminal client** (#73). Teach them ships, lanes, deliver
-    orders, macros and bridges so tournaments exercise the sea and the rails.
+Status as of **2026-09-13**. Done items keep their place so the reasoning for
+the order stays readable.
+
+1. **Ships phase 3 — warships and submarines** (#68) — **done.** It landed in
+   the three slices Richard asked for on 2026-09-09. First **detection** (#75):
+   radar and lookouts find enemy ships, and contacts age and go stale. Then
+   **combat**: `fire` resolves now with return fire (Richard 2026-09-13); at the
+   update every hostile battery fires simultaneously; damage is carried on the
+   hull's efficiency, so a harbour repairs it; sinking; salvage by the victor;
+   forts and harbours defend the coast. Last **missions**: patrol, search,
+   escort, blockade and interdiction of trains, each coming home for supplies. A
+   warship fights when there is a war or a peacetime shot to answer, never on
+   sight, so the fishing fleet never blunders into a war. Relations (#137) came
+   first, because "at war" is what makes engagement automatic.
+2. **Fuel** (#65) — **done.** Petrol per hex, tanks, refuelling in harbour and
+   from tankers.
+3. **Crews** (#66) — **done.** People aboard, signed on in harbour; crewless
+   hulls hold.
+4. **Map memory** (#64) — **done.** Seen sectors stay on the chart, dimmed as
+   they go stale.
+5. **Ships phase 2** (#67) — **done.** Lanes that feed thresholds, the `supply`
+   mission, same-update arrival, tankers that fill their own tanks, a logbook
+   per ship.
+6. **Rail follow-ups** (#70) — **done.** Standing rail lanes, depots as
+   distribution links, train markers.
+7. **Planes and land units** (#71) — **next in this plan.** The rest of the
+   units table. Land combat, capture of sectors and air missions join the
+   simultaneous resolution that sea combat uses (step 10a).
+8. **Unrest** (#72) — open. Loyalty and revolt from the happiness requirement,
+   so happiness has teeth.
+9. **Immediate navigation** (#69) — **done.** A per-ship mobility pool, and haste
+   costs more.
+10. **Agents and the terminal client** (#73) — **done** for ships, lanes,
+    deliver orders, macros and bridges. They do not yet know `supply`, `fire` or
+    the warship missions.
+
+Outside the M5 list but on the same road: **trade between nations** (#141),
+which wants #67's lanes and harbours.
 
 ## Already done that M5 builds on
 
+- Ships phases 2 and 3 (#67, #68): supply and logbooks; gunnery, sinking, coastal
+  guns, blockades and warship missions. `engine.combat.Gunnery` is the one
+  place a salvo's arithmetic lives, shared by the `fire` command and `CombatStep`.
+- Relations (#137), news (#121), seabed mining (#112).
 - Ships phase 1 (#56): the class table, harbours as shipyards, sailing, fishing
   (with the roaming mission), lanes, luxury craft, tech-scaled speed, sight (#62).
 - Deliver orders (#45), macros (#47), mass commands (#38), sector history (#49).

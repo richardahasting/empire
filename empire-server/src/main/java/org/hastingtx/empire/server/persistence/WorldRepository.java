@@ -147,6 +147,36 @@ public class WorldRepository {
 
     private static Coord homeOf(java.sql.ResultSet rs) throws java.sql.SQLException { int hx = rs.getInt("home_x"); if (rs.wasNull()) return null; return new Coord(hx, rs.getInt("home_y")); }
 
+    /** A ship's peacetime marks (issue #68) as "country:until,…". */
+    static String firedOn(Ship s) {
+        StringBuilder sb = new StringBuilder();
+        for (var e : s.firedOn().entrySet()) sb.append(sb.isEmpty() ? "" : ",").append(e.getKey()).append(':').append(e.getValue());
+        return sb.toString();
+    }
+    static Map<Integer, Long> firedOn(String text) {
+        Map<Integer, Long> m = new java.util.TreeMap<>();
+        if (text != null && !text.isBlank()) for (String kv : text.split(",")) {
+            String[] p = kv.split(":");
+            m.put(Integer.parseInt(p[0].trim()), Long.parseLong(p[1].trim()));
+        }
+        return m;
+    }
+
+    /** A patrol route or a station (issue #68) as "x,y;x,y". */
+    static String route(List<Coord> r) {
+        StringBuilder sb = new StringBuilder();
+        for (Coord c : r) sb.append(sb.isEmpty() ? "" : ";").append(c.x()).append(',').append(c.y());
+        return sb.toString();
+    }
+    static List<Coord> route(String text) {
+        List<Coord> out = new ArrayList<>();
+        if (text != null && !text.isBlank()) for (String p : text.split(";")) {
+            String[] xy = p.split(",");
+            out.add(new Coord(Integer.parseInt(xy[0].trim()), Integer.parseInt(xy[1].trim())));
+        }
+        return out;
+    }
+
     /** Few ships, so the whole fleet is rewritten whenever any of it changed. */
     private void writeShips(long gameId, World w, Commodities com) {
         jdbc.update("DELETE FROM ship WHERE game_id = ?", gameId);
@@ -158,10 +188,10 @@ public class WorldRepository {
             rows.add(new Object[] {gameId, s.id(), s.owner(), s.cls(), s.name() == null ? "" : s.name(), s.at().x(), s.at().y(), s.efficiency(),
                     s.dest() == null ? null : s.dest().x(), s.dest() == null ? null : s.dest().y(),
                     l == null ? null : l.from().x(), l == null ? null : l.from().y(), l == null ? null : l.to().x(), l == null ? null : l.to().y(),
-                    l == null ? null : l.cargo().stream().map(com::id).collect(java.util.stream.Collectors.joining(",")), l != null && l.outbound(), s.built(), s.note() == null ? "" : s.note(), s.tech(), s.mission(), s.home() == null ? null : s.home().x(), s.home() == null ? null : s.home().y(), s.fuel(), s.crew(), s.mobility()});
+                    l == null ? null : l.cargo().stream().map(com::id).collect(java.util.stream.Collectors.joining(",")), l != null && l.outbound(), s.built(), s.note() == null ? "" : s.note(), s.tech(), s.mission(), s.home() == null ? null : s.home().x(), s.home() == null ? null : s.home().y(), s.fuel(), s.crew(), s.mobility(), firedOn(s), route(s.route()), s.ward()});
             for (int c = 0; c < com.size(); c++) if (s.stock().get(c) > 0) stock.add(new Object[] {gameId, s.id(), com.id(c), s.stock().get(c)});
         }
-        jdbc.batchUpdate("INSERT INTO ship (game_id, id, owner, class, name, x, y, efficiency, dest_x, dest_y, lane_from_x, lane_from_y, lane_to_x, lane_to_y, lane_cargo, lane_outbound, built, note, tech, mission, home_x, home_y, fuel, crew, mobility) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows);
+        jdbc.batchUpdate("INSERT INTO ship (game_id, id, owner, class, name, x, y, efficiency, dest_x, dest_y, lane_from_x, lane_from_y, lane_to_x, lane_to_y, lane_cargo, lane_outbound, built, note, tech, mission, home_x, home_y, fuel, crew, mobility, fired_on, route, ward) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows);
         if (!stock.isEmpty()) jdbc.batchUpdate("INSERT INTO ship_stock (game_id, ship_id, commodity, qty) VALUES (?,?,?,?)", stock);
     }
 
@@ -282,7 +312,7 @@ public class WorldRepository {
             }
             double[] st = shipStock.getOrDefault(id, new double[n]);
             return new Ship(id, rs.getInt("owner"), rs.getString("class"), rs.getString("name"), new Coord(rs.getInt("x"), rs.getInt("y")), rs.getDouble("efficiency"),
-                    Stocks.of(st), noDest ? null : new Coord(dx, dy), lane, rs.getLong("built"), rs.getString("note"), rs.getDouble("tech"), rs.getString("mission"), homeOf(rs), rs.getDouble("fuel"), rs.getDouble("crew"), rs.getDouble("mobility"));
+                    Stocks.of(st), noDest ? null : new Coord(dx, dy), lane, rs.getLong("built"), rs.getString("note"), rs.getDouble("tech"), rs.getString("mission"), homeOf(rs), rs.getDouble("fuel"), rs.getDouble("crew"), rs.getDouble("mobility"), firedOn(rs.getString("fired_on")), route(rs.getString("route")), rs.getLong("ward"));
         }, g.id());
         Long nextShip = jdbc.queryForObject("SELECT next_ship_id FROM game WHERE id = ?", Long.class, g.id());
         List<Contact> contacts = jdbc.query("SELECT * FROM contact WHERE game_id = ? ORDER BY owner, ship_id", (rs, i) ->

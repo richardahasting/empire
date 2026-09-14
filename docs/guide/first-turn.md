@@ -102,8 +102,13 @@ probably the most interesting thing about playing here.
 ## War and peace
 
 `declare war COUNTRY` puts you at war. **You declare it alone and you are both in
-it** — they are at war with you whether they like it or not, and from that moment
-their warships will defend themselves without being told.
+it** — they are at war with you whether they like it or not. From that moment
+both sides' warships, forts and harbours engage each other on sight at every
+update, without being told.
+
+At peace nothing fires by itself, but you may still `fire` on somebody. It does
+not declare war; it marks the ship that fired, and they may shoot her on sight
+for a few updates. See [Ships](ships.html#war-at-sea).
 
 `peace COUNTRY` offers to stop. **It takes both of you.** Offering does not end
 anything; the war continues until the other side offers too, and then it is over

@@ -224,6 +224,19 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
         ctx.fillText(rules.ships?.classes.find(c => c.id === sh.cls)?.glyph ?? "?", x, y + 0.5);
       }
     }
+    // contacts (issues #75, #68): someone else's ship where your sensors last saw her — a diamond at the hex's upper left, with her glyph when you know her class
+    if (view.contacts?.length && l.size >= 8) {
+      for (const ct of view.contacts) {
+        const d = toDisplay(ct.at); const { cx, cy } = hexCenter(d.x, d.y, l);
+        const r = Math.max(4, l.size * 0.3), x = cx - l.size * 0.4, y = cy - l.size * 0.36;
+        ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath();
+        ctx.fillStyle = p.background; ctx.fill(); ctx.strokeStyle = p.contact(ct.band); ctx.lineWidth = ct.age > 0 ? 1 : 2;
+        if (ct.age > 0) ctx.setLineDash([2, 2]);
+        ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = p.contact(ct.band); ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = `${Math.max(7, r * 1.1)}px ui-monospace, monospace`;
+        ctx.fillText(ct.cls ? rules.ships?.classes.find(c => c.id === ct.cls)?.glyph ?? "?" : "?", x, y + 0.5);
+      }
+    }
     if (flows && flows.length) drawFlows(ctx, flows, flowT ?? 1, p, l, toDisplay);
     if (highlightPath && highlightPath.length > 1) {
       ctx.strokeStyle = p.accent; ctx.lineWidth = Math.max(2, l.size * 0.18); ctx.lineCap = "round"; ctx.lineJoin = "round";

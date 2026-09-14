@@ -9,7 +9,7 @@ import org.hastingtx.empire.engine.model.Coord;
 public sealed interface Command permits
         Command.BreakSanctuary, Command.Designate, Command.Threshold, Command.Distribute,
         Command.Move, Command.Explore, Command.BuildRoad, Command.BuildRail, Command.RailShip, Command.Deliver,
-        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply,
+        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission,
         Command.RailLane, Command.Telegram, Command.Announce, Command.DeclareWar, Command.OfferPeace {
 
     String verb();
@@ -63,6 +63,16 @@ public sealed interface Command permits
 
     /** Issue #67: fill your harbours' thresholds from whichever harbour can spare it; {@code home} (null = the harbour it is in) is where she refits. */
     record Supply(long ship, Coord home, boolean off) implements Command { public String verb() { return "supply"; } }
+
+    /** Issue #68: fire on a ship you can see at {@code at} ({@code cls} picks one when several are there). Resolves now, with return fire. */
+    record Fire(long ship, Coord at, String cls) implements Command { public String verb() { return "fire"; } }
+
+    /**
+     * Issue #68: a military mission — {@code kind} is patrol (points = the route), search, escort
+     * ({@code ward} = the ship to stay with), blockade or interdict (points = the station). {@code off} clears.
+     * The verb is the kind, so each can carry its own BTU cost.
+     */
+    record Mission(long ship, String kind, java.util.List<Coord> points, long ward, boolean off) implements Command { public String verb() { return kind; } }
 
     /**
      * Declare war on a country (issue #137). Unilateral to do, mutual in effect: the other side is at

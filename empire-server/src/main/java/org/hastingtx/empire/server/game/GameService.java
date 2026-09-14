@@ -607,6 +607,7 @@ public class GameService {
             long ms = (System.nanoTime() - t0) / 1_000_000;
             worlds.saveDiff(gameId, g.world, r.next(), g.com);
             postMilestones(g, g.world, r.next());
+            for (var ev : r.events()) if ("ship_sunk".equals(ev.type())) post(g, "war", ev.country(), countryFirst(r.next(), ev.country(), ev.message()), null);
             // only pay for the hash if this game asked for it (issue #82); it is lazy, so not asking costs nothing
             String stateHash = g.cfg.options().stateHash() ? r.stateHash() : null;
             logs.update(gameId, n, seed, stateHash, r.events(), r.flows(), ms, r.notes(), r.shipNotes());
@@ -654,6 +655,26 @@ public class GameService {
             messages.post(g.id, g.world.updateNumber(), from, t.to(), t.body().strip());
         else if (cmd instanceof Command.Announce a)
             messages.post(g.id, g.world.updateNumber(), from, null, a.body().strip());
+    }
+
+    /**
+     * A ship that was afloat before a {@code fire} order and is not after it went down in the exchange
+     * (issue #68). Sinkings are news; who fired is part of the story.
+     */
+    private void postSinkings(Game g, World before, World after, int shooter) {
+        for (var s : before.ships()) {
+            if (after.ship(s.id()) != null) continue;
+            String cls = g.cfg.units().ships().shipClass(s.cls()).name();
+            String by = s.owner() == shooter ? "in a fight she started" : "by " + after.country(shooter).name();
+            post(g, "war", s.owner(), "{country}'s " + cls + " was sunk " + by, null);
+        }
+    }
+
+    /** An engine message that opens with the country's name, with the name swapped for the {country} placeholder. */
+    private static String countryFirst(World w, int country, String msg) {
+        if (country < 0 || country >= w.countries().size() || msg == null) return msg;
+        String name = w.country(country).name();
+        return msg.startsWith(name) ? "{country}" + msg.substring(name.length()) : msg;
     }
 
     /** A country by the name a player would type, case-insensitively. -1 if there is no such one. */
@@ -1016,7 +1037,7 @@ public class GameService {
             World before = g.world;
             CommandResult r = g.exec.execute(before, country, cmd);
             logs.command(gameId, country, before.updateNumber(), source, cmd.verb(), cmd, r.ok(), r.error(), r.btuSpent());
-            if (r.ok()) { worlds.saveDiff(gameId, before, r.world(), g.com); g.world = r.world(); postMilestones(g, before, r.world()); deliver(g, country, cmd); }
+            if (r.ok()) { worlds.saveDiff(gameId, before, r.world(), g.com); g.world = r.world(); postMilestones(g, before, r.world()); deliver(g, country, cmd); if (cmd instanceof Command.Fire) postSinkings(g, before, r.world(), country); }
             Coord cap = g.world.country(country).capital();
             return new Outcome(r.ok(), relativise(g.world, cap, r.error()), r.btuSpent(), CountryView.of(g.world, g.cfg, country), relativise(g.world, cap, r.info()));
         } finally { g.lock.unlock(); }
@@ -1088,6 +1109,8 @@ public class GameService {
             case Command.Fish f -> null;
             case Command.Mine m -> null;
             case Command.Supply sp -> null;
+            case Command.Fire fi -> null;
+            case Command.Mission mi -> null;
             case Command.Telegram t -> null;
             case Command.Announce a -> null;
             case Command.DeclareWar d -> null;

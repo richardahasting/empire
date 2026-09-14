@@ -42,6 +42,15 @@ supply SHIP [x,y] | off      supply mission: fill any of your harbours short of 
                              spare it, carrying only what the class carries; x,y is home, where it refits
 fish SHIP [x,y] | off        fishing mission: roam the grounds near the home harbour, fish, land the catch, repeat
 mine SHIP [x,y] | off        seabed mining: roam the nodule fields near home, mine, land the ore, repeat
+fire SHIP x,y [CLASS]        fire now on a ship you can see at x,y (a fresh contact, or in her sight); the
+                             target and everything of hers in reach answer at once. At peace it declares
+                             nothing but marks your ship: they may shoot her on sight for 3 updates
+patrol SHIP x,y x2,y2 ... | off   warship: walk the points in order, and round again
+search SHIP | off            warship: wander the water near home, where you have not looked lately
+escort SHIP OTHER | off      warship: stay with one of your other ships
+blockade SHIP x,y | off      warship: hold x,y; at war, a hostile ship next to her is stopped there
+interdict SHIP x,y | off     warship: hold x,y; at war, shell enemy trains within her guns' reach
+                             every mission comes home for shells, fuel, crew and repairs, then goes back out
 scrap SHIP                   in harbour; the hold goes ashore
 move COMMODITY x,y x2,y2 N   move now; the sending sector pays the route's mobility now
 expl x,y x2,y2 N             explore into an adjacent unowned sector with N civilians

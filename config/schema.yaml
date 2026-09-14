@@ -662,6 +662,12 @@ economy:
       unload: 1
       lane: 1
       scrap: 1
+      fire: 1
+      patrol: 1
+      search: 1
+      escort: 1
+      blockade: 1
+      interdict: 1
       scorched_earth_order: 3
       map: 0
       census: 0
@@ -855,6 +861,11 @@ units:
     # efficiency every update — nothing is free out there. A ship in one of its own harbours does not
     # wear; it is being looked after, and the fit-out below puts the points back.
     sea_wear_per_update: 3
+    # Limp home (Richard 2026-09-13: "Limp should always be automatic to the nearest harbor"): wear stops at
+    # the efficiency a hull needs to make one hex an update (a fishing boat, speed 3: 34%), and a hull at sea
+    # at or below that line makes for the nearest harbour by herself, at least a hex an update, battle
+    # damage included. Her orders are kept for when she is refitted.
+    sea_wear_limp_home: true
     # At or below this, a hull on a standing mission breaks off and makes for its home harbour to be
     # refurbished. Richard, 2026-09-11: "it will return to the harbor, perform maintenance and not
     # leave again until it's back at 100%" — so a ship that comes in for a refit comes in properly,
@@ -903,12 +914,45 @@ units:
       - { id: tanker,                  name: tanker,                  glyph: t, role: tanker,  tech_required: 15, build: { lcm: 80, hcm: 40, cash: 1500 },   hold: 1500, speed: 3, carries: [oil, pet], tank: 200, fuel_per_hex: 6, crew: 15 }
       - { id: super_tanker,            name: super tanker,            glyph: T, role: tanker,  tech_required: 35, build: { lcm: 200, hcm: 120, cash: 6000 }, hold: 6000, speed: 4, carries: [oil, pet], tank: 700, fuel_per_hex: 20, crew: 40 }
       - { id: luxury_craft,            name: luxury craft,            glyph: l, role: luxury,  tech_required: 30, build: { lcm: 120, hcm: 40, cash: 5000 },  hold: 100,  speed: 3, happiness_per_etu: 1.0, carries: [civ], upkeep_per_update: { cash: 50 }, tank: 100, fuel_per_hex: 3, crew: 8 }
-      # warships need guns, shells and oil in the harbour to lay down (Richard 2026-09-09); fuel per voyage comes with units.ships.fuel
-      - { id: destroyer,               name: destroyer,               glyph: d, role: warship, tech_required: 40, build: { lcm: 100, hcm: 150, gun: 10, shell: 50, oil: 50, cash: 5000 }, hold: 200,  speed: 5, sight: 3, tank: 250, fuel_per_hex: 8, crew: 50 }
-      - { id: frigate,                 name: frigate,                 glyph: g, role: warship, tech_required: 45, build: { lcm: 120, hcm: 200, gun: 15, shell: 80, oil: 80, cash: 7000 }, hold: 300,  speed: 5, sight: 3, tank: 300, fuel_per_hex: 10, crew: 70 }
-      - { id: submarine,               name: submarine,               glyph: s, role: submarine, tech_required: 50, build: { lcm: 100, hcm: 250, gun: 5, shell: 60, oil: 100, cash: 9000 }, hold: 100, speed: 4, tank: 200, fuel_per_hex: 7, crew: 40 }
-      - { id: battleship,              name: battleship,              glyph: b, role: warship, tech_required: 60, build: { lcm: 200, hcm: 600, gun: 40, shell: 200, oil: 200, cash: 20000 }, hold: 500, speed: 4, tank: 500, fuel_per_hex: 18, crew: 150 }
-      - { id: carrier,                 name: aircraft carrier,        glyph: v, role: warship, tech_required: 70, build: { lcm: 300, hcm: 800, gun: 20, shell: 100, oil: 300, cash: 40000 }, hold: 800, speed: 4, sight: 4, tank: 800, fuel_per_hex: 25, crew: 200 }
+      # warships need guns, shells and oil in the harbour to lay down (Richard 2026-09-09); fuel per voyage comes with units.ships.fuel.
+      # The guns and shells in the build go aboard as her armament (issue #68). guns: how many she brings to
+      # bear in a salvo; range: hexes; armor: damage taken ÷ (1 + armor/100); magazine: shells a harbour
+      # rearms her to; asw: can find and fire on a submarine she has detected; hit_per_gun: a torpedo hits
+      # harder than a gun. All GUESS.
+      - { id: destroyer,               name: destroyer,               glyph: d, role: warship, tech_required: 40, build: { lcm: 100, hcm: 150, gun: 10, shell: 50, oil: 50, cash: 5000 }, hold: 200,  speed: 5, sight: 3, tank: 250, fuel_per_hex: 8, crew: 50, guns: 10, range: 3, armor: 20, magazine: 60, asw: true }
+      - { id: frigate,                 name: frigate,                 glyph: g, role: warship, tech_required: 45, build: { lcm: 120, hcm: 200, gun: 15, shell: 80, oil: 80, cash: 7000 }, hold: 300,  speed: 5, sight: 3, tank: 300, fuel_per_hex: 10, crew: 70, guns: 15, range: 3, armor: 30, magazine: 90, asw: true }
+      - { id: submarine,               name: submarine,               glyph: s, role: submarine, tech_required: 50, build: { lcm: 100, hcm: 250, gun: 5, shell: 60, oil: 100, cash: 9000 }, hold: 100, speed: 4, tank: 200, fuel_per_hex: 7, crew: 40, guns: 5, range: 2, armor: 0, magazine: 60, hit_per_gun: 6 }
+      - { id: battleship,              name: battleship,              glyph: b, role: warship, tech_required: 60, build: { lcm: 200, hcm: 600, gun: 40, shell: 200, oil: 200, cash: 20000 }, hold: 500, speed: 4, tank: 500, fuel_per_hex: 18, crew: 150, guns: 40, range: 5, armor: 80, magazine: 240 }
+      - { id: carrier,                 name: aircraft carrier,        glyph: v, role: warship, tech_required: 70, build: { lcm: 300, hcm: 800, gun: 20, shell: 100, oil: 300, cash: 40000 }, hold: 800, speed: 4, sight: 4, tank: 800, fuel_per_hex: 25, crew: 200, guns: 20, range: 3, armor: 50, magazine: 120 }
+    # COMBAT (issue #68). Richard 2026-09-11 and 2026-09-13: a declared war makes engagement automatic; anyone
+    # may fire on anyone, but only by order, and it resolves now with the target answering; a ship that fired
+    # on a country at peace is fair game to that country for a while; forts and harbours defend the coast;
+    # the victor salvages a sunk hull's cargo. A salvo is guns × damage_per_gun × efficiency × tech factor ×
+    # roll ÷ (1 + armor/100), off the target's efficiency. Every number a GUESS.
+    combat:
+      shells_per_gun: 1
+      damage_per_gun: 3
+      damage_roll: { min: 0.5, max: 1.5 }
+      tech_bonus_per_point: 0.005        # +50% at tech 100
+      tech_bonus_max: 1.0
+      sink_at_or_below: 10               # the original scuttled a hull below 20% (SHIP_MINEFF); GUESS lower, so repairs are worth trying
+      fired_upon_updates: 3
+      target_max_age: 1                  # a contact from the last update is good enough to aim at; older is where she was
+      # fortress and harbour sectors fire on hostile surface ships in range, with guns and shells from their own
+      # stock, one gun per mil_per_gun military, at most max_guns
+      coastal: { designations: [fortress, harbor], range: 3, max_guns: 20, mil_per_gun: 5 }
+    # MILITARY MISSIONS (issue #68). Richard 2026-09-11: "military boats can run between a list of sectors as a
+    # patrol ... they can have a somewhat random search and explore mechanism, returning only to obtain more
+    # supplies." A mission says where a warship goes; the war says whether she fires. On every mission she
+    # comes home when she is low, and goes back out by herself once she is resupplied. All GUESS.
+    missions:
+      resupply_shells_below: 0.34        # a third of the magazine left: two salvos' worth for a destroyer
+      resupply_fuel_below: 0.25
+      fuel_reserve_factor: 1.25          # ...and never less than the fuel to get home, with a quarter to spare
+      search_radius: 10                  # a search roams within this of home
+      search_hops: 4                     # and goes at most this far on one leg
+      blockade_radius: 1                 # a hostile ship this close to a blockader on station is stopped there
+      train_units_per_gun: 10            # interdiction: rail cargo one gun destroys
 
 # -----------------------------------------------------------------------------
 # AGENTS — NEW

@@ -35,6 +35,8 @@ class WorldRepositoryRoundTripTest {
     @AfterEach
     void cleanup() { if (gameId != null) jdbc.update("DELETE FROM game WHERE id = ?", gameId); }
 
+    private static Coord other0(World w, Coord cap) { return w.sectors().stream().filter(x -> !x.at().equals(cap)).findFirst().orElseThrow().at(); }
+
     @Test
     void savedWorldLoadsByteIdentical() {
         ConfigLoader.Loaded l = new ConfigLoader().loadPreset("teaching");
@@ -56,6 +58,12 @@ class WorldRepositoryRoundTripTest {
         played = played.withRailLanes(List.of(
                 new org.hastingtx.empire.engine.model.RailLane(0, cap, other, List.of(com.index("food"), com.index("lcm"))),
                 new org.hastingtx.empire.engine.model.RailLane(0, other, cap, List.of())));
+        // a ship marked for firing on a country at peace (issue #68): the mark is its own column
+        org.hastingtx.empire.engine.model.Ship marked = new org.hastingtx.empire.engine.model.Ship(played.nextShipId(), 0, "destroyer", "Vixen", cap, 77, org.hastingtx.empire.engine.model.Stocks.zero(com.size()).with(com.index("shell"), 40),
+                null, null, 0, "fired on B", 45, "patrol", cap, 100, 50, 3, java.util.Map.of(1, played.updateNumber() + 3), List.of(cap, other0(played, cap)), 0);
+        List<org.hastingtx.empire.engine.model.Ship> fleet = new java.util.ArrayList<>(played.ships());
+        fleet.add(marked);
+        played = played.withShips(fleet, marked.id() + 1);
 
         gameId = games.create("roundtrip-test", "teaching", new ConfigLoader().toYaml(l.raw()), l.hash(), 11, played.width(), played.height(), played.wrapX(), played.wrapY(), null);
         worlds.saveAll(gameId, played, com);
@@ -65,6 +73,7 @@ class WorldRepositoryRoundTripTest {
         assertThat(loaded.seen()).isEqualTo(played.seen());
         assertThat(loaded.railLanes()).isEqualTo(played.railLanes());
         assertThat(loaded.contacts()).isEqualTo(played.contacts());
+        assertThat(loaded.ships()).isEqualTo(played.ships());
         for (int i = 0; i < played.sectors().size(); i++) assertThat(loaded.sectors().get(i).deliver()).as("deliver orders at %d", i).isEqualTo(played.sectors().get(i).deliver());
 
         // diff save: one more update, only changed rows written, still identical

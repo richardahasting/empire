@@ -4,8 +4,10 @@ Ships need a **harbour** at 60% efficiency or better. Everything else follows
 from that.
 
 **Standing missions** — given once, run every update until told `off`:
-`fish` (fishing boats), `mine` (deep sea miners), and `lane` and `supply`
-(anything with a hold: cargo ships, tankers, luxury craft). `sail` is the one-off order. The
+`fish` (fishing boats), `mine` (deep sea miners), `lane` and `supply`
+(merchantmen: cargo ships, tankers, luxury craft), and for warships `patrol`,
+`search`, `escort`, `blockade` and `interdict`. `sail` is the one-off order, and
+`fire` is the one a warship gives now. The
 `ships` listing shows what each hull is **on** and what its class **can** be
 given, so nobody has to steer a miner by hand.
 
@@ -30,9 +32,14 @@ improve ships already built.
 | super_cargo | 25 | 2400 | 4 | anything, in bulk |
 | luxury_craft | 30 | 100 | 3 | happiness, at $50 an update |
 | super_tanker | 35 | 6000 | 4 | oil and petrol in bulk |
-| destroyer, frigate | 40, 45 | — | 5 | warships |
-| submarine | 50 | — | 4 | hard to see |
-| battleship, carrier | 60, 70 | — | 4 | warships |
+| destroyer | 40 | — | 5 | 10 guns, range 3, armour 20; hunts submarines |
+| frigate | 45 | — | 5 | 15 guns, range 3, armour 30; hunts submarines |
+| submarine | 50 | — | 4 | 5 torpedoes that hit twice as hard, range 2; hard to see |
+| battleship | 60 | — | 4 | 40 guns, range 5, armour 80 |
+| carrier | 70 | — | 4 | 20 guns, range 3, armour 50 (planes come with #71) |
+
+A warship's build cost includes guns and shells. **They go aboard as her
+armament** — she leaves the yard ready to fight.
 
 ## The sea wears a ship out
 
@@ -53,8 +60,14 @@ a real bill.
 It keeps its orders throughout. Once it is fully refitted it goes back to what it
 was doing, unbidden — you do not have to send it out again.
 
-A ship you are sailing by hand is not managed for you: it will wear down to
-nothing if you let it.
+**The sea only wears a hull down so far, and then she limps home by herself.**
+Wear stops at the efficiency she needs to make one hex an update: 34% for a
+fishing boat or cargo ship, 25% for a speed-4 hull, 20% for a destroyer. A ship
+at sea at or below that line **makes for the nearest harbour of yours on her own**,
+whatever she was doing: sailed by hand, on a lane, or on any mission. However worn
+she is, battle damage included, she makes **at least one hex an update** toward it,
+as long as she has fuel and a crew. She keeps her orders: once she is in harbour
+and refitted, a mission or lane carries on.
 
 ## Fuel
 
@@ -205,6 +218,109 @@ Tankers carry only oil and petrol, but a lot of it, and they do three jobs:
 say otherwise), a numbered line for each thing: fitted out, loaded, bound for,
 sailed, arrived, unloaded. The Fleet panel has the same thing under **History**.
 The `ships` listing still shows the last update run together on one line.
+
+## War at sea
+
+### When the guns fire
+
+- **At war, automatically.** At every update each of your armed ships, and each
+  fort and harbour of yours with guns, fires on an enemy ship it can see and
+  reach. So does the enemy. A declared war is the only thing that makes this
+  automatic: a warship never starts a fight by itself, so a fishing fleet does
+  not blunder into one.
+- **By order, at any time.** `fire SHIP x,y [CLASS]` fires on a ship you can see at
+  that hex, **now**, not at the update. The target answers straight away, with
+  everything of its country that can reach your ship: her own guns, her
+  consorts', and any fort or harbour in range. The whole exchange is finished
+  before the command returns, and the reply tells you how it went.
+- **At peace, firing is allowed, and remembered.** Firing on a country you are
+  not at war with does not declare war. It **marks the ship that fired**: for 3
+  updates that country's warships and coastal guns will engage her on sight. The
+  rest of your navy is not a target, and no war has started. The `ships` listing
+  and the Fleet panel show a marked ship in red.
+
+### What you can aim at
+
+A **contact** from this update or the last, at the hex where it was seen, or a
+surface ship inside your own ship's sight. A contact is where a ship *was*; if
+she has sailed since, there is nothing there to hit. Contacts are drawn on the
+map as diamonds: solid when fresh, dashed when a sighting is older.
+
+**Submarines** can only be hit once detected, and only by a destroyer or frigate.
+A battleship cannot touch one, and neither can a fort.
+
+### What a salvo does
+
+`guns × 3 × efficiency × (1 + tech/200, at most ×2) × a roll of 0.5–1.5 ÷ (1 +
+armour/100)`, taken off the target's efficiency. The number of guns that fire
+is the smallest of what the class mounts, the guns aboard, and the shells to
+feed them: **one shell per gun per salvo**. A destroyer's 60 shells are six
+salvos.
+
+Damage is efficiency, so a battered ship is slow as well as weak, and **a
+harbour repairs it** at the same 20 points an update as fitting out.
+
+### Ammunition
+
+A docked warship **rearms from the harbour's own stock**: guns up to what she
+mounts and shells up to her magazine. Send the harbour shells and guns first, by
+road, rail, a lane or a supply ship.
+
+### Sinking and salvage
+
+**At 10% efficiency or less a ship sinks.** Her crew and fuel go down with her.
+Of her cargo, a quarter is lost in the fighting. **Your ships in the same hex
+salvage the rest**, as far as their holds have room and they may carry it; what
+nobody can take goes down too. A sinking is news.
+
+### The coast
+
+A **fortress or harbour** with guns, shells and military fires on hostile
+surface ships within **3 hexes**: one gun for every 5 military, at most 20 guns.
+It uses its own shells, as a ship does.
+
+### Blockades and trains
+
+- A warship on **`blockade`** holds a station. A hostile ship that comes within
+  **1 hex** of her is stopped there, whether sailing at the update or by an order
+  given now, and one already inside cannot leave.
+- A warship on **`interdict`** holds a station and, finding no ship to shoot,
+  shells the nearest **enemy train** she can see and reach: rail cargo held on a
+  line near the coast. Each gun destroys 10 units. Trains do not fire, so this
+  happens only at war.
+
+## Missions for warships
+
+A mission says **where** a warship goes. Whether she fires is still up to the war.
+
+| order | what she does |
+|---|---|
+| `patrol SHIP x,y x2,y2 …` | walks the points in order, and round again |
+| `search SHIP` | wanders the water within 10 of home, at most 4 hexes a leg, going where you have not looked lately. Deliberately unpredictable |
+| `escort SHIP OTHER` | stays with one of your other ships |
+| `blockade SHIP x,y` | holds that hex and stops hostile ships next to it |
+| `interdict SHIP x,y` | holds that hex and shells enemy trains in reach |
+
+Each takes `off` to stop, and a `sail` order ends it too.
+
+**Every mission comes home for supplies, and goes back out by itself.** Home is
+the harbour she was in when you gave the order, or the nearest of yours she can
+reach. She breaks off when:
+
+- her shells fall below a third of the magazine;
+- her fuel falls below a quarter of the tank, or below what it takes to get home
+  with a quarter to spare;
+- she is short-handed;
+- the sea or a battle has worn her to 60%.
+
+In harbour she rearms, refuels, signs on crew and refits, then returns to her
+patrol, station, charge or search without another order.
+
+### Old games
+
+A game keeps its rules for life. **A game created before combat has none of
+it**: nothing fires and `fire` says so. The deity's **Reload rules** brings it
+in.
 
 ## Being seen
 

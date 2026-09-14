@@ -16,7 +16,8 @@ class FleetListingTest {
         assertThat(Console.missionsOf(CFG, "mining_ship")).isEqualTo("mine");
         assertThat(Console.missionsOf(CFG, "cargo_ship")).isEqualTo("lane, supply");
         assertThat(Console.missionsOf(CFG, "tanker")).isEqualTo("lane, supply");
-        assertThat(Console.missionsOf(CFG, "destroyer")).isEqualTo("sail only");
+        assertThat(Console.missionsOf(CFG, "destroyer")).isEqualTo("fire, patrol, search, escort, blockade, interdict");
+        assertThat(Console.missionsOf(CFG, "luxury_craft")).isEqualTo("lane, supply");
         assertThat(Console.missionsOf(CFG, "no_such_class")).isEqualTo("sail");
     }
 }

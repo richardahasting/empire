@@ -152,7 +152,9 @@ from the moment it was minted; there is no second step.
 - **Pause / Resume** — stops and restarts the schedule.
 - **Run update** — forces one immediately.
 - **Reload rules** — replaces the game's rule snapshot with the preset as
-  shipped now. Keeps the map and the stocks.
+  shipped now. Keeps the map and the stocks. This is how a game created before a
+  feature gets it — sea combat and warship missions, for one: until then its
+  warships have no guns to fire.
 - **Seed fishing grounds** — gives an existing game's ocean its fertility, for
   worlds generated before fishing existed.
 - **Delete** — removes the game and everything in it: the map, the countries,

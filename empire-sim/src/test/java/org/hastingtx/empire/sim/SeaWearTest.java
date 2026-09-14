@@ -120,6 +120,23 @@ class SeaWearTest {
         assertThat(s.note()).doesNotContain("refitting");
     }
 
+    /**
+     * Limp home (Richard 2026-09-13). Two miners in a live game were worn to 4% and 0% and could never
+     * move again. Wear now stops where a hull still makes one hex an update — 34% for a speed-3 boat.
+     */
+    @Test
+    void wearStopsWhereSheCanStillLimpHome() {
+        Coord sea = openWater(world());
+        World w = withShip(world(), 40, null, sea, sea);
+        double floor = CFG.units().ships().limpFloor(CFG.units().ships().shipClass("fishing_boat"), 0);
+        assertThat(floor).isEqualTo(34.0);
+        for (int i = 0; i < 6; i++) w = Update.run(w, CFG, SEED).next();
+        assertThat(w.ship(1).efficiency()).isEqualTo(floor);
+        assertThat(w.ship(1).note()).doesNotContain("worn by the sea");
+        assertThat(CFG.units().ships().range(CFG.units().ships().shipClass("fishing_boat"), 0, w.ship(1).efficiency()))
+                .as("and at that she still makes a hex").isGreaterThanOrEqualTo(1);
+    }
+
     @Test
     void wearNeverTakesAHullBelowNothing() {
         World w = withShip(world(), 1, null, openWater(world()), openWater(world()));

@@ -115,7 +115,11 @@ public class GameController {
      * per-sector standing orders: designate, threshold, distribute, build_road, build_rail.
      */
     public record CommandRequest(String verb, Integer x, Integer y, Integer x2, Integer y2, String type, String commodity, Double amount, Boolean clear, String scope, String direction,
-                                 Long ship, List<String> cargo, String name) {
+                                 Long ship, List<String> cargo, String name,
+                                 /** A patrol's waypoints or a station, absolute (issue #68). */
+                                 List<Coord> points,
+                                 /** The ship an escort stays with. */
+                                 Long ward) {
         boolean isMass() { return scope != null && !scope.isBlank(); }
         Command toCommand() { return toCommand(x == null || y == null ? null : new Coord(x, y)); }
         /** The command for one sector; {@code at} stands in for x,y. */
@@ -145,6 +149,9 @@ public class GameController {
                 case "scrap" -> new Command.Scrap(needShip());
                 case "fish" -> new Command.Fish(needShip(), x == null || y == null ? null : at(x, y), Boolean.TRUE.equals(clear));
                 case "mine" -> new Command.Mine(needShip(), x == null || y == null ? null : at(x, y), Boolean.TRUE.equals(clear));
+                case "fire" -> new Command.Fire(needShip(), at(x, y), type);
+                case "patrol", "search", "escort", "blockade", "interdict" -> new Command.Mission(needShip(), verb, points == null ? (x == null || y == null ? List.of() : List.of(at(x, y))) : points,
+                        ward == null ? 0 : ward, Boolean.TRUE.equals(clear));
                 case "supply" -> new Command.Supply(needShip(), x == null || y == null ? null : at(x, y), Boolean.TRUE.equals(clear));
                 default -> throw new IllegalArgumentException("unknown verb: " + verb);
             };

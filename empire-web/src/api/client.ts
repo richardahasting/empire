@@ -66,14 +66,23 @@ export interface ShipView {
   note: string; docked: boolean;
   /** Tech it was laid at, and how many sea hexes it makes per update now. */
   tech: number; hexesPerUpdate: number;
-  /** "fish" / "mine": roaming near homeRelative, landing the load there. "supply": filling your harbours' thresholds, refitting at homeRelative. */
+  /** "fish" / "mine": roaming near homeRelative, landing the load there. "supply": filling your harbours' thresholds, refitting at homeRelative.
+   *  "patrol" / "search" / "escort" / "blockade" / "interdict" (issue #68): a warship's mission; she comes home to homeRelative for supplies. */
   mission: string | null; homeRelative: Coord | null;
+  /** A patrol's waypoints or a station, relative; the ship an escort stays with (0 = none). */
+  routeRelative: Coord[]; ward: number;
+  /** Countries she fired on in peacetime, who may shoot her on sight for now. */
+  markedBy: string[];
 }
+/** Another country's ship as your radar and lookouts last saw it (issue #75): where she was, not where she is. Class and owner are hidden on a faint contact. */
+export interface ContactView { at: Coord; relative: Coord; band: string; age: number; confidence: number; cls: string | null; ownerName: string | null }
 export interface CountryView {
   countryId: number; name: string; updateNumber: number; capital: Coord; wrapX: boolean; wrapY: boolean; width: number; height: number; cash: number; btu: number;
   levels: Levels; inSanctuary: boolean; bankrupt: boolean; commodityIds: string[]; sectors: SectorView[]; otherCountryNames: string[];
   /** Your ships (issue #56). */
   ships: ShipView[];
+  /** Enemy ships your sensors have found (issue #75); what you can aim at (issue #68). */
+  contacts: ContactView[];
   /** Standing depot-to-depot rail runs; empty cargo means "keep the far end's thresholds topped up" (issue #70). */
   railLanes: { from: Coord; to: Coord; fromRelative: Coord; toRelative: Coord; cargo: string[] }[];
   /** Trains stopped part-way along a line (issue #70). */
@@ -124,13 +133,17 @@ export interface Commodity { id: string; name: string; weight: number; priority:
 export interface RoadRules { buildMaterialsPerPoint: Record<string, number>; workPerPoint: number; maxPointsPerUpdate: number; costMultiplierByTerrain: Record<string, number>; maxLevelByTerrain: Record<string, number>; decayPerUpdate: number; maintenanceCashPerPointPerUpdate: number }
 export interface Crossing { techRequired: number; materials: Record<string, number> }
 export interface RailRules { bridge?: Crossing | null; tunnel?: Crossing | null; techRequired: number; buildMaterialsPerPoint: Record<string, number>; maxPointsPerUpdate: number; minLevelToCarry: number; capacityPerUpdateAt100: number; cashPer100UnitsShipped: number; maxSectorsPerUpdate: { base: number; perTechPoint: number }; costMultiplierByTerrain: Record<string, number>; maxLevelByTerrain: Record<string, number>; decayPerUpdate: number; maintenanceCashPerPointPerUpdate: number }
-export interface ShipClass { id: string; name: string; glyph: string; role: string; techRequired: number; build: Record<string, number> | null; hold: number; speed: number; fishingRate?: number | null; miningRate?: number | null; happinessPerEtu?: number | null; carries?: string[] | null }
+export interface ShipClass { id: string; name: string; glyph: string; role: string; techRequired: number; build: Record<string, number> | null; hold: number; speed: number; fishingRate?: number | null; miningRate?: number | null; happinessPerEtu?: number | null; carries?: string[] | null;
+  /** Gunnery (issue #68): guns per salvo, range in hexes, armour, shells carried, whether she hunts submarines. */
+  guns?: number | null; range?: number | null; armor?: number | null; magazine?: number | null; asw?: boolean | null }
 export interface ShipsRules { startEfficiency: number; dockPointsPerUpdate: number; harborMinEfficiency: number; classes: ShipClass[] }
 export interface Rules { sectorTypes: SectorType[]; commodities: Commodity[]; etusPerUpdate: number; btuCosts: Record<string, number>; road?: RoadRules; defaultCapacity?: number; rail?: RailRules; productionMinEfficiency?: number; massThresholdMultiplierByType?: Record<string, number>; ships?: ShipsRules | null; work?: WorkRules; curves?: Record<string, Curve>; maxPopCurve?: { type: string; base?: number | null; perResearchPoint?: number | null; cap?: number | null } | null }
 export interface Outcome { accepted: boolean; error?: string; btuSpent: number; view: CountryView; info?: string | null }
 export interface ConsoleReply { output: string; accepted: boolean; error?: string; view?: CountryView }
 export interface CommandRequest {
   verb: string; x?: number; y?: number; x2?: number; y2?: number; type?: string; commodity?: string; amount?: number; clear?: boolean;
+  /** A patrol's waypoints or a station, absolute (issue #68); the ship an escort stays with. */
+  points?: Coord[]; ward?: number;
   /** Many sectors instead of x,y: "*" (all mine), "*:TYPE" (one designation), "x1:x2,y1:y2" (a rectangle, relative). Standing orders only. */
   scope?: string;
   /** deliver: e ne nw w sw se (or "none" to clear). */

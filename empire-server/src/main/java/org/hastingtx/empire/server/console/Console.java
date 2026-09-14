@@ -85,6 +85,16 @@ public class Console {
                     yield cmd(gameId, a, new Command.Announce(rest(line, 1)));
                 }
                 case "fish" -> { need(t, 2, "fish SHIP [x,y] | fish SHIP off"); long id = Long.parseLong(t[1].replace("#", "")); boolean off = t.length > 2 && t[2].equalsIgnoreCase("off"); yield cmd(gameId, a, new Command.Fish(id, !off && t.length > 2 ? abs(v, t[2]) : null, off)); }
+                case "patrol", "blockade", "interdict", "search", "escort" -> {
+                    need(t, 2, verb + " SHIP ... | " + verb + " SHIP off");
+                    long id = Long.parseLong(t[1].replace("#", ""));
+                    if (t.length > 2 && t[2].equalsIgnoreCase("off")) yield cmd(gameId, a, new Command.Mission(id, verb, List.of(), 0, true));
+                    if (verb.equals("escort")) { need(t, 3, "escort SHIP OTHER_SHIP"); yield cmd(gameId, a, new Command.Mission(id, verb, List.of(), Long.parseLong(t[2].replace("#", "")), false)); }
+                    List<Coord> pts = new ArrayList<>();
+                    for (int i = 2; i < t.length; i++) pts.add(abs(v, t[i]));
+                    yield cmd(gameId, a, new Command.Mission(id, verb, pts, 0, false));
+                }
+                case "fire" -> { need(t, 3, "fire SHIP x,y [CLASS]"); yield cmd(gameId, a, new Command.Fire(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]), t.length > 3 ? t[3] : null)); }
                 case "supply" -> { need(t, 2, "supply SHIP [x,y] | supply SHIP off"); long id = Long.parseLong(t[1].replace("#", "")); boolean off = t.length > 2 && t[2].equalsIgnoreCase("off"); yield cmd(gameId, a, new Command.Supply(id, !off && t.length > 2 ? abs(v, t[2]) : null, off)); }
                 case "history", "log" -> { need(t, 2, "history SHIP [UPDATES]"); yield new Reply(history(Long.parseLong(t[1].replace("#", "")), games.shipHistory(gameId, a, Long.parseLong(t[1].replace("#", "")), t.length > 2 ? Integer.parseInt(t[2]) : 5)), true, null, null); }
                 case "mine" -> { need(t, 2, "mine SHIP [x,y] | mine SHIP off"); long id = Long.parseLong(t[1].replace("#", "")); boolean off = t.length > 2 && t[2].equalsIgnoreCase("off"); yield cmd(gameId, a, new Command.Mine(id, !off && t.length > 2 ? abs(v, t[2]) : null, off)); }
@@ -296,9 +306,11 @@ public class Console {
         StringBuilder sb = new StringBuilder(String.format("%-4s %-24s %-8s %5s %5s %-11s %-8s %-18s %-14s %s%n", "id", "class", "at", "eff", "speed", "load/hold", "on", "going", "can", "last update"));
         for (var s : v.ships()) {
             String on = s.lane() != null ? "lane" : s.mission() != null && !s.mission().isBlank() ? s.mission() : "—";
-            String going = s.lane() != null ? "lane " + rel(s.lane().fromRelative()) + (s.lane().outbound() ? " → " : " ← ") + rel(s.lane().toRelative()) : "supply".equals(s.mission()) ? "supply" + (s.destRelative() != null ? " → " + rel(s.destRelative()) : s.docked() ? ", in harbour" : "") : s.mission() != null && !s.mission().isBlank() ? ("fish".equals(s.mission()) ? "fishing" : "mining") + " from " + rel(s.homeRelative()) + (s.destRelative() != null ? " → " + rel(s.destRelative()) : "") : s.destRelative() != null ? "to " + rel(s.destRelative()) : s.docked() ? "in harbour" : "holding";
+            String going = s.lane() != null ? "lane " + rel(s.lane().fromRelative()) + (s.lane().outbound() ? " → " : " ← ") + rel(s.lane().toRelative()) : s.mission() != null && java.util.Set.of("patrol", "search", "escort", "blockade", "interdict").contains(s.mission()) ? s.mission() + (s.ward() > 0 ? " #" + s.ward() : "") + (s.destRelative() != null ? " → " + rel(s.destRelative()) : "") : "supply".equals(s.mission()) ? "supply" + (s.destRelative() != null ? " → " + rel(s.destRelative()) : s.docked() ? ", in harbour" : "") : s.mission() != null && !s.mission().isBlank() ? ("fish".equals(s.mission()) ? "fishing" : "mining") + " from " + rel(s.homeRelative()) + (s.destRelative() != null ? " → " + rel(s.destRelative()) : "") : s.destRelative() != null ? "to " + rel(s.destRelative()) : s.docked() ? "in harbour" : "holding";
             sb.append(String.format("%-4d %-24s %-8s %5.0f %5d %-11s %-8s %-18s %-14s %s%n", s.id(), s.cls() + (s.name() == null || s.name().isBlank() ? "" : " " + s.name()), rel(s.relative()), s.efficiency(), s.hexesPerUpdate(), (int) s.load() + "/" + (int) s.hold(), on, going, missionsOf(cfg, s.cls()), s.note()));
         }
+        for (var s : v.ships()) if (!s.markedBy().isEmpty())
+            sb.append("ship #").append(s.id()).append(" fired on ").append(String.join(", ", s.markedBy())).append(" in peacetime: they may shoot her on sight for now\n");
         sb.append("on: the standing mission the hull is running; can: the ones its class may be given (plus sail, always)\n");
         return sb.toString();
     }
@@ -316,7 +328,8 @@ public class Console {
             List<String> can = new ArrayList<>();
             if (c.fishingRateOr0() > 0) can.add("fish");
             if (c.miningRateOr0() > 0) can.add("mine");
-            if (!c.carriesOrEmpty().isEmpty()) { can.add("lane"); can.add("supply"); }
+            if (!c.carriesOrEmpty().isEmpty() && !c.military()) { can.add("lane"); can.add("supply"); }
+            if (c.armed()) { can.add("fire"); can.add("patrol"); can.add("search"); can.add("escort"); can.add("blockade"); can.add("interdict"); }
             return can.isEmpty() ? "sail only" : String.join(", ", can);
         }
         return "sail";
