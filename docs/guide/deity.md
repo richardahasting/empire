@@ -151,10 +151,16 @@ from the moment it was minted; there is no second step.
 - **Update interval** — from manual to daily, changeable at any time.
 - **Pause / Resume** — stops and restarts the schedule.
 - **Run update** — forces one immediately.
-- **Reload rules** — replaces the game's rule snapshot with the preset as
-  shipped now. Keeps the map and the stocks. This is how a game created before a
-  feature gets it — sea combat and warship missions, for one: until then its
-  warships have no guns to fire.
+- **Reload ship rules** — takes only the ship rules from the preset as shipped
+  now (ship classes, fuel, combat, warship missions, tenders) and leaves every
+  other rule exactly as the game has it. This is how a game created before a ship
+  feature gets it: a game from before tenders has no tender to build until you
+  press it.
+- **Reload rules** — replaces **all** the game's rules with the preset as shipped
+  now. Keeps the map and the stocks, but the economy changes with it. **Careful:**
+  if the preset's population ceilings have changed, people over the new ceiling
+  are lost at the next update. Game 82 would have lost about 32,000 when research
+  began to scale the ceiling. Prefer Reload ship rules for ship features.
 - **Seed fishing grounds** — gives an existing game's ocean its fertility, for
   worlds generated before fishing existed.
 - **Delete** — removes the game and everything in it: the map, the countries,
