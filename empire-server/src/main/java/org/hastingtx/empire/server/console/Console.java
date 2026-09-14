@@ -306,7 +306,7 @@ public class Console {
         StringBuilder sb = new StringBuilder(String.format("%-4s %-24s %-8s %5s %5s %-11s %-8s %-18s %-14s %s%n", "id", "class", "at", "eff", "speed", "load/hold", "on", "going", "can", "last update"));
         for (var s : v.ships()) {
             String on = s.lane() != null ? "lane" : s.mission() != null && !s.mission().isBlank() ? s.mission() : "—";
-            String going = s.lane() != null ? "lane " + rel(s.lane().fromRelative()) + (s.lane().outbound() ? " → " : " ← ") + rel(s.lane().toRelative()) : "rescue".equals(s.mission()) ? "rescuing #" + s.ward() + (s.destRelative() != null ? " → " + rel(s.destRelative()) : "") : s.mission() != null && java.util.Set.of("patrol", "search", "escort", "blockade", "interdict").contains(s.mission()) ? s.mission() + (s.ward() > 0 ? " #" + s.ward() : "") + (s.destRelative() != null ? " → " + rel(s.destRelative()) : "") : "supply".equals(s.mission()) ? "supply" + (s.destRelative() != null ? " → " + rel(s.destRelative()) : s.docked() ? ", in harbour" : "") : s.mission() != null && !s.mission().isBlank() ? ("fish".equals(s.mission()) ? "fishing" : "mining") + " from " + rel(s.homeRelative()) + (s.destRelative() != null ? " → " + rel(s.destRelative()) : "") : s.destRelative() != null ? "to " + rel(s.destRelative()) : s.docked() ? "in harbour" : "holding";
+            String going = s.lane() != null ? "lane " + rel(s.lane().fromRelative()) + (s.lane().outbound() ? " → " : " ← ") + rel(s.lane().toRelative()) : "rescue".equals(s.mission()) ? "rescuing #" + s.ward() + (s.destRelative() != null ? " → " + rel(s.destRelative()) : "") : "tender".equals(shipRole(cfg, s.cls())) && (s.mission() == null || s.mission().isBlank()) && s.lane() == null ? "on call" + (s.destRelative() != null ? " → " + rel(s.destRelative()) : "") : s.mission() != null && java.util.Set.of("patrol", "search", "escort", "blockade", "interdict").contains(s.mission()) ? s.mission() + (s.ward() > 0 ? " #" + s.ward() : "") + (s.destRelative() != null ? " → " + rel(s.destRelative()) : "") : "supply".equals(s.mission()) ? "supply" + (s.destRelative() != null ? " → " + rel(s.destRelative()) : s.docked() ? ", in harbour" : "") : s.mission() != null && !s.mission().isBlank() ? ("fish".equals(s.mission()) ? "fishing" : "mining") + " from " + rel(s.homeRelative()) + (s.destRelative() != null ? " → " + rel(s.destRelative()) : "") : s.destRelative() != null ? "to " + rel(s.destRelative()) : s.docked() ? "in harbour" : "holding";
             sb.append(String.format("%-4d %-24s %-8s %5.0f %5d %-11s %-8s %-18s %-14s %s%n", s.id(), s.cls() + (s.name() == null || s.name().isBlank() ? "" : " " + s.name()), rel(s.relative()), s.efficiency(), s.hexesPerUpdate(), (int) s.load() + "/" + (int) s.hold(), on, going, missionsOf(cfg, s.cls()), s.note()));
         }
         for (var s : v.ships()) if (!s.markedBy().isEmpty())
@@ -336,6 +336,10 @@ public class Console {
         return "sail";
     }
     private static String rel(Coord c) { return c.x() + "," + c.y(); }
+    private static String shipRole(GameConfig cfg, String clsId) {
+        var ships = cfg.units() == null ? null : cfg.units().ships();
+        return ships == null || !ships.hasClass(clsId) ? "" : ships.shipClass(clsId).role();
+    }
 
     /** A ship's logbook, newest update first, a numbered line for each thing she did (issue #67). */
     static String history(long ship, List<org.hastingtx.empire.server.persistence.LogRepository.ShipLogEntry> book) {

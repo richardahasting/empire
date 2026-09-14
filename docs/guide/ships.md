@@ -119,8 +119,15 @@ order.
   ships beyond its own tank, and it still never sails further than it can get back
   from.
 
-Give a tender a lane or a supply round and it runs that instead; it answers calls
-only while it has no other orders.
+**A tender with no orders is on call.** If it finds itself idle at sea, it makes for
+the harbour nearest by sea and waits there, answering any call on the way in. The
+Fleet panel shows "on call for distress calls" or "answering a distress call from
+ship #N".
+
+`supply` and `lane` move cargo **between your harbours**, not to ships at sea. A
+tender given either runs that instead and answers no calls, so the Fleet panel
+doesn't offer them for tenders. The console still does, and **Stop supply (put on
+call)** takes a tender off a supply round.
 
 ## Crews
 
