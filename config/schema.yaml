@@ -886,7 +886,7 @@ units:
     # ashore when it is scrapped. A short-handed ship stays at the quay — which makes a fleet compete
     # with a factory for the same population, and that is the cost the feature is for.
     crews: true
-    crew_civ_roles: [fishing, mining, cargo, tanker, luxury]   # everything else musters military
+    crew_civ_roles: [fishing, mining, cargo, tanker, luxury, tender]   # everything else musters military
     auto_unload_in_harbor: true        # a fishing boat home from the grounds lands its catch
     fishing_food_per_etu_per_fertility_point: 0.1   # rate 1, fertility 50, 60 ETUs, 100% -> 300 food per update
     # Seabed mining (issue #112). Half the fishing rate: ore should come up slower than fish, and a
@@ -913,6 +913,9 @@ units:
       - { id: super_cargo,             name: super cargo ship,        glyph: C, role: cargo,   tech_required: 25, build: { lcm: 150, hcm: 100, cash: 4000 }, hold: 2400, speed: 4, carries: [all], tank: 400, fuel_per_hex: 12, crew: 30 }
       - { id: tanker,                  name: tanker,                  glyph: t, role: tanker,  tech_required: 15, build: { lcm: 80, hcm: 40, cash: 1500 },   hold: 1500, speed: 3, carries: [oil, pet], tank: 200, fuel_per_hex: 6, crew: 15 }
       - { id: super_tanker,            name: super tanker,            glyph: T, role: tanker,  tech_required: 35, build: { lcm: 200, hcm: 120, cash: 6000 }, hold: 6000, speed: 4, carries: [oil, pet], tank: 700, fuel_per_hex: 20, crew: 40 }
+      # A tender (issue #182, Richard 2026-09-14): slow; hears a stranded ship's distress call, sails out, fills her
+      # tank and patches her hull to the limp-home line, and goes home to restock. GUESS, all of it.
+      - { id: tender,                  name: tender,                  glyph: r, role: tender,  tech_required: 20, build: { lcm: 50, hcm: 20, cash: 1500 },   hold: 600,  speed: 2, carries: [pet, lcm], tank: 150, fuel_per_hex: 3, crew: 10 }
       - { id: luxury_craft,            name: luxury craft,            glyph: l, role: luxury,  tech_required: 30, build: { lcm: 120, hcm: 40, cash: 5000 },  hold: 100,  speed: 3, happiness_per_etu: 1.0, carries: [civ], upkeep_per_update: { cash: 50 }, tank: 100, fuel_per_hex: 3, crew: 8 }
       # warships need guns, shells and oil in the harbour to lay down (Richard 2026-09-09); fuel per voyage comes with units.ships.fuel.
       # The guns and shells in the build go aboard as her armament (issue #68). guns: how many she brings to
@@ -945,6 +948,11 @@ units:
     # patrol ... they can have a somewhat random search and explore mechanism, returning only to obtain more
     # supplies." A mission says where a warship goes; the war says whether she fires. On every mission she
     # comes home when she is low, and goes back out by herself once she is resupplied. All GUESS.
+    # TENDERS (issue #182). What a tender loads at home while it waits for a call, and the lcm a point of patching
+    # costs at sea. GUESS.
+    tenders:
+      restock: { pet: 400, lcm: 150 }
+      patch_lcm_per_point: 1
     missions:
       resupply_shells_below: 0.34        # a third of the magazine left: two salvos' worth for a destroyer
       resupply_fuel_below: 0.25

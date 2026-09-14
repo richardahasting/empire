@@ -243,6 +243,16 @@ trains leaving one depot take turns in issue order.
 ### 7c. Ships (**NEW**, issue #56; runs after road and rail flows)
 Ships are units on sea hexes or in harbours, in id order — few of them, and
 a harbour's stock is the only thing two ships can contend for. For each ship:
+0. **Distress and dispatch** (issue #182), before any ship moves, from the
+   snapshot: a ship at sea with less than a hex of fuel calls; in ship-id order,
+   each call no tender is already answering takes the free tender (no orders, no
+   lane, no destination, above the refit line) of her owner's with the shortest sea
+   route, which goes on mission `rescue` with `ward` = the caller and `home` = the
+   harbour it is in. Alongside, the tender fills her tank from its hold and patches
+   her efficiency to the limp line at `tenders.patch_lcm_per_point` (tallied
+   destroyed), then heads home; docked with no orders, it takes on
+   `tenders.restock`. Its range for the never-beyond-return rule counts the petrol
+   in its hold, and it refills its own tank from the hold below half.
 0. **Wear.** At sea a hull loses `sea_wear_per_update`, but never below
    `ceil(100 / (speed × tech speed factor))` when `sea_wear_limp_home` (the default,
    also for games that predate the key): the least that still makes one hex an update.
