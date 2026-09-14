@@ -150,20 +150,68 @@ class ShipFuelTest {
         assertThat(r.info()).contains("filling her tank");
     }
 
+    /** At sea with too little to go on and still get back, she turns for the nearest harbour and gets there. */
     @Test
-    void aShipLowOnFuelTurnsForTheNearestHarbourByHerself() {
+    void aShipLowOnFuelTurnsForTheNearestHarbourAndMakesIt() {
         Coord out = Hex.stepRaw(CAP, 0, 6);                     // four hexes from the harbour
-        World low = withShip(world(500), out, 30);
-        low = low.withShip(low.ships().get(0).withDest(FAR_SEA));
-        Ship s = Update.run(low, CFG, 5).next().ships().get(0);
-        assertThat(s.note()).contains("low on fuel");
-        assertThat(Hex.distance(low, s.at(), HARBOR)).as("she turned back").isLessThan(4);
+        World w = withShip(world(500), out, 20);                // five hexes of fuel: not enough to go on and come back
+        w = w.withShip(w.ships().get(0).withDest(FAR_SEA));
+        boolean turned = false;
+        for (int i = 0; i < 4; i++) {
+            w = Update.run(w, CFG, 5 + i).next();
+            Ship s = w.ships().get(0);
+            if (s.note().contains("low on fuel")) turned = true;
+            assertThat(Hex.distance(w, s.at(), HARBOR) * CFG.units().ships().shipClass("cargo_ship").fuelPerHexOr0())
+                    .as("update %d: never out of reach of home", i).isLessThanOrEqualTo(s.fuel() + 1e-9);
+        }
+        assertThat(turned).isTrue();
+        assertThat(w.ships().get(0).at()).as("and she got in").isEqualTo(HARBOR);
 
         World plenty = withShip(world(500), out, 120);
         plenty = plenty.withShip(plenty.ships().get(0).withDest(FAR_SEA));
         Ship p = Update.run(plenty, CFG, 5).next().ships().get(0);
-        assertThat(p.note()).doesNotContain("low on fuel");
+        assertThat(p.note()).doesNotContain("low on fuel").doesNotContain("sailed only");
         assertThat(Hex.distance(plenty, p.at(), FAR_SEA)).as("with fuel to spare she carries on").isLessThan(3);
+    }
+
+    /**
+     * Ship #30 in game 82: a full tank, a mission leg from port longer than the tank would bring her back
+     * from, and a stranded miner two updates later. She now goes out only as far as she can come back.
+     */
+    @Test
+    void aLegFromPortGoesNoFurtherThanHerFuelBringsHerBackFrom() {
+        var mc = CFG.units().ships().shipClass("mining_ship");
+        double perHex = mc.fuelPerHexOr0(), reserve = CFG.units().ships().missionsOrDefault().reserve();
+        // a full tank, as #30 had; the far side of the sea is about thirteen hexes by water, and her 250
+        // at 9 a hex, kept 1.25 in hand, brings her back from eleven
+        Ship miner = new Ship(1, 0, "mining_ship", "", HARBOR, 100, Stocks.zero(COM.size()), new Coord(0, 11), null, 0, "", 0, null, null, mc.tankOr0(), mc.crewOr0(), 40);
+        World cur = world(5000).withShips(List.of(miner), 2);
+        boolean capped = false;
+        for (int i = 0; i < 6; i++) {
+            cur = Update.run(cur, CFG, 20 + i).next();
+            Ship s = cur.ships().get(0);
+            if (s.note().contains("no further than her fuel") || s.note().contains("low on fuel")) capped = true;
+            assertThat(Hex.distance(cur, s.at(), HARBOR) * perHex * reserve).as("update %d at %s with %s: she can always get back", i, s.at(), s.fuel()).isLessThanOrEqualTo(s.fuel() + 1e-9);
+        }
+        assertThat(capped).as("somewhere out there her fuel turned her back").isTrue();
+    }
+
+    /** #4 and #15 in game 82: bound for a harbour they could not reach, while a nearer one was in reach. */
+    @Test
+    void boundForAHarbourSheCannotReachSheMakesForOneSheCan() {
+        Coord farHarbour = Hex.stepRaw(CAP, 3, 2);              // the western harbour, the long way round the disc
+        World w = TestWorlds.own(world(500), CFG, farHarbour, "harbor", 100, 127, Map.of("civ", 500.0, "food", 300.0, "pet", 500.0), Map.of());
+        Coord offEast = Hex.stepRaw(CAP, 0, 3);                 // a hex off the eastern harbour
+        w = withShip(w, offEast, 12);                           // three hexes of fuel
+        w = w.withShip(w.ships().get(0).withDest(farHarbour));
+        double perHex = CFG.units().ships().shipClass("cargo_ship").fuelPerHexOr0();
+        for (int i = 0; i < 5; i++) {
+            w = Update.run(w, CFG, 30 + i).next();
+            Ship s = w.ships().get(0);
+            assertThat(Hex.distance(w, s.at(), HARBOR) * perHex).as("update %d: the near harbour stays in reach", i).isLessThanOrEqualTo(s.fuel() + 1e-9);
+        }
+        // she may go on while the near harbour is still in reach, but she ends there, not dry on the way to the far one
+        assertThat(w.ships().get(0).at()).as("into the harbour she could reach").isEqualTo(HARBOR);
     }
 
     /**

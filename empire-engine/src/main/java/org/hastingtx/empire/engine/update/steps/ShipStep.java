@@ -28,6 +28,7 @@ public final class ShipStep implements Step {
         if (sc == null) return;
         List<Ship> out = new ArrayList<>();
         Map<Integer, List<Sector>> harbours = new HashMap<>();   // per owner, found once an update
+        Map<Integer, int[]> harbourDistances = new HashMap<>();   // per owner: hexes from every sector to its nearest harbour
         for (int si = 0; si < ctx.ships.size(); si++) {
             Ship ship = ctx.ships.get(si);
             UnitsCfg.ShipClassCfg cls = sc.shipClass(ship.cls());
@@ -150,15 +151,7 @@ public final class ShipStep implements Step {
             if (sc.crews() && docked) ship = muster(ctx, ship, cls, hi, note);
             // rearm (issue #68): a warship in harbour takes on guns up to what she mounts and shells up to her magazine
             if (docked && sc.combat() != null && cls.armed()) ship = rearm(ctx, ship, cls, hi, note);
-            // a ship at sea whose planned move this update would leave her without the fuel to get back
-            // to a harbour turns for the nearest one instead, whatever her orders said (Richard 2026-09-14:
-            // "all of the ships ran out of fuel"). Judged on the move she is about to make, once her
-            // orders have chosen it — not on the most she could sail, which at high tech is most of a tank.
-            Coord bingo = limping ? null : lowFuelHaven(ctx, sc, cls, ship, docked, harbours);
-            if (bingo != null) {
-                note.next().append("low on fuel (").append(Ledger.q(ship.fuel())).append(" of ").append(Ledger.q(cls.tankOr0())).append("): making for ").append(bingo);
-                ship = ship.withDest(bingo);
-            }
+            Coord bingo = null;   // the harbour she was turned for because of her fuel, this update
             // a ship does not leave port until her tank is full (Richard 2026-09-14)
             boolean fillingUp = sc.fuel() && docked && cls.tankOr0() - ship.fuel() >= 1 && ship.dest() != null && !ship.dest().equals(ship.at());
             if (fillingUp) {
@@ -185,6 +178,34 @@ public final class ShipStep implements Step {
                     double perHex = sc.fuel() ? cls.fuelPerHexOr0() : 0;
                     int fuelled = perHex > 0 ? (int) Math.floor(ship.fuel() / perHex) : hops;
                     if (perHex > 0 && fuelled < hops) hops = Math.max(0, fuelled);
+                    // she never sails further than she can get back from (Richard 2026-09-14, ship #30):
+                    // however her orders chose the leg, in port or at sea, bound for a harbour or not, she
+                    // stops where the fuel left still takes her to the nearest harbour; and a ship already
+                    // out of reach of one makes for the nearest as far as her tank will carry her
+                    if (perHex > 0 && hops > 0) {
+                        int[] dist = harbourDistances.computeIfAbsent(ship.owner(), o -> SeaRoutes.harbourDistances(ctx.snap, ctx.cfg, o));
+                        if (dist[ctx.idx(ship.at())] != Integer.MAX_VALUE) {
+                            int safe = SeaRoutes.safeHops(ctx.snap, path, hops, dist, ship.fuel(), perHex, sc.missionsOrDefault().reserve());
+                            if (safe == hops) { /* the whole leg, and home again after */ }
+                            else if (safe > 0) {
+                                note.next().append("sailed only ").append(safe).append(" of ").append(hops).append(" hexes: no further than her fuel will bring her back from");
+                                hops = safe;
+                            } else if (docked) {
+                                note.next().append("stays in port: ").append(ship.dest()).append(" is further than her fuel would bring her back from");
+                                hops = 0;
+                            } else {
+                                Coord haven = nearestHarbour(ctx, ship, harbours.computeIfAbsent(ship.owner(), o -> ownHarbors(ctx, o)));
+                                List<Coord> home = haven == null ? null : SeaRoutes.path(ctx.snap, ctx.cfg, ship.owner(), ship.at(), haven);
+                                if (home != null) {
+                                    bingo = haven;
+                                    if (!haven.equals(ship.dest())) note.next().append("low on fuel (").append(Ledger.q(ship.fuel())).append(" of ").append(Ledger.q(cls.tankOr0())).append("): making for ").append(haven);
+                                    ship = ship.withDest(haven);
+                                    path = home;
+                                    hops = Math.min(Math.min(range, path.size() - 1), fuelled);
+                                }
+                            }
+                        }
+                    }
                     // a hostile blockade on station stops her where she meets it (issue #68)
                     var blocked = org.hastingtx.empire.engine.combat.Blockade.limit(ctx.snap, ctx.cfg, ship, path, hops, ctx.snap.updateNumber());
                     if (blocked.by() != null) {
@@ -467,33 +488,6 @@ public final class ShipStep implements Step {
             if (harbor.equals(bound)) sum += o.stock().get(c);
         }
         return sum;
-    }
-
-    /**
-     * The harbour a ship at sea must turn for now because of her fuel, or null if she has enough. Enough
-     * means: the hexes she is about to sail toward her destination this update, plus the trip from where
-     * that leaves her back to the nearest harbour, times fuel per hex and
-     * {@code missions.fuel_reserve_factor}. A ship bound for a harbour of her owner's is left alone —
-     * she is already going in. A ship going nowhere burns nothing and is left alone too.
-     *
-     * <p>The first version of this (same day) counted the most she <em>could</em> sail instead of what
-     * she <em>will</em>: at tech 900 a boat banks twenty hexes of movement, so a full tank read as low
-     * and she shuttled in and out of port every update.
-     */
-    private static Coord lowFuelHaven(Ctx ctx, UnitsCfg.ShipsCfg sc, UnitsCfg.ShipClassCfg cls, Ship ship, boolean docked, Map<Integer, List<Sector>> harbours) {
-        double perHex = cls.fuelPerHexOr0();
-        if (!sc.fuel() || docked || perHex <= 0 || ship.dest() == null || ship.dest().equals(ship.at())) return null;
-        if (ownHarbor(ctx, ship.owner(), ctx.snap.sector(ship.dest()))) return null;
-        List<Coord> path = SeaRoutes.path(ctx.snap, ctx.cfg, ship.owner(), ship.at(), ship.dest());
-        if (path == null) return null;
-        int hops = Math.min((int) Math.floor(Math.max(ship.mobility(), 0)), path.size() - 1);
-        List<Sector> mine = harbours.computeIfAbsent(ship.owner(), o -> ownHarbors(ctx, o));
-        Coord end = path.get(hops);
-        Coord back = nearestHarbour(ctx, ship.owner(), end, mine);
-        if (back == null) return null;
-        int backHexes = SeaRoutes.path(ctx.snap, ctx.cfg, ship.owner(), end, back).size() - 1;
-        if (ship.fuel() >= (hops + backHexes) * perHex * sc.missionsOrDefault().reserve()) return null;
-        return nearestHarbour(ctx, ship.owner(), ship.at(), mine);
     }
 
     /** The nearest harbour of her owner's with a sea route to it, by hexes, ties in canonical order. */

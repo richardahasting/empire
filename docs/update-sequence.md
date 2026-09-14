@@ -290,13 +290,15 @@ a harbour's stock is the only thing two ships can contend for. For each ship:
 7. **Fuel** (runs before the lane, supply and mission steps, so they see the tank
    she really has). A docked ship refuels from the harbour; at sea, from an
    owner's tanker already processed in the same hex; a tanker that cannot make a
-   hex fills its own tank from its hold. **Low fuel** (2026-09-14), judged after her
-   orders have set a destination: a ship at sea bound somewhere other than one of
-   her owner's harbours, whose fuel is below `(hexes she will sail toward it this
-   update + hexes from where that leaves her to the nearest harbour) × fuel_per_hex
-   × missions.fuel_reserve_factor`, makes for the nearest harbour instead, keeping
-   her orders. (The first version counted `2 × floor(mobility)` — the most she could
-   sail — and at high tech read a full tank as low.) **Port**: a docked ship
+   hex fills its own tank from its hold. **Never beyond return** (2026-09-14), at the sail:
+   with `dist` the hexes from every sector to the owner's nearest harbour (one
+   multi-source search per owner per update), she sails the largest `h` of her hops
+   with `(h + dist[path[h]]) × fuel_per_hex × missions.fuel_reserve_factor ≤ fuel` —
+   in port, at sea, bound for a harbour or not. When no `h > 0` fits, a docked ship
+   stays in; a ship at sea makes for the nearest harbour, as far as her tank carries
+   her, keeping her orders. (Two earlier versions judged only ships at sea not bound
+   for a harbour, and one counted `2 × floor(mobility)`; game 82 stranded ships
+   through both gaps.) **Port**: a docked ship
    with room in her tank of a unit or more does not sail, and keeps her
    destination for when she is full; a `sail` order given in port waits the same
    way.
