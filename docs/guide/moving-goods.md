@@ -56,6 +56,12 @@ Point a sector at a distribution centre with `dist`, then set thresholds with
 - stock **below** the threshold: the sector asks the centre for the difference,
 - stock **above** it: the surplus is offered to the centre.
 
+**Where it goes is on the sector's readout**, in the inspector and in the
+right-click menu: `Surplus ↔ w (-10,-4)` means this sector's surplus goes to,
+and its shortages come from, the centre at -10,-4, which lies to the west.
+`Surplus stays here` means no centre is set. Delivery orders read the same way:
+`food → w (-1,-4) >200` is food above 200 pushed to the neighbour at -1,-4.
+
 Mobility for distribution is charged at a **tenth** of the hand-move rate. This
 is the single largest discount in the game.
 
