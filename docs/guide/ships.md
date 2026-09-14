@@ -138,6 +138,10 @@ with your factories for the same population. Ships are not free once built.
 home harbour, fish, return when the hold is 90% full, unload, repeat. It picks
 richer water more often than poor water.
 
+A boat that put into another harbour for fuel or repairs, and has none of her own
+grounds within a leg of it, **goes home and fishes from there**. It doesn't sit at a
+strange quay. Deep sea miners do the same.
+
 The sea is fertile **by region**, not by hex — fishing grounds come in patches
 of about 4×4, so finding good water is worth something and staying in it is
 worth more.

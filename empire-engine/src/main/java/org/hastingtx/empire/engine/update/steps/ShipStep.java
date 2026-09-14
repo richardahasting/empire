@@ -146,7 +146,14 @@ public final class ShipStep implements Step {
                     if (full) { if (!ship.home().equals(ship.dest())) note.next().append("hold ").append(Ledger.q(100 * ship.load() / cls.hold())).append("% full, heading home to ").append(ship.home()); ship = ship.withDest(ship.home()); }
                     else if (ship.dest() == null || ship.at().equals(ship.dest()) || ship.dest().equals(ship.home())) {
                         Coord next = pickWaters(ctx, ship, fc, mining);
-                        if (next == null) { note.next().append(mining ? "no nodule fields within " : "no fishing grounds within ").append(fc.radius()).append(" of ").append(ship.home()); ship = ship.withDest(null); }
+                        if (next == null && !ship.at().equals(ship.home())) {
+                            // away from home — put into another harbour for fuel, or limping — with no water of
+                            // her own grounds in a leg's reach: she goes home and works from there, instead of
+                            // sitting at a stranger's quay for ever (game 82, 2026-09-14)
+                            if (!ship.home().equals(ship.dest())) note.next().append("her ").append(mining ? "nodule fields" : "fishing grounds").append(" are around ").append(ship.home()).append(", out of reach from here; heading home");
+                            ship = ship.withDest(ship.home());
+                        }
+                        else if (next == null) { note.next().append(mining ? "no nodule fields within " : "no fishing grounds within ").append(fc.radius()).append(" of ").append(ship.home()); ship = ship.withDest(null); }
                         else ship = ship.withDest(next);
                     }
                 }

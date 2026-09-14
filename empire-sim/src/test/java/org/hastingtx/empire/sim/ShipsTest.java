@@ -261,4 +261,32 @@ class ShipsTest {
         // only the harbour's own 250 above a 200 threshold is reachable: not a foreign shed, not a distant one
         assertThat(r.world().ship(1).stock().get(FOOD)).isCloseTo(250, within(1e-9));
     }
+
+    /**
+     * Game 82, 2026-09-14: boats sent into a nearer harbour for fuel sat there for ever saying "no fishing
+     * grounds within 6", because from a strange harbour they look for water a leg away that is also near
+     * home, and there was none. With nowhere to work from where she is, she goes home and works from there.
+     */
+    @Test
+    void aBoatInAStrangeHarbourGoesHomeToFish() {
+        World w = world();
+        Coord away = new Coord(22, 11);                          // nine hexes from HARBOR_E: nothing a leg away is near home
+        w = TestWorlds.own(w, CFG, away, "harbor", 100, 127, Map.of("civ", 500.0, "food", 300.0, "pet", 2000.0), Map.of());
+        for (int d = 0; d < 6; d++) for (int k = 1; k <= 3; k++) {
+            Coord c = Hex.stepRaw(HARBOR_E, d, k);
+            if (w.inBounds(c) && w.sector(c).terrain() == Terrain.OCEAN) w = w.withSector(w.sector(c).withTerrain(Terrain.OCEAN, 0, new Resources(50, 0, 0, 0, 0)));
+        }
+        w = withShip(w, "fishing_boat", away, 100);
+        w = w.withShip(w.ship(1).withMission(Ship.FISH, HARBOR_E));
+        boolean headedHome = false, fished = false;
+        for (int i = 0; i < 12 && !fished; i++) {
+            w = Update.run(w, CFG, 90 + i).next();
+            Ship s = w.ship(1);
+            if (s.note().contains("heading home")) headedHome = true;
+            if (headedHome && s.note().contains("fished")) fished = true;
+            assertThat(s.note()).as("update %d", i).doesNotContain("no fishing grounds within");
+        }
+        assertThat(headedHome).as("she set off for home").isTrue();
+        assertThat(fished).as("and was fishing her own grounds again").isTrue();
+    }
 }
