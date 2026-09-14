@@ -157,6 +157,16 @@ public final class ShipStep implements Step {
                         else ship = ship.withDest(next);
                     }
                 }
+            } else if (!docked && cls.tender() && ship.mission() == null && ship.lane() == null && ship.dest() == null) {
+                // a tender with no orders waits on call in port, not at sea wearing out (Richard 2026-09-14):
+                // she makes for the harbour nearest by sea, restocks there, and answers calls on the way
+                int[] dist = harbourDistances.computeIfAbsent(ship.owner(), o -> SeaRoutes.harbourDistances(ctx.snap, ctx.cfg, o));
+                List<Coord> home = SeaRoutes.pathHome(ctx.snap, ctx.cfg, ship.owner(), ship.at(), dist);
+                if (home != null && home.size() > 1) {
+                    Coord port = home.get(home.size() - 1);
+                    note.next().append("on call: making for ").append(port).append(" to wait there");
+                    ship = ship.withDest(port);
+                }
             } else if (docked && sc.autoUnloadInHarbor() && cls.worksTheSea() && ship.load() > 0) {
                 ship = unload(ctx, ship, here, hi, null, note);   // home from the water, the load goes ashore
             }
@@ -551,7 +561,10 @@ public final class ShipStep implements Step {
                 Ship t = ctx.ships.get(k);
                 UnitsCfg.ShipClassCfg tc = sc.shipClass(t.cls());
                 if (!tc.tender() || t.owner() != d.owner() || t.id() == d.id()) continue;
-                if (t.mission() != null || t.lane() != null || t.dest() != null || t.efficiency() <= sc.refitAtOrBelow()) continue;
+                // free: no mission, no lane, not worn out, and going nowhere but into one of her own harbours —
+                // a tender on her way home to wait is still on call
+                if (t.mission() != null || t.lane() != null || t.efficiency() <= sc.refitAtOrBelow()) continue;
+                if (t.dest() != null && !ownHarbor(ctx, t.owner(), ctx.snap.sector(t.dest()))) continue;
                 List<Coord> p = SeaRoutes.path(ctx.snap, ctx.cfg, t.owner(), t.at(), d.at());
                 if (p == null) continue;
                 if (p.size() < bestLen) { best = k; bestLen = p.size(); }

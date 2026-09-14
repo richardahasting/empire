@@ -108,4 +108,18 @@ class TendersTest {
         assertThat(n.ship(2).rescuing()).isFalse();
         assertThat(n.ship(2).note()).contains("no longer needs her");
     }
+
+    /** Richard 2026-09-14: a tender with no orders waits in port, not at sea, and is still on call on the way in. */
+    @Test
+    void anIdleTenderAtSeaGoesInToWaitAndAnswersCallsOnTheWay() {
+        World w = stocked(add(world(), "tender", OUT, 0, 100), 1);     // idle, four hexes out
+        World n = Update.run(w, CFG, 90).next();
+        assertThat(n.ship(1).note()).contains("on call: making for");
+        assertThat(n.ship(1).dest()).isEqualTo(HARBOR);
+
+        // on her way in, a ship runs dry nearby: she answers
+        World call = add(n, "cargo_ship", Hex.stepRaw(CAP, 1, 5), 0, 100);
+        World m = Update.run(call, CFG, 91).next();
+        assertThat(m.ship(1).rescuing()).as("still on call while heading in").isTrue();
+    }
 }

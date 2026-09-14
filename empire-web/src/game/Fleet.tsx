@@ -14,6 +14,7 @@ interface Props {
 }
 
 const rel = (c: { x: number; y: number } | null | undefined) => c ? `${c.x},${c.y}` : "?";
+const isTender = (rules: Rules, cls: string) => rules.ships?.classes.find(c => c.id === cls)?.role === "tender";
 /** Warship missions (issue #68); console verbs take patrol, blockade and interdict with points on the map. */
 const MILITARY = ["patrol", "search", "escort", "blockade", "interdict"];
 export const shipGlyph = (rules: Rules, cls: string) => rules.ships?.classes.find(c => c.id === cls)?.glyph ?? "?";
@@ -29,12 +30,14 @@ export function Fleet({ gameId, view, rules, busy, onCommand, onSail }: Props) {
   return (
     <div className="space-y-2 text-xs">
       {view.ships.map(s => {
-        const going = s.lane ? `lane ${rel(s.lane.fromRelative)} ${s.lane.outbound ? "→" : "←"} ${rel(s.lane.toRelative)}${s.lane.cargo.length ? ` (${s.lane.cargo.join(", ")})` : ""}` : s.mission === "fish" || s.mission === "mine" ? `${s.mission === "fish" ? "fishing" : "mining"} from ${rel(s.homeRelative)}${s.destRelative ? ` → ${rel(s.destRelative)}` : ""}` : s.mission === "rescue" ? `answering a distress call from ship #${s.ward}${s.destRelative ? ` → ${rel(s.destRelative)}` : ""}` : s.mission && MILITARY.includes(s.mission) ? `${s.mission}${s.ward ? ` ship #${s.ward}` : s.routeRelative.length ? ` ${s.routeRelative.map(rel).join(" → ")}` : ""}${s.destRelative ? ` · bound for ${rel(s.destRelative)}` : ""}` : s.mission === "supply" ? `supply${s.destRelative ? ` → ${rel(s.destRelative)}` : ""}, refits at ${rel(s.homeRelative)}` : s.destRelative ? `to ${rel(s.destRelative)}` : s.docked ? "in harbour" : "holding";
+        const going = s.lane ? `lane ${rel(s.lane.fromRelative)} ${s.lane.outbound ? "→" : "←"} ${rel(s.lane.toRelative)}${s.lane.cargo.length ? ` (${s.lane.cargo.join(", ")})` : ""}` : s.mission === "fish" || s.mission === "mine" ? `${s.mission === "fish" ? "fishing" : "mining"} from ${rel(s.homeRelative)}${s.destRelative ? ` → ${rel(s.destRelative)}` : ""}` : s.mission === "rescue" ? `answering a distress call from ship #${s.ward}${s.destRelative ? ` → ${rel(s.destRelative)}` : ""}` : s.mission && MILITARY.includes(s.mission) ? `${s.mission}${s.ward ? ` ship #${s.ward}` : s.routeRelative.length ? ` ${s.routeRelative.map(rel).join(" → ")}` : ""}${s.destRelative ? ` · bound for ${rel(s.destRelative)}` : ""}` : s.mission === "supply" ? `supply${s.destRelative ? ` → ${rel(s.destRelative)}` : ""}, refits at ${rel(s.homeRelative)}` : isTender(rules, s.cls) && !s.mission && !s.lane ? `on call for distress calls${s.destRelative ? ` · making for ${rel(s.destRelative)}` : s.docked ? " · waiting in harbour" : ""}` : s.destRelative ? `to ${rel(s.destRelative)}` : s.docked ? "in harbour" : "holding";
         const fisher = !!rules.ships?.classes.find(c => c.id === s.cls)?.fishingRate;
         const miner = !!rules.ships?.classes.find(c => c.id === s.cls)?.miningRate;
         const cls = rules.ships?.classes.find(c => c.id === s.cls);
         const armed = (cls?.guns ?? 0) > 0;
-        const carrier = !armed && (cls?.carries ?? []).length > 0;
+        const tender = cls?.role === "tender";
+        // a tender's job is distress calls; lane and supply stay console orders so they are not picked by mistake
+        const carrier = !armed && !tender && (cls?.carries ?? []).length > 0;
         const cargo = Object.entries(s.stock).map(([c, q]) => `${Math.floor(q)} ${c}`).join(", ");
         return (
           <div key={s.id} className="rounded-md border border-border p-2">
@@ -66,7 +69,8 @@ export function Fleet({ gameId, view, rules, busy, onCommand, onSail }: Props) {
               {s.dest && !s.lane && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: "sail", ship: s.id, clear: true })}>Hold</Button>}
               <Button size="sm" variant="ghost" disabled={busy || !s.docked} onClick={() => setDialog({ kind: "load", ship: s })}>Load…</Button>
               <Button size="sm" variant="ghost" disabled={busy || !s.docked || s.load <= 0} onClick={() => setDialog({ kind: "unload", ship: s })}>Unload…</Button>
-              <Button size="sm" variant="ghost" disabled={busy || harbors.length < 2} onClick={() => setDialog({ kind: "lane", ship: s })}>{s.lane ? "Change lane…" : "Lane…"}</Button>
+              {(!tender || s.lane) && <Button size="sm" variant="ghost" disabled={busy || harbors.length < 2} onClick={() => setDialog({ kind: "lane", ship: s })}>{s.lane ? "Change lane…" : "Lane…"}</Button>}
+              {tender && s.mission === "supply" && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: "supply", ship: s.id, clear: true })}>Stop supply (put on call)</Button>}
               {s.lane && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: "lane", ship: s.id, clear: true })}>Leave lane</Button>}
               {s.docked && (pendingScrap === s.id
                 ? <Button size="sm" variant="danger" disabled={busy} onClick={() => { setPendingScrap(null); void onCommand({ verb: "scrap", ship: s.id }); }}>Confirm scrap</Button>
