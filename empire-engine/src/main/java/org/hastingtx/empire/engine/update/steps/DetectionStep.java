@@ -62,8 +62,9 @@ public final class DetectionStep implements Step {
         if (sig <= 0) return 0;
         double miss = 1.0;                                  // Π(1 − p) over sensors; commutative, so scan order cannot matter
         for (Sector s : ctx.snap.sectors()) {
-            if (s.owner() != cid || s.radarLevel() <= 0) continue;
-            double range = radarRange(d, s, tech);
+            if (s.owner() != cid) continue;
+            double range = org.hastingtx.empire.engine.view.Radar.range(ctx.cfg, s, tech);   // a station by its efficiency (issue #208)
+            if (range <= 0) continue;
             miss *= 1.0 - clamp(d.detectionProbability(Hex.distance(ctx.snap, s.at(), target.at()), range) * sig);
         }
         if (sc != null && d.ship() != null) for (Ship eye : ctx.ships) {
@@ -72,15 +73,6 @@ public final class DetectionStep implements Step {
             miss *= 1.0 - clamp(d.detectionProbability(Hex.distance(ctx.snap, eye.at(), target.at()), range) * sig);
         }
         return clamp(1.0 - miss);
-    }
-
-    /** Nominal range × radar level × efficiency, plus height, all scaled by the country's tech. */
-    static double radarRange(DetectionCfg d, Sector s, double tech) {
-        DetectionCfg.RadarCfg r = d.radar();
-        if (r == null) return 0;
-        double base = r.nominalRangeAt100() * (s.radarLevel() / 100.0) * (s.efficiency() / 100.0)
-                    + r.elevationBonusPer100m() * (s.elevation() / 100.0);
-        return base * (1.0 + r.techBonusPerPoint() * tech);
     }
 
     /**

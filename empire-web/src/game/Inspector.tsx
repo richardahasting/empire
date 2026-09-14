@@ -48,6 +48,7 @@ export function Inspector({ sector: s, view, rules, onCommand, busy, history, hi
         <Badge tone="neutral">eff {s.efficiency.toFixed(0)}%</Badge><Badge tone="neutral">mob {s.mobility.toFixed(0)}</Badge>
         {s.roadLevel > 0 && <Badge tone="neutral">road {s.roadLevel.toFixed(0)}</Badge>}
       </div>
+      {(s.radarRange ?? 0) >= 1 && <p className="text-xs" title="everything within reach is on your map, and enemy ships in it can be detected; reach grows with this sector's efficiency and your tech">Radar reaches {Math.floor(s.radarRange!)} hexes (the dashed ring)</p>}
       {s.resources && <p className="text-xs text-muted-foreground">fert {s.resources.fertility} · min {s.resources.minerals} · gold {s.resources.gold} · oil {s.resources.oil} · uran {s.resources.uranium}</p>}
       {type && (() => {
         const { cap, scale } = popCeiling(type, rules, view.levels.research);

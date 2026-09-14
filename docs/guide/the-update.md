@@ -66,7 +66,7 @@ adjusted by happiness. So **1,000 civilians build a sector from 0% to 100% in a
 single update**; 100 civilians gain 30 points. Whatever work is left over goes
 to production in step 5.
 
-Roads, rail and radar build the same way from their own budgets, and **decay**
+Roads and rail build the same way from their own budgets, and **decay**
 each update unless you pay their maintenance. When the treasury cannot cover
 everything, sectors are paid in a fixed, documented order and the rest rots.
 
@@ -123,6 +123,12 @@ A country below a fifth of the leader's tech has a 20% chance each update of
 closing a third of the gap. Being far behind is not permanent.
 
 ### 10. Detection
+**A radar station** is a sector designated `radar`. It reaches 12 hexes at 100%
+efficiency, scaled by its efficiency, plus a little for height, times your tech
+bonus, and never more than 30. **Everything within reach is on your map**, like
+your own neighbours, and goes onto your chart. Select the station to see its reach
+as a dashed ring.
+
 Radar, ships and planes roll against a probability shaped by range, elevation,
 tech, terrain and how visible the target is. A hit becomes a **contact** with a
 confidence and an age. Contacts go stale and are eventually dropped. Sectors

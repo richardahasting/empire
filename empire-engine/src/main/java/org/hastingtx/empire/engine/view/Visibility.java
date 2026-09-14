@@ -17,10 +17,16 @@ import java.util.TreeSet;
 public final class Visibility {
     private Visibility() {}
 
-    /** Sectors {@code countryId} can see this instant: what it owns, what adjoins that, and what its ships overlook. */
+    /** Sectors {@code countryId} can see this instant: what it owns, what adjoins that, what its radar reaches, and what its ships overlook. */
     public static Set<Coord> of(World w, GameConfig cfg, int countryId) {
         Set<Coord> visible = new TreeSet<>();
-        for (Sector s : w.ownedBy(countryId)) { visible.add(s.at()); visible.addAll(Hex.neighbours(w, s.at())); }
+        double tech = countryId >= 0 && countryId < w.countries().size() ? w.country(countryId).levels().tech() : 0;
+        for (Sector s : w.ownedBy(countryId)) {
+            visible.add(s.at()); visible.addAll(Hex.neighbours(w, s.at()));
+            // a radar station lifts the fog as far as it reaches (issue #208)
+            int reach = (int) Math.floor(Radar.range(cfg, s, tech));
+            if (reach >= 1) visible.addAll(Hex.within(w, s.at(), reach));
+        }
         // a ship lifts the fog around it (issue #62): everything within its class's sight is in view while it is there
         if (cfg.units().ships() != null) for (Ship sh : w.ships()) {
             if (sh.owner() != countryId) continue;

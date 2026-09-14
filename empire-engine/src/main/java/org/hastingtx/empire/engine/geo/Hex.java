@@ -125,4 +125,17 @@ public final class Hex {
         for (int i = 0; i < Math.floorMod(k, 6); i++) v = v.rot60();
         return toOffset(v.plus(o));
     }
+
+    /** Every hex within {@code r} of {@code c}, walking neighbours so a wrapping world is handled. */
+    public static java.util.Set<Coord> within(World w, Coord c, int r) {
+        java.util.Set<Coord> seen = new java.util.TreeSet<>();
+        seen.add(c);
+        List<Coord> frontier = List.of(c);
+        for (int k = 0; k < r; k++) {
+            List<Coord> next = new java.util.ArrayList<>();
+            for (Coord f : frontier) for (Coord n : neighbours(w, f)) if (seen.add(n)) next.add(n);
+            frontier = next;
+        }
+        return seen;
+    }
 }

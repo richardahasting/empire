@@ -33,6 +33,10 @@ There are also sectors that make no goods: `capital`, `warehouse`, `harbor`,
 `depot`, `city`, `school`, `university`, `research_lab`, `technical_center`,
 `bank`, `fortress`, `radar`, `park`, `hospital`.
 
+A `radar` sector sees as far as its efficiency lets it: up to 12 hexes at 100%,
+more with tech, never more than 30. Everything in reach shows on your map, and
+enemy ships in it can be detected. Select it to see the ring.
+
 ## The four limits on production
 
 A sector produces the **smallest** of these. Knowing which one is binding is
