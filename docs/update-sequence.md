@@ -305,8 +305,10 @@ a harbour's stock is the only thing two ships can contend for. For each ship:
    multi-source search per owner per update), she sails the largest `h` of her hops
    with `(h + dist[path[h]]) × fuel_per_hex × missions.fuel_reserve_factor ≤ fuel` —
    in port, at sea, bound for a harbour or not. When no `h > 0` fits, a docked ship
-   stays in; a ship at sea makes for the nearest harbour, as far as her tank carries
-   her, keeping her orders. (Two earlier versions judged only ships at sea not bound
+   stays in; a ship at sea makes for the harbour nearest **by sea** — the route read
+   off `dist` itself, stepping to a neighbour one hex nearer each time — as far as her
+   tank carries her, keeping her orders. (Not the harbour nearest as the crow flies:
+   game 82's ship #33 was sent to one a hex further by water than her tank.) (Two earlier versions judged only ships at sea not bound
    for a harbour, and one counted `2 × floor(mobility)`; game 82 stranded ships
    through both gaps.) **Port**: a docked ship
    with room in her tank of a unit or more does not sail, and keeps her

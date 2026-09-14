@@ -196,6 +196,29 @@ class ShipFuelTest {
         assertThat(capped).as("somewhere out there her fuel turned her back").isTrue();
     }
 
+    /**
+     * Ship #33 in game 82: turned for home, sent to the harbour nearest as the crow flies, which was a hex
+     * further by sea than her tank. Here the harbour three hexes away is behind a wall of land; another
+     * four hexes away is in open water. She must make for the one she can reach, and reach it.
+     */
+    @Test
+    void turnedForHomeSheMakesForTheHarbourNearestBySeaNotAsTheCrowFlies() {
+        World w = world(500);
+        for (int y = 3; y <= 19; y++) {                         // a wall of land a hex east of the eastern harbour
+            Coord c = new Coord(15, y);
+            w = w.withSector(w.sector(c).withTerrain(Terrain.PLAINS, 100, new Resources(0, 0, 0, 0, 0)));
+        }
+        Coord open = new Coord(20, 11);                          // a second harbour, out in the water beyond the wall
+        w = TestWorlds.own(w, CFG, open, "harbor", 100, 127, Map.of("civ", 500.0, "food", 300.0, "pet", 500.0), Map.of());
+        Coord ship = new Coord(16, 11);                          // three hexes from HARBOR as the crow flies, many by sea; four from the other
+        assertThat(Hex.distance(w, ship, HARBOR)).isLessThan(Hex.distance(w, ship, open));
+        double perHex = CFG.units().ships().shipClass("cargo_ship").fuelPerHexOr0();
+        w = withShip(w, ship, 4 * perHex + 2);                   // four hexes and a little: only the open-water harbour is in reach
+        w = w.withShip(w.ships().get(0).withDest(new Coord(22, 2)).withMobility(10));
+        for (int i = 0; i < 3; i++) w = Update.run(w, CFG, 50 + i).next();
+        assertThat(w.ships().get(0).at()).as("into the harbour she could reach by sea").isEqualTo(open);
+    }
+
     /** #4 and #15 in game 82: bound for a harbour they could not reach, while a nearer one was in reach. */
     @Test
     void boundForAHarbourSheCannotReachSheMakesForOneSheCan() {

@@ -204,8 +204,10 @@ public final class ShipStep implements Step {
                                 note.next().append("stays in port: ").append(ship.dest()).append(" is further than her fuel would bring her back from");
                                 hops = 0;
                             } else {
-                                Coord haven = nearestHarbour(ctx, ship, harbours.computeIfAbsent(ship.owner(), o -> ownHarbors(ctx, o)));
-                                List<Coord> home = haven == null ? null : SeaRoutes.path(ctx.snap, ctx.cfg, ship.owner(), ship.at(), haven);
+                                // by sea, along the same distances the check used — not to the harbour
+                                // nearest as the crow flies, which can be further by water than her tank
+                                List<Coord> home = SeaRoutes.pathHome(ctx.snap, ctx.cfg, ship.owner(), ship.at(), dist);
+                                Coord haven = home == null ? null : home.get(home.size() - 1);
                                 if (home != null) {
                                     bingo = haven;
                                     if (!haven.equals(ship.dest())) note.next().append("low on fuel (").append(Ledger.q(ship.fuel())).append(" of ").append(Ledger.q(cls.tankOr0())).append("): making for ").append(haven);
