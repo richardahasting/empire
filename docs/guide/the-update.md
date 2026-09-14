@@ -101,6 +101,13 @@ rail line's capacity can all be over-claimed:
 
 Nobody wins because they asked first. There is no first.
 
+### 7c. Ships
+Every ship, in the order they were built: worn by the sea, fitted out in
+harbour, fishing or mining, running its lane, supply round or mission, then
+refuelled, crewed and rearmed if docked, then sailing. A ship does the harbour's
+business the update she arrives. A hostile blockade stops a ship where she meets
+it. See [Ships](ships.html).
+
 ### 8. Money
 Taxes come in from civilians and workers; military pay, maintenance and
 construction costs go out. If the treasury falls below the bankruptcy
@@ -124,6 +131,14 @@ adjacent to your own are always visible.
 Detection is probabilistic, not a range check: something inside your radar
 range may go unseen, and the same thing may be seen one update and not the
 next.
+
+### 10a. Combat
+Every armed ship and every fort or harbour with guns picks a hostile ship it can
+see and reach, all from the same state, and the damage lands **all at once**. A
+ship sunk this update still fires this update. Hostile means at war, or marked
+for having fired on you in peacetime. Nothing fires at peace otherwise. Ships at
+or below the sinking line go down, and the victors in their hex salvage the
+cargo.
 
 ### 11. News, and 12. Apply
 Events are collected, then the ledger is applied to produce the new world. Two

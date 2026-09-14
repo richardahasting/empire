@@ -24,8 +24,8 @@ Nobody moves "first". What you set up before the update is what happens in it.
 - **[Moving goods](moving-goods.html)** — mobility, thresholds, distribution
   centres, delivery orders, roads and rail. Getting things from where they are
   made to where they are needed.
-- **[Ships](ships.html)** — harbours, hulls, fuel, crews, fishing and cargo
-  runs.
+- **[Ships](ships.html)** — harbours, hulls, fuel, crews, fishing, cargo runs
+  and supply, and war at sea: warships, firing, blockades and missions.
 - **[Levels](levels.html)** — tech, research, education and happiness: what
   they do and why they fall when you stop paying attention.
 - **[Command reference](commands.html)** — every command, what it takes and

@@ -2,7 +2,44 @@
 
 A running note of the state of play, so a session can pick up without re-deriving
 it. Ordered work lives in `m5-plan.md`; this page says how far along it is and
-where the open decisions sit. Last updated **2026-09-09**.
+where the open decisions sit. Last updated **2026-09-13**.
+
+## Landed 2026-09-13: the ships are finished
+
+- **Ships phase 3: war at sea** (#68). `fire SHIP x,y [CLASS]` resolves now, and
+  the target and everything of its country in reach answer in the same
+  exchange. At the update, `CombatStep` (10a, after detection) has every armed
+  ship and every fort or harbour with guns fire on a hostile ship it can see and
+  reach, all from one state, applied at once.
+  - **Hostile** means at war, or a ship marked for a peacetime shot at you, for
+    `fired_upon_updates`. Nothing fires at peace by itself.
+  - **Aiming:** a fresh contact or own sight. Submarines need a contact and a
+    destroyer or frigate.
+  - **Damage** comes off efficiency; a hull sinks at 10%; victors in her hex
+    salvage cargo less a quarter.
+  - **Supplies:** warships carry guns and shells as cargo, are built with them
+    aboard, and rearm in harbour.
+  - **Missions:** `patrol`, `search`, `escort`, `blockade` (stops hostile ships
+    within 1) and `interdict` (shells enemy trains). Every mission comes home for
+    shells, fuel, crew or repairs and goes back out.
+  - **The web map** finally draws contacts, which it never had. The Fleet panel
+    fires, searches and escorts.
+  - Every number is a GUESS under `units.ships.combat` and `units.ships.missions`.
+- **Limp home.** Sea wear stops at the efficiency a hull needs to make one hex an
+  update, and a hull at or below it makes for the nearest harbour by herself, at
+  least a hex an update, orders kept. Found in game 82, where two hand-sailed
+  miners were worn to 4% and 0% and could never move again. The web Fleet panel
+  also gained the missing "Mine from here" button.
+- **Ships phase 2** (#67). Lanes feed thresholds and act on arrival; the `supply`
+  mission keeps harbours topped up from wherever there is spare; tankers fill
+  their own tanks from the hold; a per-ship logbook (`history SHIP`, the Fleet
+  panel).
+- **Between 2026-09-10 and 2026-09-13**, recorded in OpenBrain and the issues
+  rather than retold here: map memory (#64), fuel (#65), crews (#66), rail lanes
+  (#70), a sector holds ten thousand (#91), immediate navigation (#69), seabed
+  mining (#112), relations (#137), news (#121), world-creation parameters, game
+  deletion, adding countries, a separate test database (#115), and the
+  first-evening playtest fixes (#146–#163).
 
 ## Landed 2026-09-09
 
@@ -214,6 +251,16 @@ and #77 making the tallies `long[]` means per-thread partials merge identically.
   every confidence band, so a faint smudge reads like a firm fix (#75, TODO in
   the code).
 
+- **Combat numbers are unplayed.** A destroyer settles an unarmed freighter in
+  three or four updates and has six salvos in her magazine; a battleship sinks a
+  destroyer in two or three. Coastal guns are strong (20 guns). Tune
+  `units.ships.combat` after a real war.
+- **Old games have no combat.** A game's rules are fixed at creation, so game 42
+  and any game created before 2026-09-13 needs the deity's Reload rules before its
+  warships can fire.
+- **Agents do not know the new verbs** (`supply`, `fire`, the missions); the
+  scripted agent is a fixture and is not taught strategy.
+
 ## The standing caveat
 
 Capacity 1000, whole-unit flows, longer rail reach and the new world sizes are
@@ -231,8 +278,6 @@ the only test that noticed the change at all.
 
 ## Parked
 
-- **#68 combat and missions.** Richard, 2026-09-09: wait until there are players
-  before building contact and battle.
 - **"Get some players"** — the thread that opened and never closed. It could mean
   making a game joinable by a stranger, getting a real multiplayer game running,
   or sharpening the agent tournaments. Those pull in different directions.

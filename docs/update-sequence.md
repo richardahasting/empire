@@ -243,6 +243,13 @@ trains leaving one depot take turns in issue order.
 ### 7c. Ships (**NEW**, issue #56; runs after road and rail flows)
 Ships are units on sea hexes or in harbours, in id order — few of them, and
 a harbour's stock is the only thing two ships can contend for. For each ship:
+0. **Wear.** At sea a hull loses `sea_wear_per_update`, but never below
+   `ceil(100 / (speed × tech speed factor))` when `sea_wear_limp_home` (the default,
+   also for games that predate the key): the least that still makes one hex an update.
+   A hull at sea at or below that line is **limping**: her destination is the nearest
+   harbour of her owner's with a sea route (by hexes, ties in canonical order),
+   overriding lane, supply and mission for the update; she sails at least one hex
+   whatever her mobility (fuel and crew still apply); her orders are kept.
 1. **Fit out.** Docked in a harbour of its owner at ≥ `harbor_min_efficiency`,
    a hull below 100% gains `dock_points_per_update`, paid from the harbour's
    stock and the treasury per `dock_materials_per_point`.
@@ -269,12 +276,28 @@ a harbour's stock is the only thing two ships can contend for. For each ship:
    threshold missing, then trip length, then coordinates and commodity. Nothing to
    do holds it in harbour or sends it home from sea. A harbour's dockside
    warehouses count with it for both wants and spare.
-6. **Fuel.** A docked ship refuels from the harbour; at sea, from an owner's
+6. **Military missions** (issue #68). A warship on `patrol`, `search`, `escort`,
+   `blockade` or `interdict` first checks her supplies: at the refit line, or with
+   shells below `missions.resupply_shells_below` of her magazine, fuel below
+   `resupply_fuel_below` of her tank or below the fuel to get home ×
+   `fuel_reserve_factor`, or short-handed, she makes for home and waits there
+   until supplied. Otherwise: a patrol takes the next waypoint after the one she
+   is on (the nearest, if she is on none); a blockade or interdiction makes for
+   its station; an escort for her charge's position; a search, having arrived,
+   draws a sea hex within `search_radius` of home and `search_hops` of her,
+   weighted by `1 + min(radius, updates since her country last saw it)` from a
+   stream keyed on ship and update.
+7. **Fuel.** A docked ship refuels from the harbour; at sea, from an owner's
    tanker already processed in the same hex; a tanker that cannot make a hex
    fills its own tank from its hold.
-7. **Sail.** Toward its destination over sea hexes and its owner's harbours by
+8. **Crew and arms.** A docked ship signs on crew from the harbour, and an armed
+   one takes guns up to her class's `guns` and shells up to its `magazine`.
+9. **Sail.** Toward its destination over sea hexes and its owner's harbours by
    the shortest hop count, spending the ship's mobility; no route or no range
-   holds it in place with a note. **On arrival it does the harbour's business the
+   holds it in place with a note. A hostile warship on `blockade` at her station
+   stops a ship at the first hex of its path within `missions.blockade_radius`
+   of her, read from the snapshot so processing order cannot matter; an order
+   given between updates is stopped the same way. **On arrival it does the harbour's business the
    same update**: a lane unloads or loads and turns, a supply ship lands and
    takes on cargo and picks its next job. Arrival clears a plain destination.
 Conservation counts holds and tanks with sector stocks. Harbours get sector-history
@@ -317,6 +340,38 @@ stale; older than 2× are dropped. `held_cargo` uses its own low signature so
 a raider does not see the haul. Adjacent owned sectors are always visible.
 (**NEW** model; the original was binary range.)
 
+### 10a. Combat (**NEW**, issue #68; after detection)
+Runs only when some pair of countries is at war or some ship carries a live
+peacetime mark (`Ship.firedOn`); expired marks are dropped first.
+1. **Batteries.** Every ship of an armed class with crew, guns and shells, above
+   `combat.sink_at_or_below`; and every sector whose designation is in
+   `combat.coastal.designations` with guns, shells and military, bringing
+   `min(max_guns, gun, floor(mil / mil_per_gun))` guns to bear.
+2. **Targets, all from the same state.** A battery takes the nearest ship that is
+   hostile to its owner (at war, or marked by it and unexpired), within its
+   range, that it can hurt (a submarine only by an `asw` ship) and see (a contact
+   of its owner no older than `combat.target_max_age`, or a surface ship within its
+   own sight). Ties: more guns, then lower id. Guns fired are
+   `floor(min(guns, shells / shells_per_gun))`; damage is `guns × hit_per_gun ×
+   eff/100 × (1 + min(tech_bonus_max, tech × tech_bonus_per_point)) × roll ÷ (1 +
+   armor/100)`, the roll uniform in `damage_roll` from a stream keyed on firer,
+   target and update. An interdicting ship with no ship target shells the nearest
+   enemy rail parcel in reach instead, destroying `guns × train_units_per_gun ×`
+   the same factors.
+3. **Apply.** Shells out of every magazine (tallied destroyed; a coastal
+   battery's are consumed from the sector), then damage onto every hull at once.
+4. **Sink.** A hull at or below the line goes down. Her cargo, less
+   `capture.cargo_destroyed_fraction`, goes to the ships in her hex of the
+   countries that hit her, in id order, as holds allow; the rest, her fuel and
+   her crew are tallied destroyed. Contacts on her are dropped; a `ship_sunk`
+   event is emitted and the server posts it as news.
+
+The `fire` command resolves the same arithmetic between updates: the firer's
+salvo and every answering battery of the target's country within reach of the
+firer, computed from the state before either lands, then applied together. At
+peace it marks the firer for `combat.fired_upon_updates` and gives the target's
+country a firm contact on her.
+
 ### 11. Events and news
 Collect everything the steps emitted (starvation, plague, bankruptcy,
 stranded trains, severed rail, new contacts, sanctuary breaks, handicap
@@ -350,8 +405,8 @@ step-attributed log in one transaction.
 
 ## What is deliberately *not* in the update
 
-- Combat, unit movement, missions — M5; they slot in as steps 6b/7b (planned
-  and resolved with the same contention machinery) once units exist.
+- Land units and planes (#71). Sea combat and missions are in (steps 7c and 10a);
+  land and air units will join the same simultaneous resolution when they exist.
 - Command execution. Player commands (`des`, `move`, `dist`, `thresh`,
   `tele`…) execute **between** updates against the live state, cost BTUs at
   issue time, and are the only thing that mutates state outside this

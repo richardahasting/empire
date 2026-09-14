@@ -13,6 +13,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Step 7c (issue #56): ships. In id order — few ships, and a harbour's stock is the only thing two
@@ -39,10 +40,14 @@ public final class ShipStep implements Step {
             // update, and a ship in its own harbour does not, because it is being looked after there.
             // Efficiency drives speed and the mobility cap, so a tired ship is a slow one before it is
             // anything else.
-            if (!docked && sc.seaWear() > 0 && ship.efficiency() > 0) {
-                double worn = Math.min(sc.seaWear(), ship.efficiency());
+            // It stops at the least a hull needs to make one hex an update (Richard 2026-09-13, "limp
+            // home"), so a ship left at sea can always crawl back to be refitted.
+            double floor = sc.limpFloor(cls, ship.tech());
+            if (!docked && sc.seaWear() > 0 && ship.efficiency() > floor) {
+                double worn = Math.min(sc.seaWear(), ship.efficiency() - floor);
                 ship = ship.withEfficiency(ship.efficiency() - worn);
                 note.next().append("worn by the sea, ").append(Ledger.q(ship.efficiency())).append("% left");
+                if (ship.efficiency() <= floor + 1e-9) note.last().append(" — as worn as the sea will make her; she can still limp home");
             }
 
             // fit out: a docked hull gains efficiency from the harbour's materials and cash
@@ -96,12 +101,21 @@ public final class ShipStep implements Step {
                 note.next().append("cruised: +").append(Ledger.q(h)).append(" happiness");
             }
             boolean refitting = false;
-            if (ship.lane() != null) {
+            // limp home (Richard 2026-09-13): a hull at sea worn to the least she can sail on makes for
+            // the nearest harbour of her owner's, whatever she was doing, and keeps her orders for after
+            boolean limping = !docked && floor > 0 && ship.efficiency() <= floor + 1e-9;
+            if (limping) {
+                Coord haven = nearestHarbour(ctx, ship, harbours.computeIfAbsent(ship.owner(), o -> ownHarbors(ctx, o)));
+                if (haven == null) { note.next().append("worn out, and no harbour of yours she can reach"); ship = ship.withDest(null); }
+                else { if (!haven.equals(ship.dest())) note.next().append("worn out: limping home to ").append(haven); ship = ship.withDest(haven); }
+            } else if (ship.lane() != null) {
                 ship = runLane(ctx, ship, cls, si, out, note);
             } else if (ship.supplying() && ship.home() != null) {
                 refitting = refitDue(sc, ship, docked);
                 if (refitting) ship = goForRefit(ship, docked, note);
                 else ship = runSupply(ctx, ship, cls, si, out, harbours, note);
+            } else if (ship.onMilitaryMission() && ship.home() != null) {
+                ship = runMilitary(ctx, sc, cls, ship, docked, si, out, note);
             } else if (ship.roaming() && ship.home() != null) {
                 // one mission, two things to look for (issue #112): land the load at home, then roam the
                 // water, turning for home when the hold fills. Only the weighting differs.
@@ -133,12 +147,15 @@ public final class ShipStep implements Step {
             if (sc.fuel()) ship = refuelFromOwnHold(ctx, ship, cls, note);
             // sign on a crew (issue #66): only a harbour can, and only from the people who are there
             if (sc.crews() && docked) ship = muster(ctx, ship, cls, hi, note);
+            // rearm (issue #68): a warship in harbour takes on guns up to what she mounts and shells up to her magazine
+            if (docked && sc.combat() != null && cls.armed()) ship = rearm(ctx, ship, cls, hi, note);
             // sail
             if (ship.dest() != null && !ship.dest().equals(ship.at())) {
                 List<Coord> path = SeaRoutes.path(ctx.snap, ctx.cfg, ship.owner(), ship.at(), ship.dest());
                 if (path == null) note.next().append("no sea route to ").append(ship.dest());
                 else {
                     int range = (int) Math.floor(ship.mobility());
+                    if (limping) range = Math.max(range, 1);        // however worn, she makes a hex an update toward harbour
                     int hops = Math.min(range, path.size() - 1);
                     // short-handed is not going anywhere (issue #66)
                     if (sc.crews() && ship.crew() < cls.crewOr0()) {
@@ -150,7 +167,14 @@ public final class ShipStep implements Step {
                     double perHex = sc.fuel() ? cls.fuelPerHexOr0() : 0;
                     int fuelled = perHex > 0 ? (int) Math.floor(ship.fuel() / perHex) : hops;
                     if (perHex > 0 && fuelled < hops) hops = Math.max(0, fuelled);
-                    if (hops <= 0 && sc.crews() && ship.crew() < cls.crewOr0()) { /* already said so */ }
+                    // a hostile blockade on station stops her where she meets it (issue #68)
+                    var blocked = org.hastingtx.empire.engine.combat.Blockade.limit(ctx.snap, ctx.cfg, ship, path, hops, ctx.snap.updateNumber());
+                    if (blocked.by() != null) {
+                        hops = blocked.hops();
+                        note.next().append("stopped by ").append(ctx.country(blocked.by().owner()).name()).append("'s blockade at ").append(path.get(hops));
+                    }
+                    if (blocked.by() != null && hops <= 0) { /* already said so */ }
+                    else if (hops <= 0 && sc.crews() && ship.crew() < cls.crewOr0()) { /* already said so */ }
                     else if (hops <= 0 && perHex > 0 && ship.fuel() < perHex) note.next().append("out of fuel, holding at ").append(ship.at());
                     else if (hops <= 0) note.next().append("too unfit to sail (").append(Ledger.q(ship.efficiency())).append("%)");
                     else {
@@ -167,7 +191,8 @@ public final class ShipStep implements Step {
                             note.last().append(", arrived");
                             // the harbour's business is done the update she gets there, not the one after
                             // (issue #67): a lane unloads on arrival and a supply ship takes the next job
-                            if (ship.lane() != null) ship = runLane(ctx, ship, cls, si, out, note);
+                            if (limping) ship = ship.withDest(null);
+                            else if (ship.lane() != null) ship = runLane(ctx, ship, cls, si, out, note);
                             else {
                                 ship = ship.withDest(null);
                                 if (ship.supplying() && ship.home() != null && !refitting) ship = runSupply(ctx, ship, cls, si, out, harbours, note);
@@ -426,6 +451,128 @@ public final class ShipStep implements Step {
         return sum;
     }
 
+    /** The nearest harbour of her owner's with a sea route to it, by hexes, ties in canonical order. */
+    private static Coord nearestHarbour(Ctx ctx, Ship ship, List<Sector> mine) {
+        Coord best = null; int bestD = Integer.MAX_VALUE;
+        for (Sector h : mine) {
+            int d = Hex.distance(ctx.snap, ship.at(), h.at());
+            if (d >= bestD) continue;
+            if (SeaRoutes.path(ctx.snap, ctx.cfg, ship.owner(), ship.at(), h.at()) == null) continue;
+            best = h.at(); bestD = d;
+        }
+        return best;
+    }
+
+    // ---------------------------------------------------------------------------------- military missions
+
+    /**
+     * Where a warship on a mission goes this update (issue #68). First the supplies: worn to the refit
+     * line, or low on shells, fuel or crew, she makes for home, and in harbour she stays until she is
+     * fit to go out again — the rearm, refuel and muster later in this step fill her up. Then the
+     * mission: the next patrol waypoint, the station, her charge, or somewhere new to look.
+     */
+    private static Ship runMilitary(Ctx ctx, UnitsCfg.ShipsCfg sc, UnitsCfg.ShipClassCfg cls, Ship ship, boolean docked, int si, List<Ship> out, Log note) {
+        if (refitDue(sc, ship, docked)) return goForRefit(ship, docked, note);
+        String low = lowOn(ctx, sc, cls, ship, docked);
+        if (low != null) {
+            if (docked) { note.next().append("in harbour for ").append(low); return ship.withDest(null); }
+            if (!ship.home().equals(ship.dest())) note.next().append("low on ").append(low).append(", making for ").append(ship.home());
+            return ship.withDest(ship.home());
+        }
+        Coord before = ship.dest();
+        switch (ship.mission()) {
+            case Ship.PATROL -> {
+                List<Coord> route = ship.route();
+                if (route.isEmpty()) return ship.withDest(null);
+                if (ship.dest() == null || ship.at().equals(ship.dest()) || !route.contains(ship.dest())) {
+                    int here = route.indexOf(ship.at());
+                    Coord next;
+                    if (here >= 0) next = route.get((here + 1) % route.size());
+                    else {
+                        next = route.get(0);
+                        for (Coord p : route) if (Hex.distance(ctx.snap, ship.at(), p) < Hex.distance(ctx.snap, ship.at(), next)) next = p;
+                    }
+                    ship = ship.withDest(next);
+                }
+                if (!Objects.equals(before, ship.dest())) note.next().append("on patrol, bound for ").append(ship.dest());
+            }
+            case Ship.BLOCKADE, Ship.INTERDICT -> {
+                Coord station = ship.station();
+                if (station == null) return ship.withDest(null);
+                if (ship.at().equals(station)) { note.next().append("on station at ").append(station); return ship.withDest(null); }
+                if (!station.equals(ship.dest())) note.next().append("making for her station at ").append(station);
+                ship = ship.withDest(station);
+            }
+            case Ship.ESCORT -> {
+                Ship charge = null;
+                for (int k = 0; k < ctx.ships.size(); k++) {
+                    Ship o = k < out.size() ? out.get(k) : ctx.ships.get(k);
+                    if (k != si && o.id() == ship.ward() && o.owner() == ship.owner()) { charge = o; break; }
+                }
+                if (charge == null) {
+                    note.next().append("her charge, ship #").append(ship.ward()).append(", is gone; making for ").append(ship.home());
+                    return ship.withMission(null, null).withDest(ship.home());
+                }
+                ship = ship.withDest(ship.at().equals(charge.at()) ? null : charge.at());
+                if (!Objects.equals(before, ship.dest())) note.next().append(ship.dest() == null ? "with ship #" + charge.id() : "following ship #" + charge.id() + " to " + charge.at());
+            }
+            default -> {   // search
+                if (ship.dest() == null || ship.at().equals(ship.dest()) || ship.dest().equals(ship.home())) {
+                    Coord next = pickSearch(ctx, sc, ship);
+                    if (next == null) { note.next().append("no water to search within ").append(sc.missionsOrDefault().searchRadiusOr0()).append(" of ").append(ship.home()); return ship.withDest(null); }
+                    ship = ship.withDest(next);
+                    note.next().append("searching toward ").append(next);
+                }
+            }
+        }
+        return ship;
+    }
+
+    /** What sends her home: shells, fuel or crew below what the mission rules allow, or null. */
+    private static String lowOn(Ctx ctx, UnitsCfg.ShipsCfg sc, UnitsCfg.ShipClassCfg cls, Ship ship, boolean docked) {
+        var mc = sc.missionsOrDefault();
+        List<String> low = new ArrayList<>();
+        if (sc.combat() != null && cls.magazineOr0() > 0 && ship.stock().get(ctx.com.index("shell")) < cls.magazineOr0() * mc.shellsBelow()) low.add("shells");
+        if (sc.fuel() && cls.tankOr0() > 0) {
+            double need = cls.tankOr0() * mc.fuelBelow();
+            if (!docked) {
+                List<Coord> home = SeaRoutes.path(ctx.snap, ctx.cfg, ship.owner(), ship.at(), ship.home());
+                if (home != null) need = Math.max(need, (home.size() - 1) * cls.fuelPerHexOr0() * mc.reserve());
+            }
+            if (ship.fuel() < need) low.add("fuel");
+        }
+        if (sc.crews() && ship.crew() < cls.crewOr0()) low.add("crew");
+        return low.isEmpty() ? null : String.join(" and ", low);
+    }
+
+    /**
+     * The next leg of a search: a sea hex within the search radius of home and a leg's hops of her,
+     * drawn at random, weighted toward water her country has not seen lately — unseen water most of
+     * all. Deliberately unpredictable, so nobody can learn the route; the one mission whose purpose is
+     * the fog.
+     */
+    static Coord pickSearch(Ctx ctx, UnitsCfg.ShipsCfg sc, Ship ship) {
+        var mc = sc.missionsOrDefault();
+        int radius = mc.searchRadiusOr0(), hops = mc.searchHopsOr0();
+        if (radius <= 0 || hops <= 0) return null;
+        Map<Coord, Long> seen = new HashMap<>();
+        for (SeenSector m : ctx.snap.seenBy(ship.owner())) seen.put(m.at(), m.seenUpdate());
+        java.util.SplittableRandom rng = org.hastingtx.empire.engine.update.Rng.stream("search:" + ship.id() + ":" + ctx.snap.updateNumber(), ctx.seed);
+        List<Coord> cands = new ArrayList<>(); List<Double> weights = new ArrayList<>(); double total = 0;
+        for (Coord c : org.hastingtx.empire.engine.combat.Blockade.within(ctx.snap, ship.at(), hops)) {
+            if (c.equals(ship.at()) || ctx.snap.sector(c).terrain() != Terrain.OCEAN) continue;
+            if (Hex.distance(ctx.snap, c, ship.home()) > radius) continue;
+            if (SeaRoutes.path(ctx.snap, ctx.cfg, ship.owner(), ship.at(), c) == null) continue;
+            Long when = seen.get(c);
+            double wgt = 1.0 + (when == null ? radius : Math.min(radius, ctx.snap.updateNumber() - when));
+            cands.add(c); weights.add(wgt); total += wgt;
+        }
+        if (cands.isEmpty()) return null;
+        double r = rng.nextDouble() * total;
+        for (int i = 0; i < cands.size(); i++) { r -= weights.get(i); if (r <= 0) return cands.get(i); }
+        return cands.get(cands.size() - 1);
+    }
+
     // ---------------------------------------------------------------------------------- fuel and crews
 
     /**
@@ -484,6 +631,28 @@ public final class ShipStep implements Step {
         if (take < 1) return ship;
         note.next().append("filled her own tank with ").append(Ledger.q(take)).append(' ').append(ctx.com.id(pet)).append(" from the hold");
         return ship.withStock(ship.stock().plus(pet, -take)).withFuel(ship.fuel() + take);
+    }
+
+    /**
+     * Guns up to what she can bring to bear, shells up to her magazine, from the harbour's own stock
+     * (issue #68). Like fuel it is a move, not a purchase: the harbour has to have been sent them.
+     */
+    private static Ship rearm(Ctx ctx, Ship ship, UnitsCfg.ShipClassCfg cls, int hi, Log note) {
+        StringBuilder took = new StringBuilder();
+        String[] what = {"gun", "shell"};
+        double[] want = {cls.gunsOr0(), cls.magazineOr0()};
+        for (int k = 0; k < what.length; k++) {
+            int c = ctx.com.index(what[k]);
+            double room = Math.min(want[k] - ship.stock().get(c), cls.hold() - ship.load());
+            if (room < 1) continue;
+            double have = ctx.sector(hi).stock().get(c) + ctx.led().st(hi, c);
+            double got = ctx.led().toShip(hi, c, Math.min(room, Math.max(0, have)));
+            if (got <= 0) continue;
+            ship = ship.withStock(ship.stock().plus(c, got));
+            took.append(took.isEmpty() ? "" : " and ").append(Ledger.q(got)).append(' ').append(what[k]).append(got == 1 ? "" : "s");
+        }
+        if (!took.isEmpty()) note.next().append("rearmed with ").append(took);
+        return ship;
     }
 
     /** Civilians on a merchantman, military on a warship (issue #66). */

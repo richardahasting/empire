@@ -47,7 +47,11 @@ public record CountryView(
                            /** What is in the tank and what it holds (issue #65); both 0 when fuel is off. */
                            double fuel, double tank,
                            /** Who is aboard and how many she needs (issue #66); both 0 when crews are off. */
-                           double crew, double crewNeeded) {}
+                           double crew, double crewNeeded,
+                           /** A patrol's waypoints or a station, relative (issue #68); the ship an escort stays with (0 = none). */
+                           List<Coord> routeRelative, long ward,
+                           /** Marked for firing on a country at peace: those countries may shoot her on sight until the mark runs out. */
+                           List<String> markedBy) {}
     /**
      * A sighting as its holder is allowed to read it. {@code band} is firm | probable | faint and
      * {@code age} is updates since the sighting, so a stale mark can be drawn dimmer. Anything the
@@ -192,7 +196,9 @@ public record CountryView(
             ships.add(new ShipView(sh.id(), sh.cls(), sh.name(), sh.at(), relative(w, c.capital(), sh.at()), sh.efficiency(), st, sh.load(), hold,
                     sh.dest(), sh.dest() == null ? null : relative(w, c.capital(), sh.dest()), lane, sh.note(), docked, sh.tech(), hexes, sh.mission(), sh.home() == null ? null : relative(w, c.capital(), sh.home()),
                     sh.fuel(), cfg.units().ships() != null && cfg.units().ships().fuel() ? cfg.units().ships().shipClass(sh.cls()).tankOr0() : 0,
-                    sh.crew(), cfg.units().ships() != null && cfg.units().ships().crews() ? cfg.units().ships().shipClass(sh.cls()).crewOr0() : 0));
+                    sh.crew(), cfg.units().ships() != null && cfg.units().ships().crews() ? cfg.units().ships().shipClass(sh.cls()).crewOr0() : 0,
+                    sh.route().stream().map(p -> relative(w, c.capital(), p)).toList(), sh.ward(),
+                    sh.firedOn().entrySet().stream().filter(e -> e.getValue() >= w.updateNumber() + 1 && e.getKey() < w.countries().size()).map(e -> w.country(e.getKey()).name()).toList()));
         }
         List<ContactView> contacts = new ArrayList<>();
         if (cfg.detection() != null) for (Contact ct : w.contactsOf(countryId)) {

@@ -25,6 +25,7 @@ public final class Update {
                 new MoneyStep(),          // 8
                 new LevelsStep(),         // 9
                 new DetectionStep(),      // 10 (stub in M0)
+                new CombatStep(),         // 10a everyone who can see a quarrel fires, all at once (issue #68)
                 new MemoryStep(),         // 10b what each country can see goes onto its chart (issue #64)
                 new NewsStep());          // 11
     }

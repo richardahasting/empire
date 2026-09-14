@@ -45,6 +45,8 @@ public final class CommandExecutor {
             case Command.Fish f -> fish(w, c, f);
             case Command.Mine m -> mine(w, c, m);
             case Command.Supply sp -> supply(w, c, sp);
+            case Command.Fire fi -> Engagement.fire(cfg, com, w, c, fi);
+            case Command.Mission mi -> mission(w, c, mi);
             case Command.Move m -> move(w, c, m);
             case Command.Explore e -> explore(w, c, e);
             case Command.BuildRoad br -> buildRoad(w, c, br);
@@ -241,7 +243,13 @@ public final class CommandExecutor {
         }
         if (c.cash() < cash) return CommandResult.fail(w, "a " + cls.name() + " costs $" + fmt(cash) + "; you have $" + fmt(c.cash()));
         long id = w.nextShipId();
-        Ship ship = new Ship(id, c.id(), cls.id(), b.name() == null ? "" : b.name().trim(), h.at(), sc.startEfficiency(), Stocks.zero(com.size()), null, null, w.updateNumber(), "laid down", c.levels().tech(), null, null);
+        // an armed hull's guns and shells are her armament, not scrap (issue #68): they go aboard
+        Stocks aboard = Stocks.zero(com.size());
+        if (cls.armed()) for (String k : new String[] {"gun", "shell"}) {
+            Double q = cls.buildOrEmpty().get(k);
+            if (q != null && q > 0) aboard = aboard.plus(com.index(k), q);
+        }
+        Ship ship = new Ship(id, c.id(), cls.id(), b.name() == null ? "" : b.name().trim(), h.at(), sc.startEfficiency(), aboard, null, null, w.updateNumber(), "laid down", c.levels().tech(), null, null);
         List<Ship> ships = new ArrayList<>(w.ships()); ships.add(ship);
         World next = w.withSector(h.withStock(st)).withCountry(c.withCash(c.cash() - cash)).withShips(ships, id + 1);
         return new CommandResult(next, null, 0, cls.name() + " #" + id + " laid down at " + b.harbor() + " at " + fmt(sc.startEfficiency()) + "%; it fits out while docked");
@@ -273,6 +281,17 @@ public final class CommandExecutor {
             // haste is dearer than planning: a hex ordered now costs rushCost, a planned one costs 1
             double rush = sc.rushCost();
             int hops = Math.min(Math.min((int) Math.floor(ship.mobility() / rush), hexes), byFuel);
+            // a hostile blockade on station stops her where she meets it (issue #68)
+            var blocked = org.hastingtx.empire.engine.combat.Blockade.limit(w, cfg, ship, path, hops, w.updateNumber());
+            if (blocked.by() != null) {
+                hops = blocked.hops();
+                String who = w.country(blocked.by().owner()).name();
+                if (hops <= 0) return new CommandResult(w.withShip(ship), null, 0, "ship #" + s.ship() + " is held by " + who + "'s blockade at " + ship.at() + ended);
+                Coord to = path.get(hops);
+                ship = ship.withAt(to).withMobility(ship.mobility() - hops * rush);
+                if (perHex > 0) ship = ship.withFuel(ship.fuel() - hops * perHex);
+                return new CommandResult(w.withShip(ship), null, 0, "ship #" + s.ship() + " sails " + hops + (hops == 1 ? " hex" : " hexes") + " and is stopped by " + who + "'s blockade at " + to + ended);
+            }
             if (hops > 0) {
                 Coord to = path.get(hops);
                 ship = ship.withAt(to).withMobility(ship.mobility() - hops * rush);
@@ -380,6 +399,7 @@ public final class CommandExecutor {
             cargo.add(com.index(k));
         }
         if (cls.carriesOrEmpty().isEmpty()) return CommandResult.fail(w, "a " + cls.name() + " carries no cargo");
+        if (cls.military()) return CommandResult.fail(w, "a " + cls.name() + " does not run cargo");
         Ship.Lane lane = new Ship.Lane(l.from(), l.to(), cargo, false);
         return new CommandResult(w.withShip(ship.withLane(lane).withDest(l.from()).withMission(null, null)), null, 0, "ship #" + l.ship() + " runs " + l.from() + " → " + l.to() + " carrying " + (cargo.isEmpty() ? "whatever it can" : String.join(", ", l.cargo())) + "; heading to " + l.from() + " to load");
     }
@@ -419,6 +439,80 @@ public final class CommandExecutor {
     }
 
     /**
+     * A military mission (issue #68). Only a hull with guns; every mission needs a harbour to come home
+     * to for shells, fuel and repairs — the one she is in, or the nearest of yours she can reach.
+     */
+    private CommandResult mission(World w, Country c, Command.Mission m) {
+        Ship ship = myShip(w, c, m.ship());
+        if (ship == null) return CommandResult.fail(w, "no ship #" + m.ship() + " of yours");
+        String kind = m.kind() == null ? "" : m.kind().toLowerCase(java.util.Locale.ROOT);
+        if (!Ship.MILITARY_MISSIONS.contains(kind)) return CommandResult.fail(w, "no such mission: " + m.kind());
+        if (m.off()) {
+            if (!kind.equals(ship.mission())) return CommandResult.fail(w, "ship #" + ship.id() + " is not on " + kind);
+            return new CommandResult(w.withShip(ship.withMission(null, null).withDest(null)), null, 0, "ship #" + ship.id() + " comes off " + kind + " and holds position");
+        }
+        var sc = cfg.units().ships();
+        var cls = sc.shipClass(ship.cls());
+        if (!cls.armed()) return CommandResult.fail(w, "a " + cls.name() + " has no guns; missions are for warships");
+        Coord home = harborOf(w, c, w.sector(ship.at())) ? ship.at() : nearestHarbour(w, c, ship);
+        if (home == null) return CommandResult.fail(w, "ship #" + ship.id() + " has no harbour of yours to come home to");
+        List<Coord> points = m.points() == null ? List.of() : m.points();
+        long ward = 0;
+        String what;
+        switch (kind) {
+            case Ship.PATROL -> {
+                if (points.size() < 2) return CommandResult.fail(w, "a patrol needs at least two points to walk between");
+                for (int i = 0; i < points.size(); i++) {
+                    String bad = navigable(w, c, points.get(i));
+                    if (bad != null) return CommandResult.fail(w, bad);
+                    Coord next = points.get((i + 1) % points.size());
+                    if (org.hastingtx.empire.engine.update.SeaRoutes.path(w, cfg, c.id(), points.get(i), next) == null) return CommandResult.fail(w, "no sea route from " + points.get(i) + " to " + next);
+                }
+                if (org.hastingtx.empire.engine.update.SeaRoutes.path(w, cfg, c.id(), ship.at(), points.get(0)) == null) return CommandResult.fail(w, "ship #" + ship.id() + " has no sea route to " + points.get(0));
+                what = "patrols " + points.stream().map(Coord::toString).collect(java.util.stream.Collectors.joining(" → ")) + " and round again";
+            }
+            case Ship.BLOCKADE, Ship.INTERDICT -> {
+                if (points.size() != 1) return CommandResult.fail(w, "a " + kind + " holds one station: give one x,y");
+                String bad = navigable(w, c, points.get(0));
+                if (bad != null) return CommandResult.fail(w, bad);
+                if (org.hastingtx.empire.engine.update.SeaRoutes.path(w, cfg, c.id(), ship.at(), points.get(0)) == null) return CommandResult.fail(w, "ship #" + ship.id() + " has no sea route to " + points.get(0));
+                what = kind.equals(Ship.BLOCKADE)
+                        ? "holds " + points.get(0) + "; at war, an enemy ship that comes within " + sc.missionsOrDefault().blockadeRadiusOr0() + " of her is stopped there"
+                        : "holds " + points.get(0) + "; at war, she shells enemy trains within her guns' reach";
+            }
+            case Ship.ESCORT -> {
+                Ship charge = myShip(w, c, m.ward());
+                if (charge == null || charge.id() == ship.id()) return CommandResult.fail(w, "escort which of your other ships?");
+                ward = charge.id();
+                what = "stays with ship #" + charge.id();
+            }
+            default -> {
+                points = List.of();
+                what = "searches the water within " + sc.missionsOrDefault().searchRadiusOr0() + " of " + home + ", going where you have not looked lately";
+            }
+        }
+        return new CommandResult(w.withShip(ship.withOrders(kind, home, points, ward).withLane(null).withDest(null)), null, 0,
+                "ship #" + ship.id() + " " + what + "; she comes home to " + home + " for shells, fuel and repairs. At war she fights what she finds; at peace she only watches");
+    }
+
+    /** Null if a ship may be sent to {@code at}; otherwise why not. */
+    private String navigable(World w, Country c, Coord at) {
+        if (at == null || !w.inBounds(at)) return "out of bounds: " + at;
+        return org.hastingtx.empire.engine.update.SeaRoutes.navigable(w, cfg, w.sector(at), c.id()) ? null : at + " is not sea or one of your harbours";
+    }
+
+    /** The nearest harbour of yours she can sail to, by hexes then position. */
+    private Coord nearestHarbour(World w, Country c, Ship ship) {
+        Coord best = null; int bestD = Integer.MAX_VALUE;
+        for (Sector s : w.ownedBy(c.id())) {
+            if (!harborOf(w, c, s)) continue;
+            int d = Hex.distance(w, ship.at(), s.at());
+            if (d < bestD && org.hastingtx.empire.engine.update.SeaRoutes.path(w, cfg, c.id(), ship.at(), s.at()) != null) { best = s.at(); bestD = d; }
+        }
+        return best;
+    }
+
+    /**
      * The supply mission (issue #67). Needs a hull that carries something and a harbour to call home,
      * where she goes to be refitted; what she carries and where is decided at the update, from the
      * thresholds, so there is nothing else to say here.
@@ -429,6 +523,7 @@ public final class CommandExecutor {
         if (m.off()) return new CommandResult(w.withShip(ship.withMission(null, null).withDest(null)), null, 0, "ship #" + m.ship() + " comes off supply and holds position");
         var cls = cfg.units().ships().shipClass(ship.cls());
         if (cls.carriesOrEmpty().isEmpty()) return CommandResult.fail(w, "a " + cls.name() + " carries no cargo");
+        if (cls.military()) return CommandResult.fail(w, "a " + cls.name() + " does not run cargo");
         Coord home = m.home() != null ? m.home() : harborOf(w, c, w.sector(ship.at())) ? ship.at() : null;
         if (home == null) return CommandResult.fail(w, "name a home harbour, or give the order while the ship is in one");
         if (!harborOf(w, c, w.sector(home))) return CommandResult.fail(w, home + " is not one of your harbours");

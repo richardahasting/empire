@@ -174,6 +174,28 @@ class ShipsPhase2Test {
         assertThat(n.ship(1).note()).contains("from the hold");
     }
 
+    // ---- limp home (Richard 2026-09-13) ----
+
+    /**
+     * Game 82 had two miners worn to 4% and 0% at sea that no order could move. However worn, a hull
+     * at sea makes for the nearest harbour by herself, a hex an update, and keeps her orders.
+     */
+    @Test
+    void aWornOutShipLimpsToTheNearestHarbourByHerself() {
+        for (double eff : new double[] {4, 0}) {
+            World w = addShip(world(Map.of(), Map.of(), Map.of()), "cargo_ship", OFF_W);
+            w = w.withShip(w.ship(1).withEfficiency(eff).withMobility(0));
+            World n = Update.run(w, CFG, 1).next();
+            assertThat(n.ship(1).at()).as("at %s%% she still got in", eff).isEqualTo(HARBOR_W);
+            assertThat(n.ship(1).note()).contains("limping home");
+        }
+        World lane = addShip(world(Map.of(), Map.of(), Map.of()), "cargo_ship", OFF_W);
+        lane = lane.withShip(lane.ship(1).withEfficiency(10).withLane(new Ship.Lane(HARBOR_W, HARBOR_E, List.of(LCM), true)).withDest(HARBOR_E));
+        World n = Update.run(lane, CFG, 2).next();
+        assertThat(n.ship(1).at()).as("to the nearest harbour, not the lane's far end").isEqualTo(HARBOR_W);
+        assertThat(n.ship(1).lane()).as("her lane is kept for when she is fit").isNotNull();
+    }
+
     // ---- the logbook ----
 
     @Test

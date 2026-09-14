@@ -14,22 +14,27 @@ interface Props {
 }
 
 const rel = (c: { x: number; y: number } | null | undefined) => c ? `${c.x},${c.y}` : "?";
+/** Warship missions (issue #68); console verbs take patrol, blockade and interdict with points on the map. */
+const MILITARY = ["patrol", "search", "escort", "blockade", "interdict"];
 export const shipGlyph = (rules: Rules, cls: string) => rules.ships?.classes.find(c => c.id === cls)?.glyph ?? "?";
 const className = (rules: Rules, cls: string) => rules.ships?.classes.find(c => c.id === cls)?.name ?? cls;
 
 /** Your fleet (issue #56): every ship, where it is, what it carries, where it is going, what it did last update; and the orders. */
 export function Fleet({ gameId, view, rules, busy, onCommand, onSail }: Props) {
   const [logbook, setLogbook] = useState<number | null>(null);
-  const [dialog, setDialog] = useState<{ kind: "load" | "unload" | "lane"; ship: ShipView } | null>(null);
+  const [dialog, setDialog] = useState<{ kind: "load" | "unload" | "lane" | "fire" | "escort"; ship: ShipView } | null>(null);
   const [pendingScrap, setPendingScrap] = useState<number | null>(null);
   const harbors = view.sectors.filter(s => s.full && (rules.sectorTypes.find(t => t.id === s.designation)?.flags ?? []).includes("builds_ships"));
   if (view.ships.length === 0) return <p className="text-xs text-muted-foreground">No ships. Right-click a harbour and choose “Build ship…”.{harbors.length === 0 ? " You have no harbour yet: designate a coastal sector as one." : ""}</p>;
   return (
     <div className="space-y-2 text-xs">
       {view.ships.map(s => {
-        const going = s.lane ? `lane ${rel(s.lane.fromRelative)} ${s.lane.outbound ? "→" : "←"} ${rel(s.lane.toRelative)}${s.lane.cargo.length ? ` (${s.lane.cargo.join(", ")})` : ""}` : s.mission === "fish" || s.mission === "mine" ? `${s.mission === "fish" ? "fishing" : "mining"} from ${rel(s.homeRelative)}${s.destRelative ? ` → ${rel(s.destRelative)}` : ""}` : s.mission === "supply" ? `supply${s.destRelative ? ` → ${rel(s.destRelative)}` : ""}, refits at ${rel(s.homeRelative)}` : s.destRelative ? `to ${rel(s.destRelative)}` : s.docked ? "in harbour" : "holding";
+        const going = s.lane ? `lane ${rel(s.lane.fromRelative)} ${s.lane.outbound ? "→" : "←"} ${rel(s.lane.toRelative)}${s.lane.cargo.length ? ` (${s.lane.cargo.join(", ")})` : ""}` : s.mission === "fish" || s.mission === "mine" ? `${s.mission === "fish" ? "fishing" : "mining"} from ${rel(s.homeRelative)}${s.destRelative ? ` → ${rel(s.destRelative)}` : ""}` : s.mission && MILITARY.includes(s.mission) ? `${s.mission}${s.ward ? ` ship #${s.ward}` : s.routeRelative.length ? ` ${s.routeRelative.map(rel).join(" → ")}` : ""}${s.destRelative ? ` · bound for ${rel(s.destRelative)}` : ""}` : s.mission === "supply" ? `supply${s.destRelative ? ` → ${rel(s.destRelative)}` : ""}, refits at ${rel(s.homeRelative)}` : s.destRelative ? `to ${rel(s.destRelative)}` : s.docked ? "in harbour" : "holding";
         const fisher = !!rules.ships?.classes.find(c => c.id === s.cls)?.fishingRate;
-        const carrier = (rules.ships?.classes.find(c => c.id === s.cls)?.carries ?? []).length > 0;
+        const miner = !!rules.ships?.classes.find(c => c.id === s.cls)?.miningRate;
+        const cls = rules.ships?.classes.find(c => c.id === s.cls);
+        const armed = (cls?.guns ?? 0) > 0;
+        const carrier = !armed && (cls?.carries ?? []).length > 0;
         const cargo = Object.entries(s.stock).map(([c, q]) => `${Math.floor(q)} ${c}`).join(", ");
         return (
           <div key={s.id} className="rounded-md border border-border p-2">
@@ -39,14 +44,25 @@ export function Fleet({ gameId, view, rules, busy, onCommand, onSail }: Props) {
               <span className="text-muted-foreground">at {rel(s.relative)} · {s.efficiency.toFixed(0)}% · {s.hexesPerUpdate} hex{s.hexesPerUpdate === 1 ? "" : "es"}/update (tech {s.tech.toFixed(0)}) · {Math.floor(s.load)}/{s.hold}{cargo ? ` (${cargo})` : ""}{s.tank > 0 ? <> · <span className={s.fuel < s.tank * 0.15 ? "text-destructive" : undefined}>fuel {Math.floor(s.fuel)}/{s.tank}</span></> : null}{s.crewNeeded > 0 ? <> · <span className={s.crew < s.crewNeeded ? "text-destructive" : undefined}>crew {Math.floor(s.crew)}/{s.crewNeeded}</span></> : null}</span>
             </div>
             <div className="text-muted-foreground">{going}{s.note ? ` · ${s.note}` : ""}</div>
+            {s.markedBy.length > 0 && <div className="text-destructive">Fired on {s.markedBy.join(", ")} in peacetime: they may shoot her on sight for now.</div>}
             <div className="mt-1 flex flex-wrap gap-1">
               <Button size="sm" variant="secondary" disabled={busy || !!s.lane} onClick={() => onSail(s)}>Sail…</Button>
               {fisher && (s.mission === "fish"
                 ? <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: "fish", ship: s.id, clear: true })}>Stop fishing</Button>
                 : <Button size="sm" variant="secondary" disabled={busy || !s.docked} title={s.docked ? "roam the grounds near this harbour, fish, land the catch here, repeat" : "give the order while docked in the home harbour"} onClick={() => void onCommand({ verb: "fish", ship: s.id, x: s.at.x, y: s.at.y })}>Fish from here</Button>)}
+              {armed && <Button size="sm" variant="secondary" disabled={busy} title="fire on a ship you can see; it happens now, and she answers" onClick={() => setDialog({ kind: "fire", ship: s })}>Fire…</Button>}
+              {armed && (s.mission && MILITARY.includes(s.mission)
+                ? <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: s.mission!, ship: s.id, clear: true })}>Stop {s.mission}</Button>
+                : <>
+                    <Button size="sm" variant="secondary" disabled={busy || !s.docked} title={s.docked ? "wander the water near this harbour, going where you have not looked lately; home for supplies" : "give the order in the harbour she should come home to"} onClick={() => void onCommand({ verb: "search", ship: s.id })}>Search from here</Button>
+                    <Button size="sm" variant="ghost" disabled={busy || view.ships.length < 2} onClick={() => setDialog({ kind: "escort", ship: s })}>Escort…</Button>
+                  </>)}
               {carrier && (s.mission === "supply"
                 ? <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: "supply", ship: s.id, clear: true })}>Stop supply</Button>
                 : <Button size="sm" variant="secondary" disabled={busy || !s.docked} title={s.docked ? "carry whatever your harbours' thresholds are short of, from any harbour that can spare it; refit here" : "give the order while docked in the harbour it should refit at"} onClick={() => void onCommand({ verb: "supply", ship: s.id, x: s.at.x, y: s.at.y })}>Supply from here</Button>)}
+              {miner && (s.mission === "mine"
+                ? <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: "mine", ship: s.id, clear: true })}>Stop mining</Button>
+                : <Button size="sm" variant="secondary" disabled={busy || !s.docked} title={s.docked ? "roam the nodule fields near this harbour, mine, land the iron here, repeat; comes home to refit by itself" : "give the order while docked in the home harbour"} onClick={() => void onCommand({ verb: "mine", ship: s.id, x: s.at.x, y: s.at.y })}>Mine from here</Button>)}
               {s.dest && !s.lane && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: "sail", ship: s.id, clear: true })}>Hold</Button>}
               <Button size="sm" variant="ghost" disabled={busy || !s.docked} onClick={() => setDialog({ kind: "load", ship: s })}>Load…</Button>
               <Button size="sm" variant="ghost" disabled={busy || !s.docked || s.load <= 0} onClick={() => setDialog({ kind: "unload", ship: s })}>Unload…</Button>
@@ -61,7 +77,9 @@ export function Fleet({ gameId, view, rules, busy, onCommand, onSail }: Props) {
           </div>
         );
       })}
-      {dialog && (dialog.kind === "lane"
+      {dialog?.kind === "fire" && <FireDialog ship={dialog.ship} view={view} rules={rules} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
+      {dialog?.kind === "escort" && <EscortDialog ship={dialog.ship} view={view} rules={rules} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
+      {dialog && (dialog.kind === "load" || dialog.kind === "unload" || dialog.kind === "lane") && (dialog.kind === "lane"
         ? <LaneDialog ship={dialog.ship} harbors={harbors} view={view} rules={rules} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />
         : <CargoDialog kind={dialog.kind} ship={dialog.ship} view={view} rules={rules} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />)}
     </div>
@@ -89,6 +107,58 @@ function Logbook({ gameId, ship, updateNumber }: { gameId: number; ship: number;
         </div>
       ))}
     </div>
+  );
+}
+
+/**
+ * Fire on a contact (issue #68). Only fresh sightings are offered: an older one is where she was, not
+ * where she is. The server checks range and whether she can be hit, and says why if not.
+ */
+function FireDialog({ ship, view, rules, busy, onClose, onCommand }: { ship: ShipView; view: CountryView; rules: Rules; busy: boolean; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void> }) {
+  const fresh = view.contacts.filter(c => c.age <= 1);
+  const [pick, setPick] = useState(fresh.length ? `${fresh[0].at.x},${fresh[0].at.y}` : "");
+  const cls = rules.ships?.classes.find(c => c.id === ship.cls);
+  const shells = Math.floor(ship.stock.shell ?? 0), guns = Math.floor(ship.stock.gun ?? 0);
+  const name = (id: string | null) => id ? rules.ships?.classes.find(c => c.id === id)?.name ?? id : "unidentified ship";
+  return (
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Fire from ship #{ship.id}</DialogTitle><DialogDescription>It happens now, and she answers with everything of hers in reach. {cls?.name} · range {cls?.range ?? 0} · {guns} guns, {shells} shells aboard. Firing on a country you are at peace with does not declare war, but marks this ship: they may shoot her on sight for a few updates.</DialogDescription></DialogHeader>
+        {fresh.length === 0 ? <p className="text-sm text-muted-foreground">No fresh contacts. Your radar and your ships' lookouts find enemy ships at each update.</p> : (
+          <label className="grid gap-1 text-sm">Target
+            <Select value={pick} onChange={e => setPick(e.target.value)}>
+              {fresh.map((c, i) => <option key={i} value={`${c.at.x},${c.at.y}`}>{name(c.cls)}{c.ownerName ? ` of ${c.ownerName}` : ""} at {rel(c.relative)} · {c.band}{c.age ? ", last update" : ""}</option>)}
+            </Select>
+          </label>
+        )}
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="danger" disabled={busy || !pick} onClick={async () => { const [x, y] = pick.split(",").map(Number); const c = fresh.find(k => k.at.x === x && k.at.y === y); await onCommand({ verb: "fire", ship: ship.id, x, y, type: c?.cls ?? undefined }); onClose(); }}>Fire</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Stay with one of your other ships (issue #68). */
+function EscortDialog({ ship, view, rules, busy, onClose, onCommand }: { ship: ShipView; view: CountryView; rules: Rules; busy: boolean; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void> }) {
+  const others = view.ships.filter(o => o.id !== ship.id);
+  const [ward, setWard] = useState(String(others[0]?.id ?? ""));
+  return (
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Escort with ship #{ship.id}</DialogTitle><DialogDescription>She stays with the ship you choose and fights what attacks it at war. She comes home for shells, fuel and repairs, and goes back to her charge afterwards.</DialogDescription></DialogHeader>
+        <label className="grid gap-1 text-sm">Stay with
+          <Select value={ward} onChange={e => setWard(e.target.value)}>
+            {others.map(o => <option key={o.id} value={o.id}>#{o.id} {className(rules, o.cls)}{o.name ? ` “${o.name}”` : ""} at {rel(o.relative)}</option>)}
+          </Select>
+        </label>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button disabled={busy || !ward} onClick={async () => { await onCommand({ verb: "escort", ship: ship.id, ward: Number(ward) }); onClose(); }}>Escort</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
