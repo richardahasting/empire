@@ -47,6 +47,7 @@ public final class CommandExecutor {
             case Command.Supply sp -> supply(w, c, sp);
             case Command.Fire fi -> Engagement.fire(cfg, com, w, c, fi);
             case Command.Mission mi -> mission(w, c, mi);
+            case Command.Land la -> land(w, c, la);
             case Command.Move m -> move(w, c, m);
             case Command.Explore e -> explore(w, c, e);
             case Command.BuildRoad br -> buildRoad(w, c, br);
@@ -346,8 +347,10 @@ public final class CommandExecutor {
         int ci = com.index(l.commodity());
         var cls = cfg.units().ships().shipClass(ship.cls());
         if (!org.hastingtx.empire.engine.update.steps.ShipStep.carries(new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0), cls, ci)) return CommandResult.fail(w, "a " + cls.name() + " cannot carry " + l.commodity());
-        double room = cls.hold() - ship.load();
+        // the hold, and any limit the class sets on this commodity (an assault ship takes 100 mil and 20 civ)
+        double room = Math.min(cls.hold() - ship.load(), cls.limitOf(l.commodity()) - ship.stock().get(ci));
         if (l.qty() <= 0) return CommandResult.fail(w, "quantity must be positive");
+        if (room < 1 && cls.limitOf(l.commodity()) < cls.hold()) return CommandResult.fail(w, article(cls.name()) + " takes no more than " + q(cls.limitOf(l.commodity())) + " " + l.commodity());
         double want = Math.min(l.qty(), room), got = 0;
         World next = w;
         StringBuilder from = new StringBuilder();
@@ -849,6 +852,47 @@ public final class CommandExecutor {
                 : "carrying " + String.join(", ", r.cargo());
         return new CommandResult(w.withRailLanes(lanes), null, 0, "rail lane " + r.from() + " → " + r.to() + ", " + what + ", every update");
     }
+
+    /**
+     * Put a landing party ashore (issue #193). An assault ship next to an unowned land sector lands
+     * everyone aboard — military and civilians — and the sector becomes yours, exactly as explore claims
+     * one. What the ground cannot feed is said, as explore says it. Enemy-held coast is refused: taking
+     * it is land combat, which comes with land units (#71).
+     */
+    private CommandResult land(World w, Country c, Command.Land l) {
+        if (c.inSanctuary()) return CommandResult.fail(w, "break sanctuary first");
+        Ship ship = myShip(w, c, l.ship());
+        if (ship == null) return CommandResult.fail(w, "no ship #" + l.ship() + " of yours");
+        var cls = cfg.units().ships().shipClass(ship.cls());
+        if (!cls.landing()) return CommandResult.fail(w, article(cls.name()) + " cannot land anyone; that takes an assault ship");
+        if (l.at() == null || !w.inBounds(l.at())) return CommandResult.fail(w, "land where?");
+        Sector to = w.sector(l.at());
+        if (!Hex.neighbours(w, ship.at()).contains(l.at())) return CommandResult.fail(w, l.at() + " is not next to ship #" + ship.id() + " at " + ship.at());
+        if (!to.terrain().isLand()) return CommandResult.fail(w, l.at() + " is sea");
+        if (to.sanctuary()) return CommandResult.fail(w, l.at() + " is another country's sanctuary");
+        if (to.owner() == c.id()) return CommandResult.fail(w, l.at() + " is already yours; bring a harbour to it and unload there");
+        if (to.owned()) return CommandResult.fail(w, l.at() + " belongs to " + w.country(to.owner()).name() + "; taking held coast comes with land combat");
+        double civ = Math.floor(ship.stock().get(com.civ)), mil = Math.floor(ship.stock().get(com.mil));
+        if (civ + mil < 1) return CommandResult.fail(w, "ship #" + ship.id() + " has nobody aboard to land; load mil or civ in harbour");
+        org.hastingtx.empire.engine.update.Ctx rctx = new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0);
+        double room = Math.floor(rctx.maxPopulation(to));
+        double civAshore = Math.min(civ, room);   // civilians over the sector's ceiling would be lost at the update; they stay aboard
+        World next = w.withShip(ship.withStock(ship.stock().plus(com.civ, -civAshore).plus(com.mil, -mil)));
+        next = next.withSector(to.withOwner(c.id()).withStock(to.stock().plus(com.civ, civAshore).plus(com.mil, mil)));
+        var sub = cfg.economy().population().subsistence();
+        double forage = sub == null ? 0 : sub.civsPerSector() * (sub.scaleByFertility() ? to.resource("fertility") / 100.0 : 1.0);
+        StringBuilder info = new StringBuilder("ship #" + ship.id() + " landed " + q(mil) + " mil and " + q(civAshore) + " civ at " + l.at() + "; it is yours");
+        if (civAshore < civ) info.append(" (").append(q(civ - civAshore)).append(" civ stay aboard: the sector holds ").append(q(room)).append(")");
+        if (civAshore + mil > forage)
+            info.append(" — WARNING: fertility ").append(to.resource("fertility")).append(" feeds only ").append(q(Math.floor(forage)))
+                .append(" of them and they brought no food: send some, or they will starve at the next update");
+        else info.append(" (the land feeds them)");
+        return new CommandResult(next, null, 0, info.toString());
+    }
+
+    /** Quantities in messages as the notes print them: whole numbers. */
+    private static String q(double v) { return org.hastingtx.empire.engine.update.Ledger.q(v); }
+    private static String article(String noun) { return ("aeiou".indexOf(Character.toLowerCase(noun.charAt(0))) >= 0 ? "an " : "a ") + noun; }
 
     private CommandResult explore(World w, Country c, Command.Explore e) {
         if (c.inSanctuary()) return CommandResult.fail(w, "break sanctuary first");

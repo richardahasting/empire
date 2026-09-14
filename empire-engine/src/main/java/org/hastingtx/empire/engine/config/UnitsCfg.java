@@ -171,7 +171,13 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
             /** Hull efficiency points one gun does; null = the combat default. A torpedo hits harder than a gun. */
             Double hitPerGun,
             /** Can find and fire on a submarine it has detected. */
-            Boolean asw) {
+            Boolean asw,
+            /** Most of a commodity she may carry, by id, within the hold (issue #193: an assault ship takes 100 mil and 20 civ). */
+            Map<String, Double> limits) {
+        /** How much of {@code commodity} she may have aboard in all: its limit, or the whole hold. */
+        public double limitOf(String commodity) { Double l = limits == null ? null : limits.get(commodity); return l == null ? hold : Math.min(hold, l); }
+        /** Puts people ashore on unowned coast (issue #193). */
+        public boolean landing() { return "assault".equals(role); }
         public double gunsOr0() { return guns == null ? 0 : guns; }
         public boolean armed() { return gunsOr0() > 0; }
         public int rangeOr0() { return range == null ? 0 : range; }
@@ -182,7 +188,7 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
         /** Answers distress calls (issue #182). */
         public boolean tender() { return "tender".equals(role); }
         /** A fighting hull: it does not run cargo on a lane or a supply round. */
-        public boolean military() { return "warship".equals(role) || submarine(); }
+        public boolean military() { return "warship".equals(role) || submarine() || landing(); }
         public double crewOr0() { return crew == null ? 0 : crew; }
         public double tankOr0() { return tank == null ? 0 : tank; }
         public double fuelPerHexOr0() { return fuelPerHex == null ? 0 : fuelPerHex; }

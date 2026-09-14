@@ -135,7 +135,9 @@ export interface Crossing { techRequired: number; materials: Record<string, numb
 export interface RailRules { bridge?: Crossing | null; tunnel?: Crossing | null; techRequired: number; buildMaterialsPerPoint: Record<string, number>; maxPointsPerUpdate: number; minLevelToCarry: number; capacityPerUpdateAt100: number; cashPer100UnitsShipped: number; maxSectorsPerUpdate: { base: number; perTechPoint: number }; costMultiplierByTerrain: Record<string, number>; maxLevelByTerrain: Record<string, number>; decayPerUpdate: number; maintenanceCashPerPointPerUpdate: number }
 export interface ShipClass { id: string; name: string; glyph: string; role: string; techRequired: number; build: Record<string, number> | null; hold: number; speed: number; fishingRate?: number | null; miningRate?: number | null; happinessPerEtu?: number | null; carries?: string[] | null;
   /** Gunnery (issue #68): guns per salvo, range in hexes, armour, shells carried, whether she hunts submarines. */
-  guns?: number | null; range?: number | null; armor?: number | null; magazine?: number | null; asw?: boolean | null }
+  guns?: number | null; range?: number | null; armor?: number | null; magazine?: number | null; asw?: boolean | null;
+  /** Most of a commodity she may carry, by id (issue #193: an assault ship takes 100 mil and 20 civ). */
+  limits?: Record<string, number> | null }
 export interface ShipsRules { startEfficiency: number; dockPointsPerUpdate: number; harborMinEfficiency: number; classes: ShipClass[] }
 export interface Rules { sectorTypes: SectorType[]; commodities: Commodity[]; etusPerUpdate: number; btuCosts: Record<string, number>; road?: RoadRules; defaultCapacity?: number; rail?: RailRules; productionMinEfficiency?: number; massThresholdMultiplierByType?: Record<string, number>; ships?: ShipsRules | null; work?: WorkRules; curves?: Record<string, Curve>; maxPopCurve?: { type: string; base?: number | null; perResearchPoint?: number | null; cap?: number | null } | null }
 export interface Outcome { accepted: boolean; error?: string; btuSpent: number; view: CountryView; info?: string | null }

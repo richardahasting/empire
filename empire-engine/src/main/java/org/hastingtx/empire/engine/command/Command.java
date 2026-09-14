@@ -9,7 +9,7 @@ import org.hastingtx.empire.engine.model.Coord;
 public sealed interface Command permits
         Command.BreakSanctuary, Command.Designate, Command.Threshold, Command.Distribute,
         Command.Move, Command.Explore, Command.BuildRoad, Command.BuildRail, Command.RailShip, Command.Deliver,
-        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission,
+        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission, Command.Land,
         Command.RailLane, Command.Telegram, Command.Announce, Command.DeclareWar, Command.OfferPeace {
 
     String verb();
@@ -66,6 +66,9 @@ public sealed interface Command permits
 
     /** Issue #68: fire on a ship you can see at {@code at} ({@code cls} picks one when several are there). Resolves now, with return fire. */
     record Fire(long ship, Coord at, String cls) implements Command { public String verb() { return "fire"; } }
+
+    /** Issue #193: an assault ship puts everyone aboard ashore on the unowned land sector {@code at}, next to her. */
+    record Land(long ship, Coord at) implements Command { public String verb() { return "land"; } }
 
     /**
      * Issue #68: a military mission — {@code kind} is patrol (points = the route), search, escort
