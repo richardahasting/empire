@@ -81,4 +81,29 @@ public final class SeaRoutes {
         }
         return -1;
     }
+
+    /**
+     * The shortest sea route from {@code from} to whichever of the owner's harbours is nearest by water,
+     * read straight off {@code dist} by always stepping to a neighbour one hex nearer; null when none is
+     * reachable. The same measure the range check used, so a ship turned for home is sent where it said
+     * she could get to (ship #33 in game 82 was sent to the harbour nearest as the crow flies, a hex
+     * further by sea than her tank).
+     */
+    public static List<Coord> pathHome(World w, GameConfig cfg, int owner, Coord from, int[] dist) {
+        int d = dist[w.index(from)];
+        if (d == Integer.MAX_VALUE) return null;
+        List<Coord> out = new ArrayList<>();
+        out.add(from);
+        Coord at = from;
+        while (d > 0) {
+            Coord next = null;
+            for (Coord nb : Hex.neighbours(w, at))
+                if (dist[w.index(nb)] == d - 1 && navigable(w, cfg, w.sector(nb), owner)) { next = nb; break; }
+            if (next == null) return null;
+            out.add(next);
+            at = next;
+            d--;
+        }
+        return out;
+    }
 }
