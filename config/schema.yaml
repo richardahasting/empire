@@ -809,7 +809,11 @@ capture:
 detection:
   model: probabilistic
   radar:
-    nominal_range_at_100: 12                # sectors, at radar_level 100 & eff 100
+    # A radar station (a sector designated radar) reaches nominal_range_at_100 × its efficiency, plus height, times
+    # the tech bonus, up to max_range (Richard 2026-09-14, issue #208). Everything within reach is on your map, and
+    # enemy ships in it are detected by the probability below.
+    nominal_range_at_100: 12                # sectors, at 100% efficiency
+    max_range: 30                           # GUESS: the tech bonus alone would let one station see the world
     range_by_radar_level: linear            # range scales linearly with radar_level x eff
     elevation_bonus_per_100m: 0.4           # +sectors of nominal range per 100 m station elevation
     tech_bonus_per_point: 0.02

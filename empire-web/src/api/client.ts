@@ -50,6 +50,8 @@ export interface SectorView {
   deliveries: Record<string, { dir: string; threshold: number }>;
   /** A sanctuary, and whose (owner's name for a foreign sector; null for yours or nobody's). */
   sanctuary: boolean; ownerName: string | null;
+  /** Hexes a radar station of yours reaches (issue #208); 0 for anything else. */
+  radarRange?: number;
   /**
    * On the chart from memory rather than from sight (issue #64): everything here is as it was at
    * `seenUpdate`, not as it is. `age` is updates since, so it can be dimmed by how stale it is.

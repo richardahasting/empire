@@ -104,7 +104,17 @@ public record CountryView(
             String ownerName,
             boolean remembered,
             long seenUpdate,
-            long age) {}
+            long age,
+            /** Hexes a radar station of yours reaches (issue #208); 0 for anything else. */
+            double radarRange) {
+        public SectorView(Coord at, Coord relative, boolean full, String terrain, int elevation, int owner, String designation, double efficiency,
+                          double mobility, double roadLevel, double roadTarget, double railLevel, double railTarget, Map<String, Double> stock,
+                          Map<String, Double> thresholds, Coord distCenter, Map<String, Double> held, Resources resources, Map<String, Delivery> deliveries,
+                          boolean sanctuary, String ownerName, boolean remembered, long seenUpdate, long age) {
+            this(at, relative, full, terrain, elevation, owner, designation, efficiency, mobility, roadLevel, roadTarget, railLevel, railTarget, stock, thresholds,
+                    distCenter, held, resources, deliveries, sanctuary, ownerName, remembered, seenUpdate, age, 0);
+        }
+    }
 
     public record Delivery(String dir, double threshold) {}
 
@@ -155,7 +165,7 @@ public record CountryView(
                 for (HeldParcel p : s.held()) held.merge(com.id(p.commodity()), p.qty(), Double::sum);
                 views.add(new SectorView(at, rel, true, s.terrain().id(), s.elevation(), s.owner(), s.designation(), s.efficiency(),
                         s.mobility(), s.roadLevel(), s.roadTarget(), s.railLevel(), s.railTarget(), stock, th, s.distCenter(), held, s.resources(), deliveries, s.sanctuary(), null,
-                        false, w.updateNumber(), 0));
+                        false, w.updateNumber(), 0, Radar.range(cfg, s, c.levels().tech())));
             } else {
                 // a neighbour: terrain and owner only. Sanctuaries are shown as such, with the owner's name (the original marked them 's').
                 String ownerName = s.owned() ? w.country(s.owner()).name() : null;

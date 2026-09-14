@@ -30,7 +30,12 @@ public record DetectionCfg(
             String decayCurve,
             double sigmoidK,
             double sigmoidMidpoint,
-            Map<String, Double> radarLevelBuild) {}
+            Map<String, Double> radarLevelBuild,
+            /** The farthest a station reaches, in hexes (issue #208). Absent means 30: without a cap the tech
+             *  bonus lets one station at tech 900 see the whole world, once radar reveals the map. */
+            Double maxRange) {
+        public double cap() { return maxRange == null ? 30 : maxRange; }
+    }
 
     /** A mobile sensor — a ship's own set, a plane's. Range scales with the carrier's efficiency. */
     public record SensorCfg(double nominalRange, String decayCurve) {}

@@ -265,6 +265,13 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
       const x0 = Math.min(box.a.x, box.b.x), x1 = Math.max(box.a.x, box.b.x), y0 = Math.min(box.a.y, box.b.y), y1 = Math.max(box.a.y, box.b.y);
       for (let dy = y0; dy <= y1; dy++) for (let dx = x0; dx <= x1; dx++) outline(dx, dy, true);
     }
+    // a selected radar station: its reach as a ring (issue #208) — everything inside is on your map
+    const station = selected ? byCoord.get(`${selected.x},${selected.y}`) : undefined;
+    if (station && (station.radarRange ?? 0) >= 1) {
+      const d = toDisplay(station.at); const { cx, cy } = hexCenter(d.x, d.y, l);
+      ctx.beginPath(); ctx.arc(cx, cy, (Math.floor(station.radarRange!) + 0.5) * Math.sqrt(3) * l.size, 0, Math.PI * 2);
+      ctx.setLineDash([6, 4]); ctx.strokeStyle = p.ring; ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]);
+    }
     if (selected) {
       const d = toDisplay(selected);
       const { cx, cy } = hexCenter(d.x, d.y, l);

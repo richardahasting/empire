@@ -41,15 +41,5 @@ public final class Blockade {
     }
 
     /** Every hex within {@code r} of {@code c}, walking neighbours so a wrapping world is handled. */
-    public static Set<Coord> within(World w, Coord c, int r) {
-        Set<Coord> seen = new TreeSet<>();
-        seen.add(c);
-        List<Coord> frontier = List.of(c);
-        for (int k = 0; k < r; k++) {
-            List<Coord> next = new ArrayList<>();
-            for (Coord f : frontier) for (Coord n : Hex.neighbours(w, f)) if (seen.add(n)) next.add(n);
-            frontier = next;
-        }
-        return seen;
-    }
+    public static Set<Coord> within(World w, Coord c, int r) { return Hex.within(w, c, r); }
 }
