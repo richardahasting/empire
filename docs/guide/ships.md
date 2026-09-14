@@ -31,6 +31,7 @@ improve ships already built.
 | industrial_fishing_boat | 20 | 1200 | 4 | three times the catch |
 | super_cargo | 25 | 2400 | 4 | anything, in bulk |
 | tender | 20 | 600 | 2 | answers distress calls: petrol and repairs at sea |
+| assault_ship | 30 | 100 mil + 20 civ | 4 | lands people on unowned coast |
 | luxury_craft | 30 | 100 | 3 | happiness, at $50 an update |
 | super_tanker | 35 | 6000 | 4 | oil and petrol in bulk |
 | destroyer | 40 | — | 5 | 10 guns, range 3, armour 20; hunts submarines |
@@ -128,6 +129,26 @@ ship #N".
 tender given either runs that instead and answers no calls, so the Fleet panel
 doesn't offer them for tenders. The console still does, and **Stop supply (put on
 call)** takes a tender off a supply round.
+
+## Assault ships: settling a coast you do not hold
+
+`explore` only reaches land next to a sector of yours, and ships unload only in
+your harbours, so an island that touches nothing of yours cannot be reached any
+other way (Richard 2026-09-14).
+
+An **assault ship** carries up to **100 military and 20 civilians**. Load them in
+harbour, sail her alongside the coast, and give **`land SHIP x,y`** (or **Land…**
+in the Fleet panel) for an unowned land sector next to her. Everyone aboard goes
+ashore and **the sector becomes yours**, as if they had explored into it. From
+there, `explore` spreads across the island, and a `des harbor` on the coast lets
+ordinary shipping reach it.
+
+They bring no food. A sector feeds about 300 × its fertility of people, so a party
+of 120 lives off almost any decent ground. On poor ground the reply warns you, and
+you should send food before the next update.
+
+Land held by another country is refused: taking it is land combat, which comes
+with land units.
 
 ## Crews
 

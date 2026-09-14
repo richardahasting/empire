@@ -42,6 +42,8 @@ supply SHIP [x,y] | off      supply mission: fill any of your harbours short of 
                              spare it, carrying only what the class carries; x,y is home, where it refits
 fish SHIP [x,y] | off        fishing mission: roam the grounds near the home harbour, fish, land the catch, repeat
 mine SHIP [x,y] | off        seabed mining: roam the nodule fields near home, mine, land the ore, repeat
+land SHIP x,y                assault ship: put everyone aboard (up to 100 mil, 20 civ) ashore on the unowned land
+                             sector next to her; it becomes yours
 fire SHIP x,y [CLASS]        fire now on a ship you can see at x,y (a fresh contact, or in her sight); the
                              target and everything of hers in reach answer at once. At peace it declares
                              nothing but marks your ship: they may shoot her on sight for 3 updates

@@ -1142,6 +1142,7 @@ public class GameService {
             case Command.Supply sp -> null;
             case Command.Fire fi -> null;
             case Command.Mission mi -> null;
+            case Command.Land la -> la.at();
             case Command.Telegram t -> null;
             case Command.Announce a -> null;
             case Command.DeclareWar d -> null;

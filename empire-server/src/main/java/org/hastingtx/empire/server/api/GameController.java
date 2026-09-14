@@ -153,6 +153,7 @@ public class GameController {
                 case "fish" -> new Command.Fish(needShip(), x == null || y == null ? null : at(x, y), Boolean.TRUE.equals(clear));
                 case "mine" -> new Command.Mine(needShip(), x == null || y == null ? null : at(x, y), Boolean.TRUE.equals(clear));
                 case "fire" -> new Command.Fire(needShip(), at(x, y), type);
+                case "land" -> new Command.Land(needShip(), at(x, y));
                 case "patrol", "search", "escort", "blockade", "interdict" -> new Command.Mission(needShip(), verb, points == null ? (x == null || y == null ? List.of() : List.of(at(x, y))) : points,
                         ward == null ? 0 : ward, Boolean.TRUE.equals(clear));
                 case "supply" -> new Command.Supply(needShip(), x == null || y == null ? null : at(x, y), Boolean.TRUE.equals(clear));

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { shipHistory, type CommandRequest, type CountryView, type Rules, type ShipLogEntry, type ShipView } from "@/api/client";
+import { bearing, neighbour } from "./bearing";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -23,7 +24,7 @@ const className = (rules: Rules, cls: string) => rules.ships?.classes.find(c => 
 /** Your fleet (issue #56): every ship, where it is, what it carries, where it is going, what it did last update; and the orders. */
 export function Fleet({ gameId, view, rules, busy, onCommand, onSail }: Props) {
   const [logbook, setLogbook] = useState<number | null>(null);
-  const [dialog, setDialog] = useState<{ kind: "load" | "unload" | "lane" | "fire" | "escort"; ship: ShipView } | null>(null);
+  const [dialog, setDialog] = useState<{ kind: "load" | "unload" | "lane" | "fire" | "escort" | "land"; ship: ShipView } | null>(null);
   const [pendingScrap, setPendingScrap] = useState<number | null>(null);
   const harbors = view.sectors.filter(s => s.full && (rules.sectorTypes.find(t => t.id === s.designation)?.flags ?? []).includes("builds_ships"));
   if (view.ships.length === 0) return <p className="text-xs text-muted-foreground">No ships. Right-click a harbour and choose “Build ship…”.{harbors.length === 0 ? " You have no harbour yet: designate a coastal sector as one." : ""}</p>;
@@ -36,6 +37,7 @@ export function Fleet({ gameId, view, rules, busy, onCommand, onSail }: Props) {
         const cls = rules.ships?.classes.find(c => c.id === s.cls);
         const armed = (cls?.guns ?? 0) > 0;
         const tender = cls?.role === "tender";
+        const assault = cls?.role === "assault";
         // a tender's job is distress calls; lane and supply stay console orders so they are not picked by mistake
         const carrier = !armed && !tender && (cls?.carries ?? []).length > 0;
         const cargo = Object.entries(s.stock).map(([c, q]) => `${Math.floor(q)} ${c}`).join(", ");
@@ -54,6 +56,7 @@ export function Fleet({ gameId, view, rules, busy, onCommand, onSail }: Props) {
                 ? <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: "fish", ship: s.id, clear: true })}>Stop fishing</Button>
                 : <Button size="sm" variant="secondary" disabled={busy || !s.docked} title={s.docked ? "roam the grounds near this harbour, fish, land the catch here, repeat" : "give the order while docked in the home harbour"} onClick={() => void onCommand({ verb: "fish", ship: s.id, x: s.at.x, y: s.at.y })}>Fish from here</Button>)}
               {armed && <Button size="sm" variant="secondary" disabled={busy} title="fire on a ship you can see; it happens now, and she answers" onClick={() => setDialog({ kind: "fire", ship: s })}>Fire…</Button>}
+              {assault && <Button size="sm" variant="secondary" disabled={busy || s.load < 1} title={s.load < 1 ? "load mil and civ in harbour first" : "put everyone aboard ashore on unowned land next to her"} onClick={() => setDialog({ kind: "land", ship: s })}>Land…</Button>}
               {armed && (s.mission && MILITARY.includes(s.mission)
                 ? <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: s.mission!, ship: s.id, clear: true })}>Stop {s.mission}</Button>
                 : <>
@@ -82,6 +85,7 @@ export function Fleet({ gameId, view, rules, busy, onCommand, onSail }: Props) {
         );
       })}
       {dialog?.kind === "fire" && <FireDialog ship={dialog.ship} view={view} rules={rules} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
+      {dialog?.kind === "land" && <LandDialog ship={dialog.ship} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {dialog?.kind === "escort" && <EscortDialog ship={dialog.ship} view={view} rules={rules} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {dialog && (dialog.kind === "load" || dialog.kind === "unload" || dialog.kind === "lane") && (dialog.kind === "lane"
         ? <LaneDialog ship={dialog.ship} harbors={harbors} view={view} rules={rules} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />
@@ -138,6 +142,40 @@ function FireDialog({ ship, view, rules, busy, onClose, onCommand }: { ship: Shi
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button variant="danger" disabled={busy || !pick} onClick={async () => { const [x, y] = pick.split(",").map(Number); const c = fresh.find(k => k.at.x === x && k.at.y === y); await onCommand({ verb: "fire", ship: ship.id, x, y, type: c?.cls ?? undefined }); onClose(); }}>Fire</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Put a landing party ashore (issue #193): the unowned land sectors next to the ship, and what landing
+ * on each would mean. The server makes the sector yours and says whether the ground feeds them.
+ */
+function LandDialog({ ship, view, busy, onClose, onCommand }: { ship: ShipView; view: CountryView; busy: boolean; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void> }) {
+  const shores = ["e", "ne", "nw", "w", "sw", "se"]
+    .map(d => neighbour(view, ship.at, d))
+    .map(at => view.sectors.find(o => o.at.x === at.x && o.at.y === at.y))
+    .filter((o): o is NonNullable<typeof o> => !!o && o.terrain !== "ocean" && o.owner < 0 && !o.sanctuary);
+  const [pick, setPick] = useState(shores[0] ? `${shores[0].at.x},${shores[0].at.y}` : "");
+  const mil = Math.floor(ship.stock.mil ?? 0), civ = Math.floor(ship.stock.civ ?? 0);
+  const chosen = shores.find(o => `${o.at.x},${o.at.y}` === pick);
+  const feeds = chosen?.resources ? Math.floor(300 * chosen.resources.fertility / 100) : null;
+  return (
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Land from ship #{ship.id}</DialogTitle><DialogDescription>Everyone aboard goes ashore — {mil} mil and {civ} civ — and the sector becomes yours. From there they can explore the island, and a harbour on the coast lets ordinary shipping reach it.</DialogDescription></DialogHeader>
+        {shores.length === 0 ? <p className="text-sm text-muted-foreground">No unowned land next to her. Sail her alongside the coast first.</p> : (
+          <label className="grid gap-1 text-sm">Where
+            <Select value={pick} onChange={e => setPick(e.target.value)}>
+              {shores.map(o => <option key={`${o.at.x},${o.at.y}`} value={`${o.at.x},${o.at.y}`}>{o.relative.x},{o.relative.y} · {bearing(view, ship.at, o.at)} · {o.terrain}{o.resources ? ` · fertility ${o.resources.fertility}` : ""}</option>)}
+            </Select>
+          </label>
+        )}
+        {feeds !== null && mil + civ > feeds && <p className="text-xs text-destructive">That ground feeds about {feeds} people and they bring no food: send some soon, or pick richer land.</p>}
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button disabled={busy || !chosen} onClick={async () => { if (!chosen) return; await onCommand({ verb: "land", ship: ship.id, x: chosen.at.x, y: chosen.at.y }); onClose(); }}>Land them</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

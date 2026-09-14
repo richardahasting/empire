@@ -663,6 +663,7 @@ economy:
       lane: 1
       scrap: 1
       fire: 1
+      land: 2
       patrol: 1
       search: 1
       escort: 1
@@ -916,6 +917,9 @@ units:
       # A tender (issue #182, Richard 2026-09-14): slow; hears a stranded ship's distress call, sails out, fills her
       # tank and patches her hull to the limp-home line, and goes home to restock. GUESS, all of it.
       - { id: tender,                  name: tender,                  glyph: r, role: tender,  tech_required: 20, build: { lcm: 50, hcm: 20, cash: 1500 },   hold: 600,  speed: 2, carries: [pet, lcm], tank: 150, fuel_per_hex: 3, crew: 10 }
+      # An assault ship (issue #193, Richard 2026-09-14: "they can take 100 mil and 20 civ"): puts everyone aboard
+      # ashore on unowned coast next to her, which becomes yours as explore claims it. Tech, cost and speed GUESS.
+      - { id: assault_ship,            name: assault ship,            glyph: a, role: assault, tech_required: 30, build: { lcm: 80, hcm: 60, cash: 3000 },   hold: 120,  speed: 4, carries: [mil, civ], limits: { mil: 100, civ: 20 }, tank: 150, fuel_per_hex: 5, crew: 15 }
       - { id: luxury_craft,            name: luxury craft,            glyph: l, role: luxury,  tech_required: 30, build: { lcm: 120, hcm: 40, cash: 5000 },  hold: 100,  speed: 3, happiness_per_etu: 1.0, carries: [civ], upkeep_per_update: { cash: 50 }, tank: 100, fuel_per_hex: 3, crew: 8 }
       # warships need guns, shells and oil in the harbour to lay down (Richard 2026-09-09); fuel per voyage comes with units.ships.fuel.
       # The guns and shells in the build go aboard as her armament (issue #68). guns: how many she brings to
