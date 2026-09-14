@@ -75,7 +75,22 @@ and refitted, a mission or lane carries on.
 A harbour refuels from its own stock; a tanker can refuel others at sea.
 
 A dry tank holds a ship exactly where it is. Tanks are sized at roughly thirty
-hexes, so seven to ten updates of steady sailing.
+hexes, so seven to ten updates of steady sailing. At high tech a hull sails
+further on each update and burns its tank faster.
+
+Two rules stop a fleet from stranding itself (Richard 2026-09-14):
+
+- **A ship does not leave port until her tank is full.** In harbour she refuels
+  along with loading, unloading and fitting out, and stays in until she is topped
+  off, whatever her orders, and whether you order a `sail` now or leave it to the
+  update. A harbour with no petrol keeps her in, and her history says so. Send
+  your harbours petrol: a refinery, a supply ship, a tanker on a lane.
+- **At sea, a ship short of fuel turns for port by herself.** If what is in her
+  tank will not cover this update's sailing and the trip back to the nearest
+  harbour from where that leaves her, with a quarter to spare, she makes for that
+  harbour whatever she was doing. Her orders are kept: once she is refuelled, the
+  mission or lane carries on. A ship already bound for one of your harbours that
+  she can reach is left alone.
 
 This is what finally gives the refinery a customer. Before ships, `1 oil → 10
 petrol` produced a commodity nothing consumed.

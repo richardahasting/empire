@@ -100,14 +100,27 @@ public final class ShipStep implements Step {
                 ctx.led().level[ship.owner()][3] += h;
                 note.next().append("cruised: +").append(Ledger.q(h)).append(" happiness");
             }
+            // refuel (issue #65): a harbour pumps from its own stock, a tanker from its hold at sea. First,
+            // before anything decides where she goes, so the fuel check below sees the tank she really has.
+            if (sc.fuel() && docked) ship = refuel(ctx, ship, cls, hi, note);
+            else if (sc.fuel()) ship = refuelAtSea(ctx, ship, cls, out, note);
+            // a tanker never runs dry with petrol in its own hold (issue #67)
+            if (sc.fuel()) ship = refuelFromOwnHold(ctx, ship, cls, note);
             boolean refitting = false;
             // limp home (Richard 2026-09-13): a hull at sea worn to the least she can sail on makes for
             // the nearest harbour of her owner's, whatever she was doing, and keeps her orders for after
             boolean limping = !docked && floor > 0 && ship.efficiency() <= floor + 1e-9;
+            // and a ship at sea without the fuel to sail this update and still get back to a harbour
+            // turns for the nearest one now, whatever she was doing (Richard 2026-09-14: "all of the
+            // ships ran out of fuel")
+            Coord bingo = limping ? null : lowFuelHaven(ctx, sc, cls, ship, docked, harbours);
             if (limping) {
                 Coord haven = nearestHarbour(ctx, ship, harbours.computeIfAbsent(ship.owner(), o -> ownHarbors(ctx, o)));
                 if (haven == null) { note.next().append("worn out, and no harbour of yours she can reach"); ship = ship.withDest(null); }
                 else { if (!haven.equals(ship.dest())) note.next().append("worn out: limping home to ").append(haven); ship = ship.withDest(haven); }
+            } else if (bingo != null) {
+                if (!bingo.equals(ship.dest())) note.next().append("low on fuel (").append(Ledger.q(ship.fuel())).append(" of ").append(Ledger.q(cls.tankOr0())).append("): making for ").append(bingo);
+                ship = ship.withDest(bingo);
             } else if (ship.lane() != null) {
                 ship = runLane(ctx, ship, cls, si, out, note);
             } else if (ship.supplying() && ship.home() != null) {
@@ -140,17 +153,20 @@ public final class ShipStep implements Step {
             } else if (docked && sc.autoUnloadInHarbor() && cls.worksTheSea() && ship.load() > 0) {
                 ship = unload(ctx, ship, here, hi, null, note);   // home from the water, the load goes ashore
             }
-            // refuel (issue #65): a harbour pumps from its own stock, a tanker from its hold at sea
-            if (sc.fuel() && docked) ship = refuel(ctx, ship, cls, hi, note);
-            else if (sc.fuel()) ship = refuelAtSea(ctx, ship, cls, out, note);
-            // a tanker never runs dry with petrol in its own hold (issue #67)
-            if (sc.fuel()) ship = refuelFromOwnHold(ctx, ship, cls, note);
             // sign on a crew (issue #66): only a harbour can, and only from the people who are there
             if (sc.crews() && docked) ship = muster(ctx, ship, cls, hi, note);
             // rearm (issue #68): a warship in harbour takes on guns up to what she mounts and shells up to her magazine
             if (docked && sc.combat() != null && cls.armed()) ship = rearm(ctx, ship, cls, hi, note);
+            // a ship does not leave port until her tank is full (Richard 2026-09-14)
+            boolean fillingUp = sc.fuel() && docked && cls.tankOr0() - ship.fuel() >= 1 && ship.dest() != null && !ship.dest().equals(ship.at());
+            if (fillingUp) {
+                int pet = ctx.com.index(sc.fuelId());
+                double left = ctx.sector(hi).stock().get(pet) + ctx.led().st(hi, pet);
+                note.next().append("waiting in harbour to fill her tank (").append(Ledger.q(ship.fuel())).append(" of ").append(Ledger.q(cls.tankOr0())).append(')')
+                    .append(left < 1 ? "; the harbour has no " + sc.fuelId() + " left" : "");
+            }
             // sail
-            if (ship.dest() != null && !ship.dest().equals(ship.at())) {
+            if (!fillingUp && ship.dest() != null && !ship.dest().equals(ship.at())) {
                 List<Coord> path = SeaRoutes.path(ctx.snap, ctx.cfg, ship.owner(), ship.at(), ship.dest());
                 if (path == null) note.next().append("no sea route to ").append(ship.dest());
                 else {
@@ -191,7 +207,7 @@ public final class ShipStep implements Step {
                             note.last().append(", arrived");
                             // the harbour's business is done the update she gets there, not the one after
                             // (issue #67): a lane unloads on arrival and a supply ship takes the next job
-                            if (limping) ship = ship.withDest(null);
+                            if (limping || bingo != null) ship = ship.withDest(null);
                             else if (ship.lane() != null) ship = runLane(ctx, ship, cls, si, out, note);
                             else {
                                 ship = ship.withDest(null);
@@ -200,7 +216,7 @@ public final class ShipStep implements Step {
                         }
                     }
                 }
-            } else if (ship.dest() != null) { if (ship.lane() == null) ship = ship.withDest(null); }
+            } else if (!fillingUp && ship.dest() != null) { if (ship.lane() == null) ship = ship.withDest(null); }
             // upkeep
             if (cls.upkeepPerUpdate() != null) for (var e : cls.upkeepPerUpdate().entrySet()) if (e.getKey().equals("cash")) ctx.led().cash[ship.owner()] -= e.getValue();
             List<String> lines = note.isEmpty() ? List.of(docked ? "in harbour" : "holding") : note.lines();
@@ -449,6 +465,32 @@ public final class ShipStep implements Step {
             if (harbor.equals(bound)) sum += o.stock().get(c);
         }
         return sum;
+    }
+
+    /**
+     * The harbour a ship at sea must turn for now because of her fuel, or null if she has enough: enough
+     * means the fuel for this update's sailing and for the trip from wherever that leaves her back to the
+     * nearest harbour — {@code (hexes home + 2 × this update's reach) × fuel per hex} — times
+     * {@code missions.fuel_reserve_factor}. A ship already bound for a harbour of
+     * her owner's that she can reach on what she has is left alone.
+     */
+    private static Coord lowFuelHaven(Ctx ctx, UnitsCfg.ShipsCfg sc, UnitsCfg.ShipClassCfg cls, Ship ship, boolean docked, Map<Integer, List<Sector>> harbours) {
+        double perHex = cls.fuelPerHexOr0();
+        if (!sc.fuel() || docked || perHex <= 0) return null;
+        double reserve = sc.missionsOrDefault().reserve();
+        if (ship.dest() != null) {
+            Sector d = ctx.snap.sector(ship.dest());
+            if (ownHarbor(ctx, ship.owner(), d)) {
+                List<Coord> p = SeaRoutes.path(ctx.snap, ctx.cfg, ship.owner(), ship.at(), ship.dest());
+                if (p != null && ship.fuel() >= (p.size() - 1) * perHex) return null;
+            }
+        }
+        Coord haven = nearestHarbour(ctx, ship, harbours.computeIfAbsent(ship.owner(), o -> ownHarbors(ctx, o)));
+        if (haven == null) return null;
+        int home = SeaRoutes.path(ctx.snap, ctx.cfg, ship.owner(), ship.at(), haven).size() - 1;
+        int leg = (int) Math.floor(Math.max(ship.mobility(), 0));
+        // a leg out this update is a leg further to come back: the leg, and the way home from its end
+        return ship.fuel() < (home + 2 * leg) * perHex * reserve ? haven : null;
     }
 
     /** The nearest harbour of her owner's with a sea route to it, by hexes, ties in canonical order. */
