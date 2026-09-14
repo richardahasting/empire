@@ -39,8 +39,12 @@ export function GamesPage() {
     try { await api.post(`/admin/games/${g.id}/sea-minerals`); await load(); } catch (e) { setError((e as Error).message); }
   };
   const reloadRules = async (g: GameSummary) => {
-    if (!window.confirm(`Reload the rules of "${g.name}" from the ${g.preset} preset as shipped now? The game keeps its map and stocks; only the rules change.`)) return;
+    if (!window.confirm(`Reload ALL the rules of "${g.name}" from the ${g.preset} preset as shipped now? The game keeps its map and stocks, but every rule changes, the economy and population ceilings included, and a changed ceiling can cost people at the next update. To bring in new ship features only, use Reload ship rules.`)) return;
     try { await api.post(`/admin/games/${g.id}/config/refresh`); await load(); } catch (e) { setError((e as Error).message); }
+  };
+  const reloadShipRules = async (g: GameSummary) => {
+    if (!window.confirm(`Reload only the ship rules of "${g.name}" from the ${g.preset} preset as shipped now? Ship classes, fuel, combat, missions and tenders come in; the economy, population and every other rule stay as they are.`)) return;
+    try { await api.post(`/admin/games/${g.id}/config/refresh-ships`); await load(); } catch (e) { setError((e as Error).message); }
   };
   const start = async (g: GameSummary) => {
     const open = g.countries.filter(c => !c.taken).length;
@@ -71,7 +75,8 @@ export function GamesPage() {
                 {me?.admin && g.status === "setup" && <Button size="sm" variant="secondary" onClick={() => start(g)} title="ring the starting bell now, with seats still open">Start</Button>}
                 {me?.admin && g.status === "running" && <Button size="sm" variant="ghost" onClick={() => setStatus(g, "paused")}>Pause</Button>}
                 {me?.admin && g.status === "paused" && <Button size="sm" variant="ghost" onClick={() => setStatus(g, "running")}>Resume</Button>}
-                {me?.admin && <Button size="sm" variant="ghost" onClick={() => reloadRules(g)} title="replace this game's rule snapshot with the preset as shipped now">Reload rules</Button>}
+                {me?.admin && <Button size="sm" variant="ghost" onClick={() => reloadShipRules(g)} title="take only the ship rules (classes, fuel, combat, missions, tenders) from the preset as shipped now; nothing else changes">Reload ship rules</Button>}
+                {me?.admin && <Button size="sm" variant="ghost" onClick={() => reloadRules(g)} title="replace ALL of this game's rules with the preset as shipped now, the economy included">Reload rules</Button>}
                 {me?.admin && <Button size="sm" variant="ghost" onClick={() => seedSea(g)} title="give the sea its fishing grounds (ocean fertility by region)">Seed fishing grounds</Button>}
                 {me?.admin && <Button size="sm" variant="ghost" onClick={() => seedNodules(g)} title="give the sea its nodule fields (ocean minerals by region)">Seed nodules</Button>}
                 {me?.admin && <Button size="sm" variant="secondary" onClick={() => runUpdate(g)}>Run update</Button>}

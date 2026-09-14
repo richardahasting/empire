@@ -80,6 +80,12 @@ public class AdminController {
         return games.refreshConfig(id, admin(req));
     }
 
+    /** Take only the ship rules from the preset as shipped now; every other setting stays as the game has it. */
+    @PostMapping("/games/{id}/config/refresh-ships")
+    public GameService.Summary refreshShipRules(@PathVariable long id, HttpServletRequest req) {
+        return games.refreshShipRules(id, admin(req));
+    }
+
     /** Seed nodule fields for an existing game (issue #112). */
     @PostMapping("/games/{id}/sea-minerals")
     public GameService.Summary seaMinerals(@PathVariable long id, HttpServletRequest req) {

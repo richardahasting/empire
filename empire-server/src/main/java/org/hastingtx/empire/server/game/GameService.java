@@ -217,6 +217,37 @@ public class GameService {
         } finally { old.lock.unlock(); }
     }
 
+    /**
+     * Bring only the ship rules up to date (Richard 2026-09-14): {@code units.ships} from the preset as
+     * shipped now — classes, fuel, combat, missions, tenders — and every other setting exactly as the game
+     * has it. A full reload also takes the economy as shipped, and game 82 would have lost about 32,000
+     * people to research-scaled population ceilings it never had; ship features should not cost a
+     * country its people. Deity only.
+     */
+    public Summary refreshShipRules(long gameId, Account a) {
+        if (a == null || !a.admin()) throw new SecurityException("deity only");
+        Game old = get(gameId);
+        old.lock.lock();
+        try {
+            GameRow row = games.find(gameId).orElseThrow();
+            Map<String, Object> mine = loader.loadYaml(row.configYaml()).raw();
+            Map<String, Object> shipped = loader.loadPreset(old.preset).raw();
+            @SuppressWarnings("unchecked") Map<String, Object> myUnits = (Map<String, Object>) mine.get("units");
+            @SuppressWarnings("unchecked") Map<String, Object> shippedUnits = (Map<String, Object>) shipped.get("units");
+            if (myUnits == null || shippedUnits == null || shippedUnits.get("ships") == null)
+                throw new IllegalStateException("the " + old.preset + " preset has no ship rules to take");
+            myUnits.put("ships", shippedUnits.get("ships"));
+            String yaml = loader.toYaml(mine);
+            ConfigLoader.Loaded l = loader.loadYaml(yaml);            // binds, or throws before anything is written
+            games.setConfig(gameId, yaml, l.hash());
+            GameRow after = games.find(gameId).orElseThrow();
+            Game g = new Game(after, l.config(), worlds.load(after, l.config()));
+            loaded.put(gameId, g);
+            log.info("game {} '{}': ship rules reloaded from preset {} (config {})", gameId, row.name(), old.preset, l.hash().substring(0, 12));
+            return summary(g, a);
+        } finally { old.lock.unlock(); }
+    }
+
     /** Give an existing game's sea its fishing grounds (issue #56): ocean fertility from the generator, deterministic from the game seed. Land is untouched. */
     public Summary seedSeaFertility(long gameId, Account a) {
         Game g = get(gameId);
