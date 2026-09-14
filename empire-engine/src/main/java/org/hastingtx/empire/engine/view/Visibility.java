@@ -31,7 +31,7 @@ public final class Visibility {
         if (cfg.units().ships() != null) for (Ship sh : w.ships()) {
             if (sh.owner() != countryId) continue;
             int sight = cfg.units().ships().sightOf(cfg.units().ships().shipClass(sh.cls()));
-            for (Sector s : w.sectors()) if (Hex.distance(w, s.at(), sh.at()) <= sight) visible.add(s.at());
+            visible.addAll(Hex.within(w, sh.at(), sight));   // the hexes in sight, not a scan of the world per ship
         }
         return visible;
     }
