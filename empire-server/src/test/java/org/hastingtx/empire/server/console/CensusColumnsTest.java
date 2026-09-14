@@ -20,6 +20,7 @@ class CensusColumnsTest {
     @Test
     void censusHasDaysAndDeliverColumns() {
         String c = Console.census(V, CFG);
+        assertThat(c).as("a fleet's stocks (issue #196)").contains(" pet ").contains(" gun ").contains("shell").contains("country: pet ");
         assertThat(c).startsWith("sect").contains(" days ").contains("deliver");
         assertThat(c).contains("days: updates the food lasts");
         assertThat(c.lines().count()).isGreaterThan(2);

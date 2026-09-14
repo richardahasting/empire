@@ -195,7 +195,10 @@ class ShipsTest {
         assertThat(maxDist).isLessThanOrEqualTo(CFG.units().ships().fishingOrDefault().radius());
         assertThat(cur.sector(HARBOR_E).stock().get(FOOD)).isGreaterThan(foodBefore);
         assertThat(cur.ship(1).fishing()).isTrue();
-        assertThat(new CommandExecutor(CFG).execute(cur, 0, new Command.Sail(1, SEA_E)).world().ship(1).fishing()).isFalse();
+        // a sail pauses the mission rather than ending it (issues #201, #205); only off ends it
+        Ship sent = new CommandExecutor(CFG).execute(cur, 0, new Command.Sail(1, SEA_E)).world().ship(1);
+        assertThat(sent.fishing()).isTrue();
+        assertThat(sent.handLeg() || sent.at().equals(SEA_E)).isTrue();
         assertThat(new CommandExecutor(CFG).execute(cur, 0, new Command.Fish(1, null, true)).world().ship(1).fishing()).isFalse();
         World cargo = withShip(world(), "cargo_ship", HARBOR_E, 100);
         assertThat(new CommandExecutor(CFG).execute(cargo, 0, new Command.Fish(1, null, false)).error()).contains("does not fish");

@@ -11,7 +11,7 @@ disagree, something is broken.
 
 ```text
 map                          your map (relative coordinates, capital at 0,0)
-census                       one line per owned sector: stocks, days of food left, standing deliveries, stalled roads
+census                       one line per owned sector: stocks (pet, gun and shell too), days of food left, standing deliveries, stalled roads
 census res                   the ground: fert / min / gold / oil / uran per sector, and what it is poor for
 food                         where the food is and is not: basins, deficits, and the deliver that would help
 break                        break sanctuary
@@ -34,7 +34,8 @@ ships                        your fleet: where each ship is, its load, where it 
 history SHIP [N]             a ship's logbook: what it did, a line at a time, for its last N updates (5)
 contacts                     other people's ships your radar and lookouts have seen, and how long ago
 build HARBOUR CLASS [name]   lay a hull in your harbour (fishing_boat, cargo_ship, tanker, luxury_craft, ...; tech gates apply)
-sail SHIP x,y | hold         sail to a sea hex or one of your harbours (speed × efficiency hexes per update)
+sail SHIP x,y | hold         sail to a sea hex or one of your harbours (speed × efficiency hexes per update);
+                             a standing mission or lane is paused, and resumes when she arrives
 load/unload SHIP COMMODITY N in your harbour only
 lane SHIP x,y x2,y2 [COMMODITY ...]   shuttle between two harbours, repeat; lane SHIP none clears
                              with no commodities it carries only what x2,y2's thresholds are short of

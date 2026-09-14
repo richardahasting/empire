@@ -235,14 +235,32 @@ public final class CommandExecutor {
         if (b.cls() == null || !sc.hasClass(b.cls())) return CommandResult.fail(w, "unknown ship class: " + b.cls());
         var cls = sc.shipClass(b.cls());
         if (c.levels().tech() < cls.techRequired()) return CommandResult.fail(w, cls.name() + " needs tech " + cls.techRequired() + "; you have " + fmt(c.levels().tech()));
-        Stocks st = h.stock(); double cash = 0;
+        // materials come from the harbour and any dockside warehouse beside it (issue #197), as loading does
+        List<Sector> quay = dockside(w, c, h);
+        double cash = 0;
         for (var e : cls.buildOrEmpty().entrySet()) {
             if (e.getKey().equals("cash")) { cash = e.getValue(); continue; }
             int ci = com.index(e.getKey());
-            if (st.get(ci) < e.getValue()) return CommandResult.fail(w, "the harbour needs " + fmt(e.getValue()) + " " + e.getKey() + " for a " + cls.name() + "; it has " + fmt(st.get(ci)));
-            st = st.plus(ci, -e.getValue());
+            double have = quay.stream().mapToDouble(q -> q.stock().get(ci)).sum();
+            if (have < e.getValue())
+                return CommandResult.fail(w, "the harbour " + (quay.size() > 1 ? "and the warehouse beside it have " : "has ") + fmt(have) + " " + e.getKey()
+                        + " of the " + fmt(e.getValue()) + " a " + cls.name() + " needs" + nearestStock(w, c, h, ci, e.getValue()));
         }
         if (c.cash() < cash) return CommandResult.fail(w, "a " + cls.name() + " costs $" + fmt(cash) + "; you have $" + fmt(c.cash()));
+        World paid = w;
+        for (var e : cls.buildOrEmpty().entrySet()) {
+            if (e.getKey().equals("cash")) continue;
+            int ci = com.index(e.getKey());
+            double left = e.getValue();
+            for (Sector q : quay) {
+                if (left <= 0) break;
+                Sector cur = paid.sector(q.at());
+                double take = Math.min(left, cur.stock().get(ci));
+                if (take <= 0) continue;
+                paid = paid.withSector(cur.withStock(cur.stock().plus(ci, -take)));
+                left -= take;
+            }
+        }
         long id = w.nextShipId();
         // an armed hull's guns and shells are her armament, not scrap (issue #68): they go aboard
         Stocks aboard = Stocks.zero(com.size());
@@ -251,25 +269,61 @@ public final class CommandExecutor {
             if (q != null && q > 0) aboard = aboard.plus(com.index(k), q);
         }
         Ship ship = new Ship(id, c.id(), cls.id(), b.name() == null ? "" : b.name().trim(), h.at(), sc.startEfficiency(), aboard, null, null, w.updateNumber(), "laid down", c.levels().tech(), null, null);
-        List<Ship> ships = new ArrayList<>(w.ships()); ships.add(ship);
-        World next = w.withSector(h.withStock(st)).withCountry(c.withCash(c.cash() - cash)).withShips(ships, id + 1);
-        return new CommandResult(next, null, 0, cls.name() + " #" + id + " laid down at " + b.harbor() + " at " + fmt(sc.startEfficiency()) + "%; it fits out while docked");
+        List<Ship> ships = new ArrayList<>(paid.ships()); ships.add(ship);
+        World next = paid.withCountry(c.withCash(c.cash() - cash)).withShips(ships, id + 1);
+        // say now if she will sit at the quay for want of a crew (issue #203)
+        String crewNote = "";
+        if (sc.crews() && cls.crewOr0() > 0) {
+            int who = sc.crewIsCivilian(cls) ? com.civ : com.mil;
+            double onQuay = dockside(next, c, next.sector(h.at())).stream().mapToDouble(q -> q.stock().get(who)).sum();
+            if (onQuay < cls.crewOr0()) crewNote = "; she needs " + fmt(cls.crewOr0()) + " " + com.id(who) + " to sail and there are " + fmt(onQuay) + " on the quay — send more" + (who == com.mil ? " (an enlistment centre makes military)" : "");
+        }
+        return new CommandResult(next, null, 0, cls.name() + " #" + id + " laid down at " + b.harbor() + " at " + fmt(sc.startEfficiency()) + "%; it fits out while docked" + crewNote);
+    }
+
+    /** "; the nearest stock is 37 gun at 5,0, 4 hexes away" — where to fetch what a build lacks (issue #197). */
+    private String nearestStock(World w, Country c, Sector harbour, int ci, double need) {
+        Sector best = null; int bestD = Integer.MAX_VALUE;
+        for (Sector s : w.ownedBy(c.id())) {
+            if (s.at().equals(harbour.at()) || s.stock().get(ci) < 1) continue;
+            int d = Hex.distance(w, harbour.at(), s.at());
+            if (d < bestD || (d == bestD && s.stock().get(ci) > best.stock().get(ci))) { best = s; bestD = d; }
+        }
+        return best == null ? "; you have none of it anywhere" : "; the nearest stock is " + fmt(best.stock().get(ci)) + " " + com.id(ci) + " at " + best.at() + ", " + bestD + (bestD == 1 ? " hex" : " hexes") + " away";
     }
 
     private CommandResult sail(World w, Country c, Command.Sail s) {
         Ship ship = myShip(w, c, s.ship());
         if (ship == null) return CommandResult.fail(w, "no ship #" + s.ship() + " of yours");
-        if (ship.lane() != null) return CommandResult.fail(w, "ship #" + s.ship() + " is on a lane; clear it first");
-        if (s.dest() == null) return new CommandResult(w.withShip(ship.withDest(null).withMission(null, null)), null, 0, "ship #" + s.ship() + " holds position");
+        // a standing order is paused by a sail, not ended (Richard 2026-09-14, issues #201, #205): she goes
+        // where she is sent, and the order steers her again once she is there. Only `off` ends one.
+        String order = ship.orderLabel();
+        if (s.dest() == null) return new CommandResult(w.withShip(ship.withDest(null).withHandLeg(order != null)), null, 0,
+                "ship #" + s.ship() + " holds position" + (order == null ? "" : "; her " + order + " is paused until you sail her somewhere (it resumes when she arrives) or end it with off"));
         if (!w.inBounds(s.dest())) return CommandResult.fail(w, "out of bounds: " + s.dest());
         List<Coord> path = org.hastingtx.empire.engine.update.SeaRoutes.path(w, cfg, c.id(), ship.at(), s.dest());
         if (path == null) return CommandResult.fail(w, "no sea route from " + ship.at() + " to " + s.dest() + " (sea and your harbours only)");
         var cls = cfg.units().ships().shipClass(ship.cls());
         var sc = cfg.units().ships();
         double perUpdate = sc.range(cls, ship.tech(), ship.efficiency());
-        String ended = ship.roaming() || ship.supplying() ? " (" + ship.mission() + (ship.supplying() ? " mission" : "ing mission") + " ended)" : "";
+        String ended = order == null ? "" : " (her " + order + " resumes when she arrives)";
         int hexes = path.size() - 1;
-        ship = ship.withDest(s.dest()).withMission(null, null);
+        ship = ship.withDest(s.dest()).withHandLeg(order != null);
+        // in port, the tank is topped up now from the harbour and the warehouse beside it (issue #198),
+        // so a ship can sail the turn her quay is stocked instead of waiting an update to refuel
+        if (sc.fuel() && harborOf(w, c, w.sector(ship.at())) && cls.tankOr0() - ship.fuel() >= 1) {
+            int pet = com.index(sc.fuelId());
+            double room = Math.floor(cls.tankOr0() - ship.fuel());
+            for (Sector src : dockside(w, c, w.sector(ship.at()))) {
+                if (room < 1) break;
+                Sector cur = w.sector(src.at());
+                double q = Math.floor(Math.min(room, cur.stock().get(pet)));
+                if (q < 1) continue;
+                w = w.withSector(cur.withStock(cur.stock().plus(pet, -q)));
+                ship = ship.withFuel(ship.fuel() + q);
+                room -= q;
+            }
+        }
 
         // A sail happens now (issue #69). The ship goes as far as its own mobility and its tank will
         // carry it, this command, and the rest waits for the update — which is what makes a warship
@@ -311,7 +365,7 @@ public final class CommandExecutor {
                 ship = ship.withAt(to).withMobility(ship.mobility() - hops * rush);
                 if (perHex > 0) ship = ship.withFuel(ship.fuel() - hops * perHex);
                 boolean there = to.equals(s.dest());
-                if (there) ship = ship.withDest(null);
+                if (there) { ship = ship.withDest(null).withHandLeg(false); if (order != null) ended = " (her " + order + " resumes)"; }
                 return new CommandResult(w.withShip(ship), null, 0,
                         "ship #" + s.ship() + " sails " + hops + (hops == 1 ? " hex" : " hexes") + " to " + to
                                 + (there ? ", arrived" : "; " + (hexes - hops) + " to go, at the update") + capped + ended);

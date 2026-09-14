@@ -44,8 +44,12 @@ public final class ProductionStep implements Step {
             for (var e : produces.entrySet()) {
                 int ci = ctx.com.index(e.getKey());
                 double w = unit * e.getValue();
-                double room = ctx.com.isPerson(ci) ? Math.max(0, ctx.maxPopulation(s) - people(ctx, i))
-                                                  : Math.max(0, ctx.capacity(s, ci) - (s.stock().get(ci) + ctx.led().st(i, ci)));
+                // Military do not take a place under the population ceiling (KNOWN: trunc_people trims
+                // civilians and workers only), so they are not capped by it either. They were: a full
+                // enlistment centre had no civilian room left and so made no military, ever (issue #204).
+                double room = ci == ctx.com.mil ? Double.POSITIVE_INFINITY
+                        : ctx.com.isPerson(ci) ? Math.max(0, ctx.maxPopulation(s) - people(ctx, i))
+                                               : Math.max(0, ctx.capacity(s, ci) - (s.stock().get(ci) + ctx.led().st(i, ci)));
                 want[ci] = Math.min(w, room);
                 totalWant += want[ci];
             }

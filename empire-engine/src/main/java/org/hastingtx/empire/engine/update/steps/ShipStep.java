@@ -119,6 +119,9 @@ public final class ShipStep implements Step {
                 Coord haven = nearestHarbour(ctx, ship, harbours.computeIfAbsent(ship.owner(), o -> ownHarbors(ctx, o)));
                 if (haven == null) { note.next().append("worn out, and no harbour of yours she can reach"); ship = ship.withDest(null); }
                 else { if (!haven.equals(ship.dest())) note.next().append("worn out: limping home to ").append(haven); ship = ship.withDest(haven); }
+            } else if (ship.handLeg()) {
+                // sent somewhere by hand (issues #201, #205): her standing order waits until she arrives
+                if (ship.dest() == null) note.next().append("holding; her ").append(ship.orderLabel()).append(" is paused");
             } else if (ship.rescuing()) {
                 ship = runRescue(ctx, sc, ship, si, out, harbours, told, note);
             } else if (ship.lane() != null) {
@@ -263,6 +266,7 @@ public final class ShipStep implements Step {
                             // the harbour's business is done the update she gets there, not the one after
                             // (issue #67): a lane unloads on arrival and a supply ship takes the next job
                             if (limping || bingo != null) ship = ship.withDest(null);
+                            else if (ship.handLeg()) { ship = ship.withDest(null).withHandLeg(false); if (ship.orderLabel() != null) note.last().append("; her ").append(ship.orderLabel()).append(" resumes"); }
                             else if (ship.rescuing()) ship = runRescue(ctx, sc, ship.withDest(null), si, out, harbours, told, note);   // alongside the update she arrives
                             else if (ship.lane() != null) ship = runLane(ctx, ship, cls, si, out, note);
                             else {
@@ -272,7 +276,10 @@ public final class ShipStep implements Step {
                         }
                     }
                 }
-            } else if (!fillingUp && ship.dest() != null) { if (ship.lane() == null) ship = ship.withDest(null); }
+            } else if (!fillingUp && ship.dest() != null) {
+                if (ship.handLeg()) ship = ship.withDest(null).withHandLeg(false);   // already where she was sent: the order resumes
+                else if (ship.lane() == null) ship = ship.withDest(null);
+            }
             // upkeep
             if (cls.upkeepPerUpdate() != null) for (var e : cls.upkeepPerUpdate().entrySet()) if (e.getKey().equals("cash")) ctx.led().cash[ship.owner()] -= e.getValue();
             List<String> lines = note.isEmpty() ? List.of(docked ? "in harbour" : "holding") : note.lines();
@@ -662,8 +669,7 @@ public final class ShipStep implements Step {
             int c = ctx.com.index(e.getKey());
             double room = Math.min(e.getValue() - ship.stock().get(c), cls.hold() - ship.load());
             if (room < 1) continue;
-            double have = ctx.sector(hi).stock().get(c) + ctx.led().st(hi, c);
-            double got = ctx.led().toShip(hi, c, Math.min(room, Math.max(0, have)));
+            double got = fromQuay(ctx, ship, hi, c, room);
             if (got <= 0) continue;
             ship = ship.withStock(ship.stock().plus(c, got));
             took.append(took.isEmpty() ? "" : " and ").append(Ledger.q(got)).append(' ').append(e.getKey());
@@ -793,9 +799,8 @@ public final class ShipStep implements Step {
         double room = cls.tankOr0() - ship.fuel();
         if (room < 1) return ship;
         int pet = ctx.com.index(ctx.cfg.units().ships().fuelId());
-        double have = ctx.sector(hi).stock().get(pet) + ctx.led().st(hi, pet);
-        double took = ctx.led().toShip(hi, pet, Math.min(room, Math.max(0, have)));
-        if (took <= 0) { if (ship.fuel() < cls.fuelPerHexOr0()) note.next().append("no ").append(ctx.com.id(pet)).append(" in the harbour to refuel"); return ship; }
+        double took = fromQuay(ctx, ship, hi, pet, room);
+        if (took <= 0) { if (ship.fuel() < cls.fuelPerHexOr0()) note.next().append("no ").append(ctx.com.id(pet)).append(" in the harbour or the warehouse beside it to refuel"); return ship; }
         note.next().append("took on ").append(Ledger.q(took)).append(' ').append(ctx.com.id(pet));
         return ship.withFuel(ship.fuel() + took);
     }
@@ -856,14 +861,30 @@ public final class ShipStep implements Step {
             int c = ctx.com.index(what[k]);
             double room = Math.min(want[k] - ship.stock().get(c), cls.hold() - ship.load());
             if (room < 1) continue;
-            double have = ctx.sector(hi).stock().get(c) + ctx.led().st(hi, c);
-            double got = ctx.led().toShip(hi, c, Math.min(room, Math.max(0, have)));
+            double got = fromQuay(ctx, ship, hi, c, room);
             if (got <= 0) continue;
             ship = ship.withStock(ship.stock().plus(c, got));
             took.append(took.isEmpty() ? "" : " and ").append(Ledger.q(got)).append(' ').append(what[k]).append(got == 1 ? "" : "s");
         }
         if (!took.isEmpty()) note.next().append("rearmed with ").append(took);
         return ship;
+    }
+
+    /**
+     * Up to {@code want} of commodity {@code c} off the quay: the harbour first, then any dockside warehouse
+     * of hers beside it (issues #202, #203, #197) — the same sectors load and unload already work. A large
+     * fleet was draining its harbour's petrol mid-update while the warehouse next door stood full. Whole
+     * units, moved through the ledger. Returns what was taken.
+     */
+    private static double fromQuay(Ctx ctx, Ship ship, int hi, int c, double want) {
+        double got = 0;
+        for (int si : dockside(ctx, ctx.sector(hi), ship.owner())) {
+            if (want - got < 1) break;
+            double have = ctx.sector(si).stock().get(c) + ctx.led().st(si, c);
+            if (have < 1) continue;
+            got += ctx.led().toShip(si, c, Math.min(want - got, have));
+        }
+        return got;
     }
 
     /** Civilians on a merchantman, military on a warship (issue #66). */
@@ -883,9 +904,8 @@ public final class ShipStep implements Step {
         double want = cls.crewOr0() - ship.crew();
         if (want < 1) return ship;
         int who = crewCommodity(ctx, cls);
-        double have = ctx.sector(hi).stock().get(who) + ctx.led().st(hi, who);
-        double got = ctx.led().toShip(hi, who, Math.min(want, Math.max(0, have)));
-        if (got <= 0) { note.next().append("no ").append(ctx.com.id(who)).append(" in the harbour to crew her"); return ship; }
+        double got = fromQuay(ctx, ship, hi, who, want);
+        if (got <= 0) { note.next().append("no ").append(ctx.com.id(who)).append(" in the harbour or the warehouse beside it to crew her"); return ship; }
         note.next().append("signed on ").append(Ledger.q(got)).append(' ').append(ctx.com.id(who));
         return ship.withCrew(ship.crew() + got);
     }

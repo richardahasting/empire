@@ -312,6 +312,8 @@ public class Console {
         }
         for (var s : v.ships()) if (!s.markedBy().isEmpty())
             sb.append("ship #").append(s.id()).append(" fired on ").append(String.join(", ", s.markedBy())).append(" in peacetime: they may shoot her on sight for now\n");
+        for (var s : v.ships()) if (s.handLeg())
+            sb.append("ship #").append(s.id()).append(" is sailing by hand; her ").append(s.lane() != null ? "lane" : s.mission()).append(" resumes when she arrives\n");
         sb.append("on: the standing mission the hull is running; can: the ones its class may be given (plus sail, always)\n");
         return sb.toString();
     }
@@ -371,7 +373,9 @@ public class Console {
      * the ack that set it.
      */
     static String census(CountryView v, GameConfig cfg) {
-        StringBuilder sb = new StringBuilder(String.format("%-8s %-3s %-4s %4s %4s %6s %5s %6s %6s %6s %6s %6s %5s  %s%n", "sect", "des", "eff", "mob", "road", "civ", "cap", "mil", "food", "iron", "lcm", "hcm", "days", "deliver"));
+        // pet, gun and shell too (issue #196): a fleet runs on them, and they were only in the view's JSON
+        StringBuilder sb = new StringBuilder(String.format("%-8s %-3s %-4s %4s %4s %6s %5s %6s %6s %6s %6s %6s %6s %5s %5s %5s  %s%n", "sect", "des", "eff", "mob", "road", "civ", "cap", "mil", "food", "iron", "lcm", "hcm", "pet", "gun", "shell", "days", "deliver"));
+        double[] totals = new double[4];   // pet, gun, shell, oil across the country
         List<String> stalled = new ArrayList<>();
         double popScale = cfg.economy().population().maxPopResearchCurve().eval(v.levels().research());
         for (SectorView s : v.sectors()) {
@@ -384,14 +388,17 @@ public class Console {
             String days = eats <= 0 ? "∞" : food / eats >= 100 ? "99+" : String.format("%.0f", food / eats);
             StringBuilder del = new StringBuilder();
             s.deliveries().forEach((c, d) -> del.append(del.isEmpty() ? "" : " ").append(c).append("→").append(d.dir()).append(">").append(Math.round(d.threshold())));
-            sb.append(String.format("%-8s %-3s %4.0f %4.0f %4.0f %6.0f %5.0f %6.0f %6.0f %6.0f %6.0f %6.0f %5s  %s%n", s.relative().x() + "," + s.relative().y(), glyph(s), s.efficiency(), s.mobility(), s.roadLevel(),
-                    s.stock().getOrDefault("civ", 0.0), cap, s.stock().getOrDefault("mil", 0.0), food, s.stock().getOrDefault("iron", 0.0), s.stock().getOrDefault("lcm", 0.0), s.stock().getOrDefault("hcm", 0.0), days, del));
+            double pet = s.stock().getOrDefault("pet", 0.0), gun = s.stock().getOrDefault("gun", 0.0), shell = s.stock().getOrDefault("shell", 0.0);
+            totals[0] += pet; totals[1] += gun; totals[2] += shell; totals[3] += s.stock().getOrDefault("oil", 0.0);
+            sb.append(String.format("%-8s %-3s %4.0f %4.0f %4.0f %6.0f %5.0f %6.0f %6.0f %6.0f %6.0f %6.0f %6.0f %5.0f %5.0f %5s  %s%n", s.relative().x() + "," + s.relative().y(), glyph(s), s.efficiency(), s.mobility(), s.roadLevel(),
+                    s.stock().getOrDefault("civ", 0.0), cap, s.stock().getOrDefault("mil", 0.0), food, s.stock().getOrDefault("iron", 0.0), s.stock().getOrDefault("lcm", 0.0), s.stock().getOrDefault("hcm", 0.0), pet, gun, shell, days, del));
             String r = shortForOnePoint(cfg, s, true), l = shortForOnePoint(cfg, s, false);
             if (r != null) stalled.add(rel(s.relative()) + " road→" + Math.round(s.roadTarget()) + " " + r);
             if (l != null) stalled.add(rel(s.relative()) + " rail→" + Math.round(s.railTarget()) + " " + l);
         }
         // a standing order that cannot lay a point looks exactly like a finished one; say which are waiting (issue #150)
         if (!stalled.isEmpty()) sb.append("waiting for materials: ").append(String.join("; ", stalled)).append('\n');
+        sb.append(String.format("country: pet %.0f · gun %.0f · shell %.0f · oil %.0f%n", totals[0], totals[1], totals[2], totals[3]));
         sb.append("cap: the population ceiling here").append(popScale == 1.0 ? "" : String.format(" (research %.0f → ×%.2f of the flat cap)", v.levels().research(), popScale))
           .append("; days: updates the food lasts at what the people here eat (∞ = they live off the land); census res for the ground; food for basins and deficits\n");
         return sb.toString();
