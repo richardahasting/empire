@@ -85,12 +85,12 @@ Two rules stop a fleet from stranding itself (Richard 2026-09-14):
   off, whatever her orders, and whether you order a `sail` now or leave it to the
   update. A harbour with no petrol keeps her in, and her history says so. Send
   your harbours petrol: a refinery, a supply ship, a tanker on a lane.
-- **At sea, a ship short of fuel turns for port by herself.** If what is in her
-  tank will not cover this update's sailing and the trip back to the nearest
-  harbour from where that leaves her, with a quarter to spare, she makes for that
-  harbour whatever she was doing. Her orders are kept: once she is refuelled, the
-  mission or lane carries on. A ship already bound for one of your harbours that
-  she can reach is left alone.
+- **A ship never sails further than she can get back from.** Every leg, from
+  port or at sea, whatever her orders and wherever she is bound, stops where the
+  fuel left will still take her to the nearest harbour of yours, with a quarter to
+  spare. A ship already out of reach of home makes for the nearest harbour as far
+  as her tank will carry her. Her orders are kept: once she is refuelled, the
+  mission or lane carries on. A `sail` you give now is held to the same line.
 
 This is what finally gives the refinery a customer. Before ships, `1 oil → 10
 petrol` produced a commodity nothing consumed.

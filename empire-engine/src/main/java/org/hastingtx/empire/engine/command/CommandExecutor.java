@@ -284,6 +284,16 @@ public final class CommandExecutor {
             // haste is dearer than planning: a hex ordered now costs rushCost, a planned one costs 1
             double rush = sc.rushCost();
             int hops = Math.min(Math.min((int) Math.floor(ship.mobility() / rush), hexes), byFuel);
+            // no further than her fuel will bring her back from (2026-09-14): the rest waits for the update,
+            // which turns her for a harbour if it must
+            String capped = "";
+            if (perHex > 0 && hops > 0) {
+                int[] dist = org.hastingtx.empire.engine.update.SeaRoutes.harbourDistances(w, cfg, c.id());
+                if (dist[w.index(ship.at())] != Integer.MAX_VALUE) {
+                    int safe = org.hastingtx.empire.engine.update.SeaRoutes.safeHops(w, path, hops, dist, ship.fuel(), perHex, sc.missionsOrDefault().reserve());
+                    if (safe < hops) { hops = Math.max(0, safe); capped = " (no further than her fuel will bring her back from)"; }
+                }
+            }
             // a hostile blockade on station stops her where she meets it (issue #68)
             var blocked = org.hastingtx.empire.engine.combat.Blockade.limit(w, cfg, ship, path, hops, w.updateNumber());
             if (blocked.by() != null) {
@@ -303,7 +313,7 @@ public final class CommandExecutor {
                 if (there) ship = ship.withDest(null);
                 return new CommandResult(w.withShip(ship), null, 0,
                         "ship #" + s.ship() + " sails " + hops + (hops == 1 ? " hex" : " hexes") + " to " + to
-                                + (there ? ", arrived" : "; " + (hexes - hops) + " to go, at the update") + ended);
+                                + (there ? ", arrived" : "; " + (hexes - hops) + " to go, at the update") + capped + ended);
             }
             String why = perHex > 0 && byFuel <= 0 ? "its tank is dry"
                     : perUpdate <= 0 ? "it is too unfit to sail"

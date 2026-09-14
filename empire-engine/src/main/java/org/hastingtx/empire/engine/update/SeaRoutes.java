@@ -42,4 +42,43 @@ public final class SeaRoutes {
         }
         return null;
     }
+
+    /**
+     * Hexes from every sector to the nearest harbour of {@code owner}, sailing over sea and that owner's
+     * harbours — one breadth-first search from all the harbours at once. {@link Integer#MAX_VALUE} where
+     * no harbour can be reached. Indexed like {@link World#sectors()}.
+     */
+    public static int[] harbourDistances(World w, GameConfig cfg, int owner) {
+        int n = w.sectors().size();
+        int[] dist = new int[n];
+        java.util.Arrays.fill(dist, Integer.MAX_VALUE);
+        ArrayDeque<Coord> q = new ArrayDeque<>();
+        for (Sector s : w.ownedBy(owner)) if (isHarbor(cfg, s)) { dist[w.index(s.at())] = 0; q.add(s.at()); }
+        while (!q.isEmpty()) {
+            Coord c = q.poll();
+            int d = dist[w.index(c)] + 1;
+            for (Coord nb : Hex.neighbours(w, c)) {
+                int i = w.index(nb);
+                if (dist[i] <= d || !navigable(w, cfg, w.sector(nb), owner)) continue;
+                dist[i] = d;
+                q.add(nb);
+            }
+        }
+        return dist;
+    }
+
+    /**
+     * How far along {@code path} a ship may sail this time and still get back (Richard 2026-09-14,
+     * ship #30): the largest {@code h ≤ hops} for which the hexes sailed plus the hexes from where she
+     * stops to the nearest harbour, times fuel per hex and {@code reserve}, fit in her tank. 0 when she
+     * may stay where she is but go no further; −1 when even where she is, she is already out of reach.
+     */
+    public static int safeHops(World w, List<Coord> path, int hops, int[] dist, double fuel, double perHex, double reserve) {
+        for (int h = hops; h >= 0; h--) {
+            int back = dist[w.index(path.get(h))];
+            if (back == Integer.MAX_VALUE) continue;
+            if ((h + back) * perHex * reserve <= fuel + 1e-9) return h;
+        }
+        return -1;
+    }
 }
