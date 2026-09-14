@@ -167,6 +167,22 @@ class ShipFuelTest {
     }
 
     /**
+     * The first low-fuel rule counted the most a ship could sail, not what she would: a boat laid at high
+     * tech banks twenty hexes of movement, so game 82's fishing boat read a full tank as "low on fuel
+     * (150 of 150)" and shuttled in and out of port. What counts is the move she is actually making.
+     */
+    @Test
+    void aFastShipWithAFullTankIsNotLowOnFuel() {
+        var fc = CFG.units().ships().shipClass("industrial_fishing_boat");
+        Coord near = Hex.stepRaw(CAP, 0, 4);                    // two hexes out, bound two further
+        Ship boat = new Ship(1, 0, "industrial_fishing_boat", "", near, 100, Stocks.zero(COM.size()), Hex.stepRaw(CAP, 0, 6), null, 0, "", 900, null, null, fc.tankOr0(), fc.crewOr0(), 20);
+        World w = world(500).withShips(List.of(boat), 2);
+        Ship after = Update.run(w, CFG, 7).next().ship(1);
+        assertThat(after.note()).doesNotContain("low on fuel");
+        assertThat(after.at()).as("she went where she was going").isEqualTo(Hex.stepRaw(CAP, 0, 6));
+    }
+
+    /**
      * The outcome, not the mechanism: game 82's fleet was caught out at sea on its missions with less fuel
      * than the trip home, a hold not yet full and a hull not yet worn, so nothing turned it for port and
      * it roamed on until the tank was dry. A boat in that position now comes home and keeps fishing.
