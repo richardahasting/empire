@@ -6,15 +6,19 @@ from that.
 **Standing missions** — given once, run every update until told `off`:
 `fish` (fishing boats), `mine` (deep sea miners), `lane` and `supply`
 (merchantmen: cargo ships, tankers, luxury craft), and for warships `patrol`,
-`search`, `escort`, `blockade` and `interdict`. `sail` is the one-off order, and
+`search`, `escort`, `blockade` and `interdict`. `sail` is the one-off order. It
+**pauses** a standing mission rather than ending it (see *Sailing*), and
 `fire` is the one a warship gives now. The
 `ships` listing shows what each hull is **on** and what its class **can** be
 given, so nobody has to steer a miner by hand.
 
 ## Building one
 
-`build HARBOUR CLASS [name]` lays down a hull. It costs materials and cash from
-that harbour's own stock, and the class must be within your tech.
+`build HARBOUR CLASS [name]` lays down a hull. It costs cash, and materials from
+**the quay**: the harbour's own stock and any warehouse beside it. The class must
+be within your tech. A refusal for want of something names the nearest stock of
+it, so you know where to send from. A hull that its quay has too few people to
+crew is still laid down, and the reply warns you how many to send.
 
 A new hull leaves the yard at **20% efficiency** and fits out while docked,
 gaining 20 points an update at 1 lcm and $2 a point. A ship's speed is
@@ -74,7 +78,8 @@ and refitted, a mission or lane carries on.
 ## Fuel
 
 **Every hull burns petrol by the hex**, including fishing boats and freighters.
-A harbour refuels from its own stock; a tanker can refuel others at sea.
+A harbour refuels from the quay (its own stock, then any warehouse beside it);
+a tanker can refuel others at sea.
 
 A dry tank holds a ship exactly where it is. Tanks are sized at roughly thirty
 hexes, so seven to ten updates of steady sailing. At high tech a hull sails
@@ -171,8 +176,9 @@ At peace, held coast is refused: declare war first. Either way it is news.
 
 A hull needs people aboard to sail. Merchantmen — fishing, cargo, tanker,
 luxury — take **civilians**; everything else takes **military**. The harbour
-signs them on while the ship is docked, from the people who are actually there,
-and they come ashore when it is scrapped.
+signs them on while the ship is docked, from the people who are actually on the
+quay (the harbour and any warehouse beside it), and they come ashore when it is
+scrapped.
 
 **A short-handed ship stays at the quay.** This is deliberate: a fleet competes
 with your factories for the same population. Ships are not free once built.
@@ -211,7 +217,16 @@ update — spends 1. Rushing is always available and never free, and a captain w
 plans gets further on the same movement.
 
 A ship that is short-handed, out of fuel or out of mobility does not refuse the
-order: it takes the destination and starts at the update.
+order: it takes the destination and starts at the update. A ship ordered to sail
+from port **tops her tank up from the quay first**, so she can leave the turn her
+harbour is stocked.
+
+**A `sail` pauses a standing order; it does not end it** (Richard 2026-09-14). A
+fishing boat, miner, supply ship, lane or warship on patrol goes where she is sent,
+and the order steers her again **once she arrives**. `sail SHIP hold` stops her and
+pauses the order until you sail her somewhere. Only `off` (or `lane SHIP none`)
+ends one. The `ships` listing and the Fleet panel show a paused order as
+*sailing by hand*.
 
 ## Mining the sea floor
 
@@ -254,7 +269,8 @@ A ship does the harbour's business **the update it arrives**: it unloads (or
 loads) and turns round straight away, rather than sitting at the quay for an
 update first.
 
-`sail SHIP x,y` sends a ship somewhere once. `load` and `unload` work **only in
+`sail SHIP x,y` sends a ship somewhere once; her lane picks up again when she
+gets there. `load` and `unload` work **only in
 a harbour**.
 
 ## Supply: islands that feed themselves
@@ -290,7 +306,7 @@ wants what it carries, or, empty, to the harbour that can fill it.
 - `home` is where it goes to **refit** when the sea wears it to 60%, exactly as a
   fishing boat does. Give the order in that harbour, or name it.
 
-`supply SHIP off` takes it off the round. A `sail` order also ends it.
+`supply SHIP off` takes it off the round. A `sail` order pauses it until she arrives.
 
 ## Tankers
 
@@ -392,7 +408,7 @@ A mission says **where** a warship goes. Whether she fires is still up to the wa
 | `blockade SHIP x,y` | holds that hex and stops hostile ships next to it |
 | `interdict SHIP x,y` | holds that hex and shells enemy trains in reach |
 
-Each takes `off` to stop, and a `sail` order ends it too.
+Each takes `off` to stop. A `sail` order pauses it until she arrives.
 
 **Every mission comes home for supplies, and goes back out by itself.** Home is
 the harbour she was in when you gave the order, or the nearest of yours she can

@@ -158,7 +158,7 @@ class ShipsPhase2Test {
         assertThat(new CommandExecutor(CFG).execute(addShip(w, "cargo_ship", OFF_W), 0, new Command.Supply(1, null, false)).error()).contains("home harbour");
         World on = run(addShip(w, "cargo_ship", HARBOR_E), new Command.Supply(1, null, false));
         assertThat(run(on, new Command.Supply(1, null, true)).ship(1).supplying()).isFalse();
-        assertThat(run(on, new Command.Sail(1, OFF_W)).ship(1).supplying()).as("a sail order ends the mission").isFalse();
+        assertThat(run(on, new Command.Sail(1, OFF_W)).ship(1).supplying()).as("a sail order pauses the mission, it does not end it (#201)").isTrue();
     }
 
     // ---- tankers ----
