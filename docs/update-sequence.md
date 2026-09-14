@@ -287,9 +287,17 @@ a harbour's stock is the only thing two ships can contend for. For each ship:
    draws a sea hex within `search_radius` of home and `search_hops` of her,
    weighted by `1 + min(radius, updates since her country last saw it)` from a
    stream keyed on ship and update.
-7. **Fuel.** A docked ship refuels from the harbour; at sea, from an owner's
-   tanker already processed in the same hex; a tanker that cannot make a hex
-   fills its own tank from its hold.
+7. **Fuel** (runs before the lane, supply and mission steps, so they see the tank
+   she really has). A docked ship refuels from the harbour; at sea, from an
+   owner's tanker already processed in the same hex; a tanker that cannot make a
+   hex fills its own tank from its hold. **Low fuel** (2026-09-14): a ship at sea
+   whose fuel is below `(hexes to the nearest harbour + 2 × floor(mobility)) ×
+   fuel_per_hex × missions.fuel_reserve_factor` makes for that harbour, overriding
+   her orders for the update and keeping them, unless she is already bound for a
+   harbour of her owner's she can reach on what she has. **Port**: a docked ship
+   with room in her tank of a unit or more does not sail, and keeps her
+   destination for when she is full; a `sail` order given in port waits the same
+   way.
 8. **Crew and arms.** A docked ship signs on crew from the harbour, and an armed
    one takes guns up to her class's `guns` and shells up to its `magazine`.
 9. **Sail.** Toward its destination over sea hexes and its owner's harbours by

@@ -29,7 +29,8 @@ class ShipsTest {
         World w = TestWorlds.disc(CFG, 2, Map.of("civ", 500.0, "food", 400.0));
         w = w.withCountry(w.country(0).withCash(100000));
         for (Coord h : new Coord[] {HARBOR_E, HARBOR_W})
-            w = TestWorlds.own(w, CFG, h, "harbor", 100, 127, Map.of("civ", 500.0, "food", 300.0, "lcm", 500.0, "hcm", 200.0), Map.of("food", 200.0));
+            // petrol too: a ship does not leave port until her tank is full (2026-09-14), so a harbour with none keeps its fleet in
+            w = TestWorlds.own(w, CFG, h, "harbor", 100, 127, Map.of("civ", 500.0, "food", 300.0, "lcm", 500.0, "hcm", 200.0, "pet", 2000.0), Map.of("food", 200.0));
         // fishing grounds east of the eastern harbour
         Sector sea = w.sector(SEA_E);
         w = w.withSector(sea.withTerrain(Terrain.OCEAN, 0, new Resources(60, 0, 0, 0, 0)));

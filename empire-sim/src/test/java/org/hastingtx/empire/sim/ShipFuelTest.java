@@ -124,4 +124,76 @@ class ShipFuelTest {
         assertThat(gave.stock().get(PET) + refuelled.fuel())
                 .describedAs("and nothing was created in the transfer").isEqualTo(500.0);
     }
+
+    // ---- Richard 2026-09-14: "all of the ships ran out of fuel" ----
+
+    @Test
+    void aShipDoesNotLeavePortUntilHerTankIsFull() {
+        World w = withShip(world(50), HARBOR, 0);
+        w = w.withShip(w.ships().get(0).withDest(FAR_SEA));
+        World after = Update.run(w, CFG, 3).next();
+        Ship s = after.ships().get(0);
+        assertThat(s.at()).as("still in port").isEqualTo(HARBOR);
+        assertThat(s.fuel()).as("took what the harbour had").isEqualTo(50);
+        assertThat(s.note()).contains("waiting in harbour to fill her tank").contains("no pet left");
+
+        // send the harbour petrol and she tops up and goes
+        World stocked = after.withSector(after.sector(HARBOR).withStock(after.sector(HARBOR).stock().with(PET, 500)));
+        Ship gone = Update.run(stocked, CFG, 4).next().ships().get(0);
+        assertThat(gone.at()).as("full, she sails").isNotEqualTo(HARBOR);
+
+        // an order given now waits for the tank too
+        var r = new org.hastingtx.empire.engine.command.CommandExecutor(CFG).execute(w.withShip(w.ships().get(0).withDest(null).withMobility(10)), 0,
+                new org.hastingtx.empire.engine.command.Command.Sail(1, FAR_SEA));
+        assertThat(r.error()).isNull();
+        assertThat(r.world().ships().get(0).at()).isEqualTo(HARBOR);
+        assertThat(r.info()).contains("filling her tank");
+    }
+
+    @Test
+    void aShipLowOnFuelTurnsForTheNearestHarbourByHerself() {
+        Coord out = Hex.stepRaw(CAP, 0, 6);                     // four hexes from the harbour
+        World low = withShip(world(500), out, 30);
+        low = low.withShip(low.ships().get(0).withDest(FAR_SEA));
+        Ship s = Update.run(low, CFG, 5).next().ships().get(0);
+        assertThat(s.note()).contains("low on fuel");
+        assertThat(Hex.distance(low, s.at(), HARBOR)).as("she turned back").isLessThan(4);
+
+        World plenty = withShip(world(500), out, 120);
+        plenty = plenty.withShip(plenty.ships().get(0).withDest(FAR_SEA));
+        Ship p = Update.run(plenty, CFG, 5).next().ships().get(0);
+        assertThat(p.note()).doesNotContain("low on fuel");
+        assertThat(Hex.distance(plenty, p.at(), FAR_SEA)).as("with fuel to spare she carries on").isLessThan(3);
+    }
+
+    /**
+     * The outcome, not the mechanism: game 82's fleet was caught out at sea on its missions with less fuel
+     * than the trip home, a hold not yet full and a hull not yet worn, so nothing turned it for port and
+     * it roamed on until the tank was dry. A boat in that position now comes home and keeps fishing.
+     * Checked to fail with the low-fuel rule taken out.
+     */
+    @Test
+    void aFishingBoatCaughtOutOnHerMissionComesHomeBeforeSheRunsDry() {
+        World w = world(5000);
+        for (int d = 0; d < 6; d++) for (int k = 1; k <= 6; k++) {
+            Coord c = Hex.stepRaw(HARBOR, d, k);
+            if (w.inBounds(c) && w.sector(c).terrain() == Terrain.OCEAN) w = w.withSector(w.sector(c).withTerrain(Terrain.OCEAN, 0, new Resources(1, 0, 0, 0, 0)));   // poor water: the hold will not bring her in
+        }
+        var fc = CFG.units().ships().shipClass("fishing_boat");
+        Coord farOut = Hex.stepRaw(HARBOR, 0, 5);
+        double sixHexes = 6 * fc.fuelPerHexOr0();
+        Ship boat = new Ship(1, 0, "fishing_boat", "", farOut, 100, Stocks.zero(COM.size()), null, null, 0, "", 0, Ship.FISH, HARBOR, sixHexes, fc.crewOr0());
+        w = w.withShips(List.of(boat), 2);
+        int dryAtSea = 0;
+        boolean cameIn = false;
+        for (int i = 0; i < 20; i++) {
+            w = Update.run(w, CFG, 100 + i).next();
+            Ship b = w.ship(1);
+            if (b.at().equals(HARBOR)) cameIn = true;
+            else if (b.fuel() < fc.fuelPerHexOr0()) dryAtSea++;
+        }
+        assertThat(dryAtSea).as("updates spent dry at sea").isZero();
+        assertThat(cameIn).as("she came in to refuel").isTrue();
+        assertThat(w.ship(1).mission()).as("and is still fishing").isEqualTo(Ship.FISH);
+    }
 }

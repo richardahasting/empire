@@ -276,6 +276,9 @@ public final class CommandExecutor {
         if (sc.immediate()) {
             if (sc.crews() && ship.crew() < cls.crewOr0())
                 return new CommandResult(w.withShip(ship), null, 0, "ship #" + s.ship() + " is short-handed and stays at the quay; it will sail when it has a crew" + ended);
+            // she does not leave port until her tank is full (Richard 2026-09-14)
+            if (sc.fuel() && harborOf(w, c, w.sector(ship.at())) && cls.tankOr0() - ship.fuel() >= 1)
+                return new CommandResult(w.withShip(ship), null, 0, "ship #" + s.ship() + " is filling her tank (" + fmt(ship.fuel()) + " of " + fmt(cls.tankOr0()) + "); she sails for " + s.dest() + " at the update once it is full" + ended);
             double perHex = sc.fuel() ? cls.fuelPerHexOr0() : 0;
             int byFuel = perHex > 0 ? (int) Math.floor(ship.fuel() / perHex) : hexes;
             // haste is dearer than planning: a hex ordered now costs rushCost, a planned one costs 1
