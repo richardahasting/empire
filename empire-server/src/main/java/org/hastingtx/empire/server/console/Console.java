@@ -306,7 +306,7 @@ public class Console {
         StringBuilder sb = new StringBuilder(String.format("%-4s %-24s %-8s %5s %5s %-11s %-8s %-18s %-14s %s%n", "id", "class", "at", "eff", "speed", "load/hold", "on", "going", "can", "last update"));
         for (var s : v.ships()) {
             String on = s.lane() != null ? "lane" : s.mission() != null && !s.mission().isBlank() ? s.mission() : "—";
-            String going = s.lane() != null ? "lane " + rel(s.lane().fromRelative()) + (s.lane().outbound() ? " → " : " ← ") + rel(s.lane().toRelative()) : s.mission() != null && java.util.Set.of("patrol", "search", "escort", "blockade", "interdict").contains(s.mission()) ? s.mission() + (s.ward() > 0 ? " #" + s.ward() : "") + (s.destRelative() != null ? " → " + rel(s.destRelative()) : "") : "supply".equals(s.mission()) ? "supply" + (s.destRelative() != null ? " → " + rel(s.destRelative()) : s.docked() ? ", in harbour" : "") : s.mission() != null && !s.mission().isBlank() ? ("fish".equals(s.mission()) ? "fishing" : "mining") + " from " + rel(s.homeRelative()) + (s.destRelative() != null ? " → " + rel(s.destRelative()) : "") : s.destRelative() != null ? "to " + rel(s.destRelative()) : s.docked() ? "in harbour" : "holding";
+            String going = s.lane() != null ? "lane " + rel(s.lane().fromRelative()) + (s.lane().outbound() ? " → " : " ← ") + rel(s.lane().toRelative()) : "rescue".equals(s.mission()) ? "rescuing #" + s.ward() + (s.destRelative() != null ? " → " + rel(s.destRelative()) : "") : s.mission() != null && java.util.Set.of("patrol", "search", "escort", "blockade", "interdict").contains(s.mission()) ? s.mission() + (s.ward() > 0 ? " #" + s.ward() : "") + (s.destRelative() != null ? " → " + rel(s.destRelative()) : "") : "supply".equals(s.mission()) ? "supply" + (s.destRelative() != null ? " → " + rel(s.destRelative()) : s.docked() ? ", in harbour" : "") : s.mission() != null && !s.mission().isBlank() ? ("fish".equals(s.mission()) ? "fishing" : "mining") + " from " + rel(s.homeRelative()) + (s.destRelative() != null ? " → " + rel(s.destRelative()) : "") : s.destRelative() != null ? "to " + rel(s.destRelative()) : s.docked() ? "in harbour" : "holding";
             sb.append(String.format("%-4d %-24s %-8s %5.0f %5d %-11s %-8s %-18s %-14s %s%n", s.id(), s.cls() + (s.name() == null || s.name().isBlank() ? "" : " " + s.name()), rel(s.relative()), s.efficiency(), s.hexesPerUpdate(), (int) s.load() + "/" + (int) s.hold(), on, going, missionsOf(cfg, s.cls()), s.note()));
         }
         for (var s : v.ships()) if (!s.markedBy().isEmpty())
@@ -329,6 +329,7 @@ public class Console {
             if (c.fishingRateOr0() > 0) can.add("fish");
             if (c.miningRateOr0() > 0) can.add("mine");
             if (!c.carriesOrEmpty().isEmpty() && !c.military()) { can.add("lane"); can.add("supply"); }
+            if (c.tender()) can.add("answers distress calls");
             if (c.armed()) { can.add("fire"); can.add("patrol"); can.add("search"); can.add("escort"); can.add("blockade"); can.add("interdict"); }
             return can.isEmpty() ? "sail only" : String.join(", ", can);
         }

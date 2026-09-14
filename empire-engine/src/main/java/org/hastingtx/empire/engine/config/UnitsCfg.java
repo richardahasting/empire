@@ -51,7 +51,10 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
             /** Gunnery, sinking and salvage (issue #68). Null in a game that predates combat: nothing fires. */
             CombatCfg combat,
             /** Military missions (issue #68): when to come home for supplies, how a search roams, what a blockade reaches. */
-            MissionsCfg missions) {
+            MissionsCfg missions,
+            /** Tenders (issue #182): what one loads at home before a call, and what a patch costs. */
+            TendersCfg tenders) {
+        public TendersCfg tendersOrDefault() { return tenders == null ? TendersCfg.NONE : tenders; }
         public MissionsCfg missionsOrDefault() { return missions == null ? MissionsCfg.NONE : missions; }
         public int sightOf(ShipClassCfg cls) { return cls.sight() != null ? cls.sight() : sight != null ? sight : 2; }
         /** What goes in a tank (issue #65). */
@@ -176,6 +179,8 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
         public double magazineOr0() { return magazine == null ? 0 : magazine; }
         public boolean aswOrFalse() { return asw != null && asw; }
         public boolean submarine() { return "submarine".equals(role); }
+        /** Answers distress calls (issue #182). */
+        public boolean tender() { return "tender".equals(role); }
         /** A fighting hull: it does not run cargo on a lane or a supply round. */
         public boolean military() { return "warship".equals(role) || submarine(); }
         public double crewOr0() { return crew == null ? 0 : crew; }
@@ -259,5 +264,19 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
         public int searchHopsOr0() { return searchHops == null ? 0 : searchHops; }
         public int blockadeRadiusOr0() { return blockadeRadius == null ? 0 : blockadeRadius; }
         public double trainUnitsPerGunOr0() { return trainUnitsPerGun == null ? 0 : trainUnitsPerGun; }
+    }
+
+    /**
+     * Tenders (issue #182). Boxed; a game that predates tenders has no tender class to build, so these
+     * defaults matter only once its rules are reloaded.
+     */
+    public record TendersCfg(
+            /** What a tender loads from its home harbour while waiting for a call, by commodity, up to its hold. */
+            Map<String, Double> restock,
+            /** lcm used per efficiency point when patching a hull at sea. */
+            Double patchLcmPerPoint) {
+        public static final TendersCfg NONE = new TendersCfg(null, null);
+        public Map<String, Double> restockOrDefault() { return restock == null ? Map.of("pet", 300.0, "lcm", 100.0) : restock; }
+        public double patchCost() { return patchLcmPerPoint == null ? 1 : patchLcmPerPoint; }
     }
 }

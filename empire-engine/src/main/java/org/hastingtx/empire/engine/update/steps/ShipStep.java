@@ -29,10 +29,14 @@ public final class ShipStep implements Step {
         List<Ship> out = new ArrayList<>();
         Map<Integer, List<Sector>> harbours = new HashMap<>();   // per owner, found once an update
         Map<Integer, int[]> harbourDistances = new HashMap<>();   // per owner: hexes from every sector to its nearest harbour
+        // lines for ships not yet processed, written by a tender that reached them first (issue #182)
+        Map<Long, List<String>> told = new HashMap<>();
+        dispatchTenders(ctx, sc, harbours, told);
         for (int si = 0; si < ctx.ships.size(); si++) {
             Ship ship = ctx.ships.get(si);
             UnitsCfg.ShipClassCfg cls = sc.shipClass(ship.cls());
             Log note = new Log();
+            for (String line : told.getOrDefault(ship.id(), List.of())) note.next().append(line);
             Sector here = ctx.snap.sector(ship.at());
             int hi = ctx.idx(ship.at());
             boolean docked = here.owner() == ship.owner() && SeaRoutes.isHarbor(ctx.cfg, here);
@@ -115,6 +119,8 @@ public final class ShipStep implements Step {
                 Coord haven = nearestHarbour(ctx, ship, harbours.computeIfAbsent(ship.owner(), o -> ownHarbors(ctx, o)));
                 if (haven == null) { note.next().append("worn out, and no harbour of yours she can reach"); ship = ship.withDest(null); }
                 else { if (!haven.equals(ship.dest())) note.next().append("worn out: limping home to ").append(haven); ship = ship.withDest(haven); }
+            } else if (ship.rescuing()) {
+                ship = runRescue(ctx, sc, ship, si, out, harbours, told, note);
             } else if (ship.lane() != null) {
                 ship = runLane(ctx, ship, cls, si, out, note);
             } else if (ship.supplying() && ship.home() != null) {
@@ -151,6 +157,8 @@ public final class ShipStep implements Step {
             if (sc.crews() && docked) ship = muster(ctx, ship, cls, hi, note);
             // rearm (issue #68): a warship in harbour takes on guns up to what she mounts and shells up to her magazine
             if (docked && sc.combat() != null && cls.armed()) ship = rearm(ctx, ship, cls, hi, note);
+            // restock (issue #182): a tender waiting in harbour loads what she will need for the next call
+            if (docked && cls.tender() && ship.mission() == null && ship.lane() == null) ship = restockTender(ctx, sc, ship, cls, hi, note);
             Coord bingo = null;   // the harbour she was turned for because of her fuel, this update
             // a ship does not leave port until her tank is full (Richard 2026-09-14)
             boolean fillingUp = sc.fuel() && docked && cls.tankOr0() - ship.fuel() >= 1 && ship.dest() != null && !ship.dest().equals(ship.at());
@@ -185,7 +193,9 @@ public final class ShipStep implements Step {
                     if (perHex > 0 && hops > 0) {
                         int[] dist = harbourDistances.computeIfAbsent(ship.owner(), o -> SeaRoutes.harbourDistances(ctx.snap, ctx.cfg, o));
                         if (dist[ctx.idx(ship.at())] != Integer.MAX_VALUE) {
-                            int safe = SeaRoutes.safeHops(ctx.snap, path, hops, dist, ship.fuel(), perHex, sc.missionsOrDefault().reserve());
+                            // a tender can fill her own tank from her hold, so the petrol aboard is range too
+                            double range_fuel = ship.fuel() + (cls.tender() ? ship.stock().get(ctx.com.index(sc.fuelId())) : 0);
+                            int safe = SeaRoutes.safeHops(ctx.snap, path, hops, dist, range_fuel, perHex, sc.missionsOrDefault().reserve());
                             if (safe == hops) { /* the whole leg, and home again after */ }
                             else if (safe > 0) {
                                 note.next().append("sailed only ").append(safe).append(" of ").append(hops).append(" hexes: no further than her fuel will bring her back from");
@@ -214,7 +224,10 @@ public final class ShipStep implements Step {
                     }
                     if (blocked.by() != null && hops <= 0) { /* already said so */ }
                     else if (hops <= 0 && sc.crews() && ship.crew() < cls.crewOr0()) { /* already said so */ }
-                    else if (hops <= 0 && perHex > 0 && ship.fuel() < perHex) note.next().append("out of fuel, holding at ").append(ship.at());
+                    else if (hops <= 0 && perHex > 0 && ship.fuel() < perHex) {
+                        note.next().append("out of fuel, holding at ").append(ship.at());
+                        if (!docked) note.last().append(tenderFor(ctx, ship, out, si) != null ? "; a tender is on her way" : "; distress call sent");
+                    }
                     else if (hops <= 0) note.next().append("too unfit to sail (").append(Ledger.q(ship.efficiency())).append("%)");
                     else {
                         Coord to = path.get(hops);
@@ -231,6 +244,7 @@ public final class ShipStep implements Step {
                             // the harbour's business is done the update she gets there, not the one after
                             // (issue #67): a lane unloads on arrival and a supply ship takes the next job
                             if (limping || bingo != null) ship = ship.withDest(null);
+                            else if (ship.rescuing()) ship = runRescue(ctx, sc, ship.withDest(null), si, out, harbours, told, note);   // alongside the update she arrives
                             else if (ship.lane() != null) ship = runLane(ctx, ship, cls, si, out, note);
                             else {
                                 ship = ship.withDest(null);
@@ -504,6 +518,138 @@ public final class ShipStep implements Step {
         return best;
     }
 
+    // ---------------------------------------------------------------------------------- tenders
+
+    /**
+     * Distress calls, answered (issue #182). A ship at sea that cannot make a hex for want of fuel calls.
+     * Each call nobody is already answering takes the free tender of her owner's with the shortest sea
+     * route to her: a tender with no orders, not worn to the refit line. Read from the ships as they
+     * stood at the start of the step, and the calls taken in ship-id order, so who answers whom does not
+     * depend on processing order.
+     */
+    private static void dispatchTenders(Ctx ctx, UnitsCfg.ShipsCfg sc, Map<Integer, List<Sector>> harbours, Map<Long, List<String>> told) {
+        if (!sc.fuel()) return;
+        java.util.Set<Long> answered = new java.util.HashSet<>();
+        boolean anyTender = false;
+        for (Ship t : ctx.ships) if (sc.shipClass(t.cls()).tender()) { anyTender = true; if (t.rescuing()) answered.add(t.ward()); }
+        if (!anyTender) return;
+        for (Ship d : ctx.ships) {
+            UnitsCfg.ShipClassCfg dc = sc.shipClass(d.cls());
+            if (answered.contains(d.id()) || d.fuel() >= dc.fuelPerHexOr0() || dc.fuelPerHexOr0() <= 0) continue;
+            if (ownHarbor(ctx, d.owner(), ctx.snap.sector(d.at()))) continue;
+            int best = -1, bestLen = Integer.MAX_VALUE;
+            for (int k = 0; k < ctx.ships.size(); k++) {
+                Ship t = ctx.ships.get(k);
+                UnitsCfg.ShipClassCfg tc = sc.shipClass(t.cls());
+                if (!tc.tender() || t.owner() != d.owner() || t.id() == d.id()) continue;
+                if (t.mission() != null || t.lane() != null || t.dest() != null || t.efficiency() <= sc.refitAtOrBelow()) continue;
+                List<Coord> p = SeaRoutes.path(ctx.snap, ctx.cfg, t.owner(), t.at(), d.at());
+                if (p == null) continue;
+                if (p.size() < bestLen) { best = k; bestLen = p.size(); }
+            }
+            if (best < 0) continue;
+            Ship t = ctx.ships.get(best);
+            Coord home = ownHarbor(ctx, t.owner(), ctx.snap.sector(t.at())) ? t.at()
+                    : nearestHarbour(ctx, t, harbours.computeIfAbsent(t.owner(), o -> ownHarbors(ctx, o)));
+            ctx.ships.set(best, t.withOrders(Ship.RESCUE, home, List.of(), d.id()));
+            answered.add(d.id());
+            told.computeIfAbsent(t.id(), k -> new ArrayList<>()).add("heard a distress call from ship #" + d.id() + " at " + d.at() + " and answered it");
+        }
+    }
+
+    /** The tender answering this ship's call, if one is. */
+    private static Ship tenderFor(Ctx ctx, Ship ship, List<Ship> done, int si) {
+        for (int k = 0; k < ctx.ships.size(); k++) {
+            Ship t = k < done.size() ? done.get(k) : ctx.ships.get(k);
+            if (k != si && t.rescuing() && t.ward() == ship.id() && t.owner() == ship.owner()) return t;
+        }
+        return null;
+    }
+
+    /**
+     * A tender on a call (issue #182). She sails for the ship; alongside, she fills that ship's tank from
+     * her hold and patches her hull up to the limp-home line with lcm, then makes for home, where she
+     * restocks and waits for the next call. A call that no longer needs answering — the ship gone, or
+     * already able to sail — sends her home too.
+     */
+    private static Ship runRescue(Ctx ctx, UnitsCfg.ShipsCfg sc, Ship tender, int si, List<Ship> out, Map<Integer, List<Sector>> harbours, Map<Long, List<String>> told, Log note) {
+        Coord home = tender.home() != null ? tender.home() : nearestHarbour(ctx, tender, harbours.computeIfAbsent(tender.owner(), o -> ownHarbors(ctx, o)));
+        int wi = -1;
+        for (int k = 0; k < ctx.ships.size(); k++) {
+            Ship o = k < out.size() ? out.get(k) : ctx.ships.get(k);
+            if (k != si && o.id() == tender.ward() && o.owner() == tender.owner()) { wi = k; break; }
+        }
+        if (wi < 0) {
+            note.next().append("the ship she was sent for, #").append(tender.ward()).append(", is gone; going home");
+            return tender.withMission(null, null).withDest(home);
+        }
+        Ship ward = wi < out.size() ? out.get(wi) : ctx.ships.get(wi);
+        UnitsCfg.ShipClassCfg wc = sc.shipClass(ward.cls());
+        double floor = sc.limpFloor(wc, ward.tech());
+        boolean needsFuel = ward.fuel() < wc.fuelPerHexOr0();
+        if (!ward.at().equals(tender.at())) {
+            if (!needsFuel) {
+                note.next().append("ship #").append(ward.id()).append(" no longer needs her; going home");
+                return tender.withMission(null, null).withDest(home);
+            }
+            if (!ward.at().equals(tender.dest())) note.next().append("answering a distress call from ship #").append(ward.id()).append(" at ").append(ward.at());
+            return tender.withDest(ward.at());
+        }
+
+        // alongside: fuel first, then a patch
+        int pet = ctx.com.index(sc.fuelId()), lcm = ctx.com.index("lcm");
+        double give = Math.floor(Math.min(wc.tankOr0() - ward.fuel(), tender.stock().get(pet)));
+        StringBuilder did = new StringBuilder();
+        if (give >= 1) {
+            ward = ward.withFuel(ward.fuel() + give);
+            tender = tender.withStock(tender.stock().plus(pet, -give));
+            did.append("filled her tank with ").append(Ledger.q(give)).append(' ').append(sc.fuelId());
+        }
+        double cost = sc.tendersOrDefault().patchCost();
+        if (ward.efficiency() < floor && cost > 0) {
+            double use = Math.min(Math.ceil((floor - ward.efficiency()) * cost), Math.floor(tender.stock().get(lcm)));
+            if (use >= 1) {
+                double points = Math.min(floor - ward.efficiency(), use / cost);
+                ward = ward.withEfficiency(ward.efficiency() + points);
+                tender = tender.withStock(tender.stock().plus(lcm, -use));
+                ctx.led().destroyed(lcm, use);                         // spent on the hull, gone from the world
+                did.append(did.isEmpty() ? "" : " and ").append("patched her hull to ").append(Ledger.q(ward.efficiency())).append("% with ").append(Ledger.q(use)).append(" lcm");
+            }
+        }
+        if (wi < out.size()) out.set(wi, ward); else ctx.ships.set(wi, ward);
+        if (did.isEmpty()) {
+            note.next().append("reached ship #").append(ward.id()).append(" with nothing aboard to give her; going home to restock");
+            return tender.withMission(null, null).withDest(home);
+        }
+        note.next().append("reached ship #").append(ward.id()).append(": ").append(did).append("; going home to ").append(home);
+        String line = "tender #" + tender.id() + " came alongside: " + did.toString().replace("her tank", "the tank").replace("her hull", "the hull");
+        if (wi < si) {
+            List<String> lines = new ArrayList<>(ctx.led().shipNotes.getOrDefault(ward.id(), List.of()));
+            lines.add(line);
+            ctx.led().shipNotes.put(ward.id(), lines);
+            out.set(wi, ward.withNote(ward.note() == null || ward.note().isBlank() ? line : ward.note() + "; " + line));
+        } else told.computeIfAbsent(ward.id(), k -> new ArrayList<>()).add(line);
+        return tender.withMission(null, null).withDest(home);
+    }
+
+    /** A tender waiting in harbour takes on {@code tenders.restock} from the harbour's own stock, up to her hold. */
+    private static Ship restockTender(Ctx ctx, UnitsCfg.ShipsCfg sc, Ship ship, UnitsCfg.ShipClassCfg cls, int hi, Log note) {
+        StringBuilder took = new StringBuilder();
+        for (var e : sc.tendersOrDefault().restockOrDefault().entrySet()) {
+            if (!ctx.com.has(e.getKey())) continue;
+            int c = ctx.com.index(e.getKey());
+            double room = Math.min(e.getValue() - ship.stock().get(c), cls.hold() - ship.load());
+            if (room < 1) continue;
+            double have = ctx.sector(hi).stock().get(c) + ctx.led().st(hi, c);
+            double got = ctx.led().toShip(hi, c, Math.min(room, Math.max(0, have)));
+            if (got <= 0) continue;
+            ship = ship.withStock(ship.stock().plus(c, got));
+            took.append(took.isEmpty() ? "" : " and ").append(Ledger.q(got)).append(' ').append(e.getKey());
+        }
+        if (!took.isEmpty()) note.next().append("stocked up with ").append(took).append(" for the next call");
+        return ship;
+    }
+
     // ---------------------------------------------------------------------------------- military missions
 
     /**
@@ -664,9 +810,11 @@ public final class ShipStep implements Step {
      * when it needs it, as at sea, so what it was carrying for someone else mostly arrives.
      */
     private static Ship refuelFromOwnHold(Ctx ctx, Ship ship, UnitsCfg.ShipClassCfg cls, Log note) {
-        if (!"tanker".equals(cls.role())) return ship;
+        if (!"tanker".equals(cls.role()) && !cls.tender()) return ship;
         double room = cls.tankOr0() - ship.fuel();
-        if (room < 1 || ship.fuel() >= cls.fuelPerHexOr0()) return ship;
+        // a tanker only when she cannot make a hex; a tender whenever she is below half, since reaching
+        // ships is her whole job and the petrol aboard is meant for exactly this (issue #182)
+        if (room < 1 || ship.fuel() >= (cls.tender() ? cls.tankOr0() / 2 : cls.fuelPerHexOr0())) return ship;
         int pet = ctx.com.index(ctx.cfg.units().ships().fuelId());
         double take = Math.floor(Math.min(room, ship.stock().get(pet)));
         if (take < 1) return ship;

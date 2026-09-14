@@ -82,6 +82,9 @@ public record Ship(long id, int owner, String cls, String name, Coord at, double
     public static final String PATROL = "patrol", SEARCH = "search", ESCORT = "escort", BLOCKADE = "blockade", INTERDICT = "interdict";
     public static final java.util.Set<String> MILITARY_MISSIONS = java.util.Set.of(PATROL, SEARCH, ESCORT, BLOCKADE, INTERDICT);
     public boolean onMilitaryMission() { return mission != null && MILITARY_MISSIONS.contains(mission); }
+    /** Issue #182: a tender on her way to the ship in distress in {@code ward}, or to one she has helped. */
+    public static final String RESCUE = "rescue";
+    public boolean rescuing() { return RESCUE.equals(mission); }
     /** The station a blockade or interdiction holds, or null. */
     public Coord station() { return (BLOCKADE.equals(mission) || INTERDICT.equals(mission)) && !route.isEmpty() ? route.get(0) : null; }
     public Ship withOrders(String m, Coord h, List<Coord> r, long w) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, m, h, fuel, crew, mobility, firedOn, r, w); }

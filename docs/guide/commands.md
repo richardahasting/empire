@@ -51,6 +51,7 @@ escort SHIP OTHER | off      warship: stay with one of your other ships
 blockade SHIP x,y | off      warship: hold x,y; at war, a hostile ship next to her is stopped there
 interdict SHIP x,y | off     warship: hold x,y; at war, shell enemy trains within her guns' reach
                              every mission comes home for shells, fuel, crew and repairs, then goes back out
+                             tenders have no order: one with no other orders answers your stranded ships' distress calls
 scrap SHIP                   in harbour; the hold goes ashore
 move COMMODITY x,y x2,y2 N   move now; the sending sector pays the route's mobility now
 expl x,y x2,y2 N             explore into an adjacent unowned sector with N civilians

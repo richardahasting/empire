@@ -30,6 +30,7 @@ improve ships already built.
 | tanker | 15 | 1500 | 3 | oil and petrol only |
 | industrial_fishing_boat | 20 | 1200 | 4 | three times the catch |
 | super_cargo | 25 | 2400 | 4 | anything, in bulk |
+| tender | 20 | 600 | 2 | answers distress calls: petrol and repairs at sea |
 | luxury_craft | 30 | 100 | 3 | happiness, at $50 an update |
 | super_tanker | 35 | 6000 | 4 | oil and petrol in bulk |
 | destroyer | 40 | — | 5 | 10 guns, range 3, armour 20; hunts submarines |
@@ -94,6 +95,32 @@ Two rules stop a fleet from stranding itself (Richard 2026-09-14):
 
 This is what finally gives the refinery a customer. Before ships, `1 oil → 10
 petrol` produced a commodity nothing consumed.
+
+## Tenders
+
+A tender is a slow ship (speed 2) that **rescues your stranded ships by itself**
+(Richard 2026-09-14). You build one and leave it in harbour; there is nothing to
+order.
+
+- **The distress call.** A ship at sea that cannot make a hex for want of fuel
+  calls for help every update. Her history says "distress call sent", and then "a
+  tender is on her way".
+- **Who answers.** The nearest free tender of yours by sea route, however far: one
+  with no orders, not worn out. A tender takes one ship at a time.
+- **At the ship.** The tender fills her tank from its hold, and if the sea or a
+  battle has left her hull below the limp-home line (the efficiency she needs to
+  make one hex an update), patches it up to that line with lcm from its hold, one lcm
+  a point. Refitting to 100% is still the harbour's job.
+- **Home again.** The tender returns to the harbour it left, stocks up again (400
+  petrol and 150 lcm, from that harbour's own stock), and waits for the next call.
+  A call that no longer needs answering, because the ship is gone or already has
+  fuel, sends it home too.
+- A tender can fill its own tank from the petrol in its hold, so it can reach
+  ships beyond its own tank, and it still never sails further than it can get back
+  from.
+
+Give a tender a lane or a supply round and it runs that instead; it answers calls
+only while it has no other orders.
 
 ## Crews
 
