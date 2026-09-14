@@ -60,6 +60,7 @@ road SECTOR LEVEL            standing order: pave toward LEVEL (0 cancels); noth
 rail SECTOR LEVEL            standing order: lay rail toward LEVEL (needs tech 60; 0 cancels); same rule, and a
                              tunnel or bridge pays its one-time materials with the first points
 SECTOR is x,y · * (all yours) · *:TYPE (all of one designation, id or glyph, e.g. *:a) · x1:x2,y1:y2 (a rectangle)
+  on the web map, shift + drag selects a rectangle for the same orders
   each sector pays its own BTU; e.g. road * 100 · thresh *:agribusiness hcm 50 · thresh -2:2,-2:2 food 100
   thresh on * or a rectangle scales goods by designation (warehouse ×10, people ×1); *:warehouse or one sector sets it as typed
   the ack says what each kind of sector actually got, e.g. lcm 400 in 43 sectors, 4000 in 2 warehouse sectors

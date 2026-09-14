@@ -11,7 +11,7 @@ import { Select } from "@/components/ui/select";
 
 type DialogKind = "move" | "explore" | "designate" | "threshold" | "deliver" | "road" | "rail" | "railship" | "buildship" | null;
 
-export interface PickSpec { verb: "move" | "explore" | "distribute" | "sail"; from: SectorView; commodity: string; qty: number; supply?: boolean; /** sail: the ship and where it is now */ ship?: ShipView }
+export interface PickSpec { verb: "move" | "explore" | "distribute" | "sail"; from: SectorView; commodity: string; qty: number; supply?: boolean; /** sail: the ship and where it is now */ ship?: ShipView; /** distribute: every sector of a dragged selection, not just from */ area?: Coord[] }
 
 interface Props {
   gameId: number; view: CountryView; rules: Rules; sector: SectorView | null;

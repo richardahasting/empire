@@ -144,6 +144,8 @@ export interface CommandRequest {
   verb: string; x?: number; y?: number; x2?: number; y2?: number; type?: string; commodity?: string; amount?: number; clear?: boolean;
   /** A patrol's waypoints or a station, absolute (issue #68); the ship an escort stays with. */
   points?: Coord[]; ward?: number;
+  /** Many sectors by list, absolute — a selection dragged on the map (instead of scope). */
+  sectors?: Coord[];
   /** Many sectors instead of x,y: "*" (all mine), "*:TYPE" (one designation), "x1:x2,y1:y2" (a rectangle, relative). Standing orders only. */
   scope?: string;
   /** deliver: e ne nw w sw se (or "none" to clear). */

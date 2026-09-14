@@ -7,6 +7,7 @@ import { COMMODITY_HUES } from "@/map/palette";
 import { useAuth } from "@/api/auth";
 import { HexMap, type Layer } from "@/map/HexMap";
 import { Inspector } from "@/game/Inspector";
+import { AreaActions } from "@/game/AreaActions";
 import { ConsolePanel } from "@/game/ConsolePanel";
 import { Dashboard } from "@/game/Dashboard";
 import { SectorMenu, supplyFromCapital, type PickSpec } from "@/game/SectorMenu";
@@ -31,6 +32,8 @@ export function GamePage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [selected, setSelected] = useState<Coord | null>(null);
+  // many sectors at once (issue #191): the sectors of ours inside a shift-dragged rectangle
+  const [area, setArea] = useState<Coord[]>([]);
   const [layer, setLayer] = useState<Layer>("designation");
   const [stock, setStock] = useState("food");
   const [busy, setBusy] = useState(false);
@@ -165,6 +168,11 @@ export function GamePage() {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setPick(null); };
     window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey);
   }, [pick]);
+  useEffect(() => {
+    if (area.length === 0 || pick) return;                    // Esc cancels a pick first, the selection after
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setArea([]); };
+    window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey);
+  }, [area, pick]);
   const byRel = useMemo(() => { const m = new Map<string, Coord>(); view?.sectors.forEach(s => m.set(`${s.relative.x},${s.relative.y}`, s.at)); return m; }, [view]);
   const highlightPath = useMemo(() => pick && est?.ok ? est.path.map(c => byRel.get(`${c.x},${c.y}`)).filter((c): c is Coord => !!c) : undefined, [pick, est, byRel]);
   const tooltip = useMemo(() => {
@@ -188,6 +196,12 @@ export function GamePage() {
     if (!pick) { setSelected(c); return; }
     if (pick.verb === "distribute") {
       const hv = c && view?.sectors.find(s => s.at.x === c.x && s.at.y === c.y);
+      if (pick.area) {
+        if (!hv || !hv.full) return;
+        const spec = pick; setPick(null);
+        void command({ verb: "distribute", sectors: spec.area, x2: c.x, y2: c.y });
+        return;
+      }
       if (!hv || !hv.full || (hv.at.x === pick.from.at.x && hv.at.y === pick.from.at.y)) return;
       const spec = pick; setPick(null);
       void command({ verb: "distribute", x: spec.from.at.x, y: spec.from.at.y, x2: c.x, y2: c.y });
@@ -249,7 +263,7 @@ export function GamePage() {
             {pick && (
               <div className="absolute left-2 top-2 z-10 flex items-center gap-2 rounded-md border border-border bg-popover px-2 py-1 text-xs shadow-md">
                 {pick.verb === "distribute" ? (
-                  <span>Choosing the distribution centre for {pick.from.relative.x},{pick.from.relative.y} — click a sector you own</span>
+                  <span>Choosing the distribution centre for {pick.area ? `${pick.area.length} selected sectors` : `${pick.from.relative.x},${pick.from.relative.y}`} — click a sector you own</span>
                 ) : (<>
                 {pick.verb === "sail" ? <span>Sailing ship #{pick.ship?.id} from {pick.ship ? `${pick.ship.relative.x},${pick.ship.relative.y}` : "?"} — click a sea hex or one of your harbours</span> : <span>{pick.verb === "move" ? "Moving" : "Exploring with"}</span>}
 {pick.verb !== "sail" && (<>                <Input value={String(pick.qty)} onChange={e => { const q = Math.max(0, Math.floor(Number(e.target.value) || 0)); setPick({ ...pick, qty: q }); }}
@@ -264,6 +278,11 @@ export function GamePage() {
               </div>
             )}
             <HexMap view={view} rules={rules} width={game.width} height={game.height} layer={layer} stockCommodity={stock} selected={selected} onSelect={onMapSelect}
+                    area={area} onArea={cells => {
+                      const mine = new Set(view.sectors.filter(s => s.full && s.owner === view.countryId).map(s => `${s.at.x},${s.at.y}`));
+                      setArea(cells.filter(c => mine.has(`${c.x},${c.y}`)));
+                      setSelected(null);
+                    }}
                     onHover={pick ? (c) => setHover(c) : undefined} highlightPath={highlightPath} tooltip={tooltip} picking={!!pick}
                     flows={showFlows && last ? last.flows : undefined} flowT={flowT} />
             {showFlows && last && last.flows.length > 0 && (
@@ -283,7 +302,10 @@ export function GamePage() {
         {macroDialog === "list" && <MacrosDialog macros={macros} onClose={() => setMacroDialog(null)} onSave={saveMacro} onDelete={deleteMacro} />}
         <aside className="flex min-h-0 min-w-0 flex-col gap-3">
           <div className="max-h-[28%] overflow-auto rounded-lg border border-border bg-card p-3"><div className="mb-1 text-xs font-medium">Fleet{view.ships.length ? ` (${view.ships.length})` : ""}</div><Fleet gameId={gameId} view={view} rules={rules} busy={busy} onCommand={command} onSail={s => setPick({ verb: "sail", from: view.sectors.find(x => x.at.x === s.at.x && x.at.y === s.at.y) ?? view.sectors[0], commodity: "", qty: 1, ship: s })} /></div>
-          <div className="max-h-[40%] overflow-auto rounded-lg border border-border bg-card p-3"><Inspector sector={sector} view={view} rules={rules} onCommand={command} busy={busy} history={sector ? last?.notes?.[`${sector.relative.x},${sector.relative.y}`] : undefined} historyUpdate={last?.updateNumber} /></div>
+          <div className="max-h-[40%] overflow-auto rounded-lg border border-border bg-card p-3">{area.length > 0
+            ? <AreaActions view={view} rules={rules} busy={busy} area={area} onCommand={command} onClear={() => setArea([])}
+                onPickCentre={() => { const first = view.sectors.find(s => s.at.x === area[0].x && s.at.y === area[0].y); if (first) setPick({ verb: "distribute", from: first, commodity: "", qty: 0, area }); }} />
+            : <Inspector sector={sector} view={view} rules={rules} onCommand={command} busy={busy} history={sector ? last?.notes?.[`${sector.relative.x},${sector.relative.y}`] : undefined} historyUpdate={last?.updateNumber} />}</div>
           <div className="min-h-0 flex-1"><ConsolePanel onLine={consoleLine} /></div>
         </aside>
       </div>

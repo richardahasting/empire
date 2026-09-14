@@ -119,8 +119,11 @@ public class GameController {
                                  /** A patrol's waypoints or a station, absolute (issue #68). */
                                  List<Coord> points,
                                  /** The ship an escort stays with. */
-                                 Long ward) {
-        boolean isMass() { return scope != null && !scope.isBlank(); }
+                                 Long ward,
+                                 /** Many sectors by list, absolute — a selection dragged on the map; an alternative to {@code scope}. */
+                                 List<Coord> sectors) {
+        boolean isMass() { return (scope != null && !scope.isBlank()) || (sectors != null && !sectors.isEmpty()); }
+        boolean listed() { return sectors != null && !sectors.isEmpty(); }
         Command toCommand() { return toCommand(x == null || y == null ? null : new Coord(x, y)); }
         /** The command for one sector; {@code at} stands in for x,y. */
         Command toCommand(Coord at) {
@@ -197,8 +200,9 @@ public class GameController {
         }
         CountryView v = games.view(id, a);
         var cfg = games.get(id).cfg;
-        boolean scaled = "threshold".equals(r.verb()) && SectorSelector.isMixed(r.scope()) && !Boolean.TRUE.equals(r.clear());
-        List<Coord> targets = SectorSelector.expand(v, cfg, r.scope());
+        // a dragged selection is a rectangle of mixed sectors, so it scales goods thresholds as a typed rectangle does
+        boolean scaled = "threshold".equals(r.verb()) && (r.listed() || SectorSelector.isMixed(r.scope())) && !Boolean.TRUE.equals(r.clear());
+        List<Coord> targets = r.listed() ? r.sectors().stream().distinct().toList() : SectorSelector.expand(v, cfg, r.scope());
         double amount = r.amount() == null ? 0 : r.amount();
         List<Command> cmds = targets.stream()
                 .map(at -> scaled ? new Command.Threshold(at, r.commodity(), SectorSelector.massThreshold(v, cfg, at, r.commodity(), amount)) : r.toCommand(at)).toList();
