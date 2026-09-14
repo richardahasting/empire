@@ -147,8 +147,25 @@ They bring no food. A sector feeds about 300 × its fertility of people, so a pa
 of 120 lives off almost any decent ground. On poor ground the reply warns you, and
 you should send food before the next update.
 
-Land held by another country is refused: taking it is land combat, which comes
-with land units.
+### Assault: taking held coast
+
+At **war**, `land SHIP x,y` aimed at the enemy's coast is an **assault** (Richard
+2026-09-14). The military aboard go ashore and fight **man for man until one side
+is gone**, as the original fought. It happens now, like `fire`, and the reply
+gives the result.
+
+- **Defenders:** the military in that sector, **and the defender's military in the
+  sectors next to it**. A coast held in depth is much harder to take.
+- **Each roll** kills one soldier, an attacker or a defender, weighted by strength.
+  A soldier counts `0.5 + 0.5 × efficiency`, using the ship's efficiency for yours
+  and each sector's for theirs. Defenders in a **fortress count double**.
+- **If you win,** the sector is yours with its designation and its people. The
+  survivors garrison it, and your civilians follow them ashore. A tenth of its
+  goods are lost in the fighting, roads lose 30% and rail 50%, and its distribution
+  centre and delivery orders are cleared.
+- **If you lose,** every soldier aboard is gone. The civilians never went ashore.
+
+At peace, held coast is refused: declare war first. Either way it is news.
 
 ## Crews
 

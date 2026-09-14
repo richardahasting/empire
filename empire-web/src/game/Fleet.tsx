@@ -156,7 +156,9 @@ function LandDialog({ ship, view, busy, onClose, onCommand }: { ship: ShipView; 
   const shores = ["e", "ne", "nw", "w", "sw", "se"]
     .map(d => neighbour(view, ship.at, d))
     .map(at => view.sectors.find(o => o.at.x === at.x && o.at.y === at.y))
-    .filter((o): o is NonNullable<typeof o> => !!o && o.terrain !== "ocean" && o.owner < 0 && !o.sanctuary);
+    // unowned coast to settle, and at war, enemy coast to assault (issue #206)
+    .filter((o): o is NonNullable<typeof o> => !!o && o.terrain !== "ocean" && !o.sanctuary
+      && (o.owner < 0 || (o.owner !== view.countryId && !!o.ownerName && (view.atWarWith ?? []).includes(o.ownerName))));
   const [pick, setPick] = useState(shores[0] ? `${shores[0].at.x},${shores[0].at.y}` : "");
   const mil = Math.floor(ship.stock.mil ?? 0), civ = Math.floor(ship.stock.civ ?? 0);
   const chosen = shores.find(o => `${o.at.x},${o.at.y}` === pick);
@@ -168,14 +170,15 @@ function LandDialog({ ship, view, busy, onClose, onCommand }: { ship: ShipView; 
         {shores.length === 0 ? <p className="text-sm text-muted-foreground">No unowned land next to her. Sail her alongside the coast first.</p> : (
           <label className="grid gap-1 text-sm">Where
             <Select value={pick} onChange={e => setPick(e.target.value)}>
-              {shores.map(o => <option key={`${o.at.x},${o.at.y}`} value={`${o.at.x},${o.at.y}`}>{o.relative.x},{o.relative.y} · {bearing(view, ship.at, o.at)} · {o.terrain}{o.resources ? ` · fertility ${o.resources.fertility}` : ""}</option>)}
+              {shores.map(o => <option key={`${o.at.x},${o.at.y}`} value={`${o.at.x},${o.at.y}`}>{o.relative.x},{o.relative.y} · {bearing(view, ship.at, o.at)} · {o.owner >= 0 ? `ASSAULT ${o.ownerName}'s ${o.designation ?? "sector"}` : o.terrain}{o.owner < 0 && o.resources ? ` · fertility ${o.resources.fertility}` : ""}</option>)}
             </Select>
           </label>
         )}
-        {feeds !== null && mil + civ > feeds && <p className="text-xs text-destructive">That ground feeds about {feeds} people and they bring no food: send some soon, or pick richer land.</p>}
+        {chosen && chosen.owner >= 0 && <p className="text-xs text-destructive">An assault: your {mil} mil fight theirs man for man, and their military next door joins in. Win and the sector is yours with its people; lose and every soldier aboard is gone. The civilians go ashore only if it is taken.</p>}
+        {chosen && chosen.owner < 0 && feeds !== null && mil + civ > feeds && <p className="text-xs text-destructive">That ground feeds about {feeds} people and they bring no food: send some soon, or pick richer land.</p>}
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button disabled={busy || !chosen} onClick={async () => { if (!chosen) return; await onCommand({ verb: "land", ship: ship.id, x: chosen.at.x, y: chosen.at.y }); onClose(); }}>Land them</Button>
+          <Button variant={chosen && chosen.owner >= 0 ? "danger" : "primary"} disabled={busy || !chosen} onClick={async () => { if (!chosen) return; await onCommand({ verb: "land", ship: ship.id, x: chosen.at.x, y: chosen.at.y }); onClose(); }}>{chosen && chosen.owner >= 0 ? "Assault" : "Land them"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

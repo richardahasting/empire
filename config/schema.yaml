@@ -792,6 +792,16 @@ capture:
   stock_destroyed_fraction: 0.10          # of resident sector stock
   scorched_earth_btu_cost: 3
   scorched_earth_destroy_fraction: 1.0
+  # ASSAULT (issue #206, Richard 2026-09-14): an assault ship lands its military on enemy-held coast, at war only,
+  # and they fight man for man until one side is gone, as in the original. Each roll kills an attacker or a
+  # defender, weighted by the two sides' strength: soldiers × (floor + (1 − floor) × efficiency), defenders in a
+  # fortress × fort_bonus. The defender's military in neighbouring sectors fight too. Taken: the sector, its
+  # designation and people; survivors garrison it; stock_destroyed_fraction of its goods and road/rail
+  # combat_damage_fraction lost. GUESS numbers.
+  assault:
+    efficiency_floor: 0.5
+    fort_bonus: 2.0
+    neighbours_defend: true
 
 # -----------------------------------------------------------------------------
 # DETECTION — NEW probabilistic model (original was binary radar range)

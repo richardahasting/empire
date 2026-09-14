@@ -856,8 +856,8 @@ public final class CommandExecutor {
     /**
      * Put a landing party ashore (issue #193). An assault ship next to an unowned land sector lands
      * everyone aboard — military and civilians — and the sector becomes yours, exactly as explore claims
-     * one. What the ground cannot feed is said, as explore says it. Enemy-held coast is refused: taking
-     * it is land combat, which comes with land units (#71).
+     * one. What the ground cannot feed is said, as explore says it. Enemy-held coast is an assault
+     * ({@link Assault}), at war only.
      */
     private CommandResult land(World w, Country c, Command.Land l) {
         if (c.inSanctuary()) return CommandResult.fail(w, "break sanctuary first");
@@ -871,7 +871,7 @@ public final class CommandExecutor {
         if (!to.terrain().isLand()) return CommandResult.fail(w, l.at() + " is sea");
         if (to.sanctuary()) return CommandResult.fail(w, l.at() + " is another country's sanctuary");
         if (to.owner() == c.id()) return CommandResult.fail(w, l.at() + " is already yours; bring a harbour to it and unload there");
-        if (to.owned()) return CommandResult.fail(w, l.at() + " belongs to " + w.country(to.owner()).name() + "; taking held coast comes with land combat");
+        if (to.owned()) return Assault.run(cfg, com, w, c, ship, to);   // enemy-held coast: an assault, at war (issue #206)
         double civ = Math.floor(ship.stock().get(com.civ)), mil = Math.floor(ship.stock().get(com.mil));
         if (civ + mil < 1) return CommandResult.fail(w, "ship #" + ship.id() + " has nobody aboard to land; load mil or civ in harbour");
         org.hastingtx.empire.engine.update.Ctx rctx = new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0);
