@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { deliveryTarget, surplusLine } from "./bearing";
 import type { CommandRequest, CountryView, Rules, SectorType, SectorView } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -60,7 +61,7 @@ export function Inspector({ sector: s, view, rules, onCommand, busy, history, hi
             <tr key={c} className={(s.stock[c] ?? 0) === 0 && s.thresholds[c] === undefined && !s.held[c] && !s.deliveries[c] ? "text-muted-foreground/60" : ""}>
               <td>{c}</td><td className="text-right tabular-nums">{fmt(s.stock[c])}</td>
               <td className="text-right tabular-nums">{s.thresholds[c] !== undefined ? fmt(s.thresholds[c]) : "—"}</td>
-              <td className="text-right tabular-nums" title={s.deliveries[c] ? `above ${fmt(s.deliveries[c].threshold)}, one hex ${s.deliveries[c].dir} every update` : undefined}>{s.deliveries[c] ? `→${s.deliveries[c].dir} >${fmt(s.deliveries[c].threshold)}` : ""}</td>
+              <td className="text-right tabular-nums" title={s.deliveries[c] ? `above ${fmt(s.deliveries[c].threshold)}, one hex ${s.deliveries[c].dir} every update` : undefined}>{s.deliveries[c] ? `${deliveryTarget(view, s.at, s.deliveries[c].dir)} >${fmt(s.deliveries[c].threshold)}` : ""}</td>
               <td className="text-right tabular-nums">{s.held[c] ? fmt(s.held[c]) : ""}</td>
             </tr>
           ))}
@@ -83,7 +84,7 @@ export function Inspector({ sector: s, view, rules, onCommand, busy, history, hi
         if (full.length) flags.push(`at capacity: ${full.join(", ")} (production spoils)`);
         return flags.length ? <ul className="text-xs text-destructive">{flags.map(f => <li key={f}>{f}</li>)}</ul> : null;
       })()}
-      <p className="text-xs">Distribution centre: {s.distCenter ? `${s.distCenter.x},${s.distCenter.y}` : "none"}
+      <p className="text-xs" title="Above a threshold the surplus goes to the distribution centre; below it, the sector draws from there">{surplusLine(view, s.at, s.distCenter)}
         {" "}<Button size="sm" variant="ghost" disabled={busy} onClick={() => onCommand({ verb: "distribute", x: s.at.x, y: s.at.y, x2: view.capital.x, y2: view.capital.y })}>→ capital</Button>
         {s.distCenter && <Button size="sm" variant="ghost" disabled={busy} onClick={() => onCommand({ verb: "distribute", x: s.at.x, y: s.at.y, clear: true })}>clear</Button>}
       </p>
