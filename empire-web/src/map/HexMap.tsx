@@ -21,13 +21,17 @@ interface Props {
   /** Last update's flows to animate, and where in the update (0..1) to draw them. */
   flows?: FlowOut[];
   flowT?: number;
+  /** Sectors in the current multi-sector selection (absolute), outlined on the map. */
+  area?: Coord[];
+  /** Shift + left-drag selects every sector in the rectangle between the two corner hexes; called on release (absolute coords). */
+  onArea?: (cells: Coord[]) => void;
 }
 
 /**
  * Canvas hex map. Draws only what the view contains (fog of war is the server's job).
  * Coordinates are absolute for drawing; labels show the country-relative form.
  */
-export function HexMap({ view, rules, width, height, layer, stockCommodity, selected, onSelect, onContextMenu, onHover, highlightPath, tooltip, picking, flows, flowT }: Props) {
+export function HexMap({ view, rules, width, height, layer, stockCommodity, selected, onSelect, onContextMenu, onHover, highlightPath, tooltip, picking, flows, flowT, area, onArea }: Props) {
   const [mouse, setMouse] = useState<{ x: number; y: number } | null>(null);
   const lastHover = useRef<string | null>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -35,6 +39,9 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const drag = useRef<{ x: number; y: number; px: number; py: number; moved: boolean } | null>(null);
+  // shift-drag selection, in display cells: where it started and where the pointer is now (issue #191)
+  const [box, setBox] = useState<{ a: Coord; b: Coord } | null>(null);
+  const boxRef = useRef<{ a: Coord; b: Coord } | null>(null);
 
   const byCoord = useMemo(() => {
     const m = new Map<string, SectorView>();
@@ -246,12 +253,24 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
       const end = toDisplay(highlightPath[highlightPath.length - 1]); const { cx, cy } = hexCenter(end.x, end.y, l);
       ctx.fillStyle = p.accent; ctx.beginPath(); ctx.arc(cx, cy, Math.max(3, l.size * 0.22), 0, Math.PI * 2); ctx.fill();
     }
+    // the multi-sector selection: settled sectors outlined, and while dragging every cell in the box
+    const outline = (dx: number, dy: number, fill: boolean) => {
+      const { cx, cy } = hexCenter(dx, dy, l);
+      hexPath(ctx, cx, cy, l.size - 1.5);
+      if (fill) { ctx.globalAlpha = 0.18; ctx.fillStyle = p.ring; ctx.fill(); ctx.globalAlpha = 1; }
+      ctx.strokeStyle = p.ring; ctx.lineWidth = 2; ctx.stroke();
+    };
+    if (area?.length) for (const c of area) { const d = toDisplay(c); outline(d.x, d.y, false); }
+    if (box) {
+      const x0 = Math.min(box.a.x, box.b.x), x1 = Math.max(box.a.x, box.b.x), y0 = Math.min(box.a.y, box.b.y), y1 = Math.max(box.a.y, box.b.y);
+      for (let dy = y0; dy <= y1; dy++) for (let dx = x0; dx <= x1; dx++) outline(dx, dy, true);
+    }
     if (selected) {
       const d = toDisplay(selected);
       const { cx, cy } = hexCenter(d.x, d.y, l);
       hexPath(ctx, cx, cy, l.size - 0.5); ctx.strokeStyle = p.ring; ctx.lineWidth = 3; ctx.stroke();
     }
-  }, [view, byCoord, layer, stockCommodity, selected, width, height, layout, typeCategory, typeGlyph, toWorld, toDisplay, highlightPath, flows, flowT]);
+  }, [view, byCoord, layer, stockCommodity, selected, width, height, layout, typeCategory, typeGlyph, toWorld, toDisplay, highlightPath, flows, flowT, area, box]);
 
   useEffect(() => {
     const el = wrap.current; if (!el) return;
@@ -259,7 +278,15 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
     ro.observe(el); return () => ro.disconnect();
   }, []);
 
-  const onDown = (e: React.MouseEvent) => { drag.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y, moved: false }; };
+  const onDown = (e: React.MouseEvent) => {
+    if (e.shiftKey && e.button === 0 && onArea && !picking) {
+      const r = canvas.current!.getBoundingClientRect();
+      const hit = pick(e.clientX - r.left, e.clientY - r.top, layout(), width, height);
+      if (hit) { boxRef.current = { a: hit, b: hit }; setBox(boxRef.current); }
+      return;
+    }
+    drag.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y, moved: false };
+  };
   const onMove = (e: React.MouseEvent) => {
     const r = canvas.current!.getBoundingClientRect();
     setMouse({ x: e.clientX - r.left, y: e.clientY - r.top });
@@ -269,12 +296,26 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
       const key = c ? `${c.x},${c.y}` : "";
       if (key !== lastHover.current) { lastHover.current = key; onHover(c, e.clientX, e.clientY); }
     }
+    if (boxRef.current) {
+      const hit = pick(e.clientX - r.left, e.clientY - r.top, layout(), width, height);
+      if (hit && (hit.x !== boxRef.current.b.x || hit.y !== boxRef.current.b.y)) { boxRef.current = { ...boxRef.current, b: hit }; setBox(boxRef.current); }
+      return;
+    }
     const d = drag.current; if (!d) return;
     const dx = e.clientX - d.x, dy = e.clientY - d.y;
     if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
     if (d.moved) setPan({ x: d.px + dx, y: d.py + dy });
   };
   const onUp = (e: React.MouseEvent) => {
+    const b = boxRef.current;
+    if (b) {
+      boxRef.current = null; setBox(null);
+      const cells: Coord[] = [];
+      const x0 = Math.min(b.a.x, b.b.x), x1 = Math.max(b.a.x, b.b.x), y0 = Math.min(b.a.y, b.b.y), y1 = Math.max(b.a.y, b.b.y);
+      for (let dy = y0; dy <= y1; dy++) for (let dx = x0; dx <= x1; dx++) cells.push(toWorld(dx, dy));
+      onArea?.(cells);
+      return;
+    }
     const d = drag.current; drag.current = null;
     if (d && d.moved) return;
     const r = canvas.current!.getBoundingClientRect();
@@ -292,7 +333,7 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
 
   return (
     <div ref={wrap} className="relative h-full w-full overflow-hidden rounded-lg border border-border bg-background">
-      <canvas ref={canvas} className="absolute inset-0 block cursor-crosshair" onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={() => { drag.current = null; setMouse(null); lastHover.current = null; onHover?.(null, 0, 0); }} onWheel={onWheel} onContextMenu={onCtx} style={picking ? { cursor: "cell" } : undefined} />
+      <canvas ref={canvas} className="absolute inset-0 block cursor-crosshair" onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={() => { drag.current = null; if (boxRef.current) { boxRef.current = null; setBox(null); } setMouse(null); lastHover.current = null; onHover?.(null, 0, 0); }} onWheel={onWheel} onContextMenu={onCtx} style={picking ? { cursor: "cell" } : undefined} />
       {tooltip && mouse && (
         <div className="pointer-events-none absolute z-10 rounded-md border border-border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md whitespace-pre"
              style={{ left: mouse.x + 14, top: mouse.y + 14 }}>{tooltip}</div>

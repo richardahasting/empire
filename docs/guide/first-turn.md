@@ -61,6 +61,15 @@ You see your own sectors, the ones next to them, and whatever your radar and
 ships have spotted. Everything else is dark, and stays dark until you go and
 look.
 
+On the web map, **click** a sector to inspect it, **right-click** for its orders,
+drag to pan, and scroll to zoom. To give many sectors the same order, **hold
+shift and drag** a rectangle. Every sector of yours inside it is selected, and
+the inspector becomes a panel that designates them, points them at a
+distribution centre (the capital, one you pick on the map, or none), sets or
+clears a threshold, or builds road or rail, all at once. Each sector pays its own
+BTU. Esc clears the selection. It is the same as typing a rectangle
+(`x1:x2,y1:y2`) at the console.
+
 ## What to actually do
 
 The loop is: **designate sectors, feed the people, and get the goods to where
