@@ -81,6 +81,8 @@ export interface CountryView {
   levels: Levels; inSanctuary: boolean; bankrupt: boolean; commodityIds: string[]; sectors: SectorView[]; otherCountryNames: string[];
   /** Your ships (issue #56). */
   ships: ShipView[];
+  /** Countries you are at war with, by name (issue #137). */
+  atWarWith?: string[];
   /** Enemy ships your sensors have found (issue #75); what you can aim at (issue #68). */
   contacts: ContactView[];
   /** Standing depot-to-depot rail runs; empty cargo means "keep the far end's thresholds topped up" (issue #70). */

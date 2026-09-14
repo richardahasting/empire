@@ -701,6 +701,17 @@ public class GameService {
         }
     }
 
+    /** An assault on held coast is news whichever way it went (issue #206); a landing on empty coast is not. */
+    private void postAssault(Game g, World before, World after, int attacker, Command.Land la) {
+        if (!before.inBounds(la.at())) return;
+        int was = before.sector(la.at()).owner();
+        if (was < 0 || was == attacker) return;
+        String place = before.sector(la.at()).designation().replace('_', ' ');
+        String defender = before.country(was).name();
+        if (after.sector(la.at()).owner() == attacker) post(g, "war", attacker, "{country} stormed ashore and took a " + place + " from " + defender, null);
+        else post(g, "war", attacker, "{country}'s assault on a " + defender + " " + place + " was thrown back into the sea", null);
+    }
+
     /** An engine message that opens with the country's name, with the name swapped for the {country} placeholder. */
     private static String countryFirst(World w, int country, String msg) {
         if (country < 0 || country >= w.countries().size() || msg == null) return msg;
@@ -1068,7 +1079,7 @@ public class GameService {
             World before = g.world;
             CommandResult r = g.exec.execute(before, country, cmd);
             logs.command(gameId, country, before.updateNumber(), source, cmd.verb(), cmd, r.ok(), r.error(), r.btuSpent());
-            if (r.ok()) { worlds.saveDiff(gameId, before, r.world(), g.com); g.world = r.world(); postMilestones(g, before, r.world()); deliver(g, country, cmd); if (cmd instanceof Command.Fire) postSinkings(g, before, r.world(), country); }
+            if (r.ok()) { worlds.saveDiff(gameId, before, r.world(), g.com); g.world = r.world(); postMilestones(g, before, r.world()); deliver(g, country, cmd); if (cmd instanceof Command.Fire) postSinkings(g, before, r.world(), country); if (cmd instanceof Command.Land la) postAssault(g, before, r.world(), country, la); }
             Coord cap = g.world.country(country).capital();
             return new Outcome(r.ok(), relativise(g.world, cap, r.error()), r.btuSpent(), CountryView.of(g.world, g.cfg, country), relativise(g.world, cap, r.info()));
         } finally { g.lock.unlock(); }
