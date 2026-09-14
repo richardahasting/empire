@@ -116,6 +116,8 @@ public final class Sector {
     public Resources resources() { return new Resources(fertility, minerals, gold, oil, uranium); }
     public int owner() { return owner; }
     public String designation() { return Designations.name(designation); }
+    /** The designation's registry code: an array index, for lookups on the update's hot path. */
+    public int designationCode() { return designation; }
     public double efficiency() { return efficiency; }
     public double mobility() { return mobility; }
     public Stocks stock() { return stock; }

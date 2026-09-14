@@ -14,7 +14,10 @@ public enum Terrain {
 
     public static Terrain byOrdinal(int i) { return VALUES[i]; }
 
-    public String id() { return name().toLowerCase(Locale.ROOT); }
+    /** The lowercase id, made once: this was the hottest line of the update, lowercasing a name per hop per shipment. */
+    private final String id = name().toLowerCase(Locale.ROOT);
+
+    public String id() { return id; }
 
     public boolean isLand() { return this != OCEAN; }
 

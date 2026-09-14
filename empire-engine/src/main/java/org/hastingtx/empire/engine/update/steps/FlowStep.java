@@ -29,9 +29,14 @@ public final class FlowStep implements Step {
         final List<Coord> path; final HeldParcel fromHeld; final double requested;
         double claim;           // after contention
         int sourceKey;          // budget key: sector index for stock sources, -1-k for held parcel k
+        // Precomputed once contention starts (speed, 2026-09-14): the mobility per unit and the paying sector
+        // of every hop, and dense indices into the source and room budgets. Contention used to re-price every
+        // hop, through string-keyed lookups and a linked list, on every pass of every loop.
+        double[] unit; int[] payers; int srcId, roomId;
         Plan(String kind, int owner, int commodity, int originIdx, Coord dest, List<Coord> path, HeldParcel fromHeld, double requested) {
             this.kind = kind; this.owner = owner; this.commodity = commodity; this.originIdx = originIdx; this.dest = dest;
-            this.path = path; this.fromHeld = fromHeld; this.requested = requested; this.claim = requested;
+            this.path = path instanceof RandomAccess ? path : new ArrayList<>(path);   // hops are read by index
+            this.fromHeld = fromHeld; this.requested = requested; this.claim = requested;
         }
     }
 
@@ -101,11 +106,17 @@ public final class FlowStep implements Step {
         if (plans.isEmpty()) { Map<Integer, List<HeldParcel>> nh = new HashMap<>(); for (int i : ctx.withHeld()) for (HeldParcel p : ctx.sector(i).held()) addHeld(nh, i, p); railPass(ctx, nh); carryHeld(ctx, nh); return; }
 
         // --- 7. resolve contention ------------------------------------------------------
-        // source budgets
-        Map<Long, Double> sourceBudget = new HashMap<>();
+        // source budgets, each given a dense index (a map keyed on origin<<8|commodity hashed into a couple of
+        // dozen buckets and turned into trees)
+        Map<HeldParcel, Integer> firstHeld = new HashMap<>();
+        for (int k = 0; k < heldRefs.size(); k++) firstHeld.putIfAbsent(heldRefs.get(k), k);   // indexOf's answer, without the scan
+        Map<Long, Integer> srcIndex = new HashMap<>();
+        List<Double> srcBudgetList = new ArrayList<>();
         for (Plan p : plans) {
-            if (p.fromHeld != null) { p.sourceKey = -1 - heldRefs.indexOf(p.fromHeld); sourceBudget.put((long) p.sourceKey, p.fromHeld.qty()); }
-            else {
+            if (p.fromHeld != null) {
+                p.sourceKey = -1 - firstHeld.get(p.fromHeld);
+                p.srcId = denseId(srcIndex, srcBudgetList, srcKey(p), p.fromHeld.qty(), false);
+            } else {
                 p.sourceKey = p.originIdx;
                 long key = ((long) p.originIdx << 8) | p.commodity;
                 Sector src = ctx.sector(p.originIdx);
@@ -118,9 +129,10 @@ public final class FlowStep implements Step {
                     case "deliver" -> src.deliver().has(p.commodity) ? src.deliver().threshold(p.commodity) : 0;
                     default -> 0;
                 };
-                sourceBudget.merge(key, Math.max(0, post - keep), Math::min);
+                p.srcId = denseId(srcIndex, srcBudgetList, key, Math.max(0, post - keep), true);
             }
         }
+        double[] sourceBudget = srcBudgetList.stream().mapToDouble(Double::doubleValue).toArray();
         // mobility budgets
         double[] mobBudget = new double[ctx.nSectors];
         // Only a sector that can pay is ever indexed here: paths run through their owner's territory,
@@ -132,32 +144,46 @@ public final class FlowStep implements Step {
         //
         // People share one pool, because the population cap counts civilians and workers together and
         // the apply step truncates them together. Everything else has its own capacity per commodity.
-        Map<Long, Double> roomBudget = new HashMap<>();
-        for (Plan p : plans) roomBudget.computeIfAbsent(roomKey(ctx, p), k -> room(ctx, p));
+        Map<Long, Integer> roomIndex = new HashMap<>();
+        List<Double> roomBudgetList = new ArrayList<>();
+        for (Plan p : plans) {
+            long k = mix(roomKey(ctx, p));
+            Integer id = roomIndex.get(k);
+            if (id == null) { id = roomBudgetList.size(); roomIndex.put(k, id); roomBudgetList.add(room(ctx, p)); }
+            p.roomId = id;
+        }
+        double[] roomBudget = roomBudgetList.stream().mapToDouble(Double::doubleValue).toArray();
+        // every hop priced once
+        for (Plan p : plans) {
+            int n = p.path.size();
+            p.unit = new double[n]; p.payers = new int[n];
+            for (int h = 1; h < n; h++) { p.unit[h] = unitCost(ctx, p, h); p.payers[h] = payer(ctx, p, h); }
+        }
 
+        double[] claimed = new double[sourceBudget.length], roomClaim = new double[roomBudget.length];
+        double[] mobClaim = new double[ctx.nSectors];
         for (int iter = 0; iter < 50; iter++) {
             boolean changed = false;
             // sources
-            Map<Long, Double> claimed = new HashMap<>();
-            for (Plan p : plans) claimed.merge(srcKey(p), p.claim, Double::sum);
+            Arrays.fill(claimed, 0);
+            for (Plan p : plans) claimed[p.srcId] += p.claim;
             for (Plan p : plans) {
-                double total = claimed.get(srcKey(p)), budget = sourceBudget.get(srcKey(p));
+                double total = claimed[p.srcId], budget = sourceBudget[p.srcId];
                 if (total > budget + 1e-9) { p.claim *= budget / total; changed = true; }
             }
             // mobility
-            double[] mobClaim = new double[ctx.nSectors];
-            for (Plan p : plans) for (int h = 1; h < p.path.size(); h++) mobClaim[payer(ctx, p, h)] += hopCost(ctx, p, p.claim, h);
+            for (Plan p : plans) for (int h = 1; h < p.path.size(); h++) mobClaim[p.payers[h]] += p.claim * p.unit[h];
             for (Plan p : plans) {
                 double f = 1.0;
-                for (int h = 1; h < p.path.size(); h++) { int t = payer(ctx, p, h); if (mobClaim[t] > mobBudget[t] + 1e-9) f = Math.min(f, mobBudget[t] / mobClaim[t]); }
+                for (int h = 1; h < p.path.size(); h++) { int t = p.payers[h]; if (mobClaim[t] > mobBudget[t] + 1e-9) f = Math.min(f, mobBudget[t] / mobClaim[t]); }
                 if (f < 1.0) { p.claim *= f; changed = true; }
             }
+            for (Plan p : plans) for (int h = 1; h < p.path.size(); h++) mobClaim[p.payers[h]] = 0;   // clear only what was touched
             // room at the destination, for anything
-            Map<Long, Double> roomClaim = new HashMap<>();
-            for (Plan p : plans) roomClaim.merge(roomKey(ctx, p), p.claim, Double::sum);
+            Arrays.fill(roomClaim, 0);
+            for (Plan p : plans) roomClaim[p.roomId] += p.claim;
             for (Plan p : plans) {
-                long k = roomKey(ctx, p);
-                double budget = roomBudget.get(k), wanted = roomClaim.get(k);
+                double budget = roomBudget[p.roomId], wanted = roomClaim[p.roomId];
                 if (wanted > budget + 1e-9) { p.claim *= budget / wanted; changed = true; }
             }
             if (!changed) break;
@@ -175,7 +201,7 @@ public final class FlowStep implements Step {
      * that is already full, and the apply step then throws it away as overcrowding. Latent until the
      * quantum was turned on, because this whole pass is gated on it.
      */
-    private static void handOutLeftovers(Ctx ctx, List<Plan> plans, double quantum, Map<Long, Double> sourceBudget, double[] mobBudget, Map<Long, Double> roomBudget) {
+    private static void handOutLeftovers(Ctx ctx, List<Plan> plans, double quantum, double[] sourceBudget, double[] mobBudget, double[] roomBudget) {
         SplittableRandom rng = Rng.stream("contention", ctx.seed);
         List<Plan> order = new ArrayList<>(plans);
         double[] tie = new double[plans.size()];
@@ -183,33 +209,37 @@ public final class FlowStep implements Step {
         Map<Plan, Double> tieOf = new IdentityHashMap<>();
         for (int k = 0; k < plans.size(); k++) tieOf.put(plans.get(k), tie[k]);
         order.sort(Comparator.<Plan>comparingInt(p -> ctx.com.priority(p.commodity)).thenComparingDouble(tieOf::get));
-        Map<Long, Double> used = new HashMap<>();
+        double[] used = new double[sourceBudget.length];
         double[] mobUsed = new double[ctx.nSectors];
-        Map<Long, Double> roomUsed = new HashMap<>();
+        double[] roomUsed = new double[roomBudget.length];
         for (Plan p : plans) {
-            used.merge(srcKey(p), p.claim, Double::sum);
-            for (int h = 1; h < p.path.size(); h++) mobUsed[payer(ctx, p, h)] += hopCost(ctx, p, p.claim, h);
-            roomUsed.merge(roomKey(ctx, p), p.claim, Double::sum);
+            used[p.srcId] += p.claim;
+            for (int h = 1; h < p.path.size(); h++) mobUsed[p.payers[h]] += p.claim * p.unit[h];
+            roomUsed[p.roomId] += p.claim;
         }
         // One unit per plan per pass, not everything to whoever sorts first. Draining the whole
         // remainder into the head of the order gave that direction fifteen extra units of food in the
         // six-chain symmetry fixture while its five identical siblings got none (issue #77). Round-robin
         // keeps the tie-break to the single indivisible unit it is supposed to be.
-        boolean gave = true;
-        while (gave) {
-            gave = false;
-            for (Plan p : order) {
-                long rk = roomKey(ctx, p);
+        //
+        // Every budget only ever fills, so a plan that cannot take a unit now can never take one later: it
+        // leaves the round for good. The survivors keep their order, so the outcome is the same one unit at a
+        // time as before — each pass just stops re-checking, and re-pricing, plans that are finished.
+        List<Plan> open = new ArrayList<>(order);
+        while (!open.isEmpty()) {
+            List<Plan> still = new ArrayList<>(open.size());
+            for (Plan p : open) {
                 if (p.claim + quantum <= p.requested + 1e-9
-                        && used.get(srcKey(p)) + quantum <= sourceBudget.get(srcKey(p)) + 1e-9
-                        && mobRoom(ctx, p, quantum, mobBudget, mobUsed)
-                        && roomUsed.getOrDefault(rk, 0.0) + quantum <= roomBudget.get(rk) + 1e-9) {
-                    p.claim += quantum; used.merge(srcKey(p), quantum, Double::sum);
-                    roomUsed.merge(rk, quantum, Double::sum);
-                    for (int h = 1; h < p.path.size(); h++) mobUsed[payer(ctx, p, h)] += hopCost(ctx, p, quantum, h);
-                    gave = true;
+                        && used[p.srcId] + quantum <= sourceBudget[p.srcId] + 1e-9
+                        && mobRoom(p, quantum, mobBudget, mobUsed)
+                        && roomUsed[p.roomId] + quantum <= roomBudget[p.roomId] + 1e-9) {
+                    p.claim += quantum; used[p.srcId] += quantum;
+                    roomUsed[p.roomId] += quantum;
+                    for (int h = 1; h < p.path.size(); h++) mobUsed[p.payers[h]] += quantum * p.unit[h];
+                    still.add(p);
                 }
             }
+            open = still;
         }
 
     }
@@ -234,8 +264,8 @@ public final class FlowStep implements Step {
             int hops = 0; int cur = p.originIdx; String hold = null; double moving = qty;
             for (int h = 1; h < p.path.size(); h++) {
                 int t = ctx.idx(p.path.get(h));
-                int pay = payer(ctx, p, h);
-                double unitCost = unitCost(ctx, p, h);
+                int pay = p.payers[h];
+                double unitCost = p.unit[h];
                 double avail = mobBudget[pay] - mobSpent[pay];
                 double canMove = unitCost <= 0 ? moving : Math.min(moving, floorQ(Math.max(0, avail) / unitCost, quantum));
                 if (canMove < 1e-9) canMove = 0;
@@ -507,9 +537,21 @@ public final class FlowStep implements Step {
         return Math.max(0, Math.floor(ctx.capacity(s, p.commodity)) - (s.stock().get(p.commodity) + ctx.led().st(i, p.commodity)));
     }
 
-    private static boolean mobRoom(Ctx ctx, Plan p, double qty, double[] budget, double[] used) {
-        for (int h = 1; h < p.path.size(); h++) { int t = payer(ctx, p, h); if (used[t] + hopCost(ctx, p, qty, h) > budget[t] + 1e-9) return false; }
+    private static boolean mobRoom(Plan p, double qty, double[] budget, double[] used) {
+        for (int h = 1; h < p.path.size(); h++) { int t = p.payers[h]; if (used[t] + qty * p.unit[h] > budget[t] + 1e-9) return false; }
         return true;
+    }
+
+    /** A 64-bit mix so near-sequential keys spread across hash buckets; a bijection, so keys stay distinct. */
+    private static long mix(long k) { return k * 0x9E3779B97F4A7C15L; }
+
+    /** The dense index for {@code key}, adding its budget or folding it in (the stricter of the two when {@code min}). */
+    private static int denseId(Map<Long, Integer> index, List<Double> budgets, long key, double budget, boolean min) {
+        long k = mix(key);
+        Integer id = index.get(k);
+        if (id == null) { id = budgets.size(); index.put(k, id); budgets.add(budget); }
+        else budgets.set(id, min ? Math.min(budgets.get(id), budget) : budget);
+        return id;
     }
 
     /** Index of the sector whose mobility pays for hop h: the origin (sending sector, or the sector holding a resumed parcel) or the entered sector. */
@@ -576,8 +618,9 @@ public final class FlowStep implements Step {
                 }
             }
             if (Double.isInfinite(dist[dst])) return null;
-            LinkedList<Coord> out = new LinkedList<>();
-            for (int v = dst; v != -1; v = prev[v]) out.addFirst(ctx.sector(v).at());
+            ArrayList<Coord> out = new ArrayList<>();
+            for (int v = dst; v != -1; v = prev[v]) out.add(ctx.sector(v).at());
+            Collections.reverse(out);
             return out;
         } finally {
             sc.reset();

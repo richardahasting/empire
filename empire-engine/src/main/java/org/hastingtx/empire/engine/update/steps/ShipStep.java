@@ -902,10 +902,12 @@ public final class ShipStep implements Step {
         boolean atHome = ship.at().equals(ship.home());
         int hops = atHome ? fc.radius() : fc.wanderHops();
         List<Coord> cands = new ArrayList<>(); List<Double> weights = new ArrayList<>(); double total = 0;
-        for (Sector s : ctx.snap.sectors()) {
+        // only the hexes a leg away, in canonical order (Hex.within is sorted like the sector list), so the
+        // draw below sees the same candidates in the same order as a scan of the whole world did
+        for (Coord at : Hex.within(ctx.snap, ship.at(), hops)) {
+            Sector s = ctx.snap.sector(at);
             if (s.terrain() != Terrain.OCEAN || s.at().equals(ship.at())) continue;
             if (Hex.distance(ctx.snap, s.at(), ship.home()) > fc.radius()) continue;
-            if (Hex.distance(ctx.snap, s.at(), ship.at()) > hops) continue;
             if (SeaRoutes.path(ctx.snap, ctx.cfg, ship.owner(), ship.at(), s.at()) == null) continue;
             // richer water more often; a mission looks for what it is there for
             double wgt = (mining ? s.resource("minerals") : s.fertility()) + 1.0;

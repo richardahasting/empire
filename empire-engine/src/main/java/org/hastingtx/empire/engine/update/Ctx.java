@@ -106,6 +106,19 @@ public final class Ctx {
         this.seen = new ArrayList<>(snap.seen());
         this.typeIndex = new java.util.HashMap<>();
         for (SectorTypeCfg t : cfg.economy().sectorTypes()) typeIndex.put(t.id(), t);
+        // the hop cost's ingredients, tabulated once: a terrain's base cost by ordinal, and each discount
+        // curve over the whole levels 0..100 that sectors actually hold. Same arithmetic, read by index.
+        EconomyCfg.MobilityCfg mob = cfg.economy().mobility();
+        for (Terrain t : Terrain.values()) {
+            Double b = mob.moveCostByTerrain().get(t.id());
+            moveBase[t.ordinal()] = b == null ? Double.POSITIVE_INFINITY : b;
+        }
+        var railCurve = cfg.infrastructure().rail().mobilityDiscountCurve();
+        for (int v = 0; v <= 100; v++) {
+            effDiscount[v] = mob.efficiencyDiscount().eval(v);
+            roadDiscount[v] = cfg.infrastructure().road().mobilityDiscountCurve().eval(v);
+            railDiscount[v] = railCurve == null ? 1.0 : railCurve.eval(v);
+        }
         int n = snap.sectors().size();
 
 
@@ -223,10 +236,22 @@ public final class Ctx {
     public Sector sector(int i) { return snap.sectors().get(i); }
     public Country country(int id) { return snap.countries().get(id); }
     public SectorTypeCfg type(Sector s) {
-        SectorTypeCfg t = typeIndex.get(s.designation());
+        int code = s.designationCode();
+        SectorTypeCfg t = code >= 0 && code < typeByCode.length ? typeByCode[code] : null;
+        if (t != null) return t;
+        t = typeIndex.get(s.designation());
         if (t == null) throw new IllegalArgumentException("unknown sector type: " + s.designation());
+        if (code >= 0 && code < typeByCode.length) typeByCode[code] = t;
         return t;
     }
+
+    /** Sector types by designation code, filled as they are met (a hash lookup by name was on the hot path). */
+    private final SectorTypeCfg[] typeByCode = new SectorTypeCfg[org.hastingtx.empire.engine.model.Designations.MAX + 1];
+    private final double[] moveBase = new double[Terrain.values().length];
+    private final double[] effDiscount = new double[101], roadDiscount = new double[101], railDiscount = new double[101];
+    /** Shipping weight per unit by [designation code][commodity] for an efficient sector; the inefficient row apart. */
+    private final double[][] weightByCode = new double[org.hastingtx.empire.engine.model.Designations.MAX + 1][];
+    private double[] weightInefficient;
 
     /** Storage cap for a non-person commodity in this sector. GUESS: independent of efficiency. */
     public double capacity(Sector s, int c) {
@@ -248,22 +273,41 @@ public final class Ctx {
 
     /** Shipping weight of one unit of c leaving sector s (packing applies at >= 60% efficiency, KNOWN). */
     public double weightLeaving(int c, Sector s) {
-        String cls = s.efficiency() >= 60 ? type(s).packingOrNormal() : "inefficient";
-        return com.weight(c, cls);
+        if (s.efficiency() < 60) {
+            if (weightInefficient == null) { weightInefficient = new double[com.size()]; for (int i = 0; i < com.size(); i++) weightInefficient[i] = com.weight(i, "inefficient"); }
+            return weightInefficient[c];
+        }
+        int code = s.designationCode();
+        if (code < 0 || code >= weightByCode.length) return com.weight(c, type(s).packingOrNormal());
+        double[] row = weightByCode[code];
+        if (row == null) {
+            String cls = type(s).packingOrNormal();
+            row = new double[com.size()];
+            for (int i = 0; i < com.size(); i++) row[i] = com.weight(i, cls);
+            weightByCode[code] = row;
+        }
+        return row[c];
     }
 
     /** Mobility cost per weight-unit to move INTO sector s (terrain × efficiency × road). */
     public double moveCostInto(Sector s) {
-        EconomyCfg.MobilityCfg m = cfg.economy().mobility();
-        Double base = m.moveCostByTerrain().get(s.terrain().id());
-        if (base == null) return Double.POSITIVE_INFINITY;
-        double eff = m.efficiencyDiscount().eval(s.efficiency());
-        double road = cfg.infrastructure().road().mobilityDiscountCurve().eval(s.roadLevel());
+        double base = moveBase[s.terrain().ordinal()];
+        if (base == Double.POSITIVE_INFINITY) return base;
         // rail is a road that is cheaper still (Richard 2026-09-09: "make rail easy, just like roads, but cheaper"): its level
         // discounts everything entering the sector on top of the road discount, no train orders needed (issue #60)
-        var rc = cfg.infrastructure().rail().mobilityDiscountCurve();
-        double rail = rc == null ? 1.0 : rc.eval(s.railLevel());
+        double eff = tab(effDiscount, s.efficiency());
+        if (Double.isNaN(eff)) eff = cfg.economy().mobility().efficiencyDiscount().eval(s.efficiency());
+        double road = tab(roadDiscount, s.roadLevel());
+        if (Double.isNaN(road)) road = cfg.infrastructure().road().mobilityDiscountCurve().eval(s.roadLevel());
+        double rail = tab(railDiscount, s.railLevel());
+        if (Double.isNaN(rail)) { var rc = cfg.infrastructure().rail().mobilityDiscountCurve(); rail = rc == null ? 1.0 : rc.eval(s.railLevel()); }
         return base * eff * road * rail;
+    }
+
+    /** A curve's value at a whole level 0..100 — all a sector ever holds — from its table; NaN for anything else. */
+    private static double tab(double[] table, double v) {
+        int i = (int) v;
+        return i == v && i >= 0 && i <= 100 ? table[i] : Double.NaN;
     }
 
     public double workAvailable(Sector s) {
