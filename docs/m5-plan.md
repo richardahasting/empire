@@ -7,7 +7,7 @@ milestone; the issue carries the detail, this page carries the order.
 
 ## Order of work
 
-Status as of **2026-09-14**. Done items keep their place so the reasoning for
+Status as of **2026-09-15**. Done items keep their place so the reasoning for
 the order stays readable.
 
 1. **Ships phase 3 — warships and submarines** (#68) — **done.** It landed in
@@ -32,10 +32,13 @@ the order stays readable.
    per ship.
 6. **Rail follow-ups** (#70) — **done.** Standing rail lanes, depots as
    distribution links, train markers.
-7. **Planes and land units** (#71) — **next in this plan.** The rest of the
+7. **Planes and land units** (#71) — **next in this plan.** A sliced plan with the decisions it needs is in
+   `m5-land-air-plan.md` (2026-09-15, for review): attack with military first, then four land unit classes,
+   then planes. The rest of the
    units table. Land combat, capture of sectors and air missions join the
    simultaneous resolution that sea combat uses (step 10a).
-8. **Unrest** (#72) — open. Loyalty and revolt from the happiness requirement,
+8. **Unrest** (#72) — open, **waiting on decisions**: a faithful copy of the original's loyalty would almost
+   never bite at 60 ETUs an update (simulated; see the issue). Loyalty and revolt from the happiness requirement,
    so happiness has teeth.
 9. **Immediate navigation** (#69) — **done.** A per-ship mobility pool, and haste
    costs more.
