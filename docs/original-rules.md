@@ -35,7 +35,9 @@ for lack of the mechanic; decide those in the morning.
 | tech / research | 0.000625 (1 dust + 5 oil + 10 lcm), $300 / $90, education ≥ 5 | 0.0003 | **matched** |
 | education / happiness | 0.01 per lcm, $9 | 0.0002 / 0.0004 | **matched** (school = original library; university is ours) |
 | Resource depletion | gold −20, oil −10, uranium −35 per 100 units produced | none | **deviation** — not modelled yet |
-| Enlistment | at ≥ 60 %: ETU × (10 + mil) × 0.05 per update, ≤ civ/2 − mil, $3 each | flat 0.001 per work | **deviation** — special formula not modelled; $3 now charged |
+| Enlistment | at ≥ 60 %: ETU × (10 + mil) × 0.05 per update, ≤ civ/2 − mil, $3 each | flat 0.001 per work | **deviation** — special formula not modelled; $3 now charged; military no longer capped by the civilian population ceiling (issue #204) |
+| Demobilize | `demob`: military to civilians, or to active reserves (paid `money_res`) | none | **ours**: `demob SECTOR N / all / keep N` (issue #217); to civilians where there is room, the rest discharged; no reserves |
+| Big-city ceiling | `res_pop.c`: a big city's max population rises from `maxpop` to `10 × maxpop` (≤ 9999) with efficiency | flat 10,000 | **deviation** — not scaled by efficiency |
 
 ## Mobility and moving goods
 

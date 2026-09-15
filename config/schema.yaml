@@ -207,7 +207,7 @@ economy:
     # fault of anyone's. Half a food per head is about sixteen updates' eating at 0.0005/ETU, which is
     # nothing to the source sector and everything to the party. Moved from the source with the civs.
     explore_food_per_civ: 0.5
-    max_pop_scales_with_efficiency: false       # KNOWN: max_population() is flat except big cities
+    max_pop_scales_with_efficiency: false       # KNOWN: max_population() is flat except big cities (their rise with efficiency is not modelled; city is a flat 10000)
     # Population ceiling per sector = sector_type.max_population, flat (KNOWN: res_pop.c),
     # optionally scaled by research with the original's RES_POP formula.
     # Teaching and sandbox keep it flat; classic and blitz turn RES_POP on (issue #153): ceiling ×

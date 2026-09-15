@@ -125,7 +125,7 @@ fixtures under `empire-engine/src/test/resources/golden/<preset>/<seed>/`.
 | M2 | engine (flow planner, roads, money), web (flow animation) |
 | M3 | engine (view/fog, detection, BTU), agents (heuristic, llm), sim (tournament, bisection), server (ws, admin) |
 | M4 | engine (levels, efficiency, rail), config (full sector table) |
-| M5 | engine (ships, `engine.combat` gunnery and blockades, `CombatStep`), config (`units.ships.combat`, `units.ships.missions`; units.yaml for land and air) |
+| M5 | engine (ships and tenders in `ShipStep`, `update.SeaRoutes`, `engine.combat` gunnery and blockades, `CombatStep`, `command.Engagement` for `fire`, `command.Assault` for landings on held coast, `view.Radar` and `view.Visibility`), config (`units.ships.combat`, `units.ships.missions`, `units.ships.tenders`, `capture.assault`, `detection.radar`; units.yaml for land and air), server (deity Reload ship rules), web (area selection, Fleet panel) |
 
 ## Deployment (linuxserver)
 

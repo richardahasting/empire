@@ -110,13 +110,22 @@ part of your score** — there is no advantage to hoarding them.
 
 ## Money
 
-Income is tax on civilians and workers, **scaled by their sector's efficiency**
-(a sector at 40% pays 40% of its tax, so redesignating a crowded sector costs tax
-while it builds back up), plus interest on gold bars if the game has it. **Only bars in a bank earn**: each pays $0.25 an ETU, scaled by the bank's
-efficiency, so at 60 ETUs a bar in a 100% bank earns $15 an update. A bank holds
-10,000 bars; bars sitting in a warehouse earn nothing, so set a bank's `bar`
-threshold high enough to keep them there. Spending is military pay, infrastructure maintenance, and the cash cost
-of construction and production.
+Income comes from two places, both as the original paid them:
+
+- **Tax** on civilians and workers, **scaled by their sector's efficiency**. At 60
+  ETUs a civilian in a 100% sector pays $0.50 an update; a sector at 40% pays 40% of
+  that, so redesignating a crowded sector costs tax while it builds back up.
+- **Interest on gold bars, in a bank only** (if the game has interest on). Each bar
+  pays $0.25 an ETU, scaled by the bank's efficiency: $15 an update at 60 ETUs. A
+  bank holds 10,000 bars. Bars in a warehouse or the capital earn nothing, so set
+  each bank's `bar` threshold to 10000 and let distribution bring them in.
+
+Spending is military pay, infrastructure maintenance, and the cash cost of
+construction and production. **Military pay is the big one**: a soldier costs $5
+an update whatever his sector's efficiency, ten times what a civilian pays in tax.
+An enlistment centre only ever adds soldiers, so an army nobody is watching grows
+its payroll every update. `demob SECTOR keep N` stands the surplus down (they
+become civilians where there is room); see the [command reference](commands.html).
 
 If the treasury falls below the bankruptcy threshold you are marked bankrupt,
 and **the penalty lands the following update** — you get one update's warning.
