@@ -211,11 +211,28 @@ public class GameController {
         return games.commandAll(id, a, cmds, "panel", scaled ? SectorSelector.effectiveNote(v, cfg, targets, r.commodity(), amount) : null);
     }
 
-    public record ConsoleRequest(String line) {}
+    /**
+     * The console line. {@code command} is accepted as another name for {@code line}; a body with neither, or with
+     * any other key, is a 400. It used to be a silent no-op reported as accepted, and automation posting
+     * {@code {"command": ...}} looked green while doing nothing (issue #225). The body is read as a map because Spring's
+     * mapper ignores unknown keys, and an unknown key is exactly the mistake to catch.
+     */
+    public record ConsoleRequest(String line) {
+        static ConsoleRequest of(Map<String, Object> body) {
+            if (body == null) throw new IllegalArgumentException("no console line: send {\"line\": \"...\"}");
+            for (String k : body.keySet())
+                if (!k.equals("line") && !k.equals("command")) throw new IllegalArgumentException("unknown key \"" + k + "\": send {\"line\": \"...\"}");
+            Object line = body.get("line"), command = body.get("command");
+            if (line != null && command != null && !line.equals(command)) throw new IllegalArgumentException("give the console line as \"line\" or \"command\", not both");
+            Object t = line != null ? line : command;
+            if (!(t instanceof String text)) throw new IllegalArgumentException("no console line: send {\"line\": \"...\"}");
+            return new ConsoleRequest(text);
+        }
+    }
 
     @PostMapping("/{id}/console")
-    public Console.Reply console(@PathVariable long id, @RequestBody ConsoleRequest r, HttpServletRequest req) {
-        return console.run(id, AuthInterceptor.current(req), r.line() == null ? "" : r.line());
+    public Console.Reply console(@PathVariable long id, @RequestBody Map<String, Object> body, HttpServletRequest req) {
+        return console.run(id, AuthInterceptor.current(req), ConsoleRequest.of(body).line());
     }
 
     /** A ship's logbook for her last few updates, newest first (issue #67). */
