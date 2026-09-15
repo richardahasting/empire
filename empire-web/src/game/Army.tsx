@@ -11,7 +11,7 @@ const rel = (c: { x: number; y: number }) => `${c.x},${c.y}`;
  * Your land units (issue #247): where each stands, how fit, soldiers and supplies, its own mobility, and what it is worth in
  * a fight; and its orders — march, take on or put down soldiers and supplies. Attacks are given from the enemy sector's menu.
  */
-export function Army({ view, rules, busy, onCommand }: { view: CountryView; rules: Rules; busy: boolean; onCommand: (c: CommandRequest) => Promise<void> }) {
+export function Army({ view, busy, onCommand }: { view: CountryView; busy: boolean; onCommand: (c: CommandRequest) => Promise<void> }) {
   const [dialog, setDialog] = useState<{ kind: "march" | "load" | "unload"; unit: UnitView } | null>(null);
   const units = view.units ?? [];
   if (units.length === 0) return <p className="text-xs text-muted-foreground">No land units. Designate a headquarters, then right-click it and choose “Build unit…”.</p>;
