@@ -16,7 +16,7 @@ interface Props {
 
 /**
  * Orders for many sectors at once (issue #191, Richard 2026-09-14): shift-drag a rectangle on the map,
- * then designate, point at a centre, set a threshold, or pave road or rail across the lot. Each order
+ * then designate, point at a centre, set a threshold, pave road or rail, or demobilize (#217) across the lot. Each order
  * goes to the server as one mass command over the listed sectors, so each sector pays its own BTU and a
  * sector that refuses (wrong terrain, not enough tech) is reported rather than stopping the rest.
  */
@@ -35,6 +35,8 @@ export function AreaActions({ view, rules, busy, area, onCommand, onClear, onPic
   const [amount, setAmount] = useState("");
   const [road, setRoad] = useState("100");
   const [rail, setRail] = useState("100");
+  const [keep, setKeep] = useState("0");
+  const mil = sectors.reduce((n, s) => n + Math.floor(s.stock["mil"] ?? 0), 0);
   const all = { sectors: area };
   const cost = (verb: string) => (rules.btuCosts?.[verb] ?? rules.btuCosts?.default ?? 1) * area.length;
 
@@ -86,6 +88,14 @@ export function AreaActions({ view, rules, busy, area, onCommand, onClear, onPic
           <Input value={rail} onChange={e => setRail(e.target.value)} inputMode="numeric" className="w-20" />
         </label>
         <Button size="sm" disabled={busy || !(Number(rail) >= 0)} onClick={() => void onCommand({ verb: "build_rail", amount: Number(rail), ...all })}>Build rail</Button>
+      </div>
+
+      <div className="flex items-end gap-2">
+        <label className="grid gap-1 text-xs">Demobilize, keeping per sector
+          <Input value={keep} onChange={e => setKeep(e.target.value)} inputMode="numeric" className="w-24" />
+        </label>
+        <Button size="sm" variant="danger" disabled={busy || mil < 1 || !(Number(keep) >= 0)} onClick={() => void onCommand({ verb: "demobilize", type: "keep", amount: Number(keep), ...all })}>Demobilize</Button>
+        <span className="pb-1 text-xs text-muted-foreground">{mil} mil selected</span>
       </div>
     </div>
   );

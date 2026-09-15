@@ -9,7 +9,7 @@ import org.hastingtx.empire.engine.model.Coord;
 public sealed interface Command permits
         Command.BreakSanctuary, Command.Designate, Command.Threshold, Command.Distribute,
         Command.Move, Command.Explore, Command.BuildRoad, Command.BuildRail, Command.RailShip, Command.Deliver,
-        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission, Command.Land,
+        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission, Command.Land, Command.Demobilize,
         Command.RailLane, Command.Telegram, Command.Announce, Command.DeclareWar, Command.OfferPeace {
 
     String verb();
@@ -17,6 +17,12 @@ public sealed interface Command permits
     record BreakSanctuary() implements Command { public String verb() { return "break_sanctuary"; } }
 
     record Designate(Coord sector, String type) implements Command { public String verb() { return "designate"; } }
+
+    /**
+     * Stand military down in a sector (issue #217): {@code qty} of them leave the service, or with
+     * {@code keep}, all but {@code qty}. They become civilians where the sector has room; the rest go home.
+     */
+    record Demobilize(Coord sector, double qty, boolean keep) implements Command { public String verb() { return "demobilize"; } }
 
     /** Set (or clear with a negative amount) the distribution threshold for one commodity. */
     record Threshold(Coord sector, String commodity, double amount) implements Command { public String verb() { return "threshold"; } }

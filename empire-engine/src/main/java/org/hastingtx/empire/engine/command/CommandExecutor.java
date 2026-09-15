@@ -30,6 +30,7 @@ public final class CommandExecutor {
             case Command.BreakSanctuary b -> breakSanctuary(w, c);
             case Command.Designate d -> designate(w, c, d);
             case Command.Threshold t -> threshold(w, c, t);
+            case Command.Demobilize d -> demobilize(w, c, d);
             case Command.Distribute d -> distribute(w, c, d);
             case Command.Deliver d -> deliver(w, c, d);
             case Command.BuildShip b -> buildShip(w, c, b);
@@ -177,6 +178,28 @@ public final class CommandExecutor {
         if (s == null) return CommandResult.fail(w, "you do not own " + t.sector());
         if (!com.has(t.commodity())) return CommandResult.fail(w, "unknown commodity: " + t.commodity());
         return new CommandResult(w.withSector(s.withThreshold(com.index(t.commodity()), t.amount() < 0 ? Double.NaN : t.amount())), null, 0);
+    }
+
+    /**
+     * Military leave the service now (issue #217, Richard 2026-09-14: "that definitely needs to be there").
+     * Nothing else stood an army down, and every soldier draws pay each update. The discharged become
+     * civilians while the sector has room under its population cap; the rest go home and are gone.
+     */
+    private CommandResult demobilize(World w, Country c, Command.Demobilize d) {
+        Sector s = owned(w, c, d.sector());
+        if (s == null) return CommandResult.fail(w, "you do not own " + d.sector());
+        if (d.qty() < 0) return CommandResult.fail(w, "the number must be 0 or more");
+        double have = Math.floor(s.stock().get(com.mil));
+        double leave = d.keep() ? Math.max(0, have - Math.floor(d.qty())) : Math.min(have, Math.floor(d.qty()));
+        if (have < 1) return CommandResult.fail(w, "no military at " + d.sector());
+        if (leave < 1) return CommandResult.fail(w, d.keep() ? d.sector() + " has " + fmt(have) + " military, no more than the " + fmt(Math.floor(d.qty())) + " to keep" : "the number must be at least 1");
+        org.hastingtx.empire.engine.update.Ctx ctx = new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0);
+        double toCiv = Math.min(leave, roomFor(ctx, s, com.civ));
+        Sector n = s.withStock(s.stock().plus(com.mil, -leave).plus(com.civ, toCiv));
+        String gone = leave - toCiv >= 1 ? (toCiv >= 1 ? " and " : "; ") + fmt(leave - toCiv) + " went home (no room for them as civilians)" : "";
+        return new CommandResult(w.withSector(n), null, 0,
+                fmt(leave) + " military stood down at " + d.sector() + (toCiv >= 1 ? "; " + fmt(toCiv) + " became civilians" : "") + gone
+                        + "; " + fmt(have - leave) + " remain");
     }
 
     /** A standing order; validated now, executed at every update by the flow step. Issue #45. */

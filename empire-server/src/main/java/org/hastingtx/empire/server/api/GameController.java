@@ -112,7 +112,7 @@ public class GameController {
     /**
      * One JSON shape for every verb; absolute coordinates. {@code scope}, when set, is a
      * {@link SectorSelector} (relative coordinates) that replaces x,y with many sectors for the
-     * per-sector standing orders: designate, threshold, distribute, build_road, build_rail.
+     * per-sector standing orders: designate, threshold, distribute, build_road, build_rail, demobilize.
      */
     public record CommandRequest(String verb, Integer x, Integer y, Integer x2, Integer y2, String type, String commodity, Double amount, Boolean clear, String scope, String direction,
                                  Long ship, List<String> cargo, String name,
@@ -130,6 +130,7 @@ public class GameController {
             return switch (verb == null ? "" : verb) {
                 case "break_sanctuary" -> new Command.BreakSanctuary();
                 case "designate" -> new Command.Designate(need(at), type);
+                case "demobilize" -> new Command.Demobilize(need(at), amount == null ? 0 : amount, "keep".equalsIgnoreCase(type));   // type "keep": all but amount
                 case "threshold" -> new Command.Threshold(need(at), commodity, Boolean.TRUE.equals(clear) ? -1 : amount == null ? 0 : amount);
                 case "distribute" -> new Command.Distribute(need(at), Boolean.TRUE.equals(clear) || x2 == null ? null : at(x2, y2));
                 case "deliver" -> {
@@ -196,7 +197,7 @@ public class GameController {
         Account a = AuthInterceptor.current(req);
         if (!r.isMass()) return games.command(id, a, r.toCommand(), "panel");
         switch (r.verb() == null ? "" : r.verb()) {
-            case "designate", "threshold", "distribute", "deliver", "build_road", "build_rail" -> { }
+            case "designate", "threshold", "distribute", "deliver", "build_road", "build_rail", "demobilize" -> { }
             default -> throw new IllegalArgumentException(r.verb() + " applies to one sector at a time");
         }
         CountryView v = games.view(id, a);

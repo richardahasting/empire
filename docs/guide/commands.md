@@ -21,6 +21,8 @@ des SECTOR TYPE              designate (agribusiness, mine, light_manufacturing,
                              poor ground (resource below 30) is allowed but WARNS
 thresh SECTOR COMMODITY N    set a distribution threshold (negative clears)
 dist SECTOR cx,cy | none     name a sector's distribution centre
+demob SECTOR N               stand N military down now (demob SECTOR all · demob SECTOR keep N leaves N); they become
+                             civilians while the sector has room and the rest go home. Soldiers draw pay every update
 deliver COMMODITY SECTOR DIR N   standing order: above N, push it one hex DIR (e ne nw w sw se) every update; DIR none clears
 deliver COMMODITY SECTOR DIR N check   the same, described but not made: what lies that way, and whether it would deliver
   food out of a sector that keeps less than its own people eat in an update WARNS (a self-starving pipe)
@@ -112,6 +114,14 @@ centre for more; above `N` it offers the surplus. A negative number clears it.
 
 **`dist SECTOR cx,cy`** names the distribution centre a sector talks to.
 `dist SECTOR none` unhooks it.
+
+**`demob SECTOR N`** stands N military down, now. Every soldier draws pay each
+update (ten times what a civilian pays in tax), and nothing else shrinks an army:
+an enlistment centre only adds to it. The discharged become civilians while the
+sector has room under its population cap; the rest go home and are gone. `demob
+SECTOR all` stands them all down, and `demob SECTOR keep N` leaves N. Like `des`,
+SECTOR can be many sectors (`demob * keep 50`). In the web client it is on the sector
+menu, and on a dragged selection.
 
 **`deliver COMMODITY SECTOR DIR N`** — a standing order: each update, push
 anything above `N` **one hex** in direction `DIR` (`e`, `ne`, `nw`, `w`, `sw`,
