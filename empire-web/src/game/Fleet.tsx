@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { shipHistory, type CommandRequest, type CountryView, type Rules, type ShipLogEntry, type ShipView } from "@/api/client";
+import { shipHistory, type CommandRequest, type Coord, type CountryView, type Rules, type ShipLogEntry, type ShipView } from "@/api/client";
 import { bearing, neighbour } from "./bearing";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,10 @@ interface Props {
   onCommand: (c: CommandRequest) => Promise<void>;
   /** Start picking a destination on the map for this ship. */
   onSail: (ship: ShipView) => void;
+  /** Only the ships in this sector, grouped by class (issue #240); null or absent for the whole fleet. */
+  at?: Coord | null;
+  /** Clear the sector filter. */
+  onShowAll?: () => void;
 }
 
 const rel = (c: { x: number; y: number } | null | undefined) => c ? `${c.x},${c.y}` : "?";
@@ -22,15 +26,29 @@ export const shipGlyph = (rules: Rules, cls: string) => rules.ships?.classes.fin
 const className = (rules: Rules, cls: string) => rules.ships?.classes.find(c => c.id === cls)?.name ?? cls;
 
 /** Your fleet (issue #56): every ship, where it is, what it carries, where it is going, what it did last update; and the orders. */
-export function Fleet({ gameId, view, rules, busy, onCommand, onSail }: Props) {
+export function Fleet({ gameId, view, rules, busy, onCommand, onSail, at, onShowAll }: Props) {
   const [logbook, setLogbook] = useState<number | null>(null);
   const [dialog, setDialog] = useState<{ kind: "load" | "unload" | "lane" | "fire" | "escort" | "land"; ship: ShipView } | null>(null);
   const [pendingScrap, setPendingScrap] = useState<number | null>(null);
   const harbors = view.sectors.filter(s => s.full && (rules.sectorTypes.find(t => t.id === s.designation)?.flags ?? []).includes("builds_ships"));
   if (view.ships.length === 0) return <p className="text-xs text-muted-foreground">No ships. Right-click a harbour and choose “Build ship…”.{harbors.length === 0 ? " You have no harbour yet: designate a coastal sector as one." : ""}</p>;
+  // one sector's ships, sorted by class and then number, with a heading per class (issue #240)
+  const here = at ? view.ships.filter(s => s.at.x === at.x && s.at.y === at.y)
+    .sort((a, b) => className(rules, a.cls).localeCompare(className(rules, b.cls)) || a.id - b.id) : view.ships;
+  const hereLabel = here.length > 0 ? rel(here[0].relative) : at ? rel(view.sectors.find(x => x.at.x === at.x && x.at.y === at.y)?.relative) : "";
+  const count = (cls: string) => here.filter(s => s.cls === cls).length;
   return (
     <div className="space-y-2 text-xs">
-      {view.ships.map(s => {
+      {at && (
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="font-medium">{here.length} ship{here.length === 1 ? "" : "s"} at {hereLabel}</span>
+          {onShowAll && <Button size="sm" variant="ghost" onClick={onShowAll}>Show all ships</Button>}
+        </div>
+      )}
+      {at && here.length === 0 && <p className="text-muted-foreground">None of your ships are there now.</p>}
+      {here.map((s, i) => {
+        const heading = at && (i === 0 || here[i - 1].cls !== s.cls)
+          ? <div className="pt-1 font-medium text-muted-foreground">{className(rules, s.cls)} ({count(s.cls)})</div> : null;
         const going = s.lane ? `lane ${rel(s.lane.fromRelative)} ${s.lane.outbound ? "→" : "←"} ${rel(s.lane.toRelative)}${s.lane.cargo.length ? ` (${s.lane.cargo.join(", ")})` : ""}` : s.mission === "fish" || s.mission === "mine" ? `${s.mission === "fish" ? "fishing" : "mining"} from ${rel(s.homeRelative)}${s.destRelative ? ` → ${rel(s.destRelative)}` : ""}` : s.mission === "rescue" ? `answering a distress call from ship #${s.ward}${s.destRelative ? ` → ${rel(s.destRelative)}` : ""}` : s.mission && MILITARY.includes(s.mission) ? `${s.mission}${s.ward ? ` ship #${s.ward}` : s.routeRelative.length ? ` ${s.routeRelative.map(rel).join(" → ")}` : ""}${s.destRelative ? ` · bound for ${rel(s.destRelative)}` : ""}` : s.mission === "supply" ? `supply${s.destRelative ? ` → ${rel(s.destRelative)}` : ""}, refits at ${rel(s.homeRelative)}` : isTender(rules, s.cls) && !s.mission && !s.lane ? `on call for distress calls${s.destRelative ? ` · making for ${rel(s.destRelative)}` : s.docked ? " · waiting in harbour" : ""}` : s.destRelative ? `to ${rel(s.destRelative)}` : s.docked ? "in harbour" : "holding";
         const fisher = !!rules.ships?.classes.find(c => c.id === s.cls)?.fishingRate;
         const miner = !!rules.ships?.classes.find(c => c.id === s.cls)?.miningRate;
@@ -42,7 +60,7 @@ export function Fleet({ gameId, view, rules, busy, onCommand, onSail }: Props) {
         const carrier = !armed && !tender && (cls?.carries ?? []).length > 0;
         const cargo = Object.entries(s.stock).map(([c, q]) => `${Math.floor(q)} ${c}`).join(", ");
         return (
-          <div key={s.id} className="rounded-md border border-border p-2">
+          <div key={s.id}>{heading}<div className="rounded-md border border-border p-2">
             <div className="flex flex-wrap items-baseline gap-x-2">
               <span className="font-mono">#{s.id}</span>
               <span className="font-medium">{className(rules, s.cls)}{s.name ? ` “${s.name}”` : ""}</span>
@@ -81,7 +99,7 @@ export function Fleet({ gameId, view, rules, busy, onCommand, onSail }: Props) {
               <Button size="sm" variant="ghost" onClick={() => setLogbook(l => l === s.id ? null : s.id)}>{logbook === s.id ? "Hide history" : "History"}</Button>
             </div>
             {logbook === s.id && <Logbook gameId={gameId} ship={s.id} updateNumber={view.updateNumber} />}
-          </div>
+          </div></div>
         );
       })}
       {dialog?.kind === "fire" && <FireDialog ship={dialog.ship} view={view} rules={rules} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}

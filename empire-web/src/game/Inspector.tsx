@@ -7,10 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { estimate, popCeiling, prospects, type Estimate } from "@/game/production";
 
-interface Props { sector: SectorView | null; view: CountryView; rules: Rules; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean; history?: string[]; historyUpdate?: number }
+interface Props { sector: SectorView | null; view: CountryView; rules: Rules; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean; history?: string[]; historyUpdate?: number;
+  /** List this sector's ships in the Fleet panel (issue #240). */
+  onShowShips?: (at: SectorView["at"]) => void }
 
 /** Click a sector: what it is, what it holds, what it is short of, what happened last update, and the panel actions. */
-export function Inspector({ sector: s, view, rules, onCommand, busy, history, historyUpdate }: Props) {
+export function Inspector({ sector: s, view, rules, onCommand, busy, history, historyUpdate, onShowShips }: Props) {
   const [des, setDes] = useState("");
   const [thrCommodity, setThrCommodity] = useState("food");
   const [thrAmount, setThrAmount] = useState("");
@@ -18,10 +20,17 @@ export function Inspector({ sector: s, view, rules, onCommand, busy, history, hi
 
   if (!s) return <p className="text-sm text-muted-foreground">Click a sector to inspect it. Right-click one you own to move, explore, designate or set thresholds.</p>;
   const rel = `${s.relative.x},${s.relative.y}`;
+  // your ships in this sector, sea or harbour, by class (issue #240)
+  const shipsHere = view.ships.filter(x => x.at.x === s.at.x && x.at.y === s.at.y);
+  const shipsButton = shipsHere.length > 0 && onShowShips
+    ? <Button size="sm" variant="secondary" onClick={() => onShowShips(s.at)} title="list them in the Fleet panel, sorted by type">
+        Ships here ({shipsHere.length})
+      </Button>
+    : null;
   if (!s.full) {
     return (
       <div className="space-y-2 text-sm">
-        <h3 className="font-semibold">Sector {rel}</h3>
+        <div className="flex items-center justify-between gap-2"><h3 className="font-semibold">Sector {rel}</h3>{shipsButton}</div>
         <p>{s.terrain}{s.sanctuary ? ` — sanctuary of ${s.ownerName ?? "another country"}. No one may enter until they break sanctuary.` : s.owner >= 0 ? ` — held by ${s.ownerName ?? "another country"}` : s.terrain === "ocean" ? "" : " — unowned"}</p>
         {s.terrain === "ocean" && s.resources && <p className="text-xs text-muted-foreground">Fishing grounds: fertility {s.resources.fertility}{s.resources.fertility >= 60 ? " — rich" : s.resources.fertility >= 30 ? " — fair" : " — poor"}. A fishing boat here makes about {Math.round(s.resources.fertility * rules.etusPerUpdate * 0.1)} food per update at 100%.</p>}
         {s.owner < 0 && s.terrain !== "ocean" && (
@@ -42,7 +51,7 @@ export function Inspector({ sector: s, view, rules, onCommand, busy, history, hi
 
   return (
     <div className="space-y-3 text-sm">
-      <h3 className="font-semibold">Sector {rel}</h3>
+      <div className="flex items-center justify-between gap-2"><h3 className="font-semibold">Sector {rel}</h3>{shipsButton}</div>
       <div className="flex flex-wrap gap-1">
         <Badge tone="accent">{s.designation}</Badge><Badge tone="muted">{s.terrain}</Badge>
         <Badge tone="neutral">eff {s.efficiency.toFixed(0)}%</Badge><Badge tone="neutral">mob {s.mobility.toFixed(0)}</Badge>
