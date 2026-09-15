@@ -9,7 +9,7 @@ import org.hastingtx.empire.engine.model.Coord;
 public sealed interface Command permits
         Command.BreakSanctuary, Command.Designate, Command.Threshold, Command.Distribute,
         Command.Move, Command.Explore, Command.BuildRoad, Command.BuildRail, Command.RailShip, Command.Deliver,
-        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission, Command.Land, Command.Demobilize, Command.Attack,
+        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission, Command.Land, Command.Demobilize, Command.Attack, Command.Anti,
         Command.RailLane, Command.Telegram, Command.Announce, Command.DeclareWar, Command.OfferPeace {
 
     String verb();
@@ -75,6 +75,9 @@ public sealed interface Command permits
 
     /** Issue #193: an assault ship puts everyone aboard ashore on the unowned land sector {@code at}, next to her. */
     record Land(long ship, Coord at) implements Command { public String verb() { return "land"; } }
+
+    /** Send a sector's garrison after the guerrillas in it (issue #72; KNOWN commands/anti.c). */
+    record Anti(Coord sector) implements Command { public String verb() { return "anti"; } }
 
     /** Military from sectors of yours next to an enemy sector take it by force, at war (issue #236, #71 slice 1). */
     record Attack(Coord target, java.util.List<Party> parties) implements Command {

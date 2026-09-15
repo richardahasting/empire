@@ -55,7 +55,8 @@ class AttackTest {
         assertThat(s.owner()).as("taken").isEqualTo(0);
         assertThat(s.designation()).isEqualTo("agribusiness");
         assertThat(s.stock().get(COM.mil)).as("the survivors garrison it").isBetween(1.0, 100.0);
-        assertThat(s.stock().get(COM.civ)).as("its people stay").isEqualTo(300);
+        assertThat(s.stock().get(COM.civ) + s.che()).as("its people stay, some of them now under arms (KNOWN takeover.c, issue #72)").isEqualTo(300);
+        assertThat(s.occupied()).as("occupied until they come round").isTrue();
         assertThat(s.stock().get(COM.food)).as("a tenth of the goods lost").isEqualTo(450);
         assertThat(s.distCenter()).isNull();
         Sector home = r.world().sector(FRONT);

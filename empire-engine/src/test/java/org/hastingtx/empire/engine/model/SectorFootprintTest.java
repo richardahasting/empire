@@ -82,8 +82,9 @@ class SectorFootprintTest {
 
         // #77 aimed at ~230 bytes for a sector carrying everything it can carry; widening quantities to
         // int for #91 cost 72 of them, which against 610 before #77 is a trade worth making. Held
-        // parcels are excluded: a parcel is cargo in transit, not part of the hex.
-        assertThat(total).describedAs("a sector with stock, thresholds and delivery orders").isLessThanOrEqualTo(350);
+        // parcels are excluded: a parcel is cargo in transit, not part of the hex. Unrest (#72) added the original's
+        // loyalty, work, old owner, che and che target: six bytes, eight with padding.
+        assertThat(total).describedAs("a sector with stock, thresholds and delivery orders").isLessThanOrEqualTo(360);
 
         // And the shape the win actually comes from: the old record kept four more objects per sector —
         // a Coord, a Resources, a Coord for the distribution centre, and boxed 0..100 scales.

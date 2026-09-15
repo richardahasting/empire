@@ -234,6 +234,20 @@ public final class Ctx {
 
     public int idx(Coord c) { return snap.index(c); }
     public Sector sector(int i) { return snap.sectors().get(i); }
+
+    /** A sector's unrest for this update, created from the snapshot the first time a step touches it (issue #72). */
+    public int[] unrest(int i) {
+        return led().unrest.computeIfAbsent(i, k -> {
+            Sector s = sector(k);
+            return new int[] {s.loyalty(), s.work(), s.work(), s.oldOwner(), s.che(), s.cheTarget(), Ledger.OWNER_UNCHANGED};
+        });
+    }
+
+    /** The share of a sector's civilians at work this update (KNOWN total_work: civ × sct_work / 100). */
+    public double workShare(int i) {
+        int[] u = led().unrest.get(i);
+        return (u == null ? sector(i).work() : u[Ledger.U_WORK]) / 100.0;
+    }
     public Country country(int id) { return snap.countries().get(id); }
     public SectorTypeCfg type(Sector s) {
         int code = s.designationCode();
@@ -328,7 +342,7 @@ public final class Ctx {
         double civ = s.stock().get(com.civ) + delta(i, com.civ);
         double uw = s.stock().get(com.uw) + delta(i, com.uw);
         double mil = s.stock().get(com.mil) + delta(i, com.mil);
-        double raw = Math.max(0, civ) * w.perCiv() + Math.max(0, uw) * w.perUw() + Math.max(0, mil) * w.perMil();
+        double raw = Math.max(0, civ) * w.perCiv() * workShare(i) + Math.max(0, uw) * w.perUw() + Math.max(0, mil) * w.perMil();
         return raw * etus * w.happinessEffectCurve().eval(happiness) - workSpent()[i];
     }
 

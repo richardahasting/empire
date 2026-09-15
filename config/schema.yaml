@@ -643,6 +643,80 @@ economy:
     happiness_requirement_education_divisor: 3
 
   # --- BTUs ------------------------------------------------------------------
+  # --- Unrest (issue #72) --------------------------------------------------------
+  # KNOWN, all of it (gefla/empserver update/populace.c, human.c, revolt.c, subs/takeover.c, commands/anti.c;
+  # Richard 2026-09-15: "start with the default as how it was performed in the original game"). Each sector keeps
+  # loyalty (0 loyal .. 127), work (% of civilians working) and whose its people are; disloyal ones stop working,
+  # revolt, and breed che (guerrillas) who fight the garrison, sabotage, recruit and spread. A taken sector starts
+  # disloyal and its civilians pay a quarter tax until it comes round. The happiness requirement is
+  # (tech − 40)/40 + education/3 (levels.happiness_requirement_*). Remove the section and there is no unrest.
+  unrest:
+    che_max: 255
+    hap_fact_min: 0.8
+    hap_fact_max: 2.0
+    populace:
+      requirement_gap_per_chance: 5.0     # chance (req − happiness)/5 per update, for sectors whose people are the owner's
+      loyalty_loss_per_etu: 0.125
+      disloyal_above: 65
+      garrison_civ_per_mil: 20            # work falls only where military < civilians / 20
+      work_loss_base: 49
+      work_loss_roll: 15
+      revolt_chance_per_work_lost: 0.001
+      unrest_report_chance: 0.30
+      recovery_chance: 0.75
+      recovery_per_etu: 0.25
+      loyalty_max: 127
+    feed:
+      starvation_loyalty_roll: 8
+      work_recovery_base: 7
+      work_recovery_roll: 15
+    capture:
+      loyalty: 50
+      pivot: 50
+      roll: 100
+      offset: 26
+      per_civ: 3000
+      base: 5
+      occupied_tax_divisor: 4
+    revolt:
+      civ_roll_centre: 10
+      civ_roll_range: 20
+      civ_base: 3
+      civ_per: 500
+      civ_share: 3
+      uw_roll_base: 9
+      uw_roll: 30
+      uw_base: 5
+      uw_per: 500
+    guerrilla:
+      move_ratio: 5.0
+      loyalty_recovery_roll: 15
+      sabotage_roll: 10
+      sabotage_max: 100
+      sabotage_damage_divisor: 10
+      catch_chance_per_ratio: 0.10
+      catch_share: 5
+      recruit_low: 30
+      recruit_low_roll: 5
+      recruit_high: 70
+      recruit_high_roll: 10
+      recruit_high_add: 3
+      recruit_roll: 3
+      recruit_per: 200
+      recruit_civ_loyalty: 100
+      convert_loyalty: 50
+      convert_mil_share: 20
+      spy_rounding: 10
+      jitter: 10
+      jitter_offset: 6
+    anti:
+      mobility_per_mil: 2
+      round_mobility: 2
+      che_odds_factor: 2.0
+      loyalty_kept: 0.5
+      lose_roll: 4
+      lose_share_add: 3
+
   btu:
     accrual_per_capital_civ_per_etu: 0.0012   # KNOWN: btu_build_rate 0.0012, × ETUs × civilians (≤1000) × efficiency in PERCENT
     scale_by_efficiency_percent: true         # KNOWN: a 100% capital with 1000 civilians refills 640 every update

@@ -99,14 +99,36 @@ final class Assault {
             double lost = Math.floor(st.get(ci) * cap.stockDestroyedFraction());
             if (lost >= 1) { st = st.plus(ci, -lost); spoiled.append(spoiled.isEmpty() ? "" : ", ").append(q(lost)).append(' ').append(com.id(ci)); }
         }
+        // KNOWN (subs/takeover.c, issue #72): the people of a sector that was theirs may take up arms at once, by how
+        // loyal they were; a sector taken from another country starts disloyal, one taken back is yours again
+        var unrest = cfg.economy().unrest();
+        int loser = s.owner(), loyalty = 0, old = attacker, che = s.che(), cheTarget = s.cheTarget();
+        String partisans = "";
+        if (unrest != null) {
+            var uc = unrest.capture();
+            int civ = (int) st.get(com.civ);
+            var rng = new org.hastingtx.empire.engine.update.steps.UnrestStep.R(Rng.stream("takeover:" + at + ":" + world[0].updateNumber() + ":" + attacker, cfg.world() == null ? 0 : cfg.world().seed()));
+            int n = (uc.pivot() - s.loyalty()) + (rng.roll(uc.roll()) - uc.offset());
+            if (n > 0 && s.owner() == s.oldOwner()) {
+                int rise = civ * n / uc.perCiv() + uc.base();
+                if (rise * 2 > civ) rise = civ / 2;
+                rise = (int) (rise / unrest.hapFact(world[0].country(attacker).levels().happiness(), world[0].country(loser).levels().happiness()));
+                if (rise + che > unrest.cheMax()) rise = unrest.cheMax() - che;
+                if (rise > 0) { st = st.plus(com.civ, -rise); che += rise; partisans = rise + " civilians took up arms"; }
+            }
+            if (attacker != s.oldOwner()) cheTarget = che > 0 ? attacker : cheTarget;
+            if (s.oldOwner() == attacker || st.get(com.civ) < 1) { loyalty = 0; old = attacker; }
+            else { loyalty = uc.loyalty(); old = s.oldOwner(); }
+        }
         st = st.with(com.mil, survivors).plus(com.civ, civIn);
         var infra = cfg.infrastructure();
         // KNOWN (subs/takeover.c): the distribution info is wiped and a taken sector's mobility is 0
         s = s.withOwner(attacker).withStock(st).withDistCenter(null).withDeliver(DeliverOrders.none(com.size())).withMobility(0)
              .withRoadLevel(s.roadLevel() * (1 - infra.road().combatDamageFraction()))
              .withRailLevel(s.railLevel() * (1 - infra.rail().combatDamageFraction()));
+        if (unrest != null) s = s.withUnrest(loyalty, s.work(), old == attacker ? Sector.NOBODY : old, che, che > 0 ? cheTarget : Sector.NOBODY);
         world[0] = world[0].withSector(s);
-        return spoiled.toString();
+        return partisans.isEmpty() ? spoiled.toString() : (spoiled.isEmpty() ? "" : spoiled + "; ") + partisans + " against you";
     }
 
     /** From the sea: everyone aboard an assault ship next to enemy coast (issue #206). */
@@ -198,6 +220,48 @@ final class Assault {
         String spoiled = capture(cfg, com, held, c.id(), a.target(), f.survivors(), 0);
         return new CommandResult(held[0], null, 0, story + " — taken: " + q(f.survivors()) + " survivors hold it; they lost " + q(f.defendersLost())
                 + (spoiled.isEmpty() ? "" : "; lost in the fighting: " + spoiled));
+    }
+
+    /**
+     * The garrison goes after the guerrillas (issue #72; KNOWN commands/anti.c). Round by round, while both sides stand
+     * and the sector has mobility: a soldier falls with chance che × factor / (mil + che) ÷ hap_fact, else a guerrilla.
+     * Survive, and the sector pays the rounds in mobility; lose every soldier, and the partisans take the sector back
+     * for its old owner, keeping some of their number as che and the rest as its military.
+     */
+    static CommandResult anti(GameConfig cfg, Commodities com, World w, Country c, Command.Anti a) {
+        var unrest = cfg.economy().unrest();
+        if (unrest == null) return CommandResult.fail(w, "this world has no guerrillas to hunt");
+        if (a.sector() == null || !w.inBounds(a.sector())) return CommandResult.fail(w, "anti where?");
+        Sector s = w.sector(a.sector());
+        if (s.owner() != c.id()) return CommandResult.fail(w, "you do not own " + a.sector());
+        var an = unrest.anti();
+        int mil = (int) s.stock().get(com.mil), che = s.che();
+        int avail = Math.min(mil, (int) (s.mobility() / an.mobilityPerMil()));
+        if (avail <= 0) return CommandResult.fail(w, a.sector() + " has no military or no mobility to send after them");
+        if (che <= 0 || s.cheTarget() != c.id()) return CommandResult.fail(w, "no guerrillas are fighting you at " + a.sector());
+        var r = new org.hastingtx.empire.engine.update.steps.UnrestStep.R(Rng.stream("anti:" + a.sector() + ":" + w.updateNumber() + ":" + mil + ":" + che, cfg.world() == null ? 0 : cfg.world().seed()));
+        double hf = unrest.hapFact(c.levels().happiness(), s.oldOwner() == c.id() ? c.levels().happiness() : w.country(s.oldOwner()).levels().happiness());
+        int amil = mil, ache = che, milKilled = 0, cheKilled = 0;
+        double mob = s.mobility();
+        while (amil != 0 && ache != 0 && mob > 1) {
+            double odds = ache * an.cheOddsFactor() / (amil + ache) / hf;
+            mob -= an.roundMobility();
+            if (r.chance(odds)) { amil--; milKilled++; } else { ache--; cheKilled++; }
+        }
+        String story = "anti-guerrilla sweep at " + a.sector() + ": " + milKilled + " military and " + cheKilled + " guerrillas killed";
+        if (mil - milKilled > 0) {
+            Sector n = s.withStock(s.stock().with(com.mil, mil - milKilled)).withMobility(Math.max(0, s.mobility() - cheKilled - milKilled))
+                    .withUnrest(s.loyalty(), s.work(), s.occupied() ? s.oldOwner() : Sector.NOBODY, ache, ache > 0 ? c.id() : Sector.NOBODY);
+            return new CommandResult(w.withSector(n), null, 0, story + (ache == 0 ? "; the partisans are cleared out for now" : "; " + ache + " still active"));
+        }
+        // the garrison is gone: the partisans take the sector
+        int stay = r.roll0(an.loseRoll());
+        int cheLeft = stay > 0 ? ache / (stay + an.loseShareAdd()) : 0;
+        int to = s.oldOwner() == c.id() ? Sector.NOBODY : s.oldOwner();
+        Sector n = s.withStock(s.stock().with(com.mil, ache - cheLeft)).withMobility(0).withOwner(to)
+                .withDistCenter(null).withDeliver(DeliverOrders.none(com.size()))
+                .withUnrest((int) (s.loyalty() * an.loyaltyKept()), s.work(), Sector.NOBODY, cheLeft, cheLeft > 0 ? c.id() : Sector.NOBODY);   // the che left behind still fight you (anti.c keeps sct_che_target)
+        return new CommandResult(w.withSector(n), null, 0, story + "; the partisans took the sector" + (to < 0 ? "" : " for " + w.country(to).name()) + ". You blew it.");
     }
 
     private static double fort(GameConfig cfg, CaptureCfg.AssaultCfg ac, Sector s) {

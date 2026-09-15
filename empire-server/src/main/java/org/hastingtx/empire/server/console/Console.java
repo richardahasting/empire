@@ -101,6 +101,8 @@ public class Console {
                     for (int i = 2; i < t.length; i++) pts.add(abs(v, t[i]));
                     yield cmd(gameId, a, new Command.Mission(id, verb, pts, 0, false));
                 }
+                case "anti" -> { need(t, 2, "anti SECTOR"); yield many(gameId, a, v, cfg, t[1], Command.Anti::new); }
+                case "unrest" -> new Reply(unrest(v), true, null, null);
                 case "attack", "att" -> {
                     String usage = "attack x,y N from x2,y2 [N2 from x3,y3 ...]";
                     need(t, 5, usage);
@@ -373,6 +375,21 @@ public class Console {
             for (int i = 0; i < e.lines().size(); i++) sb.append(String.format("  %d. %s%n", i + 1, e.lines().get(i)));
         }
         return sb.toString();
+    }
+
+    /** Sectors with unrest (issue #72): disloyal, not all at work, occupied, or with guerrillas; and the happiness they want. */
+    static String unrest(CountryView v) {
+        StringBuilder sb = new StringBuilder();
+        int n = 0;
+        for (var s : v.sectors()) {
+            var u = s.unrest();
+            if (u == null || (u.loyalty() == 0 && u.work() == 100 && u.peopleOf() == null && u.che() == 0)) continue;
+            if (n++ == 0) sb.append(String.format("%-8s %-20s %7s %5s %4s  %s%n", "sect", "des", "loyalty", "work", "che", "people of"));
+            sb.append(String.format("%-8s %-20s %7d %4d%% %4d  %s%n", rel(s.relative()), s.designation(), u.loyalty(), u.work(), u.che(), u.peopleOf() == null ? "" : u.peopleOf()));
+        }
+        if (n == 0) return "no unrest: every sector is loyal and at work";
+        return sb.append(n).append(n == 1 ? " sector" : " sectors").append(" (loyalty 0 is loyal; above ").append(v.sectors().stream().map(CountryView.SectorView::unrest).filter(java.util.Objects::nonNull).findFirst().map(CountryView.UnrestView::disloyalAbove).orElse(65))
+                .append(" civilians stop working and may revolt; anti SECTOR sends the garrison after guerrillas)").toString();
     }
 
     /** One ship's running manifest (issue #244): what she has caught, mined, cruised and delivered since she was built. */

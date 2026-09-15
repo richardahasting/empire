@@ -15,7 +15,9 @@ public record EconomyCfg(
         MobilityCfg mobility,
         MoneyCfg money,
         LevelsCfg levels,
-        BtuCfg btu) {
+        BtuCfg btu,
+        /** Loyalty, work and guerrillas (issue #72). Null in a game whose rules predate them: no unrest. */
+        UnrestCfg unrest) {
 
     public double poorGroundBelowOrDefault() { return poorGroundBelow == null ? 30 : poorGroundBelow; }
 

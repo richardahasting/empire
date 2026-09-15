@@ -110,7 +110,16 @@ public record CountryView(
             long seenUpdate,
             long age,
             /** Hexes a radar station of yours reaches (issue #208); 0 for anything else. */
-            double radarRange) {
+            double radarRange,
+            /** Loyalty, work and guerrillas in a sector of yours (issue #72); null for anyone else's, or a world without unrest. */
+            UnrestView unrest) {
+        public SectorView(Coord at, Coord relative, boolean full, String terrain, int elevation, int owner, String designation, double efficiency,
+                          double mobility, double roadLevel, double roadTarget, double railLevel, double railTarget, Map<String, Double> stock,
+                          Map<String, Double> thresholds, Coord distCenter, Map<String, Double> held, Resources resources, Map<String, Delivery> deliveries,
+                          boolean sanctuary, String ownerName, boolean remembered, long seenUpdate, long age, double radarRange) {
+            this(at, relative, full, terrain, elevation, owner, designation, efficiency, mobility, roadLevel, roadTarget, railLevel, railTarget, stock, thresholds,
+                    distCenter, held, resources, deliveries, sanctuary, ownerName, remembered, seenUpdate, age, radarRange, null);
+        }
         public SectorView(Coord at, Coord relative, boolean full, String terrain, int elevation, int owner, String designation, double efficiency,
                           double mobility, double roadLevel, double roadTarget, double railLevel, double railTarget, Map<String, Double> stock,
                           Map<String, Double> thresholds, Coord distCenter, Map<String, Double> held, Resources resources, Map<String, Delivery> deliveries,
@@ -121,6 +130,13 @@ public record CountryView(
     }
 
     public record Delivery(String dir, double threshold) {}
+
+    /**
+     * A sector's unrest (issue #72). {@code loyalty} 0 is loyal, above {@code disloyalAbove} its civilians stop working;
+     * {@code work} the share of them at work; {@code peopleOf} the country its people still belong to when it was taken
+     * (null when they are yours); {@code che} guerrillas fighting you there.
+     */
+    public record UnrestView(int loyalty, int work, String peopleOf, int che, int disloyalAbove) {}
 
     /**
      * The deity's view: the same shape as a country's, with the fog lifted (issue #128).
@@ -169,7 +185,9 @@ public record CountryView(
                 for (HeldParcel p : s.held()) held.merge(com.id(p.commodity()), p.qty(), Double::sum);
                 views.add(new SectorView(at, rel, true, s.terrain().id(), s.elevation(), s.owner(), s.designation(), s.efficiency(),
                         s.mobility(), s.roadLevel(), s.roadTarget(), s.railLevel(), s.railTarget(), stock, th, s.distCenter(), held, s.resources(), deliveries, s.sanctuary(), null,
-                        false, w.updateNumber(), 0, Radar.range(cfg, s, c.levels().tech())));
+                        false, w.updateNumber(), 0, Radar.range(cfg, s, c.levels().tech()),
+                        cfg.economy().unrest() == null ? null : new UnrestView(s.loyalty(), s.work(), s.occupied() ? w.country(s.oldOwner()).name() : null,
+                                s.cheTarget() == countryId ? s.che() : 0, cfg.economy().unrest().populace().disloyalAbove())));
             } else {
                 // a neighbour: terrain and owner only. Sanctuaries are shown as such, with the owner's name (the original marked them 's').
                 String ownerName = s.owned() ? w.country(s.owner()).name() : null;

@@ -32,7 +32,7 @@ public final class ApplyStep {
             // nothing to add, nothing to truncate, and no reason to build a new object for it. Owned
             // sectors always take the full path even when untouched, because a designation command
             // between updates can change a cap and leave stock above it.
-            if (!s.owned() && untouched(led, i, nCom)) { next.add(s); continue; }
+            if (!s.owned() && untouched(led, i, nCom) && !led.unrest.containsKey(i)) { next.add(s); continue; }
             rebuilt[nRebuilt++] = i;
             // Whole units throughout (issue #77): the snapshot is integral, every delta is integral, so
             // the result is integral and conservation below can be checked by equality rather than tolerance.
@@ -55,6 +55,7 @@ public final class ApplyStep {
                     .withRoadLevel(clamp(s.roadLevel() + led.road[i], 0, 100))
                     .withRailLevel(clamp(s.railLevel() + led.rail[i], 0, 100));
             if (led.heldNext[i] != null) n = n.withHeld(led.heldNext[i]);
+            n = unrest(ctx, led.unrest.get(i), s, n, q);
             next.add(n);
         }
         List<Country> countries = new ArrayList<>();
@@ -76,6 +77,26 @@ public final class ApplyStep {
         java.util.Map<String, List<String>> notes = new java.util.TreeMap<>();
         for (var e : led.notes.entrySet()) { Sector s = ctx.sector(e.getKey()); if (s.owned()) notes.put(s.at().x() + "," + s.at().y(), List.copyOf(e.getValue())); }
         return new UpdateResult(out, List.copyOf(led.events), List.copyOf(led.flows), UpdateResult.lazyHash(out), notes, java.util.Collections.unmodifiableMap(new java.util.TreeMap<>(led.shipNotes)));
+    }
+
+    /**
+     * Loyalty, work, whose the people are and the guerrillas, as the update leaves them (issue #72). A sector che
+     * handed back changes owner and loses its wiring (KNOWN takeover()). With no civilians it is loyal and fully at
+     * work again (KNOWN check_pop_loss()).
+     */
+    private static Sector unrest(Ctx ctx, int[] u, Sector s, Sector n, int[] q) {
+        if (ctx.cfg.economy().unrest() == null) return n;
+        int owner = s.owner(), loyalty = s.loyalty(), work = s.work(), old = s.oldOwner(), che = s.che(), target = s.cheTarget();
+        if (u != null) {
+            if (u[Ledger.U_OWNER] != Ledger.OWNER_UNCHANGED && u[Ledger.U_OWNER] != owner) {
+                owner = u[Ledger.U_OWNER];
+                n = n.withOwner(owner).withDistCenter(null).withDeliver(org.hastingtx.empire.engine.model.DeliverOrders.none(ctx.com.size()));
+            }
+            loyalty = u[Ledger.U_LOYAL]; work = u[Ledger.U_WORK_NEXT]; old = u[Ledger.U_OLD]; che = u[Ledger.U_CHE]; target = u[Ledger.U_TARGET];
+        }
+        if (q[ctx.com.civ] == 0) { work = 100; loyalty = 0; old = owner; }
+        if (loyalty == s.loyalty() && work == s.work() && old == s.oldOwner() && che == s.che() && target == s.cheTarget() && owner == s.owner()) return n;
+        return n.withUnrest(loyalty, work, old == owner ? Sector.NOBODY : old, che, target);
     }
 
     /** Nothing in the ledger moved this sector: no stock, no level, no change to its parcels. */
@@ -162,6 +183,9 @@ public final class ApplyStep {
                 for (int c = 0; c < s.thresholdCount(); c++) sb.append(s.hasThreshold(c) ? f(s.threshold(c)) : "-").append(',');
                 sb.append('|');
                 for (HeldParcel p : s.held()) sb.append(p.commodity()).append(':').append(f(p.qty())).append('>').append(p.dest()).append(p.rail() ? "R" : "").append(';');
+                // unrest (issue #72), only where there is any, so a world without it hashes as it always did
+                if (s.loyalty() != 0 || s.work() != 100 || s.occupied() || s.che() != 0)
+                    sb.append("|u").append(s.loyalty()).append(',').append(s.work()).append(',').append(s.oldOwner()).append(',').append(s.che()).append(',').append(s.cheTarget());
                 sb.append('\n');
                 md.update(sb.toString().getBytes(StandardCharsets.UTF_8)); sb.setLength(0);
             }
