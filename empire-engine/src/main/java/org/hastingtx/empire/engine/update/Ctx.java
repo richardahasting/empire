@@ -92,6 +92,8 @@ public final class Ctx {
     private double[] workSpent;
     /** Ships as this update leaves them (the ship step rewrites this list; apply copies it out). */
     public final List<Ship> ships;
+    /** Land units as this update leaves them (issue #247); apply copies them out. */
+    public final List<org.hastingtx.empire.engine.model.LandUnit> units;
     /** Contacts as this update leaves them (the detection step rewrites this list; apply copies it out). */
     public final List<Contact> contacts;
     /** Map memory as this update leaves it (issue #64); apply copies it out. */
@@ -102,6 +104,7 @@ public final class Ctx {
         this.etus = cfg.etus();
         this.nSectors = snap.sectors().size();
         this.ships = new ArrayList<>(snap.ships());
+        this.units = new ArrayList<>(snap.units());
         this.contacts = new ArrayList<>(snap.contacts());
         this.seen = new ArrayList<>(snap.seen());
         this.typeIndex = new java.util.HashMap<>();

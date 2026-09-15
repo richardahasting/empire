@@ -1,0 +1,53 @@
+# The army: land units
+
+A **land unit** is a body of soldiers with its own supplies: it marches on its own mobility,
+adds its strength to a fight, and hunts guerrillas. These are the original game's land units
+(Richard 2026-09-15: the original is the default).
+
+## Raising one
+
+Designate a **headquarters** (`!`) and, once it is at 60%, `build HQ CLASS` (or right-click it,
+**Build unit…**). A unit is raised at **10%** for a tenth of its materials and cost, and builds
+up while it stands in the headquarters, from that sector's work and materials (a third as fast
+anywhere else of yours, except a fortress).
+
+| class | tech | attack | defence | speed | carries | for |
+|---|---|---|---|---|---|---|
+| cavalry | 30 | 1.2 | 0.5 | 32 | 20 mil, 12 food | fast, light |
+| artillery | 35 | 0.1 | 0.4 | 18 | 25 mil, 40 shells, 10 guns, 24 food | its guns come with a later slice |
+| infantry | 50 | 1.0 | 1.5 | 25 | 100 mil, 24 food | holding ground |
+| supply | 50 | 0.1 | 0.2 | 25 | 25 mil and a store of shells, guns, petrol, food, lcm, hcm | carrying |
+| engineer | 130 | 1.2 | 2.4 | 25 | 20 mil, 12 food | the best defenders; costs three times as much to keep |
+| security | 170 | 1.0 | 2.0 | 25 | 50 mil, 30 food | hunting guerrillas |
+
+A unit raised above its class's tech is a little stronger and faster.
+
+## Soldiers and supplies
+
+A unit is empty when it is raised. **`lload UNIT mil N`** takes soldiers from the sector it
+stands in, up to what it carries; `lload UNIT food N` its rations; `lunload` puts them down.
+A unit with no soldiers cannot fight. **`army`** (or the Army panel) lists your units.
+
+## Every update
+
+- Its soldiers are **paid** like any military, and the unit costs a little **upkeep**
+  (0.1% of its cost an ETU; engineers three times that). A treasury that cannot pay costs it
+  efficiency instead.
+- Its men **eat from its own food**. Without rations they starve.
+- It **builds up** toward 100% where it stands, and gains **mobility** (60 an update, at most 127).
+
+## Marching and fighting
+
+- **`march UNIT x,y`** goes through your own land the cheapest way, as far as its mobility
+  carries it. Each hex costs the sector's move cost, adjusted for the unit's speed.
+- **Defence:** units in a sector that is attacked, or next to it, fight with **soldiers ×
+  defence × efficiency**. A hundred infantry at full strength are worth 150 of a sector's own.
+- **Attack:** `attack x,y [N from x2,y2 ...] unit U` sends a unit from next door with **soldiers ×
+  attack × efficiency**; it pays its march in, and if the sector falls it moves in with its
+  survivors. The enemy sector's **Attack…** menu offers your units there.
+- **Capture:** a sector's units fall with it. Each loses 29–128 points of efficiency; one
+  left above 10% is captured, the rest are blown up by their crews.
+- **Security troops** in a sector with guerrillas fighting you raid them every update and count
+  three times over against them.
+
+Loading units onto ships, artillery fire, engineers' works and spies come in later slices.

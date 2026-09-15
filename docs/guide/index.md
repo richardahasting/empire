@@ -26,6 +26,8 @@ Nobody moves "first". What you set up before the update is what happens in it.
   made to where they are needed.
 - **[Ships](ships.html)** — harbours, hulls, fuel, crews, fishing, cargo runs
   and supply, and war at sea: warships, firing, blockades and missions.
+- **[The army](army.html)** — land units: raising them in a headquarters, soldiers and supplies,
+  marching, and what they add to an attack or a defence.
 - **[Levels](levels.html)** — tech, research, education and happiness: what
   they do and why they fall when you stop paying attention.
 - **[Command reference](commands.html)** — every command, what it takes and

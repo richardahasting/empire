@@ -40,7 +40,16 @@ public record CountryView(
         /** Your standing depot-to-depot rail runs (issue #70). */
         List<RailLaneView> railLanes,
         /** Trains of yours stopped on the line, part-way to somewhere (issue #70). */
-        List<TrainView> trains) {
+        List<TrainView> trains,
+        /** Your land units (issue #247). */
+        List<UnitView> units) {
+
+    /**
+     * A land unit of yours (issue #247): where, how fit, what it carries, its own mobility, what it is worth in a fight
+     * (mil × attack or defence × efficiency) and what a hex of plain costs it to march.
+     */
+    public record UnitView(long id, String cls, String name, Coord at, Coord relative, double efficiency, Map<String, Double> stock, Map<String, Double> carries,
+                           double mobility, double tech, double attack, double defense, String note) {}
 
     public record ShipView(long id, String cls, String name, Coord at, Coord relative, double efficiency, Map<String, Double> stock, double load, double hold,
                            Coord dest, Coord destRelative, LaneView lane, String note, boolean docked, double tech, int hexesPerUpdate, String mission, Coord homeRelative,
@@ -257,7 +266,24 @@ public record CountryView(
             if (r.atWar() && r.involves(countryId)) atWar.add(w.country(r.other(countryId)).name());
 
         return new CountryView(countryId, c.name(), w.updateNumber(), c.capital(), w.wrapX(), w.wrapY(), w.width(), w.height(), c.cash(), c.btu(), c.levels(), c.handicap(),
-                c.inSanctuary(), c.bankrupt(), ids, views, others, atWar, ships, contacts, railLanes, trains);
+                c.inSanctuary(), c.bankrupt(), ids, views, others, atWar, ships, contacts, railLanes, trains, units(w, cfg, com, c));
+    }
+
+    private static List<UnitView> units(World w, GameConfig cfg, Commodities com, Country c) {
+        var land = cfg.units().land();
+        if (land == null) return List.of();
+        List<UnitView> out = new ArrayList<>();
+        for (var u : w.units()) {
+            if (u.owner() != c.id()) continue;
+            var cls = land.landClass(u.cls());
+            if (cls == null) continue;
+            Map<String, Double> st = new java.util.LinkedHashMap<>();
+            for (int i = 0; i < com.size(); i++) if (u.stock().get(i) > 0) st.put(com.id(i), u.stock().get(i));
+            double men = u.stock().get(com.mil);
+            out.add(new UnitView(u.id(), u.cls(), cls.name(), u.at(), relative(w, c.capital(), u.at()), u.efficiency(), st, cls.carries(), u.mobility(), u.tech(),
+                    men * cls.attackAt(u.tech()) * u.efficiency() / 100.0, men * cls.defenseAt(u.tech()) * u.efficiency() / 100.0, u.note()));
+        }
+        return out;
     }
 
     /**

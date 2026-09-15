@@ -147,13 +147,29 @@ public final class UnrestStep implements Step {
         int civ = now(ctx, i, ctx.com.civ), uw = now(ctx, i, ctx.com.uw), mil = now(ctx, i, ctx.com.mil);
         int victim = owner(ctx, i), actor = u[U_OLD], target = u[U_TARGET];
         if (target < 0) { u[U_CHE] = 0; return; }
+        // land units of the owner's there count with the garrison; security troops raid first (KNOWN guerrilla(), issue #247)
+        double security = 0;
+        int sectorMil = mil;
+        var land = ctx.cfg.units().land();
+        if (land != null) for (var lu : ctx.units) {
+            if (lu.owner() != victim || !lu.at().equals(s.at())) continue;
+            int um = (int) lu.stock().get(ctx.com.mil);
+            mil += um;
+            var cls = land.landClass(lu.cls());
+            if (cls == null || target != victim || !cls.has("security")) continue;
+            security += land.securityBonus() * um * lu.efficiency() / 100.0;
+            int reach = (int) (um * lu.efficiency() / land.securityKillDivisor());
+            int kill = Math.min(che, reach < 1 ? 0 : r.roll(reach));
+            if (kill > 0) { che -= kill; ctx.led().note(i, "unit #" + lu.id() + " killed " + kill + " guerrillas in a raid"); }
+        }
+        if (che <= 0) { u[U_CHE] = 0; u[U_TARGET] = -1; return; }
         boolean recruit = false, convert = false, move = false;
         int mc = 0, cc = 0;
         double hf = uc.hapFact(happiness(ctx, target), happiness(ctx, actor));
         if (victim != target) move = true;
         else {
-            double ratio = (double) mil / che;
-            double odds = (double) che / (mil + che) / hf;
+            double ratio = (mil + security) / che;
+            double odds = (double) che / (mil + security + che) / hf;
             if (mil == 0) {
                 ctx.led().note(i, "revolutionary subversion reported");
                 recruit = true; convert = true;
@@ -162,7 +178,7 @@ public final class UnrestStep implements Step {
                 while (che > cc && mil > mc) { if (r.chance(odds)) mc++; else cc++; }
                 if (mil > mc) u[U_LOYAL] = Math.max(0, u[U_LOYAL] - r.roll0(g.loyaltyRecoveryRoll()));
                 else { convert = true; recruit = true; }
-                if (mc > 0) ctx.led().die(i, ctx.com.mil, mc);
+                casualties(ctx, i, s, victim, sectorMil, mc);
                 che -= cc; mil -= mc;
             } else if (ratio < g.moveRatio()) {
                 // guerrillas resort to blowing things up, which disrupts work
@@ -176,10 +192,10 @@ public final class UnrestStep implements Step {
             if (mil > 0 && che > 0 && r.chance(ratio * g.catchChancePerRatio())) {
                 // the garrison catches them: a fifth of it engages
                 int n = mil / g.catchShare() + 1;
-                double o = (double) che / (n + che) / hf;
+                double o = (double) che / (n + security / g.catchShare() + che) / hf;
                 while (che > cc && n > mc) { if (r.chance(o)) mc++; else cc++; }
                 int killed = Math.min(mc, mil);
-                if (killed > 0) ctx.led().die(i, ctx.com.mil, killed);
+                casualties(ctx, i, s, victim, sectorMil, killed);
                 che -= cc; mil -= killed;
                 recruit = false;
             }
@@ -243,6 +259,22 @@ public final class UnrestStep implements Step {
         if (mc > 0 || cc > 0) {
             ctx.led().event("guerrilla", target, s.at(), "guerrilla warfare in " + s.at(), mc + cc);
             ctx.led().note(i, "guerrilla warfare: " + mc + " troops and " + cc + " rebels killed");
+        }
+    }
+
+    /** KNOWN take_casualties(): the sector's military fall first, then the owner's units there. */
+    private static void casualties(Ctx ctx, int i, Sector s, int owner, int sectorMil, int dead) {
+        int fromSector = Math.min(dead, sectorMil);
+        if (fromSector > 0) ctx.led().die(i, ctx.com.mil, fromSector);
+        int left = dead - fromSector;
+        for (int k = 0; k < ctx.units.size() && left > 0; k++) {
+            var lu = ctx.units.get(k);
+            if (lu.owner() != owner || !lu.at().equals(s.at())) continue;
+            int take = Math.min(left, (int) lu.stock().get(ctx.com.mil));
+            if (take <= 0) continue;
+            ctx.units.set(k, lu.withStock(lu.stock().plus(ctx.com.mil, -take)));
+            ctx.led().destroyed[ctx.com.mil] += take;
+            left -= take;
         }
     }
 

@@ -37,6 +37,7 @@ for lack of the mechanic; decide those in the morning.
 | Resource depletion | gold −20, oil −10, uranium −35 per 100 units produced | none | **deviation** — not modelled yet |
 | Enlistment | at ≥ 60 %: ETU × (10 + mil) × 0.05 per update, ≤ civ/2 − mil, $3 each | flat 0.001 per work | **deviation** — special formula not modelled; $3 now charged; military no longer capped by the civilian population ceiling (issue #204) |
 | Demobilize | `demob`: military to civilians, or to active reserves (paid `money_res`) | none | **ours**: `demob SECTOR N / all / keep N` (issue #217); to civilians where there is room, the rest discharged; no reserves |
+| Land units | land.config classes, build in HQ at 10%, landrepair, lnd_mobcost, attack/defense_val, takeover_land, security vs che | none | **matched, core** (issue #247): cavalry, infantry, artillery, engineer, supply, security. Not yet: ships carrying units, artillery fire, engineers' works, spies, reaction and support |
 | Big-city ceiling | `res_pop.c`: a big city's max population rises from `maxpop` to `10 × maxpop` (≤ 9999) with efficiency | flat 10,000 | **deviation** — not scaled by efficiency |
 
 ## Mobility and moving goods

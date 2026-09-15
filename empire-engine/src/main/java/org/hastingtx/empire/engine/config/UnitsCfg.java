@@ -4,7 +4,58 @@ import java.util.List;
 import java.util.Map;
 
 /** Units. Phase 1 (issue #56): ships. {@code table} is the M5 land/air table, not read yet. */
-public record UnitsCfg(boolean enabled, String table, ShipsCfg ships) {
+public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
+                       /** Land units (issue #247, #71 slice 2). Null in a game whose rules predate them: none can be built. */
+                       LandCfg land) {
+
+    /** The ships-only shape, for fixtures and callers that predate land units. */
+    public UnitsCfg(boolean enabled, String table, ShipsCfg ships) { this(enabled, table, ships, null); }
+
+    /**
+     * KNOWN (gefla/empserver land.config, commands/buil.c, update/land.c, subs/lndsub.c; Richard 2026-09-15: the original is
+     * the default). A unit is a body of soldiers with supplies, built in a headquarters at {@code startEfficiency}, repaired
+     * toward 100% by the work of the sector it stands in, and paid and fed like any military.
+     */
+    public record LandCfg(
+            /** KNOWN LAND_MINEFF: a unit is laid down at this efficiency, for this share of its materials and cost. */
+            double startEfficiency,
+            /** KNOWN land_grow_scale: at most ETUs × this efficiency points of repair an update. */
+            double growScale,
+            /** KNOWN: repair outside a headquarters or fortress goes at a third. */
+            double repairElsewhereDivisor,
+            /** KNOWN land_mob_scale, land_mob_max. */
+            double mobilityPerEtu, double mobilityMax,
+            /** KNOWN money_land: maintenance per ETU per point of the class's cost; engineers pay engineer_maintenance_multiplier times. */
+            double maintenancePerEtuPerCost, double engineerMaintenanceMultiplier,
+            /** KNOWN lnd_pathcost: mobility per hex = sector move cost × path_factor × 480 / (spd + techfact(tech, spd)). */
+            double pathFactor, double speedNumerator,
+            /** KNOWN takeover.c: a unit in a taken sector loses (base + roll(roll)) efficiency; below start_efficiency its crew blows it up. */
+            int captureLossBase, int captureLossRoll,
+            /** KNOWN revolt.c: security troops add bonus × mil × eff to the garrison against che and kill up to mil × eff / kill_divisor of them. */
+            double securityBonus, int securityKillDivisor,
+            List<LandClassCfg> classes) {
+
+        public LandClassCfg landClass(String id) {
+            for (LandClassCfg c : classes) if (c.id().equals(id)) return c;
+            return null;
+        }
+        public boolean hasClass(String id) { return landClass(id) != null; }
+    }
+
+    /** One row of land.config. {@code build} is per 100% (lcm, hcm, cash); a unit is laid down at start_efficiency of it. */
+    public record LandClassCfg(String id, String name, String glyph, double techRequired, Map<String, Double> build, double bwork,
+                               double attack, double defense, double vulnerability, double speed, double visibility,
+                               /** Most of each commodity it carries: mil, shell, gun, pet, food, ... */
+                               Map<String, Double> carries,
+                               /** light, recon, assault, supply, engineer, security, marine, ... */
+                               List<String> flags) {
+        public boolean has(String flag) { return flags != null && flags.contains(flag); }
+        public double carriesOf(String commodity) { return carries == null ? 0 : carries.getOrDefault(commodity, 0.0); }
+        /** KNOWN LND_ATTDEF / LND_SPD: a unit laid above its class's tech is a little stronger and faster, attack and defence at most 127. */
+        public double attackAt(double tech) { return Math.min(127, attack * (1 + Math.sqrt(Math.max(0, tech - techRequired)) / 100 * 4)); }
+        public double defenseAt(double tech) { return Math.min(127, defense * (1 + Math.sqrt(Math.max(0, tech - techRequired)) / 100 * 4)); }
+        public double speedAt(double tech) { return Math.min(127, speed * (1 + Math.sqrt(Math.max(0, tech - techRequired)) / 100 * 2.1)); }
+    }
 
     public record ShipsCfg(
             /** A new hull leaves the yard at this efficiency (KNOWN: 20). */

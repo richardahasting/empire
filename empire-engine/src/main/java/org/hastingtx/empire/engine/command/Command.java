@@ -9,7 +9,7 @@ import org.hastingtx.empire.engine.model.Coord;
 public sealed interface Command permits
         Command.BreakSanctuary, Command.Designate, Command.Threshold, Command.Distribute,
         Command.Move, Command.Explore, Command.BuildRoad, Command.BuildRail, Command.RailShip, Command.Deliver,
-        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission, Command.Land, Command.Demobilize, Command.Attack, Command.Anti,
+        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission, Command.Land, Command.Demobilize, Command.Attack, Command.Anti, Command.BuildUnit, Command.March, Command.LoadUnit,
         Command.RailLane, Command.Telegram, Command.Announce, Command.DeclareWar, Command.OfferPeace {
 
     String verb();
@@ -76,11 +76,21 @@ public sealed interface Command permits
     /** Issue #193: an assault ship puts everyone aboard ashore on the unowned land sector {@code at}, next to her. */
     record Land(long ship, Coord at) implements Command { public String verb() { return "land"; } }
 
+    /** Raise a land unit in a headquarters (issue #247; KNOWN commands/buil.c build_land). */
+    record BuildUnit(Coord sector, String cls) implements Command { public String verb() { return "build_unit"; } }
+    /** March a land unit through your own land (issue #247; commands/marc.c). */
+    record March(long unit, Coord to) implements Command { public String verb() { return "march"; } }
+    /** A land unit takes on ({@code unload} false) or puts down what its sector has (issue #247; KNOWN lload, lunload). */
+    record LoadUnit(long unit, String commodity, double qty, boolean unload) implements Command { public String verb() { return unload ? "lunload" : "lload"; } }
+
     /** Send a sector's garrison after the guerrillas in it (issue #72; KNOWN commands/anti.c). */
     record Anti(Coord sector) implements Command { public String verb() { return "anti"; } }
 
     /** Military from sectors of yours next to an enemy sector take it by force, at war (issue #236, #71 slice 1). */
-    record Attack(Coord target, java.util.List<Party> parties) implements Command {
+    record Attack(Coord target, java.util.List<Party> parties, java.util.List<Long> units) implements Command {
+        public Attack { units = units == null ? java.util.List.of() : java.util.List.copyOf(units); }
+        /** Military only, no land units. */
+        public Attack(Coord target, java.util.List<Party> parties) { this(target, parties, java.util.List.of()); }
         public String verb() { return "attack"; }
         /** {@code mil} soldiers from {@code from}. */
         public record Party(Coord from, double mil) {}

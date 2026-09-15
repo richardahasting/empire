@@ -353,6 +353,15 @@ Conservation counts holds and tanks with sector stocks. Harbours get sector-hist
 lines for what docked ships did; each ship's lines for the update are its logbook
 (`UpdateResult.shipNotes`, stored per update), and joined they are its note.
 
+### 7d. Land units (**KNOWN**, issue #247; `units.land`, absent = none)
+Each unit in id order, as update/land.c: pay (mil × pay_per_mil); maintenance ETUs × money_land × cost (×2 below 85% of
+its tech, ×3 engineers; unpaid → −ETUs/5 efficiency); rations from its own food (the unfed starve); repair toward 100%
+by its sector's work / bwork, at most ETUs × grow_scale, materials per point from the sector and cost × points/100 in
+cash, a third outside a headquarters or fortress; mobility + ETUs × mob_scale, ≤ mob_max. Unit stocks count in
+conservation. In fights (command time), defenders' units in the sector and next door add mil × def × eff, attackers'
+units mil × att × eff; the loser's units in a taken sector lose 29 + roll(100) efficiency, captured above 10% else
+destroyed; security units raid che in step 2a.
+
 ### 8. Money
 Country-level:
 - **Occupied sectors** (issue #72): civilians whose sector's `old_owner` is not its owner pay tax ÷

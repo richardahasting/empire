@@ -48,7 +48,11 @@ supply SHIP [x,y] | off      supply mission: fill any of your harbours short of 
                              spare it, carrying only what the class carries; x,y is home, where it refits
 fish SHIP [x,y] | off        fishing mission: roam the grounds near the home harbour, fish, land the catch, repeat
 mine SHIP [x,y] | off        seabed mining: roam the nodule fields near home, mine, land the ore, repeat
-attack x,y N from x2,y2 [N2 from x3,y3 ...]   at war: N military from your sector x2,y2 (and more from others next to
+army                         your land units: where, efficiency, soldiers, food, mobility, attack and defence
+build HQ CLASS               raise a land unit (cavalry, infantry, artillery, engineer, supply, security) in a headquarters
+march UNIT x,y               march a unit through your own land on its own mobility
+lload / lunload UNIT COMMODITY N   a unit takes on, or puts down, soldiers and supplies in its sector
+attack x,y N from x2,y2 [N2 from x3,y3 ...] [unit U ...]   at war: N military from your sector x2,y2 (and more from others next to
                              x,y) attack the enemy sector x,y, man for man against it and its neighbours' military;
                              win and it is yours; lose and all sent are gone. Sending costs a move's mobility
 land SHIP x,y                assault ship: put everyone aboard (up to 100 mil, 20 civ) ashore on the unowned land

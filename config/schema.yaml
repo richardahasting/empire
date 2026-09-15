@@ -345,6 +345,12 @@ economy:
       min_tech: 50
       packing: warehouse
       flags: [rail_endpoint, distribution_hub]
+    - id: headquarters                 # KNOWN (sect.config "!"): land units are built here (commands/buil.c build_land)
+      glyph: "!"
+      category: infrastructure
+      build: { cash: 1 }
+      max_population: 1000
+      flags: [builds_units]
     - id: fortress
       glyph: "f"
       category: infrastructure
@@ -944,6 +950,32 @@ tech:
 units:
   enabled: true
   table: units.yaml
+  # LAND UNITS (issue #247, #71 slice 2). KNOWN, all of it: gefla/empserver land.config, commands/buil.c, update/land.c,
+  # subs/lndsub.c, subs/attsub.c, subs/takeover.c (Richard 2026-09-15: the original is the default). A unit is a body of
+  # soldiers and supplies: built in a headquarters at 10%, repaired by the work of the sector it stands in, paid and fed
+  # like any military, marching on its own mobility, and adding mil × attack or defence × efficiency to a fight.
+  land:
+    start_efficiency: 10          # LAND_MINEFF
+    grow_scale: 2.0               # land_grow_scale × ETUs
+    repair_elsewhere_divisor: 3   # outside a headquarters or fortress
+    mobility_per_etu: 1.0         # land_mob_scale
+    mobility_max: 127             # land_mob_max
+    maintenance_per_etu_per_cost: 0.001   # money_land
+    engineer_maintenance_multiplier: 3
+    path_factor: 5.0              # lnd_pathcost
+    speed_numerator: 480.0        # speed_factor
+    capture_loss_base: 29         # takeover.c
+    capture_loss_roll: 100
+    security_bonus: 3.0           # revolt.c
+    security_kill_divisor: 500
+    classes:
+      # build is per 100% (land.config l_b, h_b, cost); a unit is laid down at 10% of it. carries: the unit's capacity.
+      - { id: cavalry,   name: cavalry,   glyph: c, tech_required: 30,  build: { lcm: 10, hcm: 5,  cash: 500 },  bwork: 40, attack: 1.2, defense: 0.5, vulnerability: 80, speed: 32, visibility: 18, carries: { mil: 20, food: 12 }, flags: [light, recon] }
+      - { id: infantry,  name: infantry,  glyph: i, tech_required: 50,  build: { lcm: 10, hcm: 5,  cash: 500 },  bwork: 40, attack: 1.0, defense: 1.5, vulnerability: 60, speed: 25, visibility: 15, carries: { mil: 100, food: 24 }, flags: [light, assault] }
+      - { id: artillery, name: artillery, glyph: a, tech_required: 35,  build: { lcm: 20, hcm: 10, cash: 800 },  bwork: 60, attack: 0.1, defense: 0.4, vulnerability: 70, speed: 18, visibility: 20, carries: { mil: 25, shell: 40, gun: 10, food: 24 }, flags: [light] }
+      - { id: engineer,  name: engineer,  glyph: e, tech_required: 130, build: { lcm: 10, hcm: 5,  cash: 3000 }, bwork: 40, attack: 1.2, defense: 2.4, vulnerability: 50, speed: 25, visibility: 14, carries: { mil: 20, shell: 3, food: 12 }, flags: [engineer, light, assault] }
+      - { id: supply,    name: supply,    glyph: s, tech_required: 50,  build: { lcm: 10, hcm: 5,  cash: 500 },  bwork: 40, attack: 0.1, defense: 0.2, vulnerability: 80, speed: 25, visibility: 20, carries: { mil: 25, shell: 200, gun: 10, pet: 300, iron: 100, dust: 100, bar: 10, food: 300, lcm: 200, hcm: 100 }, flags: [supply, light] }
+      - { id: security,  name: security,  glyph: z, tech_required: 170, build: { lcm: 10, hcm: 5,  cash: 600 },  bwork: 40, attack: 1.0, defense: 2.0, vulnerability: 60, speed: 25, visibility: 15, carries: { mil: 50, shell: 4, food: 30 }, flags: [security, light] }
   # SHIPS — NEW (Richard 2026-09-09, issue #56). A data table gated on tech; every number a GUESS to tune
   # except where marked. Harbours build them from their own lcm/hcm and cash; a hull leaves the yard at
   # start_efficiency and fits out while docked. Speed is sea hexes per update at 100%, × efficiency.

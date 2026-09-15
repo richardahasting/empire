@@ -66,7 +66,7 @@ public final class ApplyStep {
             countries.add(new Country(c.id(), c.name(), c.capital(), c.cash() + led.cash[c.id()], c.btu() + led.btu[c.id()], lv,
                     c.handicap(), c.inSanctuary(), led.bankruptNext[c.id()], led.plagueLeft[c.id()]));
         }
-        World out = new World(snap.width(), snap.height(), snap.wrapX(), snap.wrapY(), next, countries, List.of(), snap.updateNumber() + 1, List.of(), ctx.ships, snap.nextShipId(), ctx.contacts, ctx.seen, snap.railLanes(), snap.relations());   // lanes and relations are standing: they survive the update
+        World out = new World(snap.width(), snap.height(), snap.wrapX(), snap.wrapY(), next, countries, List.of(), snap.updateNumber() + 1, List.of(), ctx.ships, snap.nextShipId(), ctx.contacts, ctx.seen, snap.railLanes(), snap.relations(), ctx.units, snap.nextUnitId());   // lanes and relations are standing: they survive the update
         checkConservation(ctx, out, rebuilt, nRebuilt);
         // the last line of a sector's story: what it wanted and did not get
         for (var e : led.shortages.entrySet()) {
@@ -129,6 +129,9 @@ public final class ApplyStep {
         }
         for (Ship sh : ctx.snap.ships()) for (int c = 0; c < nCom; c++) before[c] += (long) sh.stock().get(c);
         for (Ship sh : out.ships()) for (int c = 0; c < nCom; c++) after[c] += (long) sh.stock().get(c);
+        // what land units carry is still in the world (issue #247)
+        for (var u : ctx.snap.units()) for (int c = 0; c < nCom; c++) before[c] += (long) u.stock().get(c);
+        for (var u : out.units()) for (int c = 0; c < nCom; c++) after[c] += (long) u.stock().get(c);
         // Fuel in a tank is still fuel (issue #65): it left a sector but it has not left the world, and
         // it only stops being counted when it is burned, which is tallied as destroyed.
         int fuelIdx = ctx.cfg.units().ships() != null && ctx.cfg.units().ships().fuel() ? ctx.com.index(ctx.cfg.units().ships().fuelId()) : -1;
@@ -216,6 +219,12 @@ public final class ApplyStep {
                 if (sh.lane() != null) sb.append(sh.lane().from()).append('>').append(sh.lane().to()).append(sh.lane().outbound() ? "o" : "i").append(sh.lane().cargo());
                 sb.append('|');
                 for (int c = 0; c < sh.stock().size(); c++) sb.append(f(sh.stock().get(c))).append(',');
+                sb.append('\n');
+                md.update(sb.toString().getBytes(StandardCharsets.UTF_8)); sb.setLength(0);
+            }
+            for (var u : w.units()) {
+                sb.append("U").append(u.id()).append('|').append(u.owner()).append('|').append(u.cls()).append('|').append(u.at()).append('|').append(f(u.efficiency())).append('|').append(f(u.mobility())).append('|');
+                for (int c = 0; c < u.stock().size(); c++) sb.append(f(u.stock().get(c))).append(',');
                 sb.append('\n');
                 md.update(sb.toString().getBytes(StandardCharsets.UTF_8)); sb.setLength(0);
             }
