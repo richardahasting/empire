@@ -23,7 +23,8 @@ public final class MoneyStep implements Step {
             double mil = Math.max(0, s.stock().get(ctx.com.mil) + ctx.led().st(i, ctx.com.mil));
             income[c] += (civ * m.taxPerCivPerEtu() + uw * m.taxPerUwPerEtu()) * ctx.etus;
             expense[c] += mil * m.payPerMilPerEtu() * ctx.etus;
-            if (interest && ctx.type(s).hasFlag("interest_bearing")) income[c] += Math.max(0, s.stock().get(bar) + ctx.led().st(i, bar)) * m.bankInterestPerBarPerEtu() * ctx.etus;
+            // KNOWN (update/prepare.c bank_income): bars × ETUs × bankint × efficiency / 100 (issue #219)
+            if (interest && ctx.type(s).hasFlag("interest_bearing")) income[c] += Math.max(0, s.stock().get(bar) + ctx.led().st(i, bar)) * m.bankInterestPerBarPerEtu() * ctx.etus * s.efficiency() / 100;
         }
         for (Country c : ctx.snap.countries()) {
             ctx.led().cash[c.id()] += income[c.id()] - expense[c.id()];

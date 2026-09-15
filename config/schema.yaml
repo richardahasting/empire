@@ -609,7 +609,7 @@ economy:
     tax_per_uw_per_etu:  0.0017777       # KNOWN: money_uw
     pay_per_mil_per_etu: 0.0833333       # KNOWN: money_mil (ten times a civilian's tax)
     sector_maintenance_per_etu: 0.0      # most sectors free; infra decay is the maintenance sink
-    bank_interest_per_bar_per_etu: 0.0025 # KNOWN: bankint 0.25 per update-ish; scaled
+    bank_interest_per_bar_per_etu: 0.25  # KNOWN: bankint 0.25, paid as bars × ETUs × bankint × efficiency% (update/prepare.c bank_income; issue #219 — was 0.0025)
     bankruptcy:
       threshold: -500
       # KNOWN: original at negative money seized/halted production; GUESS at effect
