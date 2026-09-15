@@ -67,6 +67,11 @@ export function Fleet({ gameId, view, rules, busy, onCommand, onSail, at, onShow
               <span className="text-muted-foreground">at {rel(s.relative)} · {s.efficiency.toFixed(0)}% · {s.hexesPerUpdate} hex{s.hexesPerUpdate === 1 ? "" : "es"}/update (tech {s.tech.toFixed(0)}) · {Math.floor(s.load)}/{s.hold}{cargo ? ` (${cargo})` : ""}{s.tank > 0 ? <> · <span className={s.fuel < s.tank * 0.15 ? "text-destructive" : undefined}>fuel {Math.floor(s.fuel)}/{s.tank}</span></> : null}{s.crewNeeded > 0 ? <> · <span className={s.crew < s.crewNeeded ? "text-destructive" : undefined}>crew {Math.floor(s.crew)}/{s.crewNeeded}</span></> : null}</span>
             </div>
             <div className="text-muted-foreground">{s.handLeg ? `sailing by hand${s.destRelative ? ` to ${rel(s.destRelative)}` : ", holding"} — ${going} resumes on arrival` : going}{s.note ? ` · ${s.note}` : ""}</div>
+            {s.manifest && Object.keys(s.manifest).length > 0 && (
+              <div className="text-muted-foreground" title="her running manifest: lifetime totals since she was built">
+                Since built: {Object.entries(s.manifest).map(([k, q]) => `${k} ${Math.round(q).toLocaleString()}`).join(" · ")}
+              </div>
+            )}
             {s.markedBy.length > 0 && <div className="text-destructive">Fired on {s.markedBy.join(", ")} in peacetime: they may shoot her on sight for now.</div>}
             <div className="mt-1 flex flex-wrap gap-1">
               <Button size="sm" variant="secondary" disabled={busy} title={s.mission || s.lane ? "sail her by hand; her standing order resumes when she arrives" : undefined} onClick={() => onSail(s)}>Sail…</Button>

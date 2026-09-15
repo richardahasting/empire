@@ -53,7 +53,9 @@ public record CountryView(
                            /** Marked for firing on a country at peace: those countries may shoot her on sight until the mark runs out. */
                            List<String> markedBy,
                            /** Sent somewhere by hand with her standing order paused until she arrives (issues #201, #205). */
-                           boolean handLeg) {}
+                           boolean handLeg,
+                           /** Lifetime totals since she was built: caught, mined, happiness, delivered, fuel given (issue #244). */
+                           Map<String, Double> manifest) {}
     /**
      * A sighting as its holder is allowed to read it. {@code band} is firm | probable | faint and
      * {@code age} is updates since the sighting, so a stale mark can be drawn dimmer. Anything the
@@ -211,7 +213,7 @@ public record CountryView(
                     sh.crew(), cfg.units().ships() != null && cfg.units().ships().crews() ? cfg.units().ships().shipClass(sh.cls()).crewOr0() : 0,
                     sh.route().stream().map(p -> relative(w, c.capital(), p)).toList(), sh.ward(),
                     sh.firedOn().entrySet().stream().filter(e -> e.getValue() >= w.updateNumber() + 1 && e.getKey() < w.countries().size()).map(e -> w.country(e.getKey()).name()).toList(),
-                    sh.handLeg()));
+                    sh.handLeg(), sh.manifest()));
         }
         List<ContactView> contacts = new ArrayList<>();
         if (cfg.detection() != null) for (Contact ct : w.contactsOf(countryId)) {

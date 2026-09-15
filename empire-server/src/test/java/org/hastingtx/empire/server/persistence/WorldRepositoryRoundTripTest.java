@@ -60,7 +60,8 @@ class WorldRepositoryRoundTripTest {
                 new org.hastingtx.empire.engine.model.RailLane(0, other, cap, List.of())));
         // a ship marked for firing on a country at peace (issue #68): the mark is its own column
         org.hastingtx.empire.engine.model.Ship marked = new org.hastingtx.empire.engine.model.Ship(played.nextShipId(), 0, "destroyer", "Vixen", cap, 77, org.hastingtx.empire.engine.model.Stocks.zero(com.size()).with(com.index("shell"), 40),
-                null, null, 0, "fired on B", 45, "patrol", cap, 100, 50, 3, java.util.Map.of(1, played.updateNumber() + 3), List.of(cap, other0(played, cap)), 0);
+                null, null, 0, "fired on B", 45, "patrol", cap, 100, 50, 3, java.util.Map.of(1, played.updateNumber() + 3), List.of(cap, other0(played, cap)), 0)
+                .tally(org.hastingtx.empire.engine.model.Ship.CAUGHT + "food", 1234.5).tally(org.hastingtx.empire.engine.model.Ship.DELIVERED + "lcm", 60);   // the manifest is its own table (issue #244)
         List<org.hastingtx.empire.engine.model.Ship> fleet = new java.util.ArrayList<>(played.ships());
         fleet.add(marked);
         played = played.withShips(fleet, marked.id() + 1);

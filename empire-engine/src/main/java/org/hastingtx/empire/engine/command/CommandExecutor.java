@@ -470,7 +470,7 @@ public final class CommandExecutor {
             if (!dst.at().equals(h.at())) into.append(into.isEmpty() ? "" : ", ").append(fmt(q)).append(" into the warehouse at ").append(dst.at());
         }
         if (done <= 0) return CommandResult.fail(w, ship.stock().get(ci) <= 0 ? "no " + u.commodity() + " aboard" : "no room in the harbour or a warehouse beside it");
-        next = next.withShip(ship.withStock(ship.stock().plus(ci, -done)));
+        next = next.withShip(ship.withStock(ship.stock().plus(ci, -done)).tally(Ship.DELIVERED + u.commodity(), done));
         double d = done;
         return new CommandResult(next, null, 0, "unloaded " + fmt(d) + " " + u.commodity() + (into.isEmpty() ? "" : " (" + into + ")"));
     }

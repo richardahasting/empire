@@ -115,6 +115,7 @@ public class Console {
                 case "land" -> { need(t, 3, "land SHIP x,y"); yield cmd(gameId, a, new Command.Land(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
                 case "fire" -> { need(t, 3, "fire SHIP x,y [CLASS]"); yield cmd(gameId, a, new Command.Fire(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]), t.length > 3 ? t[3] : null)); }
                 case "supply" -> { need(t, 2, "supply SHIP [x,y] | supply SHIP off"); long id = Long.parseLong(t[1].replace("#", "")); boolean off = t.length > 2 && t[2].equalsIgnoreCase("off"); yield cmd(gameId, a, new Command.Supply(id, !off && t.length > 2 ? abs(v, t[2]) : null, off)); }
+                case "manifest", "man" -> new Reply(t.length > 1 ? manifest(v, Long.parseLong(t[1].replace("#", ""))) : manifests(v), true, null, null);
                 case "history", "log" -> { need(t, 2, "history SHIP [UPDATES]"); yield new Reply(history(Long.parseLong(t[1].replace("#", "")), games.shipHistory(gameId, a, Long.parseLong(t[1].replace("#", "")), t.length > 2 ? Integer.parseInt(t[2]) : 5)), true, null, null); }
                 case "mine" -> { need(t, 2, "mine SHIP [x,y] | mine SHIP off"); long id = Long.parseLong(t[1].replace("#", "")); boolean off = t.length > 2 && t[2].equalsIgnoreCase("off"); yield cmd(gameId, a, new Command.Mine(id, !off && t.length > 2 ? abs(v, t[2]) : null, off)); }
                 case "scrap" -> { need(t, 2, "scrap SHIP"); yield cmd(gameId, a, new Command.Scrap(Long.parseLong(t[1].replace("#", "")))); }
@@ -371,6 +372,26 @@ public class Console {
             sb.append("update ").append(e.updateNumber()).append('\n');
             for (int i = 0; i < e.lines().size(); i++) sb.append(String.format("  %d. %s%n", i + 1, e.lines().get(i)));
         }
+        return sb.toString();
+    }
+
+    /** One ship's running manifest (issue #244): what she has caught, mined, cruised and delivered since she was built. */
+    static String manifest(CountryView v, long ship) {
+        var s = v.ships().stream().filter(x -> x.id() == ship).findFirst().orElse(null);
+        if (s == null) return "no ship #" + ship + " of yours";
+        StringBuilder sb = new StringBuilder("ship #" + s.id() + " " + s.cls() + (s.name() == null || s.name().isBlank() ? "" : " \"" + s.name() + "\"") + ", since she was built:\n");
+        if (s.manifest().isEmpty()) return sb.append("  nothing yet").toString();
+        for (var e : s.manifest().entrySet()) sb.append(String.format("  %-22s %,14.0f%n", e.getKey(), e.getValue()));
+        return sb.toString();
+    }
+
+    /** Every ship's manifest on a line, busiest first. */
+    static String manifests(CountryView v) {
+        if (v.ships().isEmpty()) return "no ships";
+        StringBuilder sb = new StringBuilder();
+        v.ships().stream().sorted(java.util.Comparator.comparingDouble((CountryView.ShipView s) -> -s.manifest().values().stream().mapToDouble(Double::doubleValue).sum()).thenComparingLong(CountryView.ShipView::id))
+                .forEach(s -> sb.append(String.format("#%-4d %-24s %s%n", s.id(), s.cls(), s.manifest().isEmpty() ? "nothing yet"
+                        : String.join(" · ", s.manifest().entrySet().stream().map(e -> String.format("%s %,.0f", e.getKey(), e.getValue())).toList()))));
         return sb.toString();
     }
 

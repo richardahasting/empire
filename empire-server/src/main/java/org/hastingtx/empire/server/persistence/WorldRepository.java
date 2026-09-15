@@ -182,7 +182,7 @@ public class WorldRepository {
         jdbc.update("DELETE FROM ship WHERE game_id = ?", gameId);
         jdbc.update("UPDATE game SET next_ship_id = ? WHERE id = ?", w.nextShipId(), gameId);
         if (w.ships().isEmpty()) return;
-        List<Object[]> rows = new ArrayList<>(), stock = new ArrayList<>();
+        List<Object[]> rows = new ArrayList<>(), stock = new ArrayList<>(), manifest = new ArrayList<>();
         for (Ship s : w.ships()) {
             Ship.Lane l = s.lane();
             rows.add(new Object[] {gameId, s.id(), s.owner(), s.cls(), s.name() == null ? "" : s.name(), s.at().x(), s.at().y(), s.efficiency(),
@@ -190,9 +190,11 @@ public class WorldRepository {
                     l == null ? null : l.from().x(), l == null ? null : l.from().y(), l == null ? null : l.to().x(), l == null ? null : l.to().y(),
                     l == null ? null : l.cargo().stream().map(com::id).collect(java.util.stream.Collectors.joining(",")), l != null && l.outbound(), s.built(), s.note() == null ? "" : s.note(), s.tech(), s.mission(), s.home() == null ? null : s.home().x(), s.home() == null ? null : s.home().y(), s.fuel(), s.crew(), s.mobility(), firedOn(s), route(s.route()), s.ward(), s.handLeg()});
             for (int c = 0; c < com.size(); c++) if (s.stock().get(c) > 0) stock.add(new Object[] {gameId, s.id(), com.id(c), s.stock().get(c)});
+            for (var e : s.manifest().entrySet()) manifest.add(new Object[] {gameId, s.id(), e.getKey(), e.getValue()});
         }
         jdbc.batchUpdate("INSERT INTO ship (game_id, id, owner, class, name, x, y, efficiency, dest_x, dest_y, lane_from_x, lane_from_y, lane_to_x, lane_to_y, lane_cargo, lane_outbound, built, note, tech, mission, home_x, home_y, fuel, crew, mobility, fired_on, route, ward, hand_leg) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows);
         if (!stock.isEmpty()) jdbc.batchUpdate("INSERT INTO ship_stock (game_id, ship_id, commodity, qty) VALUES (?,?,?,?)", stock);
+        if (!manifest.isEmpty()) jdbc.batchUpdate("INSERT INTO ship_manifest (game_id, ship_id, key, qty) VALUES (?,?,?,?)", manifest);
     }
 
     /**
@@ -299,6 +301,10 @@ public class WorldRepository {
         jdbc.query("SELECT ship_id, commodity, qty FROM ship_stock WHERE game_id = ?", rs -> {
             shipStock.computeIfAbsent(rs.getLong("ship_id"), k -> new double[n])[com.index(rs.getString("commodity"))] = rs.getDouble("qty");
         }, g.id());
+        Map<Long, Map<String, Double>> manifests = new HashMap<>();
+        jdbc.query("SELECT ship_id, key, qty FROM ship_manifest WHERE game_id = ?", rs -> {
+            manifests.computeIfAbsent(rs.getLong("ship_id"), k -> new java.util.TreeMap<>()).put(rs.getString("key"), rs.getDouble("qty"));
+        }, g.id());
         List<Ship> ships = jdbc.query("SELECT * FROM ship WHERE game_id = ? ORDER BY id", (rs, i) -> {
             long id = rs.getLong("id");
             int dx = rs.getInt("dest_x"); boolean noDest = rs.wasNull(); int dy = rs.getInt("dest_y");
@@ -312,7 +318,7 @@ public class WorldRepository {
             }
             double[] st = shipStock.getOrDefault(id, new double[n]);
             return new Ship(id, rs.getInt("owner"), rs.getString("class"), rs.getString("name"), new Coord(rs.getInt("x"), rs.getInt("y")), rs.getDouble("efficiency"),
-                    Stocks.of(st), noDest ? null : new Coord(dx, dy), lane, rs.getLong("built"), rs.getString("note"), rs.getDouble("tech"), rs.getString("mission"), homeOf(rs), rs.getDouble("fuel"), rs.getDouble("crew"), rs.getDouble("mobility"), firedOn(rs.getString("fired_on")), route(rs.getString("route")), rs.getLong("ward"), rs.getBoolean("hand_leg"));
+                    Stocks.of(st), noDest ? null : new Coord(dx, dy), lane, rs.getLong("built"), rs.getString("note"), rs.getDouble("tech"), rs.getString("mission"), homeOf(rs), rs.getDouble("fuel"), rs.getDouble("crew"), rs.getDouble("mobility"), firedOn(rs.getString("fired_on")), route(rs.getString("route")), rs.getLong("ward"), rs.getBoolean("hand_leg"), manifests.getOrDefault(id, Map.of()));
         }, g.id());
         Long nextShip = jdbc.queryForObject("SELECT next_ship_id FROM game WHERE id = ?", Long.class, g.id());
         List<Contact> contacts = jdbc.query("SELECT * FROM contact WHERE game_id = ? ORDER BY owner, ship_id", (rs, i) ->

@@ -335,6 +335,15 @@ Tankers carry only oil and petrol, but a lot of it, and they do three jobs:
 `history SHIP [N]` shows what a ship did over its last N updates (5 unless you
 say otherwise), a numbered line for each thing: fitted out, loaded, bound for,
 sailed, arrived, unloaded. The Fleet panel has the same thing under **History**.
+
+**Every ship keeps a running manifest** of what she has done since she was built
+(Richard 2026-09-15): the food she has **caught**, the iron she has **mined**, the
+**happiness** her cruises made, everything she has **delivered** into a harbour by
+commodity (by lane, supply round, landing her catch or `unload`), and for a tender or
+tanker the **fuel given** and **ships helped**. `manifest` lists every ship's totals,
+busiest first; `manifest SHIP` shows one in full. The Fleet panel shows it on each
+ship as "Since built: …". A ship's manifest goes down with her, and ships built before
+the manifest existed start from nothing.
 The `ships` listing still shows the last update run together on one line.
 
 ## War at sea

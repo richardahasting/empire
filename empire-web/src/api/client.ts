@@ -77,6 +77,8 @@ export interface ShipView {
   markedBy: string[];
   /** Sent somewhere by hand; her standing order resumes when she arrives (issues #201, #205). */
   handLeg?: boolean;
+  /** Lifetime totals since she was built: "caught food", "mined iron", "happiness", "delivered lcm", "fuel given"… (issue #244). */
+  manifest?: Record<string, number>;
 }
 /** Another country's ship as your radar and lookouts last saw it (issue #75): where she was, not where she is. Class and owner are hidden on a faint contact. */
 export interface ContactView { at: Coord; relative: Coord; band: string; age: number; confidence: number; cls: string | null; ownerName: string | null }
