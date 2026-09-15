@@ -373,8 +373,12 @@ economy:
       glyph: "F"
       category: extraction
       build: { cash: 1 }
-      max_population: 1000
+      # NEW (Richard 2026-09-15, issue #227): a forest doubles as a park. Fewer people than a park, a little lcm,
+      # and half a park's happy strollers per worker at a quarter of the price. Both outputs from the same people.
+      max_population: 500                # GUESS: "not as populated as a park" (1000)
       produces: { lcm: 0.002 }
+      produces_level: { happiness: 0.0025 }   # half a park's 0.005
+      production_cash_by_output: { happiness: 0.25 }   # Richard 2026-09-15: "$.25"; the lcm stays free
       level_effect: { level: tech, curve: tech_easy }   # NEW (Richard 2026-09-09): tech scales every production value
       resource_gate: fertility
       terrain_required: [forest]

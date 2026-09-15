@@ -27,7 +27,10 @@ public record SectorTypeCfg(
         /** Cash charged per ETU just for existing (KNOWN: sect.config maint; the capital pays 1). */
         Double maintenanceCashPerEtu,
         /** Other names {@code des} accepts (issue #157). Boxed: older snapshots have none. */
-        List<String> aliases) {
+        List<String> aliases,
+        /** Cash per unit of the named outputs, overriding {@code productionCashPerUnit} for them (issue #227: a forest's
+         *  happy strollers cost $0.25 while its lcm stays free). Boxed: older snapshots have none. */
+        Map<String, Double> productionCashByOutput) {
     public List<String> aliasesOrEmpty() { return aliases == null ? List.of() : aliases; }
 
     public record LevelEffect(String level, String curve) {}
@@ -47,5 +50,10 @@ public record SectorTypeCfg(
     public int minTechOr0() { return minTech == null ? 0 : minTech; }
     public String packingOrNormal() { return packing == null ? "normal" : packing; }
     public double productionCashPerUnitOr0() { return productionCashPerUnit == null ? 0 : productionCashPerUnit; }
+    /** What one unit of {@code output} (a commodity or a level id) costs to make here. */
+    public double productionCashFor(String output) {
+        Double d = productionCashByOutput == null ? null : productionCashByOutput.get(output);
+        return d != null ? d : productionCashPerUnitOr0();
+    }
     public double maintenanceCashPerEtuOr0() { return maintenanceCashPerEtu == null ? 0 : maintenanceCashPerEtu; }
 }
