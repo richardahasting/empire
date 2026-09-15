@@ -60,9 +60,11 @@ public record EconomyCfg(
     }
 
     public record WorkCfg(double perCiv, double perUw, double perMil, HappinessEffect happinessEffectCurve) {
-        public record HappinessEffect(double neutralAt, double slopePerPoint, double min, double max) {
+        /** {@code max} null: no ceiling (Richard 2026-09-15, issue #230: "a happy workforce is a productive workforce ... take off the limit"). */
+        public record HappinessEffect(double neutralAt, double slopePerPoint, double min, Double max) {
             public double eval(double happiness) {
-                return Math.max(min, Math.min(max, 1.0 + (happiness - neutralAt) * slopePerPoint));
+                double f = Math.max(min, 1.0 + (happiness - neutralAt) * slopePerPoint);
+                return max == null ? f : Math.min(max, f);
             }
         }
     }

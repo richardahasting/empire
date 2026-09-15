@@ -65,8 +65,9 @@ would hold the level where it is, in red when you are short. The terminal client
 `projection` says the same. Schools that run out of lcm make nothing, and a
 threshold below one update's use (600 for a full school) lets them run dry.
 
-Happiness also scales every sector's work pool, from **0.5× to 1.2×**. Unhappy
-countries do up to half as much work with the same people, everywhere at once.
+Happiness also scales every sector's work pool: **+1% work per point of
+happiness**, everywhere at once, with no ceiling. At happiness 50 your people do
+half as much again as at 0.
 It is the cheapest thing to neglect and one of the most expensive.
 
 ## Education gates the ladder
