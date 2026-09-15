@@ -265,7 +265,12 @@ public final class ShipStep implements Step {
                             note.last().append(", arrived");
                             // the harbour's business is done the update she gets there, not the one after
                             // (issue #67): a lane unloads on arrival and a supply ship takes the next job
-                            if (limping || bingo != null) ship = ship.withDest(null);
+                            if (limping || bingo != null) {
+                                // turned for a harbour on the way somewhere: a hand leg ends here, and her standing
+                                // order takes her over again once she is fit and fuelled (issue #213)
+                                if (ship.handLeg() && ship.orderLabel() != null) note.last().append("; her ").append(ship.orderLabel()).append(" resumes");
+                                ship = ship.withDest(null).withHandLeg(false);
+                            }
                             else if (ship.handLeg()) { ship = ship.withDest(null).withHandLeg(false); if (ship.orderLabel() != null) note.last().append("; her ").append(ship.orderLabel()).append(" resumes"); }
                             else if (ship.rescuing()) ship = runRescue(ctx, sc, ship.withDest(null), si, out, harbours, told, note);   // alongside the update she arrives
                             else if (ship.lane() != null) ship = runLane(ctx, ship, cls, si, out, note);
