@@ -75,7 +75,7 @@ for lack of the mechanic; decide those in the morning.
 | Education/happiness | moving averages of a per-ETU rate: consumption 600000, averages 192/48 ETUs, hap_edu factor, flag-1 limit (easy 5, base 4/6) | accumulating stocks | **matched** (M4) |
 | Technology bleed | below best/5: 20 % chance to gain (best/5 − level)/3 | none | **matched** (M4) |
 | Unrest | happiness below (tech−40)/40 + edu/3 erodes loyalty, cuts work, may revolt | none | **deviation** — M5 territory |
-| Bank interest | bankint 0.25 "dt × bars" | 0.0025 per bar per ETU | unresolved — read `nat.c` in M4 |
+| Bank interest | bankint 0.25: bars × ETU × bankint × effic/100 (`update/prepare.c` bank_income) | 0.0025 per bar per ETU, no efficiency | **matched** (issue #219) |
 
 ## Notes for the morning
 
