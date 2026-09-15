@@ -51,8 +51,14 @@ could use `fortress` or a new `barracks` designation).
   `unit UNIT fortify` (hold and dig in).
 - **Supply:** units eat food and draw shells and fuel from sectors or supply units within reach. An unsupplied
   unit loses efficiency. This makes the logistics game (roads, rail, depots) matter for war.
-- **Later classes** (cavalry, armour, marines, AA, radar units, spies) are rows in the table once these four
-  play.
+- **Spies** (the original's `infiltrator`, tech 40, and `commando`, tech 55, flag `spy`): move through enemy
+  land hard to detect, report what they see, and `sabotage` a sector with the shells they carry. A spy caught
+  (a chance by its efficiency) is shot; one in a sector that is taken hides or is executed.
+- **NEW, Richard 2026-09-15: the incite spy.** A spy in an enemy sector can `incite`: raise the sector's
+  disloyalty (the original's `sct_loyal`) and, past the revolt line, turn its civilians into che aimed at their
+  owner. The original's unrest came only from conquest, starvation and unhappiness; this gives it an offensive
+  use. Detection works as for sabotage: each attempt risks the spy. The rates are GUESS in schema.yaml.
+- **Later classes** (cavalry, armour, marines, AA, radar units) are rows in the table once these play.
 
 ### Slice 3: planes
 Built at an `airfield` from lcm, hcm and military crews; they fly from airfields (and carriers) within range and
@@ -77,7 +83,34 @@ come back.
 - **Map:** unit and plane markers, flight paths, and the update's combat on the map.
 - **Tests:** the guide chapters and the tests the ships got.
 
-## Decisions for Richard
+## Decisions: the original is the default (Richard 2026-09-15)
+
+"For all the rest of the decisions, start with the default as how it was performed in the original game." So
+unless Richard says otherwise:
+
+1. **Slice 1 first.** The original lets military `attack` without units.
+2. **Land units are built in a `headquarters`** (the original's `!` designation).
+3. **Supply as the original:** units draw food, shells and petrol from sectors and supply units in range, and
+   lose efficiency without.
+4. **Planes after land units**, the original's order of need.
+5. **Missiles and satellites are in scope**, as later slices, since the original has them (`ssm` to `icbm`,
+   `landsat`, `spysat`); nuclear warheads with them.
+6. **Conquest as the original** (`subs/takeover.c`):
+   - **Loyalty:** a sector taken from another country starts at loyalty 50 (0 when retaking your own).
+   - **Guerrillas:** some of its civilians turn che at once, by loyalty.
+   - **Mobility:** its mobility drops to 0.
+   - **Tax:** its civilians pay a quarter tax (`prepare.c tax()`) until loyalty decays to 0 and it is "now fully
+     yours".
+7. **Attack mobility as the original** (`subs/attsub.c`):
+   - **Cost:** each sending sector pays soldiers × the move cost into the target.
+   - **Cap:** its mobility caps how many it can send.
+   - **Casualties:** they take up to 20 more.
+
+Decisions Richard has already made stand where they differ from the original: the defender's neighbouring
+military fight in an assault or attack (the original used fort, artillery, ship and plane support), and the
+happiness work bonus (#230).
+
+## Decisions for Richard (superseded by the defaults above)
 
 1. **Slice 1 first?** Taking land with military before units exist is the original's order and the smallest
    step. Or go straight to units.
