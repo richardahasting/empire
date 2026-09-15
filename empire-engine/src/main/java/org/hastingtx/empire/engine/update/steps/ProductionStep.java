@@ -74,17 +74,17 @@ public final class ProductionStep implements Step {
             }
             if (scale <= 0) continue;
 
-            double producedTotal = 0;
+            double producedTotal = 0, cash = 0;
             StringBuilder made = new StringBuilder(), used = new StringBuilder();
-            for (int ci = 0; ci < want.length; ci++) if (want[ci] > 0) { ctx.led().produce(i, ci, want[ci] * scale); producedTotal += want[ci] * scale; made.append(made.isEmpty() ? "" : ", ").append(Ledger.q(want[ci] * scale)).append(' ').append(ctx.com.id(ci)); }
-            for (int li = 0; li < 4; li++) if (wantLevel[li] > 0) { ctx.led().level[c.id()][li] += wantLevel[li] * scale; producedTotal += wantLevel[li] * scale; made.append(made.isEmpty() ? "" : ", ").append(Ledger.q(wantLevel[li] * scale)).append(' ').append(LEVEL_NAMES[li]); }
+            for (int ci = 0; ci < want.length; ci++) if (want[ci] > 0) { ctx.led().produce(i, ci, want[ci] * scale); producedTotal += want[ci] * scale; cash += want[ci] * scale * t.productionCashFor(ctx.com.id(ci)); made.append(made.isEmpty() ? "" : ", ").append(Ledger.q(want[ci] * scale)).append(' ').append(ctx.com.id(ci)); }
+            for (int li = 0; li < 4; li++) if (wantLevel[li] > 0) { ctx.led().level[c.id()][li] += wantLevel[li] * scale; producedTotal += wantLevel[li] * scale; cash += wantLevel[li] * scale * t.productionCashFor(LEVEL_NAMES[li]); made.append(made.isEmpty() ? "" : ", ").append(Ledger.q(wantLevel[li] * scale)).append(' ').append(LEVEL_NAMES[li]); }
             for (var e : consumes.entrySet()) {
                 int in = ctx.com.index(e.getKey());
                 double q = producedTotal * e.getValue();
                 if (q > 0) { ctx.led().consume(i, in, q); used.append(used.isEmpty() ? "" : ", ").append(Ledger.q(q)).append(' ').append(e.getKey()); }
             }
-            double cashPer = t.productionCashPerUnitOr0();
-            if (cashPer > 0) { ctx.led().cash[c.id()] -= cashPer * producedTotal; used.append(used.isEmpty() ? "" : ", ").append('$').append(Ledger.q(cashPer * producedTotal)); }   // KNOWN: guns $30, shells $3, tech $300...
+            // KNOWN: guns $30, shells $3, tech $300... per unit; per output where a type names one (issue #227)
+            if (cash > 0) { ctx.led().cash[c.id()] -= cash; used.append(used.isEmpty() ? "" : ", ").append('$').append(Ledger.q(cash)); }
             if (!made.isEmpty()) ctx.led().note(i, "made " + made + (used.isEmpty() ? "" : " using " + used) + (scale < 1 - 1e-9 ? " (short of inputs)" : ""));
         }
     }

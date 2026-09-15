@@ -22,6 +22,7 @@ dust       --bank----------->  gold bars       (5 dust -> 1 bar)
 lcm+hcm    --shell_plant---->  shells          (2 lcm + 1 hcm -> 1 shell)
 oil+lcm+hcm--gun_plant------>  guns            (1 oil + 5 lcm + 10 hcm -> 1 gun)
 uranium    --uranium_mine--->  radioactive material
+fertility  --forest--------->  a little lcm, and happiness   (forest terrain only)
 civilians  --enlistment_center--> military
 ```
 
@@ -136,3 +137,9 @@ Happiness scales every sector's work pool, from **0.5× to 1.2×**. An unhappy
 country does not merely feel bad; it does up to half as much work with the same
 people. Happiness is produced by parks and is a moving average — it decays if
 you stop.
+
+**A forest doubles as a park** (Richard 2026-09-15). On forest terrain it makes a
+little lcm and, from the same people's leisure, half a park's happiness per
+person, at **$0.25 a point** against a park's $1; its lcm costs nothing. It holds
+500 people to a park's 1,000. Like its lcm, its happiness scales with the ground's
+fertility and your tech, so a forest on rich ground does best.
