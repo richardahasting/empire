@@ -35,7 +35,7 @@ macro                        list your macros (recorded from the map); macro run
 ships                        your fleet: where each ship is, its load, where it is going, what it did
 history SHIP [N]             a ship's logbook: what it did, a line at a time, for its last N updates (5)
 contacts                     other people's ships your radar and lookouts have seen, and how long ago
-build HARBOUR CLASS [name]   lay a hull in your harbour (fishing_boat, cargo_ship, tanker, luxury_craft, ...; tech gates apply)
+build HARBOUR CLASS [name]   lay a hull in your harbour (fishing_boat, cargo_ship, ferry, tanker, luxury_craft, ...; tech gates apply)
 sail SHIP x,y | hold         sail to a sea hex or one of your harbours (speed × efficiency hexes per update);
                              a standing mission or lane is paused, and resumes when she arrives
 load/unload SHIP COMMODITY N in your harbour only

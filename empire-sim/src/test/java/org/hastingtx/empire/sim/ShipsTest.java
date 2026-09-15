@@ -154,7 +154,7 @@ class ShipsTest {
         assertThat(u.world().ship(1).stock().get(FOOD)).isCloseTo(500, within(1e-9));
         World atSea = w.withShip(w.ship(1).withAt(SEA_E));
         assertThat(ex.execute(atSea, 0, new Command.Load(1, "food", 10)).error()).contains("not in one of your harbours");
-        assertThat(ex.execute(w, 0, new Command.Load(1, "civ", 10)).error()).isNull();              // cargo carries all
+        assertThat(ex.execute(w, 0, new Command.Load(1, "civ", 10)).error()).contains("cannot carry");  // goods only: people go by ferry (issue #242)
         World tanker = withShip(world(), "tanker", HARBOR_E, 100);
         assertThat(ex.execute(tanker, 0, new Command.Load(1, "food", 10)).error()).contains("cannot carry");
     }
