@@ -32,6 +32,8 @@ export function GamePage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [selected, setSelected] = useState<Coord | null>(null);
+  // the Fleet panel shows one sector's ships when set (issue #240)
+  const [fleetAt, setFleetAt] = useState<Coord | null>(null);
   // many sectors at once (issue #191): the sectors of ours inside a shift-dragged rectangle
   const [area, setArea] = useState<Coord[]>([]);
   const [layer, setLayer] = useState<Layer>("designation");
@@ -301,11 +303,11 @@ export function GamePage() {
         {macroDialog === "run" && sector && <RunMacroDialog macros={macros} sectorLabel={`${sector.relative.x},${sector.relative.y}`} designation={sector.designation} onClose={() => setMacroDialog(null)} onRun={(slot, scope) => void runMacro(slot, sector.at, scope)} />}
         {macroDialog === "list" && <MacrosDialog macros={macros} onClose={() => setMacroDialog(null)} onSave={saveMacro} onDelete={deleteMacro} />}
         <aside className="flex min-h-0 min-w-0 flex-col gap-3">
-          <div className="max-h-[28%] overflow-auto rounded-lg border border-border bg-card p-3"><div className="mb-1 text-xs font-medium">Fleet{view.ships.length ? ` (${view.ships.length})` : ""}</div><Fleet gameId={gameId} view={view} rules={rules} busy={busy} onCommand={command} onSail={s => setPick({ verb: "sail", from: view.sectors.find(x => x.at.x === s.at.x && x.at.y === s.at.y) ?? view.sectors[0], commodity: "", qty: 1, ship: s })} /></div>
+          <div className={(fleetAt ? "max-h-[45%]" : "max-h-[28%]") + " overflow-auto rounded-lg border border-border bg-card p-3"}><div className="mb-1 text-xs font-medium">Fleet{view.ships.length ? ` (${view.ships.length})` : ""}</div><Fleet gameId={gameId} view={view} rules={rules} busy={busy} onCommand={command} at={fleetAt} onShowAll={() => setFleetAt(null)} onSail={s => setPick({ verb: "sail", from: view.sectors.find(x => x.at.x === s.at.x && x.at.y === s.at.y) ?? view.sectors[0], commodity: "", qty: 1, ship: s })} /></div>
           <div className="max-h-[40%] overflow-auto rounded-lg border border-border bg-card p-3">{area.length > 0
             ? <AreaActions view={view} rules={rules} busy={busy} area={area} onCommand={command} onClear={() => setArea([])}
                 onPickCentre={() => { const first = view.sectors.find(s => s.at.x === area[0].x && s.at.y === area[0].y); if (first) setPick({ verb: "distribute", from: first, commodity: "", qty: 0, area }); }} />
-            : <Inspector sector={sector} view={view} rules={rules} onCommand={command} busy={busy} history={sector ? last?.notes?.[`${sector.relative.x},${sector.relative.y}`] : undefined} historyUpdate={last?.updateNumber} />}</div>
+            : <Inspector sector={sector} view={view} rules={rules} onCommand={command} busy={busy} history={sector ? last?.notes?.[`${sector.relative.x},${sector.relative.y}`] : undefined} historyUpdate={last?.updateNumber} onShowShips={setFleetAt} />}</div>
           <div className="min-h-0 flex-1"><ConsolePanel onLine={consoleLine} /></div>
         </aside>
       </div>
