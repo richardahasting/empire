@@ -19,7 +19,10 @@ Live at <https://hastingtx.org/empire/> (holding page until M1).
 
 ## Status
 
-**M4 done** (issue #27): the four national levels with the original's formulas, rail
+**M5 under way** (see [`docs/progress.md`](docs/progress.md) and [`docs/m5-plan.md`](docs/m5-plan.md)): ships
+with fuel, crews, lanes, supply, tenders and a logbook; war at sea (warships, missions,
+blockades); assault ships and landings; radar; demobilization; income as the original
+paid it. **M4 done** (issue #27): the four national levels with the original's formulas, rail
 networks and depots (build orders, depot-to-depot trains with capacity, range,
 holding and stranding, a rail map layer), on top of the rules reconciliation with
 the Wolfpack source (#24, `docs/original-rules.md`). **M2 done** (#18): roads,

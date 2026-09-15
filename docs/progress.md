@@ -2,7 +2,48 @@
 
 A running note of the state of play, so a session can pick up without re-deriving
 it. Ordered work lives in `m5-plan.md`; this page says how far along it is and
-where the open decisions sit. Last updated **2026-09-13**.
+where the open decisions sit. Last updated **2026-09-14**.
+
+## Landed 2026-09-14: ships that do not strand, landings, radar, money as the original paid it
+
+Nearly all of it found by playing game 82, Richard's test-every-feature game, and by
+the Wolfpack agent's playtest of it.
+
+- **Fuel that cannot strand a fleet.** A docked ship does not leave until her tank is
+  full (#176/#177). **A ship never sails further than she can get back from** (#181):
+  every leg, in port or at sea, stops where the fuel left still reaches the nearest
+  harbour by sea with a quarter to spare, and a ship out of reach makes for that
+  harbour (by sea, not as the crow flies, #184). A boat in a strange harbour goes home
+  to fish (#188).
+- **Tenders** (#182/#183/#189/#190). A ship at sea without a hex of fuel calls; the
+  nearest free tender answers, fills her tank, patches her hull to the limp line, and
+  goes home to wait on call.
+- **Assault ships and landings** (#193/#194/#206/#207). `assault_ship` carries 100
+  mil and 20 civ. `land SHIP x,y` takes unowned coast; at war, enemy coast is an
+  assault fought man for man against the sector's and its neighbours' military.
+- **Radar works** (#208/#209). A station reaches 12 × efficiency (+ height) × tech,
+  capped at 30, reveals the map within it, and draws its ring. It had done nothing.
+- **Updates 35–45× faster** (#210/#211). Game 82's engine update went from ~2.3 s warm
+  (6.5 s cold) to ~50 ms (180 ms): distribution was re-pricing every hop of every
+  route. Golden hash unchanged.
+- **The web client**: shift-drag selects many sectors for one order (#191/#192);
+  the readout says where the surplus goes, `Surplus ↔ w (-10,-4)` (#179/#180).
+- **Deity: Reload ship rules** (#186) takes `units.ships` from the preset and nothing
+  else, because a full reload would have cost game 82 about 32,000 people to
+  population ceilings it never had.
+- **The Wolfpack playtest batch** (#196–#205, PR #212). The quay (harbour plus
+  dockside warehouse) refuels, crews and builds; a build refusal names the nearest
+  stock; a `sail` **pauses** a standing order, which resumes on arrival; a full
+  enlistment centre makes military again; census shows pet, gun and shell.
+- **Demobilize** (#217/#218). `demob SECTOR N | all | keep N`, on the sector menu and a
+  dragged selection. Nothing could shrink an army before.
+- **Money as the original paid it.** Bank interest was a hundredth of the original's
+  `bankint` (#219/#220); tax now scales with sector efficiency (#221/#222). Both read
+  from gefla/empserver `update/prepare.c`.
+- **Game 82 hand edits**, all in `deity_edit` with the service stopped: two refuels of
+  stranded ships, the enlistment centre at 124,21 made a mine, Rick's military cut from
+  12,235 to 1,000, bank interest 0.25 in its rules, and its three banks' `bar`
+  threshold to 10,000. Rick went from losing $31k an update to making about $280k.
 
 ## Landed 2026-09-13: the ships are finished
 
@@ -255,11 +296,20 @@ and #77 making the tallies `long[]` means per-thread partials merge identically.
   three or four updates and has six salvos in her magazine; a battleship sinks a
   destroyer in two or three. Coastal guns are strong (20 guns). Tune
   `units.ships.combat` after a real war.
-- **Old games have no combat.** A game's rules are fixed at creation, so game 42
-  and any game created before 2026-09-13 needs the deity's Reload rules before its
-  warships can fire.
-- **Agents do not know the new verbs** (`supply`, `fire`, the missions); the
-  scripted agent is a fixture and is not taught strategy.
+- **Old games have old ship rules.** A game's rules are fixed at creation, so a game
+  created before a ship feature (combat 2026-09-13; tenders and assault ships
+  2026-09-14) needs the deity's **Reload ship rules** to get it.
+- **Old games keep the old bank interest.** Interest is a rule (0.0025 in any game
+  created before 2026-09-14); only game 82 was changed by hand. Tax by efficiency is
+  engine logic and reached every game at once.
+- **Bank interest is now the original's, and it is large.** $15 a bar an update at 60
+  ETUs, 10,000 bars to a bank: $150k an update per full bank, against $0.50 a
+  civilian. Unplayed at that rate; the original had a market and loans to spend it on.
+- **Still not the original:** captured civilians pay full tax (the original, a
+  quarter); a city's population ceiling does not rise with its efficiency; no
+  reserves, market, loans or trade-ship payouts.
+- **Agents do not know the new verbs** (`supply`, `fire`, the missions, `land`,
+  `demob`); the scripted agent is a fixture and is not taught strategy.
 
 ## The standing caveat
 

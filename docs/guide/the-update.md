@@ -85,6 +85,9 @@ made   = min(output, input, room_left_in_the_sector)
 on — fertility for a farm, minerals for a mine, oil for a well. A mine on rock
 with 5 minerals produces a twentieth of one on 100.
 
+An enlistment centre turns civilians into military. Military do not count against
+a sector's population ceiling, so a centre full of civilians still enlists.
+
 Nothing in this step moves anything between sectors.
 
 ### 6–7. Moving things
@@ -104,13 +107,16 @@ Nobody wins because they asked first. There is no first.
 ### 7c. Ships
 Every ship, in the order they were built: worn by the sea, fitted out in
 harbour, fishing or mining, running its lane, supply round or mission, then
-refuelled, crewed and rearmed if docked, then sailing. A ship does the harbour's
-business the update she arrives. A hostile blockade stops a ship where she meets
+refuelled, crewed and rearmed if docked (from the harbour and any warehouse beside
+it), then sailing. A ship sailed by hand has her standing order paused, and it takes
+her over again the update she arrives. A ship does the harbour's business the
+update she arrives. A hostile blockade stops a ship where she meets
 it. See [Ships](ships.html).
 
 ### 8. Money
-Taxes come in from civilians and workers; military pay, maintenance and
-construction costs go out. If the treasury falls below the bankruptcy
+Taxes come in from civilians and workers, scaled by their sector's efficiency,
+and interest from gold bars in banks; military pay, maintenance and construction
+costs go out. See [Money](economy.html#money). If the treasury falls below the bankruptcy
 threshold, you are marked bankrupt — and the **effects apply next update**, not
 this one.
 

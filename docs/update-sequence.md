@@ -138,7 +138,10 @@ produced     = min(output_cap, input_cap, capacity_remaining)
 ```
 Every producer carries a `level_effect` tech curve (Richard 2026-09-09: "tech level adjusts every production value"); the original gated only some products on tech. Inputs are consumed in proportion; output is added. Level-producing sectors
 (`produces_level`) add to the **country** level in the ledger, scaled by the
-education/research cross-curves. Enlistment converts civ → mil. Nothing in
+education/research cross-curves. Enlistment converts civ → mil; `capacity_remaining`
+for military is unbounded, since military take no place under the population
+ceiling (KNOWN: trunc_people trims civilians and workers only). Before issue #204
+it was the civilian room, and a full enlistment centre made no military. Nothing in
 this step moves anything between sectors. (**KNOWN:** the three-way min is
 the original model; **GUESS:** every constant.)
 
@@ -298,7 +301,8 @@ a harbour's stock is the only thing two ships can contend for. For each ship:
    weighted by `1 + min(radius, updates since her country last saw it)` from a
    stream keyed on ship and update.
 7. **Fuel** (runs before the lane, supply and mission steps, so they see the tank
-   she really has). A docked ship refuels from the harbour; at sea, from an
+   she really has). A docked ship refuels from the **quay**: the harbour's stock, then its dockside
+warehouses (issue #202); at sea, from an
    owner's tanker already processed in the same hex; a tanker that cannot make a
    hex fills its own tank from its hold. **Never beyond return** (2026-09-14), at the sail:
    with `dist` the hexes from every sector to the owner's nearest harbour (one
@@ -314,7 +318,8 @@ a harbour's stock is the only thing two ships can contend for. For each ship:
    with room in her tank of a unit or more does not sail, and keeps her
    destination for when she is full; a `sail` order given in port waits the same
    way.
-8. **Crew and arms.** A docked ship signs on crew from the harbour, and an armed
+8. **Crew and arms.** A docked ship signs on crew from the quay (harbour, then
+   dockside warehouses; issue #203), and an armed
    one takes guns up to her class's `guns` and shells up to its `magazine`.
 9. **Sail.** Toward its destination over sea hexes and its owner's harbours by
    the shortest hop count, spending the ship's mobility; no route or no range
@@ -324,13 +329,22 @@ a harbour's stock is the only thing two ships can contend for. For each ship:
    given between updates is stopped the same way. **On arrival it does the harbour's business the
    same update**: a lane unloads or loads and turns, a supply ship lands and
    takes on cargo and picks its next job. Arrival clears a plain destination.
+   **A hand leg** (`Ship.handLeg`, issues #201/#205): a `sail` given to a ship with a
+   standing order (fish, mine, supply, a mission, a lane) sets her destination and
+   pauses the order; lane, supply and mission steps leave her alone while it is set,
+   and a hold (no destination) keeps her in place. Arrival clears it, and the order
+   steers her again from the next update. Only `off` ends an order.
 Conservation counts holds and tanks with sector stocks. Harbours get sector-history
 lines for what docked ships did; each ship's lines for the update are its logbook
 (`UpdateResult.shipNotes`, stored per update), and joined they are its note.
 
 ### 8. Money
 Country-level:
-- **Income**: taxes on civ/uw, bank interest on bars (if `options.interest`).
+- **Income** (KNOWN, `update/prepare.c`): tax `(civ × tax_per_civ_per_etu + uw ×
+  tax_per_uw_per_etu) × ETUs × efficiency/100` per sector (issue #221), and, in
+  `interest_bearing` sectors (banks) when `options.interest`, `bars × ETUs ×
+  bank_interest_per_bar_per_etu × efficiency/100` (0.25, issue #219). Military pay
+  `mil × pay_per_mil_per_etu × ETUs` is not scaled by efficiency.
 - **Expenses**: military pay, infrastructure maintenance actually paid in
   step 4, rail shipment cash, efficiency/infra build cash actually spent.
 - Apply `handicap` where the rate accrued.
@@ -362,6 +376,10 @@ creates or refreshes a **contact** `(country, target-sector, what, confidence,
 update_number)`. Contacts older than `contact_staleness_updates` are marked
 stale; older than 2× are dropped. `held_cargo` uses its own low signature so
 a raider does not see the haul. Adjacent owned sectors are always visible.
+**Radar reach** (issue #208, `view.Radar`): a sector designated `radar` reaches
+`detection.radar.nominal_range_at_100 × efficiency/100`, plus elevation, times the
+tech bonus, capped at `detection.radar.max_range`; every sector within it is visible to its owner (and charted, as
+own sight is) and candidate targets within it are rolled for.
 (**NEW** model; the original was binary range.)
 
 ### 10a. Combat (**NEW**, issue #68; after detection)

@@ -7,7 +7,7 @@ milestone; the issue carries the detail, this page carries the order.
 
 ## Order of work
 
-Status as of **2026-09-13**. Done items keep their place so the reasoning for
+Status as of **2026-09-14**. Done items keep their place so the reasoning for
 the order stays readable.
 
 1. **Ships phase 3 — warships and submarines** (#68) — **done.** It landed in
@@ -40,8 +40,13 @@ the order stays readable.
 9. **Immediate navigation** (#69) — **done.** A per-ship mobility pool, and haste
    costs more.
 10. **Agents and the terminal client** (#73) — **done** for ships, lanes,
-    deliver orders, macros and bridges. They do not yet know `supply`, `fire` or
-    the warship missions.
+    deliver orders, macros and bridges. They do not yet know `supply`, `fire`,
+    the warship missions, `land` or `demob`.
+
+Landed alongside on 2026-09-14, from playing game 82: tenders (#182), assault ships
+and landings on unowned coast (#193) and assaults on held coast (#206) — the first
+capture of sectors, from the sea, ahead of #71's land combat — and radar that works
+(#208). See `progress.md`.
 
 Outside the M5 list but on the same road: **trade between nations** (#141),
 which wants #67's lanes and harbours.
