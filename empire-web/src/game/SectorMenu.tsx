@@ -145,6 +145,7 @@ function Attributes({ s, view }: { s: SectorView; view: CountryView }) {
     <div className="px-2 pb-1 text-xs text-muted-foreground">
       <div className="text-popover-foreground">{s.designation} · {s.terrain} · eff {s.efficiency.toFixed(0)}% · mob {s.mobility.toFixed(0)}{(s.roadLevel > 0 || s.roadTarget > 0) && ` · road ${s.roadLevel.toFixed(0)}${s.roadTarget > s.roadLevel ? ` → ${s.roadTarget.toFixed(0)}` : ""}`}{(s.railLevel > 0 || s.railTarget > 0) && ` · rail ${s.railLevel.toFixed(0)}${s.railTarget > s.railLevel ? ` → ${s.railTarget.toFixed(0)}` : ""}`}</div>
       {s.resources && <div>fert {s.resources.fertility} · min {s.resources.minerals} · gold {s.resources.gold} · oil {s.resources.oil} · uran {s.resources.uranium}</div>}
+      {(s.radarRange ?? 0) >= 1 && <div className="text-popover-foreground">radar: sees {Math.floor(s.radarRange!)} hexes around it</div>}
       <div className="text-popover-foreground">{surplusLine(view, s.at, s.distCenter)} · {th} threshold{th === 1 ? "" : "s"}{held > 0 && ` · ${held.toFixed(0)} in transit`}</div>
       {Object.keys(s.deliveries).length > 0 && <div>deliver {Object.entries(s.deliveries).map(([c, d]) => `${c} ${deliveryTarget(view, s.at, d.dir)} >${d.threshold}`).join(" · ")}</div>}
     </div>

@@ -26,6 +26,20 @@ class CensusColumnsTest {
         assertThat(c.lines().count()).isGreaterThan(2);
     }
 
+    /** Richard 2026-09-15: "A radar should note the radius of its vision." The census says how far each station sees. */
+    @Test
+    void censusSaysHowFarEachRadarSees() {
+        assertThat(Console.census(V, CFG)).as("no radar, no line").doesNotContain("radar:");
+        var cap = W.country(0).capital();
+        org.hastingtx.empire.engine.model.Coord at = null;
+        for (var n : org.hastingtx.empire.engine.geo.Hex.neighbours(W, cap)) if (W.sector(n).owner() == 0 && !n.equals(cap)) { at = n; break; }
+        World w = W.withSector(W.sector(at).withDesignation("radar", 100));
+        CountryView v = CountryView.of(w, CFG, 0);
+        int reach = (int) Math.floor(org.hastingtx.empire.engine.view.Radar.range(CFG, w.sector(at), w.country(0).levels().tech()));
+        assertThat(reach).isGreaterThanOrEqualTo(1);
+        assertThat(Console.census(v, CFG)).contains("radar: ").contains("sees " + reach + " hexes");
+    }
+
     @Test
     void censusResShowsTheGroundAndWhatItIsPoorFor() {
         String c = Console.censusResources(V, CFG);
