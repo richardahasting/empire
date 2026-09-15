@@ -150,6 +150,8 @@ def main():
             elif verb == "view": show(api.get(f"/games/{gid}/view"))
             elif verb == "projection":
                 p = api.get(f"/games/{gid}/projection")
+                if p.get("educationToHold") is not None and p["educationToHold"] >= 0:
+                    print(f"education {p['educationNow']:.1f} -> {p['educationAfter']:.1f}: next update makes {p['educationMade']:.0f}, holding it takes {p['educationToHold']:.0f} an update")
                 print(f"next update: ${p['cashAfter'] - p['cashNow']:+.0f}  civ {p['civAfter'] - p['civNow']:+.0f}  food {p['foodAfter'] - p['foodNow']:+.0f}  "
                       f"starving sectors {p['starvingSectors']}  spoiling {p['spoilingSectors']}  stalled shipments {p['flowsHeld']}")
                 for kind in ("starving", "spoiling"):

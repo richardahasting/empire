@@ -28,7 +28,9 @@ public final class Projection {
 
     public record Result(long forUpdate, double cashNow, double cashAfter, double civNow, double civAfter, double foodNow, double foodAfter,
                          double btuNow, double btuAfter, int starvingSectors, int spoilingSectors, int flowsCompleted, int flowsHeld,
-                         List<Trouble> starving, List<Trouble> spoiling) {}
+                         List<Trouble> starving, List<Trouble> spoiling,
+                         /** Issue #226: the level now and after, the points the next update makes, and the points an update that would hold it (-1: at the ceiling, no number holds it). */
+                         double educationNow, double educationAfter, double educationMade, double educationToHold) {}
 
     public static Result of(World w, GameConfig cfg, int countryId, long seed) {
         Commodities com = Commodities.of(cfg);
@@ -47,8 +49,16 @@ public final class Projection {
         for (Flow f : r.flows()) if (f.owner() == countryId) { if (f.completed()) done++; else held++; }
         starving.sort(Comparator.comparingDouble((Trouble t) -> -t.amount()));
         spoiling.sort(Comparator.comparingDouble((Trouble t) -> -t.amount()));
+        var lv = cfg.economy().levels();
+        double e0 = before.levels().education(), e1 = after.levels().education();
         return new Result(w.updateNumber() + 1, before.cash(), after.cash(), civ0, civ1, food0, food1, before.btu(), after.btu(),
-                starving.size(), spoiling.size(), done, held, List.copyOf(starving), List.copyOf(spoiling));
+                starving.size(), spoiling.size(), done, held, List.copyOf(starving), List.copyOf(spoiling),
+                e0, e1, finite(lv.educationMade(e0, e1, civ1, cfg.etus())), finite(lv.educationToHold(e0, civ1, cfg.etus())));
+    }
+
+    /** JSON has no infinity: a level at the 250 ceiling cannot be held by any number of points, and says so as -1. */
+    private static double finite(double d) {
+        return Double.isFinite(d) ? d : -1;
     }
 
     /** The sector as it stands now — what it has and whether anything is set to bring food in — is the best hint at why. */
