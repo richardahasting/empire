@@ -455,6 +455,10 @@ public class Console {
         // a standing order that cannot lay a point looks exactly like a finished one; say which are waiting (issue #150)
         if (!stalled.isEmpty()) sb.append("waiting for materials: ").append(String.join("; ", stalled)).append('\n');
         sb.append(String.format("country: pet %.0f · gun %.0f · shell %.0f · oil %.0f%n", totals[0], totals[1], totals[2], totals[3]));
+        // how far each radar station sees (Richard 2026-09-15: "A radar should note the radius of its vision")
+        List<String> radars = new ArrayList<>();
+        for (SectorView s : v.sectors()) if (s.full() && s.radarRange() >= 1) radars.add(rel(s.relative()) + " sees " + (int) Math.floor(s.radarRange()) + " hexes");
+        if (!radars.isEmpty()) sb.append("radar: ").append(String.join("; ", radars)).append('\n');
         sb.append("cap: the population ceiling here").append(popScale == 1.0 ? "" : String.format(" (research %.0f → ×%.2f of the flat cap)", v.levels().research(), popScale))
           .append("; days: updates the food lasts at what the people here eat (∞ = they live off the land); census res for the ground; food for basins and deficits\n");
         return sb.toString();
