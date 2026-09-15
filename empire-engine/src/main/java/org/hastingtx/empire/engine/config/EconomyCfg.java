@@ -149,6 +149,31 @@ public record EconomyCfg(
             if (above > 250) above = 250;
             return above < 0 ? easy : easy + above;
         }
+
+        /** The raw rate {@link #limit} turns into {@code value}: its inverse, by bisection (it only rises). Infinite past the 250 cap. */
+        public static double unlimit(double value, double easy, double logBase, boolean flag) {
+            if (value <= easy) return Math.max(0, value);
+            if (value >= easy + 250) return Double.POSITIVE_INFINITY;
+            double lo = easy, hi = easy + 1;
+            while (limit(hi, easy, logBase, flag) < value) hi = easy + (hi - easy) * 2;
+            for (int i = 0; i < 100 && hi - lo > 1e-9 * hi; i++) { double mid = (lo + hi) / 2; if (limit(mid, easy, logBase, flag) < value) lo = mid; else hi = mid; }
+            return (lo + hi) / 2;
+        }
+
+        /**
+         * Points of education an update that hold the level at {@code level} (issue #226): the steady state of the
+         * moving average is the limited rate itself, so the rate must limit to the level, over this many civilians.
+         */
+        public double educationToHold(double level, double civilians, double etus) {
+            return unlimit(level, education.easy(), education.logBase(), true) * (civilians + 1) * etus / education.consumption();
+        }
+
+        /** The points that moved education from {@code before} to {@code after} in one update, read back through the average and the limit. */
+        public double educationMade(double before, double after, double civilians, double etus) {
+            double rate = (after * (education.averageEtus() + etus) - before * education.averageEtus()) / etus;
+            if (rate <= 1e-9) return 0;
+            return unlimit(rate, education.easy(), education.logBase(), true) * (civilians + 1) * etus / education.consumption();
+        }
     }
 
     public record BtuCfg(

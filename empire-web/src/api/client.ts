@@ -123,6 +123,8 @@ export interface Projection {
   btuNow: number; btuAfter: number; starvingSectors: number; spoilingSectors: number; flowsCompleted: number; flowsHeld: number;
   /** Where it will hurt, in your own coordinates, worst first, with a reason (issue #152). */
   starving: Trouble[]; spoiling: Trouble[];
+  /** Issue #226: education now and after, the points the next update makes, and the points an update that hold the level. */
+  educationNow?: number; educationAfter?: number; educationMade?: number; educationToHold?: number;
 }
 export interface Trouble { at: { x: number; y: number }; designation: string; amount: number; hint: string }
 export interface SectorType {

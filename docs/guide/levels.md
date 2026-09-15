@@ -48,6 +48,23 @@ The consequences are worth stating plainly:
 - **They cannot be stockpiled.** There is no point producing a burst of
   education and then stopping.
 
+**So education has an upkeep**, and it grows with your population. At 60 ETUs,
+holding a level takes roughly this many points an update (a point is 1 lcm and $9
+in a school; a full school of 1,000 makes 600):
+
+| to hold | per 100,000 civilians |
+|---|---|
+| 5 | 50 |
+| 10 | 143 |
+| 20 | 462 |
+| 44 | 1,450 |
+
+Above 5 each point buys less. The dashboard shows it under education as
+**made/needed to hold**: the points the next update makes against the points that
+would hold the level where it is, in red when you are short. The terminal client's
+`projection` says the same. Schools that run out of lcm make nothing, and a
+threshold below one update's use (600 for a full school) lets them run dry.
+
 Happiness also scales every sector's work pool, from **0.5× to 1.2×**. Unhappy
 countries do up to half as much work with the same people, everywhere at once.
 It is the cheapest thing to neglect and one of the most expensive.

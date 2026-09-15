@@ -22,7 +22,7 @@ export function Dashboard({ view, game, projection }: { view: CountryView; game:
       <Stat label="efficiency" value={eff.toFixed(0)} />
       <Stat label="tech" value={view.levels.tech.toFixed(1)} />
       <Stat label="research" value={view.levels.research.toFixed(1)} />
-      <Stat label="education" value={view.levels.education.toFixed(1)} />
+      <Stat label="education" value={view.levels.education.toFixed(1)} sub={p && <EducationUpkeep p={p} />} />
       <Stat label="happiness" value={view.levels.happiness.toFixed(1)} />
       <div className="col-span-2 flex flex-wrap gap-1 sm:col-span-4 lg:col-span-6">
         <Badge tone="muted">{game.name} · {game.preset} · {game.status}</Badge>
@@ -34,6 +34,23 @@ export function Dashboard({ view, game, projection }: { view: CountryView; game:
         {p && p.flowsHeld > 0 && <Badge tone="neutral">next update: {p.flowsHeld} shipment{p.flowsHeld === 1 ? "" : "s"} will stall</Badge>}
       </div>
     </div>
+  );
+}
+
+/**
+ * What education costs to keep (issue #226). The level is a moving average of points per civilian, so it has an upkeep
+ * that grows with the population; the number that holds it and what the next update makes, red when short.
+ */
+function EducationUpkeep({ p }: { p: Projection }) {
+  if (p.educationToHold === undefined || p.educationMade === undefined) return null;
+  const hold = Math.ceil(p.educationToHold), made = Math.round(p.educationMade);
+  if (p.educationToHold < 0) return <span className="text-muted-foreground">at the ceiling</span>;
+  const short = made < hold;
+  return (
+    <span className={short ? "text-destructive" : "text-muted-foreground"}
+          title={`Education is a moving average of points per civilian. Holding ${(p.educationNow ?? 0).toFixed(1)} takes ${hold} points an update (a point is 1 lcm and $9 in a school); the next update makes ${made}, so it goes to ${(p.educationAfter ?? 0).toFixed(1)}.`}>
+      {made}/{hold} to hold
+    </span>
   );
 }
 
