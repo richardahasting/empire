@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 
-type DialogKind = "move" | "explore" | "designate" | "threshold" | "deliver" | "road" | "rail" | "railship" | "buildship" | null;
+type DialogKind = "move" | "explore" | "designate" | "threshold" | "deliver" | "road" | "rail" | "railship" | "buildship" | "demobilize" | null;
 
 export interface PickSpec { verb: "move" | "explore" | "distribute" | "sail"; from: SectorView; commodity: string; qty: number; supply?: boolean; /** sail: the ship and where it is now */ ship?: ShipView; /** distribute: every sector of a dragged selection, not just from */ area?: Coord[] }
 
@@ -76,6 +76,7 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
               <ContextMenuSeparator />
               <ContextMenuItem onSelect={() => setDialog("designate")}>Designate…</ContextMenuItem>
               <ContextMenuItem onSelect={() => setDialog("threshold")}>Set threshold…</ContextMenuItem>
+              <ContextMenuItem disabled={(s.stock["mil"] ?? 0) < 1} onSelect={() => setDialog("demobilize")}>Demobilize…{(s.stock["mil"] ?? 0) >= 1 ? ` (${(s.stock["mil"] ?? 0).toFixed(0)} mil)` : ""}</ContextMenuItem>
               <ContextMenuItem onSelect={() => setDialog("deliver")}>Deliver to a neighbour…{Object.keys(s.deliveries).length ? ` (${Object.keys(s.deliveries).length} set)` : ""}</ContextMenuItem>
               <ContextMenuItem onSelect={() => setDialog("road")}>Build road…</ContextMenuItem>
               <ContextMenuItem disabled={view.levels.tech < (rules.rail?.techRequired ?? 60)} onSelect={() => setDialog("rail")}>Build rail…{view.levels.tech < (rules.rail?.techRequired ?? 60) ? ` (tech ${rules.rail?.techRequired ?? 60})` : ""}</ContextMenuItem>
@@ -107,6 +108,7 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
       {s && owned && dialog === "explore" && <ExploreDialog gameId={gameId} view={view} from={s} targets={adjacentUnowned} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} onPick={(civs, supply) => { setDialog(null); onStartPick({ verb: "explore", from: s, commodity: "civ", qty: civs, supply }); }} />}
       {s && owned && dialog === "designate" && <DesignateDialog view={view} rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "threshold" && <ThresholdDialog view={view} rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
+      {s && owned && dialog === "demobilize" && <DemobilizeDialog sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "deliver" && <DeliverDialog view={view} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "road" && <RoadDialog rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && (owned || s.terrain === "ocean") && dialog === "rail" && <RailDialog rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
@@ -321,6 +323,38 @@ function ThresholdDialog({ view, rules, sector: s, onClose, onCommand, busy }: {
           {(scope || s.thresholds[commodity] !== undefined) && <Button variant="danger" disabled={busy} onClick={async () => { await onCommand({ verb: "threshold", x: s.at.x, y: s.at.y, commodity, clear: true, scope: scope || undefined }); onClose(); }}>Clear</Button>}
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button disabled={busy || amount === ""} onClick={async () => { await onCommand({ verb: "threshold", x: s.at.x, y: s.at.y, commodity, amount: Number(amount), scope: scope || undefined }); onClose(); }}>Set</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Stand military down now (issue #217): they become civilians while the sector has room; the rest go home. */
+function DemobilizeDialog({ sector: s, onClose, onCommand, busy }: { sector: SectorView; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean }) {
+  const have = Math.floor(s.stock["mil"] ?? 0);
+  const [mode, setMode] = useState<"keep" | "discharge">("keep");
+  const [amount, setAmount] = useState("0");
+  const [scope, setScope] = useState("");
+  const n = Number(amount);
+  const leaving = scope ? null : mode === "keep" ? Math.max(0, have - Math.floor(n)) : Math.min(have, Math.floor(n));
+  return (
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Demobilize at {s.relative.x},{s.relative.y}</DialogTitle><DialogDescription>{have} military here. Every soldier draws pay each update. Those stood down become civilians while the sector has room; the rest go home.</DialogDescription></DialogHeader>
+        <div className="grid gap-3 text-sm">
+          <label>How
+            <Select value={mode} onChange={e => setMode(e.target.value as "keep" | "discharge")}>
+              <option value="keep">keep this many, stand the rest down</option>
+              <option value="discharge">stand this many down</option>
+            </Select>
+          </label>
+          <label>Number<Input value={amount} onChange={e => setAmount(e.target.value)} inputMode="numeric" autoFocus /></label>
+          <ScopeSelect s={s} scope={scope} setScope={setScope} />
+          {leaving !== null && <p className="text-xs text-muted-foreground">{leaving} leave the service; {have - leaving} remain.</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="danger" disabled={busy || amount === "" || !(n >= 0) || leaving === 0} onClick={async () => { await onCommand({ verb: "demobilize", x: s.at.x, y: s.at.y, amount: n, type: mode === "keep" ? "keep" : undefined, scope: scope || undefined }); onClose(); }}>Demobilize</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -47,6 +47,13 @@ public class Console {
                     // the ack says what each kind of sector actually got, not just that something was applied (issue #146)
                     yield many(gameId, a, v, cfg, t[1], at -> new Command.Threshold(at, t[2], mixed ? SectorSelector.massThreshold(v, cfg, at, t[2], n) : n), mixed ? SectorSelector.effectiveNote(v, cfg, targets, t[2], n) : null);
                 }
+                case "demob", "demobilize", "demobilise" -> {
+                    need(t, 3, "demob SECTOR N | demob SECTOR all | demob SECTOR keep N");
+                    boolean keep = t[2].equalsIgnoreCase("keep") || t[2].equalsIgnoreCase("all");
+                    if (t[2].equalsIgnoreCase("keep")) need(t, 4, "demob SECTOR keep N");
+                    double n = t[2].equalsIgnoreCase("all") ? 0 : Double.parseDouble(keep ? t[3] : t[2]);
+                    yield many(gameId, a, v, cfg, t[1], at -> new Command.Demobilize(at, n, keep));
+                }
                 case "dist", "distribute" -> { need(t, 3, "dist SECTOR cx,cy|none"); Coord ctr = t[2].equalsIgnoreCase("none") ? null : abs(v, t[2]); yield many(gameId, a, v, cfg, t[1], at -> new Command.Distribute(at, ctr)); }
                 case "ships", "fleet" -> new Reply(fleet(v, cfg), true, null, null);
                 case "contacts", "radar" -> new Reply(contacts(v), true, null, null);

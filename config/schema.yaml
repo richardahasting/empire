@@ -648,6 +648,7 @@ economy:
       designate: 1
       distribute: 1
       threshold: 1
+      demobilize: 1                      # NEW (issue #217)
       deliver: 1
       explore: 2
       telegram: 1
