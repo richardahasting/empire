@@ -49,13 +49,22 @@ final class Assault {
     private static Fight fight(GameConfig cfg, Commodities com, World w, Sector target, double attackers, double attStrength, String streamKey) {
         CaptureCfg.AssaultCfg ac = cfg.capture().assault();
         int them = target.owner();
-        record Group(Coord at, double men, double strength) {}
+        record Group(Coord at, double men, double strength, long unit) {}
         List<Group> defence = new ArrayList<>();
-        defence.add(new Group(target.at(), Math.floor(target.stock().get(com.mil)), ac.perMan(target.efficiency()) * fort(cfg, ac, target)));
-        if (ac.neighbours()) for (Coord n : Hex.neighbours(w, target.at())) {
+        defence.add(new Group(target.at(), Math.floor(target.stock().get(com.mil)), ac.perMan(target.efficiency()) * fort(cfg, ac, target), -1));
+        List<Coord> around = ac.neighbours() ? Hex.neighbours(w, target.at()) : List.of();
+        for (Coord n : around) {
             Sector s = w.sector(n);
             if (s.owner() == them && s.stock().get(com.mil) >= 1)
-                defence.add(new Group(n, Math.floor(s.stock().get(com.mil)), ac.perMan(s.efficiency()) * fort(cfg, ac, s)));
+                defence.add(new Group(n, Math.floor(s.stock().get(com.mil)), ac.perMan(s.efficiency()) * fort(cfg, ac, s), -1));
+        }
+        // land units of the defender's standing there fight with mil × defence × efficiency (issue #247; KNOWN attsub.c defense_val)
+        var land = cfg.units().land();
+        if (land != null) for (LandUnit u : w.units()) {
+            if (u.owner() != them || u.stock().get(com.mil) < 1 || !(u.at().equals(target.at()) || around.contains(u.at()))) continue;
+            var cls = land.landClass(u.cls());
+            if (cls == null) continue;
+            defence.add(new Group(u.at(), Math.floor(u.stock().get(com.mil)), cls.defenseAt(u.tech()) * u.efficiency() / 100.0 * fort(cfg, ac, w.sector(u.at())), u.id()));
         }
         double[] men = defence.stream().mapToDouble(Group::men).toArray();
         double defendersAtStart = java.util.Arrays.stream(men).sum();
@@ -81,11 +90,15 @@ final class Assault {
             } else att -= 1;
         }
         World next = w;
+        double inSector = 0;
         for (int k = 0; k < men.length; k++) {
-            Sector s = next.sector(defence.get(k).at());
+            Group g = defence.get(k);
+            if (g.at().equals(target.at())) inSector += g.men();
+            if (g.unit() >= 0) { LandUnit u = next.unit(g.unit()); next = next.withUnit(u.withStock(u.stock().with(com.mil, men[k]))); continue; }
+            Sector s = next.sector(g.at());
             next = next.withSector(s.withStock(s.stock().with(com.mil, men[k])));
         }
-        return new Fight(next, att >= 1, att, defendersAtStart, defendersAtStart - java.util.Arrays.stream(men).sum(), defence.get(0).men(), fort(cfg, ac, target));
+        return new Fight(next, att >= 1, att, defendersAtStart, defendersAtStart - java.util.Arrays.stream(men).sum(), inSector, fort(cfg, ac, target));
     }
 
     /** The sector changes hands: survivors garrison it, the capture losses come off, its wiring to the old owner is cut. Returns what was lost. */
@@ -128,7 +141,27 @@ final class Assault {
              .withRailLevel(s.railLevel() * (1 - infra.rail().combatDamageFraction()));
         if (unrest != null) s = s.withUnrest(loyalty, s.work(), old == attacker ? Sector.NOBODY : old, che, che > 0 ? cheTarget : Sector.NOBODY);
         world[0] = world[0].withSector(s);
-        return partisans.isEmpty() ? spoiled.toString() : (spoiled.isEmpty() ? "" : spoiled + "; ") + partisans + " against you";
+        // KNOWN (takeover.c): the loser's units there lose 29 + roll(100) efficiency; below LAND_MINEFF their crews blow them up, else they are captured
+        var land = cfg.units().land();
+        StringBuilder unitsTaken = new StringBuilder();
+        if (land != null) {
+            var rng = new org.hastingtx.empire.engine.update.steps.UnrestStep.R(Rng.stream("takeover-land:" + at + ":" + world[0].updateNumber(), cfg.world() == null ? 0 : cfg.world().seed()));
+            for (LandUnit u : new ArrayList<>(world[0].units())) {
+                if (u.owner() != loser || !u.at().equals(at)) continue;
+                double eff = u.efficiency() - (land.captureLossBase() + rng.roll(land.captureLossRoll()));
+                if (eff < land.startEfficiency()) {
+                    world[0] = world[0].withoutUnit(u.id());
+                    unitsTaken.append(unitsTaken.isEmpty() ? "" : "; ").append("their unit #").append(u.id()).append(" blown up by its crew");
+                } else {
+                    world[0] = world[0].withUnit(u.withOwner(attacker).withEfficiency(eff));
+                    unitsTaken.append(unitsTaken.isEmpty() ? "" : "; ").append("captured their unit #").append(u.id());
+                }
+            }
+        }
+        String out = spoiled.toString();
+        if (!partisans.isEmpty()) out = (out.isEmpty() ? "" : out + "; ") + partisans + " against you";
+        if (!unitsTaken.isEmpty()) out = (out.isEmpty() ? "" : out + "; ") + unitsTaken;
+        return out;
     }
 
     /** From the sea: everyone aboard an assault ship next to enemy coast (issue #206). */
@@ -172,7 +205,7 @@ final class Assault {
         if (!target.owned()) return CommandResult.fail(w, a.target() + " belongs to nobody; explore into it");
         String no = refused(cfg, w, c, target, "attack");
         if (no != null) return CommandResult.fail(w, no);
-        if (a.parties() == null || a.parties().isEmpty()) return CommandResult.fail(w, "attack with whom? attack " + a.target() + " N from x,y");
+        if ((a.parties() == null || a.parties().isEmpty()) && a.units().isEmpty()) return CommandResult.fail(w, "attack with whom? attack " + a.target() + " N from x,y [unit U]");
         org.hastingtx.empire.engine.update.Ctx mctx = new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0);
         double perMan = mctx.moveCostInto(target);
         if (!Double.isFinite(perMan)) return CommandResult.fail(w, "no soldier can move into " + a.target());
@@ -200,6 +233,24 @@ final class Assault {
             attackers += men;
             worth += men * cfg.capture().assault().perMan(s.efficiency());
         }
+        // land units next door (issue #247; KNOWN attsub.c attack_val: mil × attack × efficiency), paying their own march in
+        record UnitSent(long id, double men) {}
+        List<UnitSent> unitsSent = new ArrayList<>();
+        var land = cfg.units().land();
+        for (long id : a.units()) {
+            LandUnit u = next.unit(id);
+            if (land == null || u == null || u.owner() != c.id()) return CommandResult.fail(w, "no land unit #" + id + " of yours");
+            if (!Hex.neighbours(w, a.target()).contains(u.at())) return CommandResult.fail(w, "unit #" + id + " at " + u.at() + " is not next to " + a.target());
+            var cls = land.landClass(u.cls());
+            double men = Math.floor(u.stock().get(com.mil));
+            if (men < 1) return CommandResult.fail(w, "unit #" + id + " has no soldiers (lload " + id + " mil N)");
+            double cost = Army.costInto(cfg, mctx, u, target);
+            if (u.mobility() < cost) return CommandResult.fail(w, "unit #" + id + " has " + q(u.mobility()) + " mobility; moving into " + a.target() + " takes " + q(cost));
+            unitsSent.add(new UnitSent(id, men));
+            next = next.withUnit(u.withStock(u.stock().with(com.mil, 0)).withMobility(u.mobility() - cost));
+            attackers += men;
+            worth += men * cls.attackAt(u.tech()) * u.efficiency() / 100.0;
+        }
 
         Fight f = fight(cfg, com, next, next.sector(a.target()), attackers, worth / attackers, "attack:" + c.id() + ">" + a.target());
         // the dead cost their sectors mobility, in proportion to the share of the garrison lost, at most the cap each (attsub.c)
@@ -217,8 +268,19 @@ final class Assault {
         if (!f.won())
             return new CommandResult(f.next(), null, 0, story + " — beaten off: all " + q(attackers) + " lost; they lost " + q(f.defendersLost()));
         World[] held = {f.next()};
-        String spoiled = capture(cfg, com, held, c.id(), a.target(), f.survivors(), 0);
+        // the survivors are shared out in proportion to what each sent; units move in with theirs
+        double inUnits = 0;
+        for (UnitSent us : unitsSent) inUnits += Math.floor(us.men() * f.survivors() / attackers);
+        String spoiled = capture(cfg, com, held, c.id(), a.target(), f.survivors() - inUnits, 0);
+        StringBuilder movedIn = new StringBuilder();
+        for (UnitSent us : unitsSent) {
+            double keep = Math.floor(us.men() * f.survivors() / attackers);
+            LandUnit u = held[0].unit(us.id());
+            held[0] = held[0].withUnit(u.withAt(a.target()).withStock(u.stock().with(com.mil, keep)));
+            movedIn.append(movedIn.isEmpty() ? "" : ", ").append("#").append(us.id());
+        }
         return new CommandResult(held[0], null, 0, story + " — taken: " + q(f.survivors()) + " survivors hold it; they lost " + q(f.defendersLost())
+                + (movedIn.isEmpty() ? "" : "; units " + movedIn + " moved in")
                 + (spoiled.isEmpty() ? "" : "; lost in the fighting: " + spoiled));
     }
 

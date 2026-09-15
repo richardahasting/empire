@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { api, macrosApi, type CommandRequest, type ConsoleReply, type Coord, type CountryView, type GameSummary, type LastUpdate, type Macro, type MacroStep, type Outcome, type Projection, type Rules } from "@/api/client";
 import { MacrosDialog, RecordMacroDialog, RunMacroDialog, stepFromCommand } from "@/game/Macros";
 import { Fleet } from "@/game/Fleet";
+import { Army } from "@/game/Army";
 import { COMMODITY_HUES } from "@/map/palette";
 import { useAuth } from "@/api/auth";
 import { HexMap, type Layer } from "@/map/HexMap";
@@ -304,6 +305,7 @@ export function GamePage() {
         {macroDialog === "list" && <MacrosDialog macros={macros} onClose={() => setMacroDialog(null)} onSave={saveMacro} onDelete={deleteMacro} />}
         <aside className="flex min-h-0 min-w-0 flex-col gap-3">
           <div className={(fleetAt ? "max-h-[45%]" : "max-h-[28%]") + " overflow-auto rounded-lg border border-border bg-card p-3"}><div className="mb-1 text-xs font-medium">Fleet{view.ships.length ? ` (${view.ships.length})` : ""}</div><Fleet gameId={gameId} view={view} rules={rules} busy={busy} onCommand={command} at={fleetAt} onShowAll={() => setFleetAt(null)} onSail={s => setPick({ verb: "sail", from: view.sectors.find(x => x.at.x === s.at.x && x.at.y === s.at.y) ?? view.sectors[0], commodity: "", qty: 1, ship: s })} /></div>
+          {rules.land && <div className="max-h-[22%] overflow-auto rounded-lg border border-border bg-card p-3"><div className="mb-1 text-xs font-medium">Army{(view.units ?? []).length ? ` (${(view.units ?? []).length})` : ""}</div><Army view={view} rules={rules} busy={busy} onCommand={command} /></div>}
           <div className="max-h-[40%] overflow-auto rounded-lg border border-border bg-card p-3">{area.length > 0
             ? <AreaActions view={view} rules={rules} busy={busy} area={area} onCommand={command} onClear={() => setArea([])}
                 onPickCentre={() => { const first = view.sectors.find(s => s.at.x === area[0].x && s.at.y === area[0].y); if (first) setPick({ verb: "distribute", from: first, commodity: "", qty: 0, area }); }} />

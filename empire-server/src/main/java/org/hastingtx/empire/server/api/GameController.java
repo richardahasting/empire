@@ -98,7 +98,9 @@ public class GameController {
                         /** Work per person and the happiness curve, and every named curve — so the inspector can say what a sector will make and which limit binds (issue #163). */
                         org.hastingtx.empire.engine.config.EconomyCfg.WorkCfg work, Map<String, org.hastingtx.empire.engine.config.CurveCfg> curves,
                         /** How research scales a sector's population ceiling (issue #153): {type: none | res_pop | linear…}. */
-                        org.hastingtx.empire.engine.config.EconomyCfg.PopulationCfg.MaxPopCurve maxPopCurve) {}
+                        org.hastingtx.empire.engine.config.EconomyCfg.PopulationCfg.MaxPopCurve maxPopCurve,
+                        /** Land unit classes and rules (issue #247); null in a world without them. */
+                        org.hastingtx.empire.engine.config.UnitsCfg.LandCfg land) {}
 
     @GetMapping("/{id}/rules")
     public Rules rules(@PathVariable long id) {
@@ -106,7 +108,7 @@ public class GameController {
         Double minEff = cfg.economy().efficiency().productionMinEfficiency();
         return new Rules(cfg.economy().sectorTypes(), cfg.commodities(), cfg.etus(), cfg.economy().btu().costByCommand(), cfg.infrastructure().road(), cfg.economy().defaultCapacity(),
                 cfg.infrastructure().rail(), minEff == null ? 0 : minEff, cfg.distribution().massThresholdMultiplierByType() == null ? Map.of() : cfg.distribution().massThresholdMultiplierByType(), cfg.units().ships(),
-                cfg.economy().work(), cfg.economy().curves() == null ? Map.of() : cfg.economy().curves(), cfg.economy().population().maxPopResearchCurve());
+                cfg.economy().work(), cfg.economy().curves() == null ? Map.of() : cfg.economy().curves(), cfg.economy().population().maxPopResearchCurve(), cfg.units().land());
     }
 
     /**
@@ -123,7 +125,9 @@ public class GameController {
                                  /** Many sectors by list, absolute — a selection dragged on the map; an alternative to {@code scope}. */
                                  List<Coord> sectors,
                                  /** An attack's parties: military from sectors next to x,y, absolute (issue #236). */
-                                 List<Command.Attack.Party> parties) {
+                                 List<Command.Attack.Party> parties,
+                                 /** A land unit's id for march / lload / lunload; land units joining an attack (issue #247). */
+                                 Long unit, List<Long> units) {
         boolean isMass() { return (scope != null && !scope.isBlank()) || (sectors != null && !sectors.isEmpty()); }
         boolean listed() { return sectors != null && !sectors.isEmpty(); }
         Command toCommand() { return toCommand(x == null || y == null ? null : new Coord(x, y)); }
@@ -157,14 +161,18 @@ public class GameController {
                 case "mine" -> new Command.Mine(needShip(), x == null || y == null ? null : at(x, y), Boolean.TRUE.equals(clear));
                 case "fire" -> new Command.Fire(needShip(), at(x, y), type);
                 case "land" -> new Command.Land(needShip(), at(x, y));
-                case "attack" -> new Command.Attack(need(at), parties == null ? List.of() : parties);
+                case "attack" -> new Command.Attack(need(at), parties == null ? List.of() : parties, units == null ? List.of() : units);
                 case "anti" -> new Command.Anti(need(at));
+                case "build_unit" -> new Command.BuildUnit(need(at), type);
+                case "march" -> new Command.March(needUnit(), at(x, y));
+                case "lload", "lunload" -> new Command.LoadUnit(needUnit(), commodity, amount == null ? 0 : amount, verb.equals("lunload"));
                 case "patrol", "search", "escort", "blockade", "interdict" -> new Command.Mission(needShip(), verb, points == null ? (x == null || y == null ? List.of() : List.of(at(x, y))) : points,
                         ward == null ? 0 : ward, Boolean.TRUE.equals(clear));
                 case "supply" -> new Command.Supply(needShip(), x == null || y == null ? null : at(x, y), Boolean.TRUE.equals(clear));
                 default -> throw new IllegalArgumentException("unknown verb: " + verb);
             };
         }
+        private long needUnit() { if (unit == null) throw new IllegalArgumentException("unit id required"); return unit; }
         private long needShip() { if (ship == null) throw new IllegalArgumentException("ship id required"); return ship; }
         private static Coord need(Coord c) {
             if (c == null) throw new IllegalArgumentException("coordinates required");

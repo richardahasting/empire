@@ -31,6 +31,7 @@ public class WorldRepository {
         writeMoves(gameId, w.pendingMoves(), com);
         writeRail(gameId, w.pendingRail(), com);
         writeShips(gameId, w, com);
+        writeUnits(gameId, w, com);
         writeContacts(gameId, w);
         writeSeen(gameId, w);
         writeRailLanes(gameId, w, com);
@@ -50,6 +51,7 @@ public class WorldRepository {
         if (!after.pendingMoves().equals(before.pendingMoves())) writeMoves(gameId, after.pendingMoves(), com);
         if (!after.pendingRail().equals(before.pendingRail())) writeRail(gameId, after.pendingRail(), com);
         if (!after.ships().equals(before.ships()) || after.nextShipId() != before.nextShipId()) writeShips(gameId, after, com);
+        if (!after.units().equals(before.units()) || after.nextUnitId() != before.nextUnitId()) writeUnits(gameId, after, com);
         if (!after.contacts().equals(before.contacts())) writeContacts(gameId, after);
         if (!after.seen().equals(before.seen())) writeSeen(gameId, after);
         if (!after.railLanes().equals(before.railLanes())) writeRailLanes(gameId, after, com);
@@ -181,6 +183,20 @@ public class WorldRepository {
     }
 
     /** Few ships, so the whole fleet is rewritten whenever any of it changed. */
+    /** Land units (issue #247): few, so all of them are rewritten whenever any changed. */
+    private void writeUnits(long gameId, World w, Commodities com) {
+        jdbc.update("DELETE FROM land_unit WHERE game_id = ?", gameId);
+        jdbc.update("UPDATE game SET next_unit_id = ? WHERE id = ?", w.nextUnitId(), gameId);
+        if (w.units().isEmpty()) return;
+        List<Object[]> rows = new ArrayList<>(), stock = new ArrayList<>();
+        for (var u : w.units()) {
+            rows.add(new Object[] {gameId, u.id(), u.owner(), u.cls(), u.at().x(), u.at().y(), u.efficiency(), u.mobility(), u.tech(), u.built(), u.note() == null ? "" : u.note()});
+            for (int c = 0; c < com.size(); c++) if (u.stock().get(c) > 0) stock.add(new Object[] {gameId, u.id(), com.id(c), u.stock().get(c)});
+        }
+        jdbc.batchUpdate("INSERT INTO land_unit (game_id, id, owner, class, x, y, efficiency, mobility, tech, built, note) VALUES (?,?,?,?,?,?,?,?,?,?,?)", rows);
+        if (!stock.isEmpty()) jdbc.batchUpdate("INSERT INTO land_unit_stock (game_id, unit_id, commodity, qty) VALUES (?,?,?,?)", stock);
+    }
+
     private void writeShips(long gameId, World w, Commodities com) {
         jdbc.update("DELETE FROM ship WHERE game_id = ?", gameId);
         jdbc.update("UPDATE game SET next_ship_id = ? WHERE id = ?", w.nextShipId(), gameId);
@@ -325,6 +341,14 @@ public class WorldRepository {
                     Stocks.of(st), noDest ? null : new Coord(dx, dy), lane, rs.getLong("built"), rs.getString("note"), rs.getDouble("tech"), rs.getString("mission"), homeOf(rs), rs.getDouble("fuel"), rs.getDouble("crew"), rs.getDouble("mobility"), firedOn(rs.getString("fired_on")), route(rs.getString("route")), rs.getLong("ward"), rs.getBoolean("hand_leg"), manifests.getOrDefault(id, Map.of()));
         }, g.id());
         Long nextShip = jdbc.queryForObject("SELECT next_ship_id FROM game WHERE id = ?", Long.class, g.id());
+        Map<Long, double[]> unitStock = new HashMap<>();
+        jdbc.query("SELECT unit_id, commodity, qty FROM land_unit_stock WHERE game_id = ?", rs -> {
+            unitStock.computeIfAbsent(rs.getLong("unit_id"), k -> new double[n])[com.index(rs.getString("commodity"))] = rs.getDouble("qty");
+        }, g.id());
+        List<org.hastingtx.empire.engine.model.LandUnit> units = jdbc.query("SELECT * FROM land_unit WHERE game_id = ? ORDER BY id", (rs, i) -> new org.hastingtx.empire.engine.model.LandUnit(
+                rs.getLong("id"), rs.getInt("owner"), rs.getString("class"), new Coord(rs.getInt("x"), rs.getInt("y")), rs.getDouble("efficiency"),
+                Stocks.of(unitStock.getOrDefault(rs.getLong("id"), new double[n])), rs.getDouble("mobility"), rs.getDouble("tech"), rs.getLong("built"), rs.getString("note")), g.id());
+        Long nextUnit = jdbc.queryForObject("SELECT next_unit_id FROM game WHERE id = ?", Long.class, g.id());
         List<Contact> contacts = jdbc.query("SELECT * FROM contact WHERE game_id = ? ORDER BY owner, ship_id", (rs, i) ->
                 new Contact(rs.getInt("owner"), rs.getLong("ship_id"), rs.getInt("target_owner"), rs.getString("class"),
                         new Coord(rs.getInt("x"), rs.getInt("y")), rs.getLong("seen_update"), rs.getDouble("confidence")), g.id());
@@ -340,6 +364,6 @@ public class WorldRepository {
             int o = rs.getInt("owner"), fx = rs.getInt("from_x"), fy = rs.getInt("from_y"), tx = rs.getInt("to_x"), ty = rs.getInt("to_y");
             return new RailLane(o, new Coord(fx, fy), new Coord(tx, ty), laneCargo.getOrDefault(laneKey(o, fx, fy, tx, ty), List.of()));
         }, g.id());
-        return new World(g.width(), g.height(), g.wrapX(), g.wrapY(), list, countries, moves, g.updateNumber(), rail, ships, nextShip == null ? 1 : nextShip, contacts, seen, lanes, readRelations(g.id()));
+        return new World(g.width(), g.height(), g.wrapX(), g.wrapY(), list, countries, moves, g.updateNumber(), rail, ships, nextShip == null ? 1 : nextShip, contacts, seen, lanes, readRelations(g.id()), units, nextUnit == null ? 1 : nextUnit);
     }
 }

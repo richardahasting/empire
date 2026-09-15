@@ -57,7 +57,12 @@ public class Console {
                 case "dist", "distribute" -> { need(t, 3, "dist SECTOR cx,cy|none"); Coord ctr = t[2].equalsIgnoreCase("none") ? null : abs(v, t[2]); yield many(gameId, a, v, cfg, t[1], at -> new Command.Distribute(at, ctr)); }
                 case "ships", "fleet" -> new Reply(fleet(v, cfg), true, null, null);
                 case "contacts", "radar" -> new Reply(contacts(v), true, null, null);
-                case "build" -> { need(t, 3, "build HARBOUR CLASS [name]"); yield cmd(gameId, a, new Command.BuildShip(abs(v, t[1]), t[2], t.length > 3 ? String.join(" ", Arrays.copyOfRange(t, 3, t.length)) : null)); }
+                case "build" -> {
+                    need(t, 3, "build HARBOUR SHIPCLASS [name] | build HEADQUARTERS UNITCLASS");
+                    // a land unit class builds a unit in a headquarters (issue #247); anything else is a ship
+                    if (cfg.units().land() != null && cfg.units().land().hasClass(t[2])) yield cmd(gameId, a, new Command.BuildUnit(abs(v, t[1]), t[2]));
+                    yield cmd(gameId, a, new Command.BuildShip(abs(v, t[1]), t[2], t.length > 3 ? String.join(" ", Arrays.copyOfRange(t, 3, t.length)) : null));
+                }
                 case "sail" -> { need(t, 3, "sail SHIP x,y | sail SHIP hold"); yield cmd(gameId, a, new Command.Sail(Long.parseLong(t[1].replace("#", "")), t[2].equalsIgnoreCase("hold") ? null : abs(v, t[2]))); }
                 case "load" -> { need(t, 4, "load SHIP COMMODITY N"); yield cmd(gameId, a, new Command.Load(Long.parseLong(t[1].replace("#", "")), t[2], Double.parseDouble(t[3]))); }
                 case "unload" -> { need(t, 4, "unload SHIP COMMODITY N"); yield cmd(gameId, a, new Command.Unload(Long.parseLong(t[1].replace("#", "")), t[2], Double.parseDouble(t[3]))); }
@@ -104,16 +109,20 @@ public class Console {
                 case "anti" -> { need(t, 2, "anti SECTOR"); yield many(gameId, a, v, cfg, t[1], Command.Anti::new); }
                 case "unrest" -> new Reply(unrest(v), true, null, null);
                 case "attack", "att" -> {
-                    String usage = "attack x,y N from x2,y2 [N2 from x3,y3 ...]";
-                    need(t, 5, usage);
-                    if ((t.length - 2) % 3 != 0) throw new IllegalArgumentException("usage: " + usage);
+                    String usage = "attack x,y [N from x2,y2 ...] [unit U ...]";
+                    need(t, 3, usage);
                     List<Command.Attack.Party> parties = new ArrayList<>();
-                    for (int k = 2; k < t.length; k += 3) {
-                        if (!t[k + 1].equalsIgnoreCase("from")) throw new IllegalArgumentException("usage: " + usage);
-                        parties.add(new Command.Attack.Party(abs(v, t[k + 2]), Double.parseDouble(t[k])));
+                    List<Long> units = new ArrayList<>();
+                    for (int k = 2; k < t.length; ) {
+                        if (t[k].equalsIgnoreCase("unit") && k + 1 < t.length) { units.add(Long.parseLong(t[k + 1].replace("#", ""))); k += 2; }
+                        else if (k + 2 < t.length && t[k + 1].equalsIgnoreCase("from")) { parties.add(new Command.Attack.Party(abs(v, t[k + 2]), Double.parseDouble(t[k]))); k += 3; }
+                        else throw new IllegalArgumentException("usage: " + usage);
                     }
-                    yield cmd(gameId, a, new Command.Attack(abs(v, t[1]), parties));
+                    yield cmd(gameId, a, new Command.Attack(abs(v, t[1]), parties, units));
                 }
+                case "army", "units" -> new Reply(army(v), true, null, null);
+                case "march", "mar" -> { need(t, 3, "march UNIT x,y"); yield cmd(gameId, a, new Command.March(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
+                case "lload", "lunload" -> { need(t, 4, verb + " UNIT COMMODITY N"); yield cmd(gameId, a, new Command.LoadUnit(Long.parseLong(t[1].replace("#", "")), t[2], Double.parseDouble(t[3]), verb.equals("lunload"))); }
                 case "land" -> { need(t, 3, "land SHIP x,y"); yield cmd(gameId, a, new Command.Land(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
                 case "fire" -> { need(t, 3, "fire SHIP x,y [CLASS]"); yield cmd(gameId, a, new Command.Fire(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]), t.length > 3 ? t[3] : null)); }
                 case "supply" -> { need(t, 2, "supply SHIP [x,y] | supply SHIP off"); long id = Long.parseLong(t[1].replace("#", "")); boolean off = t.length > 2 && t[2].equalsIgnoreCase("off"); yield cmd(gameId, a, new Command.Supply(id, !off && t.length > 2 ? abs(v, t[2]) : null, off)); }
@@ -375,6 +384,18 @@ public class Console {
             for (int i = 0; i < e.lines().size(); i++) sb.append(String.format("  %d. %s%n", i + 1, e.lines().get(i)));
         }
         return sb.toString();
+    }
+
+    /** Your land units (issue #247): where, how fit, soldiers and supplies, mobility, strength in attack and defence. */
+    static String army(CountryView v) {
+        if (v.units().isEmpty()) return "no land units — designate a headquarters and build one there (build x,y infantry)";
+        StringBuilder sb = new StringBuilder(String.format("%-5s %-10s %-8s %4s %5s %5s %5s %4s %5s  %s%n", "unit", "class", "at", "eff", "mil", "food", "mob", "att", "def", "carries"));
+        for (var u : v.units()) {
+            String rest = String.join(", ", u.stock().entrySet().stream().filter(e -> !e.getKey().equals("mil") && !e.getKey().equals("food")).map(e -> String.format("%.0f %s", e.getValue(), e.getKey())).toList());
+            sb.append(String.format("#%-4d %-10s %-8s %3.0f%% %5.0f %5.0f %5.0f %4.0f %5.0f  %s%s%n", u.id(), u.cls(), rel(u.relative()), u.efficiency(), u.stock().getOrDefault("mil", 0.0),
+                    u.stock().getOrDefault("food", 0.0), u.mobility(), u.attack(), u.defense(), rest, u.note() == null || u.note().isBlank() ? "" : " · " + u.note()));
+        }
+        return sb.append("att/def: mil × strength × efficiency. march UNIT x,y · lload UNIT mil N · attack x,y unit UNIT").toString();
     }
 
     /** Sectors with unrest (issue #72): disloyal, not all at work, occupied, or with guerrillas; and the happiness they want. */

@@ -60,6 +60,14 @@ export interface SectorView {
    */
   remembered: boolean; seenUpdate: number; age: number;
 }
+/** A land unit of yours (issue #247). attack/defense: mil × strength × efficiency. */
+export interface UnitView {
+  id: number; cls: string; name: string; at: Coord; relative: Coord; efficiency: number; stock: Record<string, number>; carries: Record<string, number>;
+  mobility: number; tech: number; attack: number; defense: number; note: string;
+}
+export interface LandClass { id: string; name: string; glyph: string; techRequired: number; build: Record<string, number>; bwork: number; attack: number; defense: number; speed: number; carries: Record<string, number>; flags: string[] }
+export interface LandRules { startEfficiency: number; classes: LandClass[] }
+
 export interface ShipView {
   id: number; cls: string; name: string; at: Coord; relative: Coord; efficiency: number; stock: Record<string, number>; load: number; hold: number;
   dest: Coord | null; destRelative: Coord | null; lane: { from: Coord; to: Coord; fromRelative: Coord; toRelative: Coord; cargo: string[]; outbound: boolean } | null;
@@ -89,6 +97,8 @@ export interface CountryView {
   levels: Levels; inSanctuary: boolean; bankrupt: boolean; commodityIds: string[]; sectors: SectorView[]; otherCountryNames: string[];
   /** Your ships (issue #56). */
   ships: ShipView[];
+  /** Your land units (issue #247). */
+  units?: UnitView[];
   /** Countries you are at war with, by name (issue #137). */
   atWarWith?: string[];
   /** Enemy ships your sensors have found (issue #75); what you can aim at (issue #68). */
@@ -151,7 +161,7 @@ export interface ShipClass { id: string; name: string; glyph: string; role: stri
   /** Most of a commodity she may carry, by id (issue #193: an assault ship takes 100 mil and 20 civ). */
   limits?: Record<string, number> | null }
 export interface ShipsRules { startEfficiency: number; dockPointsPerUpdate: number; harborMinEfficiency: number; classes: ShipClass[] }
-export interface Rules { sectorTypes: SectorType[]; commodities: Commodity[]; etusPerUpdate: number; btuCosts: Record<string, number>; road?: RoadRules; defaultCapacity?: number; rail?: RailRules; productionMinEfficiency?: number; massThresholdMultiplierByType?: Record<string, number>; ships?: ShipsRules | null; work?: WorkRules; curves?: Record<string, Curve>; maxPopCurve?: { type: string; base?: number | null; perResearchPoint?: number | null; cap?: number | null } | null }
+export interface Rules { sectorTypes: SectorType[]; commodities: Commodity[]; etusPerUpdate: number; btuCosts: Record<string, number>; road?: RoadRules; defaultCapacity?: number; rail?: RailRules; productionMinEfficiency?: number; massThresholdMultiplierByType?: Record<string, number>; ships?: ShipsRules | null; work?: WorkRules; curves?: Record<string, Curve>; maxPopCurve?: { type: string; base?: number | null; perResearchPoint?: number | null; cap?: number | null } | null; land?: LandRules | null }
 export interface Outcome { accepted: boolean; error?: string; btuSpent: number; view: CountryView; info?: string | null }
 export interface ConsoleReply { output: string; accepted: boolean; error?: string; view?: CountryView }
 export interface CommandRequest {
@@ -162,6 +172,8 @@ export interface CommandRequest {
   sectors?: Coord[];
   /** An attack's parties: military from your sectors next to x,y, absolute (issue #236). */
   parties?: { from: Coord; mil: number }[];
+  /** A land unit for march / lload / lunload; land units joining an attack (issue #247). */
+  unit?: number; units?: number[];
   /** Many sectors instead of x,y: "*" (all mine), "*:TYPE" (one designation), "x1:x2,y1:y2" (a rectangle, relative). Standing orders only. */
   scope?: string;
   /** deliver: e ne nw w sw se (or "none" to clear). */

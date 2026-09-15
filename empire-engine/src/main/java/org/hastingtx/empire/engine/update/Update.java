@@ -23,6 +23,7 @@ public final class Update {
                 new ProductionStep(),     // 5
                 new FlowStep(),           // 6 + 7 (plan, then resolve contention and walk)
                 new ShipStep(),           // 7c ships: fit out, fish, cruise, lanes, sail (issue #56)
+                new LandStep(),           // 7d land units: pay, maintenance, rations, repair, mobility (issue #247)
                 new MoneyStep(),          // 8
                 new LevelsStep(),         // 9
                 new DetectionStep(),      // 10 (stub in M0)
