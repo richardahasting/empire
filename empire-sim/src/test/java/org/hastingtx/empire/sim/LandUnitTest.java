@@ -80,6 +80,9 @@ class LandUnitTest {
         assertThat(u.mobility()).as("mobility accrues").isGreaterThan(0);
         assertThat(u.stock().get(COM.food)).as("the men ate").isLessThan(24);
 
+        // game 82, 2026-09-15: 55 men with 24 food need 1.65 a update; flooring what they ate to 1 starved 21 of them
+        World fed = unitAt(world(), HQ, "infantry", 100, Map.of("mil", 55.0, "food", 24.0));
+        assertThat(Update.run(fed, CFG, 5).next().unit(1).stock().get(COM.mil)).as("rations enough: nobody starves").isEqualTo(55);
         World hungry = unitAt(world(), HQ, "infantry", 100, Map.of("mil", 100.0));
         assertThat(Update.run(hungry, CFG, 4).next().unit(1).stock().get(COM.mil)).as("no rations: men starve").isLessThan(100);
     }
