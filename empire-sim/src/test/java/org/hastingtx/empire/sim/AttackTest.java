@@ -60,7 +60,13 @@ class AttackTest {
         assertThat(s.distCenter()).isNull();
         Sector home = r.world().sector(FRONT);
         assertThat(home.stock().get(COM.mil)).as("the hundred left home").isEqualTo(100);
-        assertThat(home.mobility()).as("and the sector paid for sending them").isEqualTo(100 - CFG.capture().attackOrDefault().mobilityCostOr0());
+        // KNOWN (attsub.c): the move cost of a hundred soldiers into the target, and up to 20 more for its dead
+        World before = world(true, 10, 0, 200);
+        double move = 100 * new org.hastingtx.empire.engine.update.Ctx(before, CFG, COM, 0).moveCostInto(before.sector(TARGET));
+        assertThat(move).as("a real cost").isGreaterThan(1);
+        assertThat(home.mobility()).as("and the sector paid the move, and a little for its dead")
+                .isLessThanOrEqualTo(Math.round(100 - move)).isGreaterThanOrEqualTo(Math.round(100 - move) - CFG.capture().attackOrDefault().casualtyMobilityCapOr0() - 1);
+        assertThat(s.mobility()).as("a taken sector's mobility is 0").isZero();
         assertThat(r.info()).contains("taken");
         assertThat(Update.run(r.world(), CFG, 7).next().sector(TARGET).owner()).as("the books balance through an update").isEqualTo(0);
     }
@@ -94,7 +100,7 @@ class AttackTest {
         assertThat(EX.execute(world(true, 10, 0, 50), 0, attack(100)).error()).contains("has 50 military");
         World tired = world(true, 10, 0, 200);
         tired = tired.withSector(tired.sector(FRONT).withMobility(5));
-        assertThat(EX.execute(tired, 0, attack(100)).error()).contains("mobility");
+        assertThat(EX.execute(tired, 0, attack(100)).error()).as("mobility caps how many a sector can send").contains("mobility, which can carry").contains("not 100");
         assertThat(EX.execute(world(true, 10, 0, 200), 0, new Command.Attack(DEPTH, List.of(new Command.Attack.Party(FRONT, 10)))).error()).contains("not next to");
         assertThat(EX.execute(world(true, 10, 0, 200), 0, new Command.Attack(TARGET, List.of())).error()).contains("with whom");
         assertThat(EX.execute(world(true, 10, 0, 200), 0, new Command.Attack(FRONT, List.of(new Command.Attack.Party(FRONT, 10)))).error()).contains("already yours");

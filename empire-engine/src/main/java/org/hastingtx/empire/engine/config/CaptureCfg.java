@@ -10,11 +10,14 @@ public record CaptureCfg(
         /** Attacking over land (issue #236); the fight itself is {@link #assault}'s. Null in a game that predates it. */
         AttackCfg attack) {
 
-    /** NEW (issue #236, #71 slice 1). Boxed: a game from before land attack binds with none of these keys. */
+    /**
+     * Issue #236 (#71 slice 1). A sending sector pays soldiers × the move cost into the target (KNOWN: attsub.c att_mobcost),
+     * and its casualties cost it more. Boxed: a game from before land attack binds with none of these keys.
+     */
     public record AttackCfg(
-            /** Mobility a sector must have, and pays, to send military into an attack. GUESS. */
-            Double mobilityCost) {
-        public double mobilityCostOr0() { return mobilityCost == null ? 0 : mobilityCost; }
+            /** Most mobility a sector's casualties can cost it beyond the move (KNOWN: attsub.c MIN(20, ...)). */
+            Double casualtyMobilityCap) {
+        public double casualtyMobilityCapOr0() { return casualtyMobilityCap == null ? 0 : casualtyMobilityCap; }
     }
 
     /** A game that predates land attack charges no mobility for one. */

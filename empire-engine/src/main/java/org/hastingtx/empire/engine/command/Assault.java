@@ -101,7 +101,8 @@ final class Assault {
         }
         st = st.with(com.mil, survivors).plus(com.civ, civIn);
         var infra = cfg.infrastructure();
-        s = s.withOwner(attacker).withStock(st).withDistCenter(null).withDeliver(DeliverOrders.none(com.size()))
+        // KNOWN (subs/takeover.c): the distribution info is wiped and a taken sector's mobility is 0
+        s = s.withOwner(attacker).withStock(st).withDistCenter(null).withDeliver(DeliverOrders.none(com.size())).withMobility(0)
              .withRoadLevel(s.roadLevel() * (1 - infra.road().combatDamageFraction()))
              .withRailLevel(s.railLevel() * (1 - infra.rail().combatDamageFraction()));
         world[0] = world[0].withSector(s);
@@ -135,9 +136,10 @@ final class Assault {
     }
 
     /**
-     * Over land (issue #236, #71 slice 1): military from sectors of yours next to an enemy sector. Every party leaves
-     * home when the fight starts; each sector sending one must have {@code capture.attack.mobility_cost} mobility and pays
-     * it. The attackers fight as one body, at the average worth of the men sent.
+     * Over land (issue #236, #71 slice 1): military from sectors of yours next to an enemy sector, fighting as one body
+     * at the average worth of the men sent. Mobility as the original (subs/attsub.c, Richard 2026-09-15: the original is
+     * the default): a sector pays soldiers × the cost of moving one into the target, so its mobility caps how many it
+     * can send; its casualties cost it a further share of its mobility, at most 20. Survivors move in.
      */
     static CommandResult attack(GameConfig cfg, Commodities com, World w, Country c, Command.Attack a) {
         if (c.inSanctuary()) return CommandResult.fail(w, "break sanctuary first");
@@ -149,7 +151,12 @@ final class Assault {
         String no = refused(cfg, w, c, target, "attack");
         if (no != null) return CommandResult.fail(w, no);
         if (a.parties() == null || a.parties().isEmpty()) return CommandResult.fail(w, "attack with whom? attack " + a.target() + " N from x,y");
-        double mobilityCost = cfg.capture().attackOrDefault().mobilityCostOr0();
+        org.hastingtx.empire.engine.update.Ctx mctx = new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0);
+        double perMan = mctx.moveCostInto(target);
+        if (!Double.isFinite(perMan)) return CommandResult.fail(w, "no soldier can move into " + a.target());
+        double lossCap = cfg.capture().attackOrDefault().casualtyMobilityCapOr0();
+        record Sent(Coord from, double men, double homeMil, double homeMob) {}
+        List<Sent> sent = new ArrayList<>();
 
         World next = w;
         double attackers = 0, worth = 0;
@@ -163,13 +170,27 @@ final class Assault {
             double men = Math.floor(p.mil());
             if (men < 1) return CommandResult.fail(w, "send at least one soldier from " + p.from());
             if (s.stock().get(com.mil) < men) return CommandResult.fail(w, p.from() + " has " + q(s.stock().get(com.mil)) + " military, not " + q(men));
-            if (s.mobility() < mobilityCost) return CommandResult.fail(w, p.from() + " has " + q(s.mobility()) + " mobility; an attack from it takes " + q(mobilityCost));
-            next = next.withSector(s.withStock(s.stock().plus(com.mil, -men)).withMobility(s.mobility() - mobilityCost));
+            double cost = men * mctx.weightLeaving(com.mil, s) * perMan;
+            if (s.mobility() < cost) return CommandResult.fail(w, p.from() + " has " + q(s.mobility()) + " mobility, which can carry "
+                    + q(Math.floor(s.mobility() / (mctx.weightLeaving(com.mil, s) * perMan))) + " soldiers into " + a.target() + ", not " + q(men));
+            sent.add(new Sent(p.from(), men, s.stock().get(com.mil), s.mobility()));
+            next = next.withSector(s.withStock(s.stock().plus(com.mil, -men)).withMobility(s.mobility() - Math.max(1, cost)));
             attackers += men;
             worth += men * cfg.capture().assault().perMan(s.efficiency());
         }
 
         Fight f = fight(cfg, com, next, next.sector(a.target()), attackers, worth / attackers, "attack:" + c.id() + ">" + a.target());
+        // the dead cost their sectors mobility, in proportion to the share of the garrison lost, at most the cap each (attsub.c)
+        double dead = attackers - f.survivors();
+        World after = f.next();
+        for (Sent p : sent) {
+            double lost = dead * p.men() / attackers;
+            if (lost <= 0 || p.homeMil() <= 0) continue;
+            Sector s = after.sector(p.from());
+            double extra = Math.min(lossCap, p.homeMob() * Math.min(1, lost / p.homeMil()));
+            after = after.withSector(s.withMobility(Math.max(0, s.mobility() - extra)));
+        }
+        f = new Fight(after, f.won(), f.survivors(), f.defendersAtStart(), f.defendersLost(), f.inSector(), f.fort());
         String story = f.story("attack", a.target(), attackers);
         if (!f.won())
             return new CommandResult(f.next(), null, 0, story + " — beaten off: all " + q(attackers) + " lost; they lost " + q(f.defendersLost()));

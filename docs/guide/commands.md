@@ -47,7 +47,7 @@ fish SHIP [x,y] | off        fishing mission: roam the grounds near the home har
 mine SHIP [x,y] | off        seabed mining: roam the nodule fields near home, mine, land the ore, repeat
 attack x,y N from x2,y2 [N2 from x3,y3 ...]   at war: N military from your sector x2,y2 (and more from others next to
                              x,y) attack the enemy sector x,y, man for man against it and its neighbours' military;
-                             win and it is yours; lose and all sent are gone. Each sending sector pays 20 mobility
+                             win and it is yours; lose and all sent are gone. Sending costs a move's mobility
 land SHIP x,y                assault ship: put everyone aboard (up to 100 mil, 20 civ) ashore on the unowned land
                              sector next to her; it becomes yours. At war, on enemy coast: an assault, man for
                              man against the sector's and its neighbours' military; win and it is yours
@@ -132,8 +132,10 @@ soldiers leave home and fight as one body, man for man, against the sector's
 garrison and its owner's military in the sectors around it. A fortress's defenders
 count double, and a soldier from a run-down sector is worth less. Win and the sector
 is yours with its people, garrisoned by your survivors, less a tenth of its goods and
-some of its road and rail. Lose and everyone you sent is gone. Each sector that sends
-soldiers pays 20 mobility. In the web client it is **Attack…** on an enemy sector's
+some of its road and rail, and its mobility falls to 0. Lose and everyone you sent is
+gone. Moving soldiers in costs mobility as a move would: a sector pays each soldier's
+cost of entering the target (so its mobility caps how many it can send), and its dead
+cost it up to 20 more. In the web client it is **Attack…** on an enemy sector's
 menu. An assault ship does the same from the sea (see [Ships](ships.html)).
 
 **`deliver COMMODITY SECTOR DIR N`** — a standing order: each update, push
