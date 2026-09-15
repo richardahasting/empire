@@ -56,10 +56,11 @@ public final class LandStep implements Step {
             double need = men * pop.foodPerMilPerEtu() * ctx.etus, have = u.stock().get(food);
             Stocks st = u.stock();
             if (need > 0) {
-                double eat = Math.floor(Math.min(have, need));
+                // whole units: a unit that has the food eats what it needs, rounded up; only a real shortage starves anyone
+                double eat = Math.min(have, Math.ceil(need));
                 if (eat > 0) { st = st.plus(food, -eat); ctx.led().consumed[food] += (long) eat; }
-                if (eat < need - 1e-9) {
-                    double shortfall = 1 - eat / need;
+                if (have < need) {
+                    double shortfall = 1 - have / need;
                     double dead = Math.floor(Math.min(men * shortfall, men * pop.starvationMaxFractionPerUpdate()));
                     if (dead > 0) {
                         st = st.plus(mil, -dead);
