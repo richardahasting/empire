@@ -30,10 +30,11 @@ improve ships already built.
 | class | tech | hold | speed | what it is for |
 |---|---|---|---|---|
 | fishing_boat | 0 | 300 | 3 | food from the sea |
-| cargo_ship | 0 | 600 | 3 | anything |
+| cargo_ship | 0 | 600 | 3 | goods, not people |
+| ferry | 10 | 300 | 4 | people: civilians, military, workers |
 | tanker | 15 | 1500 | 3 | oil and petrol only |
 | industrial_fishing_boat | 20 | 1200 | 4 | three times the catch |
-| super_cargo | 25 | 2400 | 4 | anything, in bulk |
+| super_cargo | 25 | 2400 | 4 | goods in bulk, not people |
 | tender | 20 | 600 | 2 | answers distress calls: petrol and repairs at sea |
 | assault_ship | 30 | 100 mil + 20 civ | 4 | lands people on unowned coast |
 | luxury_craft | 30 | 100 | 3 | happiness, at $50 an update |
@@ -249,6 +250,16 @@ They do not run out. Nodules form over millions of years, so nothing here
 depletes them.
 
 A deep sea miner needs tech 35, and costs rather more than a trawler.
+
+## Ferries: people go by ferry
+
+**Cargo ships carry goods, not people** (Richard 2026-09-15: "cargo ships should not be used as busses").
+Civilians, military and workers travel by **ferry**: a hold of 300 people, speed 4, a crew of five,
+tech 10, and cheap to build (40 lcm, 20 hcm, $800). It moves them between your own harbours with
+`load`/`unload`, a `lane`, or a `supply` round, exactly as a cargo ship moves goods. It cannot put
+anyone ashore anywhere else: landing on unowned or enemy coast is the assault ship's job.
+
+(The original's cargo ship took 600 civilians and 50 military along with its goods.)
 
 ## Cargo runs
 
