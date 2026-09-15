@@ -9,7 +9,7 @@ import org.hastingtx.empire.engine.model.Coord;
 public sealed interface Command permits
         Command.BreakSanctuary, Command.Designate, Command.Threshold, Command.Distribute,
         Command.Move, Command.Explore, Command.BuildRoad, Command.BuildRail, Command.RailShip, Command.Deliver,
-        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission, Command.Land, Command.Demobilize,
+        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission, Command.Land, Command.Demobilize, Command.Attack,
         Command.RailLane, Command.Telegram, Command.Announce, Command.DeclareWar, Command.OfferPeace {
 
     String verb();
@@ -75,6 +75,13 @@ public sealed interface Command permits
 
     /** Issue #193: an assault ship puts everyone aboard ashore on the unowned land sector {@code at}, next to her. */
     record Land(long ship, Coord at) implements Command { public String verb() { return "land"; } }
+
+    /** Military from sectors of yours next to an enemy sector take it by force, at war (issue #236, #71 slice 1). */
+    record Attack(Coord target, java.util.List<Party> parties) implements Command {
+        public String verb() { return "attack"; }
+        /** {@code mil} soldiers from {@code from}. */
+        public record Party(Coord from, double mil) {}
+    }
 
     /**
      * Issue #68: a military mission — {@code kind} is patrol (points = the route), search, escort

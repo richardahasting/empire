@@ -6,7 +6,19 @@ public record CaptureCfg(
         double scorchedEarthBtuCost,
         double scorchedEarthDestroyFraction,
         /** Taking held coast from the sea (issue #206). Null in a game that predates it: assault is refused. */
-        AssaultCfg assault) {
+        AssaultCfg assault,
+        /** Attacking over land (issue #236); the fight itself is {@link #assault}'s. Null in a game that predates it. */
+        AttackCfg attack) {
+
+    /** NEW (issue #236, #71 slice 1). Boxed: a game from before land attack binds with none of these keys. */
+    public record AttackCfg(
+            /** Mobility a sector must have, and pays, to send military into an attack. GUESS. */
+            Double mobilityCost) {
+        public double mobilityCostOr0() { return mobilityCost == null ? 0 : mobilityCost; }
+    }
+
+    /** A game that predates land attack charges no mobility for one. */
+    public AttackCfg attackOrDefault() { return attack != null ? attack : new AttackCfg(null); }
 
     /**
      * Man for man, as the original fought it (Richard 2026-09-14). Boxed: a game from before assault

@@ -673,6 +673,7 @@ economy:
       scrap: 1
       fire: 1
       land: 2
+      attack: 2                          # NEW (issue #236)
       patrol: 1
       search: 1
       escort: 1
@@ -811,6 +812,11 @@ capture:
     efficiency_floor: 0.5
     fort_bonus: 2.0
     neighbours_defend: true
+  # ATTACK over land (issue #236, #71 slice 1; built 2026-09-15 for Richard's review): military from sectors of
+  # yours next to an enemy sector, at war, fought exactly as an assault above. Each sector sending men must have
+  # this much mobility and pays it (NEW: the original charged the move cost). GUESS.
+  attack:
+    mobility_cost: 20
 
 # -----------------------------------------------------------------------------
 # DETECTION — NEW probabilistic model (original was binary radar range)

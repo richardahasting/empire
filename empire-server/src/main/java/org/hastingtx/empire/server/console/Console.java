@@ -101,6 +101,17 @@ public class Console {
                     for (int i = 2; i < t.length; i++) pts.add(abs(v, t[i]));
                     yield cmd(gameId, a, new Command.Mission(id, verb, pts, 0, false));
                 }
+                case "attack", "att" -> {
+                    String usage = "attack x,y N from x2,y2 [N2 from x3,y3 ...]";
+                    need(t, 5, usage);
+                    if ((t.length - 2) % 3 != 0) throw new IllegalArgumentException("usage: " + usage);
+                    List<Command.Attack.Party> parties = new ArrayList<>();
+                    for (int k = 2; k < t.length; k += 3) {
+                        if (!t[k + 1].equalsIgnoreCase("from")) throw new IllegalArgumentException("usage: " + usage);
+                        parties.add(new Command.Attack.Party(abs(v, t[k + 2]), Double.parseDouble(t[k])));
+                    }
+                    yield cmd(gameId, a, new Command.Attack(abs(v, t[1]), parties));
+                }
                 case "land" -> { need(t, 3, "land SHIP x,y"); yield cmd(gameId, a, new Command.Land(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
                 case "fire" -> { need(t, 3, "fire SHIP x,y [CLASS]"); yield cmd(gameId, a, new Command.Fire(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]), t.length > 3 ? t[3] : null)); }
                 case "supply" -> { need(t, 2, "supply SHIP [x,y] | supply SHIP off"); long id = Long.parseLong(t[1].replace("#", "")); boolean off = t.length > 2 && t[2].equalsIgnoreCase("off"); yield cmd(gameId, a, new Command.Supply(id, !off && t.length > 2 ? abs(v, t[2]) : null, off)); }

@@ -121,7 +121,9 @@ public class GameController {
                                  /** The ship an escort stays with. */
                                  Long ward,
                                  /** Many sectors by list, absolute — a selection dragged on the map; an alternative to {@code scope}. */
-                                 List<Coord> sectors) {
+                                 List<Coord> sectors,
+                                 /** An attack's parties: military from sectors next to x,y, absolute (issue #236). */
+                                 List<Command.Attack.Party> parties) {
         boolean isMass() { return (scope != null && !scope.isBlank()) || (sectors != null && !sectors.isEmpty()); }
         boolean listed() { return sectors != null && !sectors.isEmpty(); }
         Command toCommand() { return toCommand(x == null || y == null ? null : new Coord(x, y)); }
@@ -155,6 +157,7 @@ public class GameController {
                 case "mine" -> new Command.Mine(needShip(), x == null || y == null ? null : at(x, y), Boolean.TRUE.equals(clear));
                 case "fire" -> new Command.Fire(needShip(), at(x, y), type);
                 case "land" -> new Command.Land(needShip(), at(x, y));
+                case "attack" -> new Command.Attack(need(at), parties == null ? List.of() : parties);
                 case "patrol", "search", "escort", "blockade", "interdict" -> new Command.Mission(needShip(), verb, points == null ? (x == null || y == null ? List.of() : List.of(at(x, y))) : points,
                         ward == null ? 0 : ward, Boolean.TRUE.equals(clear));
                 case "supply" -> new Command.Supply(needShip(), x == null || y == null ? null : at(x, y), Boolean.TRUE.equals(clear));

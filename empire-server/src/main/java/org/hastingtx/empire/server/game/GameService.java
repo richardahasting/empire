@@ -712,6 +712,16 @@ public class GameService {
         else post(g, "war", attacker, "{country}'s assault on a " + defender + " " + place + " was thrown back into the sea", null);
     }
 
+    private void postAttack(Game g, World before, World after, int attacker, Command.Attack at) {
+        if (!before.inBounds(at.target())) return;
+        int was = before.sector(at.target()).owner();
+        if (was < 0 || was == attacker) return;
+        String place = before.sector(at.target()).designation().replace('_', ' ');
+        String defender = before.country(was).name();
+        if (after.sector(at.target()).owner() == attacker) post(g, "war", attacker, "{country} attacked over land and took a " + place + " from " + defender, null);
+        else post(g, "war", attacker, "{country}'s attack on a " + defender + " " + place + " was beaten off", null);
+    }
+
     /** An engine message that opens with the country's name, with the name swapped for the {country} placeholder. */
     private static String countryFirst(World w, int country, String msg) {
         if (country < 0 || country >= w.countries().size() || msg == null) return msg;
@@ -1079,7 +1089,7 @@ public class GameService {
             World before = g.world;
             CommandResult r = g.exec.execute(before, country, cmd);
             logs.command(gameId, country, before.updateNumber(), source, cmd.verb(), cmd, r.ok(), r.error(), r.btuSpent());
-            if (r.ok()) { worlds.saveDiff(gameId, before, r.world(), g.com); g.world = r.world(); postMilestones(g, before, r.world()); deliver(g, country, cmd); if (cmd instanceof Command.Fire) postSinkings(g, before, r.world(), country); if (cmd instanceof Command.Land la) postAssault(g, before, r.world(), country, la); }
+            if (r.ok()) { worlds.saveDiff(gameId, before, r.world(), g.com); g.world = r.world(); postMilestones(g, before, r.world()); deliver(g, country, cmd); if (cmd instanceof Command.Fire) postSinkings(g, before, r.world(), country); if (cmd instanceof Command.Land la) postAssault(g, before, r.world(), country, la); if (cmd instanceof Command.Attack at) postAttack(g, before, r.world(), country, at); }
             Coord cap = g.world.country(country).capital();
             return new Outcome(r.ok(), relativise(g.world, cap, r.error()), r.btuSpent(), CountryView.of(g.world, g.cfg, country), relativise(g.world, cap, r.info()));
         } finally { g.lock.unlock(); }
@@ -1154,6 +1164,7 @@ public class GameService {
             case Command.Fire fi -> null;
             case Command.Mission mi -> null;
             case Command.Land la -> la.at();
+            case Command.Attack atk -> atk.target();
             case Command.Demobilize d -> d.sector();
             case Command.Telegram t -> null;
             case Command.Announce a -> null;
