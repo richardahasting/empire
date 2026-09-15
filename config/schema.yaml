@@ -228,7 +228,11 @@ economy:
     per_civ: 1.0
     per_uw:  1.0
     per_mil: 0.5
-    happiness_effect_curve: { neutral_at: 0, slope_per_point: 0.01, min: 0.5, max: 1.2 }
+    # +1% work per point of happiness, everywhere work is spent (production, build-up, paving). No ceiling
+    # (Richard 2026-09-15, issue #230; it was max 1.2, reached at happiness 20). Happiness itself is bounded by
+    # limit_level and its moving average. A game whose rules still carry max keeps that ceiling. NEW: the original
+    # had no bonus; its happiness only mattered below the unrest requirement (#72).
+    happiness_effect_curve: { neutral_at: 0, slope_per_point: 0.01, min: 0.5 }
 
   # --- Sector types ------------------------------------------------------------
   # One entry per designation. Fields:

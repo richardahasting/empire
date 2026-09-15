@@ -136,7 +136,7 @@ export interface SectorType {
   storeMultiplier?: number | null; productionCashPerUnit?: number | null;
 }
 export interface Curve { type: string; k?: number | null; baseline?: number | null; base?: number | null; easy?: number | null; value?: number | null; minMultiplier?: number | null; min?: number | null; lag?: number | null; at0?: number | null; at100?: number | null }
-export interface WorkRules { perCiv: number; perUw: number; perMil: number; happinessEffectCurve: { neutralAt: number; slopePerPoint: number; min: number; max: number } }
+export interface WorkRules { perCiv: number; perUw: number; perMil: number; happinessEffectCurve: { neutralAt: number; slopePerPoint: number; min: number; max?: number | null } }
 export interface Commodity { id: string; name: string; weight: number; priority: number; isPerson?: boolean | null }
 export interface RoadRules { buildMaterialsPerPoint: Record<string, number>; workPerPoint: number; maxPointsPerUpdate: number; costMultiplierByTerrain: Record<string, number>; maxLevelByTerrain: Record<string, number>; decayPerUpdate: number; maintenanceCashPerPointPerUpdate: number }
 export interface Crossing { techRequired: number; materials: Record<string, number> }

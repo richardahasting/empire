@@ -133,9 +133,11 @@ and **the penalty lands the following update** — you get one update's warning.
 
 ## Happiness and the work you get
 
-Happiness scales every sector's work pool, from **0.5× to 1.2×**. An unhappy
-country does not merely feel bad; it does up to half as much work with the same
-people. Happiness is produced by parks and is a moving average — it decays if
+Happiness scales every sector's work pool: **+1% work per point**, with no
+ceiling (Richard 2026-09-15: "a happy workforce is a productive workforce"). It
+counts wherever work is spent: production, efficiency build-up and paving. A
+country at happiness 50 does half as much again as one at 0 with the same
+people. Happiness is produced by parks and forests and is a moving average — it decays if
 you stop.
 
 **A forest doubles as a park** (Richard 2026-09-15). On forest terrain it makes a

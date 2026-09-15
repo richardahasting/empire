@@ -50,7 +50,7 @@ export function estimate(s: SectorView, t: SectorType, rules: Rules, levels: Lev
   const w = rules.work;
   const civ = s.stock["civ"] ?? 0, uw = s.stock["uw"] ?? 0, mil = s.stock["mil"] ?? 0;
   const h = w?.happinessEffectCurve;
-  const happy = h ? Math.max(h.min, Math.min(h.max, 1 + (levels.happiness - h.neutralAt) * h.slopePerPoint)) : 1;
+  const happy = h ? Math.min(h.max ?? Infinity, Math.max(h.min, 1 + (levels.happiness - h.neutralAt) * h.slopePerPoint)) : 1;   // no max: no ceiling (#230)
   const work = (civ * (w?.perCiv ?? 1) + uw * (w?.perUw ?? 1) + mil * (w?.perMil ?? 0.5)) * rules.etusPerUpdate * happy;
 
   const floor = rules.productionMinEfficiency ?? 0;
