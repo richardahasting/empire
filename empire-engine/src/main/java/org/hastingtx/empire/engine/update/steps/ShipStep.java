@@ -86,7 +86,7 @@ public final class ShipStep implements Step {
                 double room = Math.max(0, cls.hold() - ship.load());
                 double fish = Math.min(room, cls.fishingRateOr0() * here.fertility() * ctx.etus * sc.fishingFoodPerEtuPerFertilityPoint() * eff);
                 fish = ctx.led().produceAtSea(ctx.com.food, fish);   // whole units, tallied where it is made (issue #77)
-                if (fish > 0) { ship = ship.withStock(ship.stock().plus(ctx.com.food, fish)); note.next().append("fished ").append(Ledger.q(fish)).append(" food"); if (room - fish < 1e-9) note.last().append(" (hold full)"); }
+                if (fish > 0) { ship = ship.withStock(ship.stock().plus(ctx.com.food, fish)).tally(Ship.CAUGHT + ctx.com.id(ctx.com.food), fish); note.next().append("fished ").append(Ledger.q(fish)).append(" food"); if (room - fish < 1e-9) note.last().append(" (hold full)"); }
                 else if (room <= 1e-9) note.next().append("hold full, no fishing");
             }
             // seabed mining (issue #112): iron from the hex's nodules into the hold. The same shape as
@@ -95,7 +95,7 @@ public final class ShipStep implements Step {
                 double room = Math.max(0, cls.hold() - ship.load());
                 double ore = Math.min(room, cls.miningRateOr0() * here.resource("minerals") * ctx.etus * sc.oreRate() * eff);
                 ore = ctx.led().produceAtSea(ctx.com.index("iron"), ore);
-                if (ore > 0) { ship = ship.withStock(ship.stock().plus(ctx.com.index("iron"), ore)); note.next().append("mined ").append(Ledger.q(ore)).append(" iron"); if (room - ore < 1e-9) note.last().append(" (hold full)"); }
+                if (ore > 0) { ship = ship.withStock(ship.stock().plus(ctx.com.index("iron"), ore)).tally(Ship.MINED + "iron", ore); note.next().append("mined ").append(Ledger.q(ore)).append(" iron"); if (room - ore < 1e-9) note.last().append(" (hold full)"); }
                 else if (room <= 1e-9) note.next().append("hold full, no mining");
                 else if (here.resource("minerals") <= 0) note.next().append("no nodules here");
             }
@@ -103,6 +103,7 @@ public final class ShipStep implements Step {
             if (cls.happinessOr0() > 0 && here.terrain() == Terrain.OCEAN && eff > 0) {
                 double h = cls.happinessOr0() * ctx.etus * eff;
                 ctx.led().level[ship.owner()][3] += h;
+                ship = ship.tally(Ship.HAPPINESS, h);
                 note.next().append("cruised: +").append(Ledger.q(h)).append(" happiness");
             }
             // refuel (issue #65): a harbour pumps from its own stock, a tanker from its hold at sea. First,
@@ -636,7 +637,7 @@ public final class ShipStep implements Step {
         StringBuilder did = new StringBuilder();
         if (give >= 1) {
             ward = ward.withFuel(ward.fuel() + give);
-            tender = tender.withStock(tender.stock().plus(pet, -give));
+            tender = tender.withStock(tender.stock().plus(pet, -give)).tally(Ship.FUEL_GIVEN, give);
             did.append("filled her tank with ").append(Ledger.q(give)).append(' ').append(sc.fuelId());
         }
         double cost = sc.tendersOrDefault().patchCost();
@@ -655,6 +656,7 @@ public final class ShipStep implements Step {
             note.next().append("reached ship #").append(ward.id()).append(" with nothing aboard to give her; going home to restock");
             return tender.withMission(null, null).withDest(home);
         }
+        tender = tender.tally(Ship.RESCUES, 1);
         note.next().append("reached ship #").append(ward.id()).append(": ").append(did).append("; going home to ").append(home);
         String line = "tender #" + tender.id() + " came alongside: " + did.toString().replace("her tank", "the tank").replace("her hull", "the hull");
         if (wi < si) {
@@ -829,7 +831,7 @@ public final class ShipStep implements Step {
             if (!"tanker".equals(ctx.cfg.units().ships().shipClass(t.cls()).role())) continue;
             double give = Math.floor(Math.min(room, t.stock().get(pet)));
             if (give < 1) continue;
-            done.set(k, t.withStock(t.stock().plus(pet, -give)));
+            done.set(k, t.withStock(t.stock().plus(pet, -give)).tally(Ship.FUEL_GIVEN, give));
             note.next().append("refuelled ").append(Ledger.q(give)).append(' ').append(ctx.com.id(pet)).append(" from ").append(label(t));
             return ship.withFuel(ship.fuel() + give);
         }
@@ -1042,6 +1044,8 @@ public final class ShipStep implements Step {
             ctx.led().note(sx, label(ship) + " unloaded " + here);
         }
         if (!put.isEmpty()) note.next().append("unloaded ").append(put).append(" at ").append(harbor.at());
-        return ship.withStock(st);
+        Ship out = ship.withStock(st);
+        for (int c = 0; c < given.length; c++) out = out.tally(Ship.DELIVERED + ctx.com.id(c), given[c]);   // the manifest (issue #244)
+        return out;
     }
 }

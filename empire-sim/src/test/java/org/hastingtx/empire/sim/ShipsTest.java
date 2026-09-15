@@ -169,6 +169,41 @@ class ShipsTest {
         assertThat(Update.run(docked, CFG, 1).next().country(0).levels().happiness()).isCloseTo(0, within(1e-9));
     }
 
+    /**
+     * The running manifest (issue #244, Richard 2026-09-15: "how much food, iron, happiness, or deliveries each ship has
+     * created since the ship's creation"). Every fish is caught once, and either delivered or still aboard.
+     */
+    @Test
+    void aShipKeepsARunningManifest() {
+        World w = withShip(world(), "fishing_boat", HARBOR_E, 100);
+        for (int d = 0; d < 6; d++) for (int k = 1; k <= 3; k++) {
+            Coord c = Hex.stepRaw(HARBOR_E, d, k);
+            if (w.inBounds(c) && w.sector(c).terrain() == Terrain.OCEAN) w = w.withSector(w.sector(c).withTerrain(Terrain.OCEAN, 0, new Resources(50, 0, 0, 0, 0)));
+        }
+        World cur = new CommandExecutor(CFG).execute(w, 0, new Command.Fish(1, null, false)).world();
+        double fishedByNote = 0;
+        var fished = java.util.regex.Pattern.compile("fished (\\d+(?:\\.\\d)?) food");
+        for (int i = 0; i < 12; i++) {
+            cur = Update.run(cur, CFG, 60 + i).next();
+            var m = fished.matcher(cur.ship(1).note());
+            while (m.find()) fishedByNote += Double.parseDouble(m.group(1));
+        }
+        Ship boat = cur.ship(1);
+        double caught = boat.manifest().getOrDefault(Ship.CAUGHT + "food", 0.0), delivered = boat.manifest().getOrDefault(Ship.DELIVERED + "food", 0.0);
+        assertThat(caught).as("she caught fish").isGreaterThan(0).isCloseTo(fishedByNote, within(fishedByNote * 0.02 + 1));
+        assertThat(delivered).as("and landed some").isGreaterThan(0);
+        assertThat(caught).as("every fish caught is delivered or still aboard").isCloseTo(delivered + boat.stock().get(FOOD), within(1e-6));
+
+        // happiness from a cruise, and a delivery by hand
+        World lux = Update.run(withShip(world(), "luxury_craft", SEA_E, 100), CFG, 1).next();
+        assertThat(lux.ship(1).manifest().get(Ship.HAPPINESS)).isGreaterThan(0);
+        World cargo = withShip(world(), "cargo_ship", HARBOR_E, 100);
+        cargo = cargo.withShip(cargo.ship(1).withStock(cargo.ship(1).stock().plus(COM.index("lcm"), 50)));
+        Ship unloaded = new CommandExecutor(CFG).execute(cargo, 0, new Command.Unload(1, "lcm", 30)).world().ship(1);
+        assertThat(unloaded.manifest()).containsEntry(Ship.DELIVERED + "lcm", 30.0);
+        assertThat(unloaded.tally(Ship.DELIVERED + "lcm", 5).manifest()).as("it runs on").containsEntry(Ship.DELIVERED + "lcm", 35.0);
+    }
+
     @Test
     void aFishingMissionRoamsFishesLandsAndGoesOutAgain() {
         World w = withShip(world(), "fishing_boat", HARBOR_E, 100);

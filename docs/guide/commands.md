@@ -34,6 +34,7 @@ announce "..."               the same, to everybody in the game
 macro                        list your macros (recorded from the map); macro run N SECTOR runs one
 ships                        your fleet: where each ship is, its load, where it is going, what it did
 history SHIP [N]             a ship's logbook: what it did, a line at a time, for its last N updates (5)
+manifest [SHIP]              what each ship has caught, mined, cruised and delivered since she was built (one ship in full)
 contacts                     other people's ships your radar and lookouts have seen, and how long ago
 build HARBOUR CLASS [name]   lay a hull in your harbour (fishing_boat, cargo_ship, ferry, tanker, luxury_craft, ...; tech gates apply)
 sail SHIP x,y | hold         sail to a sea hex or one of your harbours (speed × efficiency hexes per update);

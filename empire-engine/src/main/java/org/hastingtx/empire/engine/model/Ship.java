@@ -16,12 +16,34 @@ import java.util.List;
  * merchantman, military on a warship — counted in conservation the same way, and put ashore when she is
  * scrapped.
  */
-public record Ship(long id, int owner, String cls, String name, Coord at, double efficiency, Stocks stock, Coord dest, Lane lane, long built, String note, double tech, String mission, Coord home, double fuel, double crew, double mobility, java.util.Map<Integer, Long> firedOn, List<Coord> route, long ward, boolean handLeg) {
+public record Ship(long id, int owner, String cls, String name, Coord at, double efficiency, Stocks stock, Coord dest, Lane lane, long built, String note, double tech, String mission, Coord home, double fuel, double crew, double mobility, java.util.Map<Integer, Long> firedOn, List<Coord> route, long ward, boolean handLeg,
+                   java.util.Map<String, Double> manifest) {
 
     public Ship {
         firedOn = firedOn == null || firedOn.isEmpty() ? java.util.Map.of() : java.util.Collections.unmodifiableMap(new java.util.TreeMap<>(firedOn));
         route = route == null ? List.of() : List.copyOf(route);
+        manifest = manifest == null || manifest.isEmpty() ? java.util.Map.of() : java.util.Collections.unmodifiableMap(new java.util.TreeMap<>(manifest));
     }
+
+    /** Before the manifest (issue #244): nothing on the books. */
+    public Ship(long id, int owner, String cls, String name, Coord at, double efficiency, Stocks stock, Coord dest, Lane lane, long built, String note, double tech, String mission, Coord home, double fuel, double crew, double mobility, java.util.Map<Integer, Long> firedOn, List<Coord> route, long ward, boolean handLeg) {
+        this(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, mission, home, fuel, crew, mobility, firedOn, route, ward, handLeg, java.util.Map.of());
+    }
+
+    /*
+     * The running manifest (issue #244, Richard 2026-09-15: "how much food, iron, happiness, or deliveries each ship has
+     * created since the ship's creation"). Lifetime totals by key, in canonical order: "caught food", "mined iron",
+     * "happiness", "delivered <commodity>", "refuelled ships" and "fuel given" for a tender.
+     */
+    public static final String CAUGHT = "caught ", MINED = "mined ", HAPPINESS = "happiness", DELIVERED = "delivered ", RESCUES = "ships helped", FUEL_GIVEN = "fuel given";
+    /** Add {@code qty} to a lifetime total. */
+    public Ship tally(String key, double qty) {
+        if (!(qty > 0)) return this;
+        java.util.Map<String, Double> m = new java.util.TreeMap<>(manifest);
+        m.merge(key, qty, Double::sum);
+        return withManifest(m);
+    }
+    public Ship withManifest(java.util.Map<String, Double> m) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, mission, home, fuel, crew, mobility, firedOn, route, ward, handLeg, m); }
 
     /** Before hand legs (issues #201, #205): never on one. */
     public Ship(long id, int owner, String cls, String name, Coord at, double efficiency, Stocks stock, Coord dest, Lane lane, long built, String note, double tech, String mission, Coord home, double fuel, double crew, double mobility, java.util.Map<Integer, Long> firedOn, List<Coord> route, long ward) {
@@ -41,7 +63,7 @@ public record Ship(long id, int owner, String cls, String name, Coord at, double
      * sight until the update given. The mark is on the ship, not the flag — the rest of her navy is
      * not fair game — and it sinks with her.
      */
-    public Ship withFiredOn(java.util.Map<Integer, Long> f) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, mission, home, fuel, crew, mobility, f, route, ward, handLeg); }
+    public Ship withFiredOn(java.util.Map<Integer, Long> f) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, mission, home, fuel, crew, mobility, f, route, ward, handLeg, manifest); }
     /** Whether {@code country} may engage this hull without a war, as of update {@code now}. */
     public boolean firedOnBy(int country, long now) { Long until = firedOn.get(country); return until != null && until >= now; }
 
@@ -50,7 +72,7 @@ public record Ship(long id, int owner, String cls, String name, Coord at, double
     }
 
     /** Hexes this hull may still travel before it has to wait for the update (issue #69). */
-    public Ship withMobility(double m) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, mission, home, fuel, crew, Math.max(0, m), firedOn, route, ward, handLeg); }
+    public Ship withMobility(double m) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, mission, home, fuel, crew, Math.max(0, m), firedOn, route, ward, handLeg, manifest); }
 
     /** A hull with a dry tank and nobody aboard, for callers that predate fuel and crews (issues #65, #66). */
     public Ship(long id, int owner, String cls, String name, Coord at, double efficiency, Stocks stock, Coord dest, Lane lane, long built, String note, double tech, String mission, Coord home) {
@@ -62,8 +84,8 @@ public record Ship(long id, int owner, String cls, String name, Coord at, double
         this(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, mission, home, fuel, 0);
     }
 
-    public Ship withFuel(double f) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, mission, home, Math.max(0, f), crew, mobility, firedOn, route, ward, handLeg); }
-    public Ship withCrew(double c) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, mission, home, fuel, Math.max(0, c), mobility, firedOn, route, ward, handLeg); }
+    public Ship withFuel(double f) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, mission, home, Math.max(0, f), crew, mobility, firedOn, route, ward, handLeg, manifest); }
+    public Ship withCrew(double c) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, mission, home, fuel, Math.max(0, c), mobility, firedOn, route, ward, handLeg, manifest); }
     public static final String FISH = "fish";
     /** Issue #112: roam the nodule fields near {@code home}, mine, land the ore, repeat. */
     public static final String MINE = "mine";
@@ -84,7 +106,7 @@ public record Ship(long id, int owner, String cls, String name, Coord at, double
      * on a hand leg the order's own steering is skipped; the automatic rules (fuel, limping) still apply.
      * Only {@code off} ends a standing order.
      */
-    public Ship withHandLeg(boolean h) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, mission, home, fuel, crew, mobility, firedOn, route, ward, h); }
+    public Ship withHandLeg(boolean h) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, mission, home, fuel, crew, mobility, firedOn, route, ward, h, manifest); }
     /** The standing order she has, lane included, as a word for the player: fishing, mining, supply, patrol… */
     public String orderLabel() {
         if (lane != null) return "lane";
@@ -106,7 +128,7 @@ public record Ship(long id, int owner, String cls, String name, Coord at, double
     public boolean rescuing() { return RESCUE.equals(mission); }
     /** The station a blockade or interdiction holds, or null. */
     public Coord station() { return (BLOCKADE.equals(mission) || INTERDICT.equals(mission)) && !route.isEmpty() ? route.get(0) : null; }
-    public Ship withOrders(String m, Coord h, List<Coord> r, long w) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, m, h, fuel, crew, mobility, firedOn, r, w, handLeg); }
+    public Ship withOrders(String m, Coord h, List<Coord> r, long w) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, m, h, fuel, crew, mobility, firedOn, r, w, handLeg, manifest); }
 
     /** Shuttle between two harbours: load {@code cargo} (commodity indices; empty = everything it may carry) above the harbour's thresholds at {@code from}, unload all at {@code to}. */
     public record Lane(Coord from, Coord to, List<Integer> cargo, boolean outbound) {
@@ -115,15 +137,15 @@ public record Ship(long id, int owner, String cls, String name, Coord at, double
         public Coord target() { return outbound ? to : from; }
     }
 
-    public Ship withAt(Coord c) { return new Ship(id, owner, cls, name, c, efficiency, stock, dest, lane, built, note, tech, mission, home, fuel, crew, mobility, firedOn, route, ward, handLeg); }
-    public Ship withEfficiency(double e) { return new Ship(id, owner, cls, name, at, e, stock, dest, lane, built, note, tech, mission, home, fuel, crew, mobility, firedOn, route, ward, handLeg); }
-    public Ship withStock(Stocks s) { return new Ship(id, owner, cls, name, at, efficiency, s, dest, lane, built, note, tech, mission, home, fuel, crew, mobility, firedOn, route, ward, handLeg); }
-    public Ship withDest(Coord d) { return new Ship(id, owner, cls, name, at, efficiency, stock, d, lane, built, note, tech, mission, home, fuel, crew, mobility, firedOn, route, ward, handLeg); }
-    public Ship withLane(Lane l) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, l, built, note, tech, mission, home, fuel, crew, mobility, firedOn, route, ward, handLeg); }
-    public Ship withNote(String n) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, n, tech, mission, home, fuel, crew, mobility, firedOn, route, ward, handLeg); }
-    public Ship withName(String n) { return new Ship(id, owner, cls, n, at, efficiency, stock, dest, lane, built, note, tech, mission, home, fuel, crew, mobility, firedOn, route, ward, handLeg); }
+    public Ship withAt(Coord c) { return new Ship(id, owner, cls, name, c, efficiency, stock, dest, lane, built, note, tech, mission, home, fuel, crew, mobility, firedOn, route, ward, handLeg, manifest); }
+    public Ship withEfficiency(double e) { return new Ship(id, owner, cls, name, at, e, stock, dest, lane, built, note, tech, mission, home, fuel, crew, mobility, firedOn, route, ward, handLeg, manifest); }
+    public Ship withStock(Stocks s) { return new Ship(id, owner, cls, name, at, efficiency, s, dest, lane, built, note, tech, mission, home, fuel, crew, mobility, firedOn, route, ward, handLeg, manifest); }
+    public Ship withDest(Coord d) { return new Ship(id, owner, cls, name, at, efficiency, stock, d, lane, built, note, tech, mission, home, fuel, crew, mobility, firedOn, route, ward, handLeg, manifest); }
+    public Ship withLane(Lane l) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, l, built, note, tech, mission, home, fuel, crew, mobility, firedOn, route, ward, handLeg, manifest); }
+    public Ship withNote(String n) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, n, tech, mission, home, fuel, crew, mobility, firedOn, route, ward, handLeg, manifest); }
+    public Ship withName(String n) { return new Ship(id, owner, cls, n, at, efficiency, stock, dest, lane, built, note, tech, mission, home, fuel, crew, mobility, firedOn, route, ward, handLeg, manifest); }
     /** A new mission, or none: any patrol route or escort charge from the last one is forgotten. */
-    public Ship withMission(String m, Coord h) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, m, h, fuel, crew, mobility, firedOn, List.of(), 0, false); }
+    public Ship withMission(String m, Coord h) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, m, h, fuel, crew, mobility, firedOn, List.of(), 0, false, manifest); }
     public boolean fishing() { return FISH.equals(mission); }
     public double load() { return stock.total(); }
 }
