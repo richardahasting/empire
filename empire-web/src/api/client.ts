@@ -52,6 +52,8 @@ export interface SectorView {
   sanctuary: boolean; ownerName: string | null;
   /** Hexes a radar station of yours reaches (issue #208); 0 for anything else. */
   radarRange?: number;
+  /** Loyalty (0 loyal), work % and guerrillas in a sector of yours; peopleOf is who its people still belong to when it was taken (issue #72). */
+  unrest?: { loyalty: number; work: number; peopleOf: string | null; che: number; disloyalAbove: number } | null;
   /**
    * On the chart from memory rather than from sight (issue #64): everything here is as it was at
    * `seenUpdate`, not as it is. `age` is updates since, so it can be dimmed by how stale it is.

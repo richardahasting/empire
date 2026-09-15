@@ -48,6 +48,9 @@ public final class Sector {
     // 0..100 scales (mobility 0..127), 7 B
     private final byte efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget;
     private final boolean sanctuary;
+    // unrest (issue #72), 6 B: KNOWN sct_loyal 0 (loyal)..127, sct_work 0..100, sct_oldown, sct_che 0..CHE_MAX, sct_che_target
+    private final byte loyalty, work, oldOwner, cheTarget;
+    private final short che;
     // distribution centre, 4 B
     private final short distX, distY;
     // references, 16 B
@@ -62,7 +65,9 @@ public final class Sector {
                    byte efficiency, byte mobility, byte roadLevel, byte railLevel, byte radarLevel,
                    byte roadTarget, byte railTarget, boolean sanctuary,
                    short distX, short distY,
-                   int[] thresholds, Stocks stock, List<HeldParcel> held, DeliverOrders deliver) {
+                   int[] thresholds, Stocks stock, List<HeldParcel> held, DeliverOrders deliver,
+                   byte loyalty, byte work, byte oldOwner, short che, byte cheTarget) {
+        this.loyalty = loyalty; this.work = work; this.oldOwner = oldOwner; this.che = che; this.cheTarget = cheTarget;
         this.x = x; this.y = y; this.terrain = terrain; this.elevation = elevation;
         this.fertility = fertility; this.minerals = minerals; this.gold = gold; this.oil = oil; this.uranium = uranium;
         this.owner = owner; this.designation = designation;
@@ -130,6 +135,18 @@ public final class Sector {
     public double roadTarget() { return roadTarget; }
     public double railTarget() { return railTarget; }
     public DeliverOrders deliver() { return deliver; }
+    /** KNOWN sct_loyal: 0 is loyal, up to 127; above 65 the civilians stop working and may revolt (issue #72). */
+    public int loyalty() { return loyalty; }
+    /** KNOWN sct_work: the percentage of civilians working, 0..100. */
+    public int work() { return work; }
+    /** KNOWN sct_oldown: whose the people are. The owner, unless the sector was taken and has not come round yet. */
+    public int oldOwner() { return oldOwner == NOBODY ? owner : oldOwner; }
+    /** Taken, and its people still someone else's: they pay a quarter tax and will not be exported (issue #72). */
+    public boolean occupied() { return owned() && oldOwner() != owner; }
+    /** Guerrillas in the sector (KNOWN sct_che, at most {@link #CHE_MAX}), and the country they fight. */
+    public int che() { return che; }
+    public int cheTarget() { return cheTarget; }
+    public static final int CHE_MAX = 255;
 
     /** The thresholds as the rest of the code has always seen them: NaN where none is set. */
     public double[] thresholds() {
@@ -169,7 +186,7 @@ public final class Sector {
                         int[] thresholds, Stocks stock, List<HeldParcel> held, DeliverOrders deliver) {
         return new Sector(x, y, terrain, elevation, fertility, minerals, gold, oil, uranium, owner, designation,
                 efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget, sanctuary,
-                distX, distY, thresholds, stock, held, deliver);
+                distX, distY, thresholds, stock, held, deliver, loyalty, work, oldOwner, che, cheTarget);
     }
 
     public Sector withOwner(int o) { return copy(country(o), designation, efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget, sanctuary, distX, distY, thresholds, stock, held, deliver); }
@@ -185,6 +202,13 @@ public final class Sector {
     public Sector withRailLevel(double r) { return copy(owner, designation, efficiency, mobility, roadLevel, scale(r, 0, 100), radarLevel, roadTarget, railTarget, sanctuary, distX, distY, thresholds, stock, held, deliver); }
     public Sector withHeld(List<HeldParcel> h) { return copy(owner, designation, efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget, sanctuary, distX, distY, thresholds, stock, List.copyOf(h), deliver); }
     public Sector withSanctuary(boolean s) { return copy(owner, designation, efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget, s, distX, distY, thresholds, stock, held, deliver); }
+    /** Unrest (issue #72): loyalty 0..127, work 0..100, whose the people are (-1: the owner's), che and their target. */
+    public Sector withUnrest(int loyalty, int work, int oldOwner, int che, int cheTarget) {
+        return new Sector(x, y, terrain, elevation, fertility, minerals, gold, oil, uranium, owner, designation,
+                efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget, sanctuary,
+                distX, distY, thresholds, stock, held, deliver, scale(loyalty, 0, 127), scale(work, 0, 100),
+                oldOwner == NOBODY ? (byte) NOBODY : country(oldOwner), (short) Math.max(0, Math.min(CHE_MAX, che)), che <= 0 || cheTarget == NOBODY ? (byte) NOBODY : country(cheTarget));
+    }
     public Sector withDeliver(DeliverOrders d) { return copy(owner, designation, efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget, sanctuary, distX, distY, thresholds, stock, held, d); }
 
     public Sector withThresholds(double[] t) {
@@ -209,13 +233,13 @@ public final class Sector {
         return new Sector(x, y, (byte) t.ordinal(), elev(elev), scale(r.fertility(), 0, 100), scale(r.minerals(), 0, 100),
                 scale(r.gold(), 0, 100), scale(r.oil(), 0, 100), scale(r.uranium(), 0, 100), owner, designation,
                 efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget, sanctuary,
-                distX, distY, thresholds, stock, held, deliver);
+                distX, distY, thresholds, stock, held, deliver, loyalty, work, oldOwner, che, cheTarget);
     }
 
     public Sector withAt(Coord c) {
         return new Sector(coord(c.x()), coord(c.y()), terrain, elevation, fertility, minerals, gold, oil, uranium,
                 owner, designation, efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget,
-                sanctuary, distX, distY, thresholds, stock, held, deliver);
+                sanctuary, distX, distY, thresholds, stock, held, deliver, loyalty, work, oldOwner, che, cheTarget);
     }
 
     // --- construction ----------------------------------------------------------------------------
@@ -238,7 +262,8 @@ public final class Sector {
                 (byte) NOBODY, Designations.id("wilderness"),
                 (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, false,
                 NO_COORD, NO_COORD,
-                noThresholds(nCommodities), Stocks.zero(nCommodities), List.of(), DeliverOrders.none(nCommodities));
+                noThresholds(nCommodities), Stocks.zero(nCommodities), List.of(), DeliverOrders.none(nCommodities),
+                (byte) 0, (byte) 100, (byte) NOBODY, (short) 0, (byte) NOBODY);
     }
 
     // --- value semantics -------------------------------------------------------------------------
@@ -252,12 +277,13 @@ public final class Sector {
                 && efficiency == s.efficiency && mobility == s.mobility && roadLevel == s.roadLevel && railLevel == s.railLevel
                 && radarLevel == s.radarLevel && roadTarget == s.roadTarget && railTarget == s.railTarget && sanctuary == s.sanctuary
                 && distX == s.distX && distY == s.distY
+                && loyalty == s.loyalty && work == s.work && oldOwner == s.oldOwner && che == s.che && cheTarget == s.cheTarget
                 && Arrays.equals(thresholds, s.thresholds) && stock.equals(s.stock) && held.equals(s.held) && deliver.equals(s.deliver);
     }
 
     @Override public int hashCode() {
         int h = Objects.hash(x, y, terrain, elevation, fertility, minerals, gold, oil, uranium, owner, designation,
-                efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget, sanctuary, distX, distY, stock, held, deliver);
+                efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget, sanctuary, distX, distY, stock, held, deliver, loyalty, work, oldOwner, che, cheTarget);
         return 31 * h + Arrays.hashCode(thresholds);
     }
 

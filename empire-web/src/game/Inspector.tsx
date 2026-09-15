@@ -57,6 +57,13 @@ export function Inspector({ sector: s, view, rules, onCommand, busy, history, hi
         <Badge tone="neutral">eff {s.efficiency.toFixed(0)}%</Badge><Badge tone="neutral">mob {s.mobility.toFixed(0)}</Badge>
         {s.roadLevel > 0 && <Badge tone="neutral">road {s.roadLevel.toFixed(0)}</Badge>}
       </div>
+      {s.unrest && (s.unrest.loyalty > 0 || s.unrest.work < 100 || s.unrest.peopleOf || s.unrest.che > 0) && (
+        <div className={"flex flex-wrap items-center gap-2 text-xs " + (s.unrest.loyalty > s.unrest.disloyalAbove || s.unrest.che > 0 ? "text-destructive" : "text-muted-foreground")}
+             title="loyalty 0 is loyal; past the line the civilians stop working and may revolt. Hunger raises it, and so does unhappiness below what your tech and education demand">
+          <span>loyalty {s.unrest.loyalty}{s.unrest.loyalty > s.unrest.disloyalAbove ? " (disloyal)" : ""} · work {s.unrest.work}%{s.unrest.peopleOf ? ` · its people are still ${s.unrest.peopleOf}'s` : ""}{s.unrest.che > 0 ? ` · ${s.unrest.che} guerrillas` : ""}</span>
+          {s.unrest.che > 0 && <Button size="sm" variant="danger" disabled={busy} onClick={() => void onCommand({ verb: "anti", x: s.at.x, y: s.at.y })} title="the garrison goes after them; lose every soldier and the partisans take the sector">Hunt guerrillas</Button>}
+        </div>
+      )}
       {(s.radarRange ?? 0) >= 1 && <p className="text-xs" title="everything within reach is on your map, and enemy ships in it can be detected; reach grows with this sector's efficiency and your tech">Radar reaches {Math.floor(s.radarRange!)} hexes (the dashed ring)</p>}
       {s.resources && <p className="text-xs text-muted-foreground">fert {s.resources.fertility} · min {s.resources.minerals} · gold {s.resources.gold} · oil {s.resources.oil} · uran {s.resources.uranium}</p>}
       {type && (() => {

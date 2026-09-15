@@ -33,6 +33,8 @@ telegram COUNTRY "..."       a private message to one country; they see who it i
 announce "..."               the same, to everybody in the game
 macro                        list your macros (recorded from the map); macro run N SECTOR runs one
 ships                        your fleet: where each ship is, its load, where it is going, what it did
+unrest                       sectors that are disloyal, not all at work, occupied, or fighting guerrillas
+anti SECTOR                  send the garrison after the guerrillas there; lose every soldier and the partisans take it
 history SHIP [N]             a ship's logbook: what it did, a line at a time, for its last N updates (5)
 manifest [SHIP]              what each ship has caught, mined, cruised and delivered since she was built (one ship in full)
 contacts                     other people's ships your radar and lookouts have seen, and how long ago

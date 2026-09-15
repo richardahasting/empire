@@ -17,6 +17,7 @@ public final class Update {
     public static List<Step> steps() {
         return List.of(
                 new AccrualStep(),        // 2
+                new UnrestStep(),         // 2a guerrillas, then loyalty and work (issue #72; populace.c, revolt.c)
                 new PopulationStep(),     // 3
                 new BuildUpStep(),        // 4
                 new ProductionStep(),     // 5

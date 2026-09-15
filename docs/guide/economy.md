@@ -145,3 +145,33 @@ little lcm and, from the same people's leisure, half a park's happiness per
 person, at **$0.25 a point** against a park's $1; its lcm costs nothing. It holds
 500 people to a park's 1,000. Like its lcm, its happiness scales with the ground's
 fertility and your tech, so a forest on rich ground does best.
+
+## Unrest: loyalty, work and guerrillas
+
+Every sector has a **loyalty** (0 is loyal, up to 127) and a **work** share: the
+percentage of its civilians actually working. This is the original game's unrest,
+exactly (Richard 2026-09-15: the original is the default).
+
+- **Hunger makes people disloyal.** A sector where people starve gains 2–9
+  disloyalty and does no work the next update; fed, its work comes back 7–21 points an
+  update.
+- **Unhappiness erodes loyalty slowly.** Each update a sector has a chance of
+  losing loyalty of (requirement − happiness) / 5, where the requirement is
+  `(tech − 40)/40 + education/3`. Loyalty also drifts back every update, so this
+  alone rarely gets far.
+- **Past 65, with fewer soldiers than one per 20 civilians, work falls** and the
+  sector may **revolt**: civilians and workers take up arms as **guerrillas**.
+- **Guerrillas** with no garrison to stop them spread subversion, and if loyalty is
+  50 or more they take the sector (back to whoever its people belong to, or to nobody).
+  Against a smaller garrison they fight it. Against one less than five times their
+  number they blow things up (work and the sector suffer). Against a strong one they
+  slip into a neighbouring sector with fewer troops.
+- **`anti SECTOR`** (or **Hunt guerrillas** in the sector's info box) sends its
+  garrison after them. It costs mobility; lose every soldier and the partisans take
+  the sector.
+- **Conquest.** A sector you take from another country starts at loyalty 50 with its
+  people still theirs: some turn guerrilla at once, and its civilians **pay a quarter
+  tax** until loyalty decays to 0 and the sector is "now fully yours".
+
+Keep a garrison of at least one soldier per 20 civilians in newly taken land, and
+feed everyone. `unrest` in the console lists the sectors that are not quiet.

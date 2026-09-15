@@ -65,8 +65,23 @@ not interact:
 - **Sanctuary**: nothing special; sanctuary sectors update like any other if
   `players.sanctuary.update_runs_while_in_sanctuary`.
 
+### 2a. Unrest (**KNOWN**, issue #72; `economy.unrest`, absent = off)
+For every owned sector in index order, the original's `guerrilla()` then `populace()` (update/revolt.c, populace.c),
+into `Ledger.unrest` (loyalty, this update's work %, next update's, whose the people are, che, che target, new owner):
+- **guerrilla:** che fighting their sector's owner act on the garrison ratio: none → subversion (recruit, and at
+  loyalty ≥ `convert_loyalty` the sector goes to its old owner, or nobody, with a twentieth of its people as military);
+  che > mil → shoot-out; mil/che < `move_ratio` → sabotage (work and `sect_damage`); else move to the target's neighbour
+  with the smallest rounded garrison. The garrison may catch them (ratio × `catch_chance_per_ratio`).
+- **populace:** for the owner's own people below `hap_req`, a (req − hap)/5 chance of + roll(roundavg(ETUs × 0.125))
+  loyalty; above 65 with mil < civ/20, work −(loyalty − 49 − roll(15)) and a work-lost × 0.001 revolt chance
+  (`revolt()`: civilians and uw become che); then loyalty drifts back (75%: −ETUs × 0.25). At 0 the people are the owner's.
+Work share multiplies the civilian term of the work pool (KNOWN `total_work`). Deterministic streams `unrest`,
+`unrest-feed`. Starvation (step 3) adds roll(8)+1 disloyalty and zeroes next update's work; fed, work recovers 7 +
+roll(15). Capture (`attack`, assault) follows `takeover()`: loyalty 50, people still the old owner's, che from the
+civilians by loyalty. `anti` is `anti.c`. Land units (security troops) come with #71.
+
 ### 3. Population
-Per sector, from snapshot stocks:
+Per sector, from the stocks as the update has them (the unrest step may have turned civilians into che):
 1. **Subsistence, then eating.** The first `subsistence.civs_per_sector`
    people (× fertility/100 when `scale_by_fertility`, in `applies_to` order:
    civ, uw, mil) live off the land: they consume no stock and cannot starve.
@@ -340,6 +355,8 @@ lines for what docked ships did; each ship's lines for the update are its logboo
 
 ### 8. Money
 Country-level:
+- **Occupied sectors** (issue #72): civilians whose sector's `old_owner` is not its owner pay tax ÷
+  `unrest.capture.occupied_tax_divisor` (4).
 - **Income** (KNOWN, `update/prepare.c`): tax `(civ × tax_per_civ_per_etu + uw ×
   tax_per_uw_per_etu) × ETUs × efficiency/100` per sector (issue #221), and, in
   `interest_bearing` sectors (banks) when `options.interest`, `bars × ETUs ×

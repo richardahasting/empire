@@ -1165,6 +1165,7 @@ public class GameService {
             case Command.Mission mi -> null;
             case Command.Land la -> la.at();
             case Command.Attack atk -> atk.target();
+            case Command.Anti an -> an.sector();
             case Command.Demobilize d -> d.sector();
             case Command.Telegram t -> null;
             case Command.Announce a -> null;

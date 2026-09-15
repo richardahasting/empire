@@ -37,6 +37,12 @@ Things that grow by time alone.
   up to 1,000. A 100%-efficient capital with 1,000 civilians refills the full
   640 every update; a half-ruined capital refills half as fast.
 
+### 2a. Unrest
+Guerrillas act, then each sector's loyalty and work move, as in the original (see
+[Unrest](economy.html#unrest-loyalty-work-and-guerrillas)): disloyal sectors lose work
+and may revolt; guerrillas fight, sabotage, recruit, move, or take a sector back.
+Work lost here counts in this update's production.
+
 ### 3. Population
 Per sector, in this order:
 

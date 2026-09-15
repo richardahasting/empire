@@ -52,6 +52,15 @@ public final class Ledger {
      */
     public int heldTotal;
 
+    /**
+     * Unrest this update (issue #72), for the sectors it touches, by sector index: {@link #U_LOYAL} loyalty,
+     * {@link #U_WORK} work % used this update, {@link #U_WORK_NEXT} work % the next update starts with,
+     * {@link #U_OLD} whose the people are (the owner, when loyal), {@link #U_CHE} guerrillas, {@link #U_TARGET} the
+     * country they fight, {@link #U_OWNER} a new owner when che hand the sector back ({@link #OWNER_UNCHANGED} if none).
+     */
+    public final java.util.Map<Integer, int[]> unrest = new java.util.TreeMap<>();
+    public static final int U_LOYAL = 0, U_WORK = 1, U_WORK_NEXT = 2, U_OLD = 3, U_CHE = 4, U_TARGET = 5, U_OWNER = 6, OWNER_UNCHANGED = -2;
+
     public final List<Event> events = new ArrayList<>();
     public final List<Flow> flows = new ArrayList<>();
     /** Plain-language lines per sector, in the order the steps wrote them (issue #49): "made 430 lcm using 430 iron". */

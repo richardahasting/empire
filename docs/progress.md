@@ -322,14 +322,14 @@ and #77 making the tallies `long[]` means per-thread partials merge identically.
 - **Bank interest is now the original's, and it is large.** $15 a bar an update at 60
   ETUs, 10,000 bars to a bank: $150k an update per full bank, against $0.50 a
   civilian. Unplayed at that rate; the original had a market and loans to spend it on.
-- **Still not the original:** captured civilians pay full tax (the original, a
-  quarter); a city's population ceiling does not rise with its efficiency; no
-  reserves, market, loans or trade-ship payouts.
+- **Still not the original:** a city's population ceiling does not rise with its
+  efficiency; no reserves, market, loans or trade-ship payouts. (Captured civilians'
+  quarter tax came with unrest, #72.)
 - **Agents do not know the new verbs** (`supply`, `fire`, the missions, `land`,
   `demob`); the scripted agent is a fixture and is not taught strategy.
-- **Unrest (#72) needs a decision before it is built.** The original's loyalty decays faster than
-  unhappiness raises it at 60 ETUs, so a faithful copy almost never cuts work; its unrest came from conquest
-  and starvation. Options are on the issue.
+- **Unrest (#72) is the original's**, built 2026-09-15: loyalty, work, revolt, guerrillas, `anti`,
+  capture at loyalty 50 with a quarter tax. Unhappiness alone rarely bites at 60 ETUs (the original's decay);
+  conquest and hunger do. Security land units against guerrillas wait for #71.
 - **Land warfare and planes (#71)** have a plan for review in `m5-land-air-plan.md`.
 - **Dead config:** `levels.curves` (`research_to_tech`, `education_to_research`) in schema.yaml is read by
   nothing.

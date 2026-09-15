@@ -22,11 +22,15 @@ public final class PopulationStep implements Step {
         boolean plagueOn = ctx.cfg.options().plague();
         // one pass for the whole world, not one pass per populated sector (issue #82)
         java.util.Map<Integer, java.util.List<Sector>> mitigators = plagueOn ? mitigatorsByOwner(ctx) : java.util.Map.of();
+        org.hastingtx.empire.engine.config.UnrestCfg unrest = ctx.cfg.economy().unrest();
+        UnrestStep.R feedRng = new UnrestStep.R(Rng.stream("unrest-feed", ctx.seed));
 
         // issue #87: sectors holding people, which is this step's own predicate — not ownership
         for (int i : ctx.populated()) {
             Sector s = ctx.sector(i);
-            double nCiv = s.stock().get(civ), nMil = s.stock().get(mil), nUw = s.stock().get(uw);
+            // the people as the update has them so far: the unrest step may have turned some into guerrillas (issue #72)
+            double nCiv = s.stock().get(civ) + ctx.led().st(i, civ), nMil = s.stock().get(mil) + ctx.led().st(i, mil), nUw = s.stock().get(uw) + ctx.led().st(i, uw);
+            double startPeople = nCiv + nMil + nUw;
 
             // 1. eating. The first `limit` people live off the land (subsistence); only the rest draw on stock.
             EconomyCfg.PopulationCfg.SubsistenceCfg sub = p.subsistenceOrNone();
@@ -44,7 +48,7 @@ public final class PopulationStep implements Step {
             double subsistenceHeadroom = Math.max(0, limit);   // unused foraging capacity: births here need no stock
             double xCiv = nCiv - fCiv, xUw = nUw - fUw, xMil = nMil - fMil;   // the people who need stocked food
             double demand = (xCiv * p.foodPerCivPerEtu() + xMil * p.foodPerMilPerEtu() + xUw * p.foodPerUwPerEtu()) * ctx.etus;
-            double have = s.stock().get(food);
+            double have = s.stock().get(food) + ctx.led().st(i, food);
             double foodLeft;
             if (have >= demand) {
                 if (demand > 0) { ctx.led().consume(i, food, demand); if (s.owned()) ctx.led().note(i, "people ate " + Ledger.q(demand) + " food"); }
@@ -72,6 +76,24 @@ public final class PopulationStep implements Step {
                 if (dUw > 0) ctx.led().die(i, uw, dUw);
                 nCiv -= dCiv; nMil -= dMil; nUw -= dUw;
                 if (s.owned() && dCiv + dMil + dUw > 0) { ctx.led().event("starvation", s.owner(), s.at(), "starvation in " + s.at(), dCiv + dMil + dUw); ctx.led().note(i, Ledger.q(dCiv + dMil + dUw) + " starved"); }
+            }
+
+            // KNOWN (human.c do_feed, issue #72): starving people turn disloyal and stop working; fed, work comes back
+            if (unrest != null && s.owned()) {
+                var f = unrest.feed();
+                double starved = startPeople - (nCiv + nMil + nUw);
+                int[] u = ctx.led().unrest.get(i);
+                if (starved >= 1) {
+                    u = ctx.unrest(i);
+                    u[Ledger.U_LOYAL] = Math.min(unrest.populace().loyaltyMax(), u[Ledger.U_LOYAL] + feedRng.roll(f.starvationLoyaltyRoll()) + 1);
+                    u[Ledger.U_WORK_NEXT] = 0;
+                } else {
+                    int work = u == null ? s.work() : u[Ledger.U_WORK];
+                    if (work < 100) {
+                        u = ctx.unrest(i);
+                        u[Ledger.U_WORK_NEXT] = Math.min(100, work + f.workRecoveryBase() + feedRng.roll(f.workRecoveryRoll()));
+                    }
+                }
             }
 
             // 2. births, bounded by ceiling and by food

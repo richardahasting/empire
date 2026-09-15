@@ -61,7 +61,11 @@ class AssaultTest {
         assertThat(s.owner()).as("taken").isEqualTo(0);
         assertThat(s.designation()).isEqualTo("agribusiness");
         assertThat(s.stock().get(COM.mil)).as("survivors garrison it").isBetween(1.0, 100.0);
-        assertThat(s.stock().get(COM.civ)).as("its people, and ours who followed").isEqualTo(320);
+        // its people, and ours who followed; some of its own took up arms at once (KNOWN takeover.c, issue #72)
+        assertThat(s.stock().get(COM.civ) + s.che()).as("its people, and ours who followed").isEqualTo(320);
+        assertThat(s.che()).as("partisans").isGreaterThan(0);
+        assertThat(s.loyalty()).as("taken from another country: disloyal").isEqualTo(CFG.economy().unrest().capture().loyalty());
+        assertThat(s.oldOwner()).as("its people are still theirs").isEqualTo(1);
         assertThat(s.stock().get(COM.food)).as("a tenth of the goods lost in the fighting").isEqualTo(450);
         assertThat(s.distCenter()).as("no longer wired to their network").isNull();
         assertThat(s.roadLevel()).isLessThan(80);
