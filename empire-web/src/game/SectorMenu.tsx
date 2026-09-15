@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 
-type DialogKind = "move" | "explore" | "designate" | "threshold" | "deliver" | "road" | "rail" | "railship" | "buildship" | "demobilize" | null;
+type DialogKind = "move" | "explore" | "designate" | "threshold" | "deliver" | "road" | "rail" | "railship" | "buildship" | "demobilize" | "attack" | null;
 
 export interface PickSpec { verb: "move" | "explore" | "distribute" | "sail"; from: SectorView; commodity: string; qty: number; supply?: boolean; /** sail: the ship and where it is now */ ship?: ShipView; /** distribute: every sector of a dragged selection, not just from */ area?: Coord[] }
 
@@ -40,6 +40,13 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
     return out;
   }, [s, view]);
 
+  // an enemy sector: which of mine are next to it with soldiers to send (issue #236)
+  const attackFrom = useMemo(() => {
+    if (!s || s.full || s.owner < 0 || s.terrain === "ocean") return [] as SectorView[];
+    return view.sectors.filter(o => o.full && (o.stock["mil"] ?? 0) >= 1 && hexDist(o.at, s.at, view, o) === 1);
+  }, [s, view]);
+  const atWar = !!s && !!s.ownerName && (view.atWarWith ?? []).includes(s.ownerName);
+
   const owned = !!s && s.full;
   return (
     <>
@@ -50,6 +57,11 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
           {s && !owned && s.terrain === "ocean" && shoreOfMine(s, view) && (
             <ContextMenuItem disabled={view.levels.tech < (rules.rail?.bridge?.techRequired ?? 90)} onSelect={() => setDialog("rail")}>
               Build bridge…{s.railLevel > 0 || s.railTarget > 0 ? ` (rail ${s.railLevel.toFixed(0)}${s.railTarget > s.railLevel ? ` → ${s.railTarget.toFixed(0)}` : ""})` : ""}{view.levels.tech < (rules.rail?.bridge?.techRequired ?? 90) ? ` (tech ${rules.rail?.bridge?.techRequired ?? 90})` : ""}
+            </ContextMenuItem>
+          )}
+          {s && !owned && s.owner >= 0 && s.terrain !== "ocean" && !s.sanctuary && (
+            <ContextMenuItem disabled={!atWar || attackFrom.length === 0} onSelect={() => setDialog("attack")}>
+              Attack…{!atWar ? " (only at war)" : attackFrom.length === 0 ? " (no soldiers of yours next to it)" : ""}
             </ContextMenuItem>
           )}
           {s && !owned && <ContextMenuLabel>{rel(s.relative)} · {s.terrain}{s.terrain === "ocean" && s.resources ? ` · fishing ${s.resources.fertility}` : ""}{s.sanctuary ? ` · sanctuary of ${s.ownerName ?? "another country"}` : s.owner >= 0 ? ` · ${s.ownerName ?? "foreign"}` : s.terrain === "ocean" ? "" : " · unowned"}</ContextMenuLabel>}
@@ -108,6 +120,7 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
       {s && owned && dialog === "explore" && <ExploreDialog gameId={gameId} view={view} from={s} targets={adjacentUnowned} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} onPick={(civs, supply) => { setDialog(null); onStartPick({ verb: "explore", from: s, commodity: "civ", qty: civs, supply }); }} />}
       {s && owned && dialog === "designate" && <DesignateDialog view={view} rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "threshold" && <ThresholdDialog view={view} rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
+      {s && !owned && dialog === "attack" && <AttackDialog target={s} from={attackFrom} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "demobilize" && <DemobilizeDialog sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "deliver" && <DeliverDialog view={view} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "road" && <RoadDialog rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
@@ -323,6 +336,40 @@ function ThresholdDialog({ view, rules, sector: s, onClose, onCommand, busy }: {
           {(scope || s.thresholds[commodity] !== undefined) && <Button variant="danger" disabled={busy} onClick={async () => { await onCommand({ verb: "threshold", x: s.at.x, y: s.at.y, commodity, clear: true, scope: scope || undefined }); onClose(); }}>Clear</Button>}
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button disabled={busy || amount === ""} onClick={async () => { await onCommand({ verb: "threshold", x: s.at.x, y: s.at.y, commodity, amount: Number(amount), scope: scope || undefined }); onClose(); }}>Set</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Attack an enemy sector over land (issue #236): soldiers from any of your sectors next to it, fought man for man against
+ * its garrison and the defender's military next door. Win and it is yours; lose and everyone sent is gone.
+ */
+function AttackDialog({ target: t, from, onClose, onCommand, busy }: { target: SectorView; from: SectorView[]; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean }) {
+  const [sent, setSent] = useState<Record<string, string>>({});
+  const key = (c: Coord) => `${c.x},${c.y}`;
+  const parties = from.map(o => ({ from: o.at, mil: Math.floor(Number(sent[key(o.at)] ?? "0") || 0), have: Math.floor(o.stock["mil"] ?? 0) }))
+    .filter(p => p.mil > 0);
+  const total = parties.reduce((n, p) => n + p.mil, 0);
+  const tooMany = parties.some(p => p.mil > p.have);
+  return (
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Attack {t.relative.x},{t.relative.y}{t.ownerName ? ` (${t.ownerName})` : ""}</DialogTitle>
+          <DialogDescription>Your soldiers fight its garrison{t.stock["mil"] !== undefined ? ` (${Math.floor(t.stock["mil"] ?? 0)} seen)` : ""} and their military next door, man for man until one side is gone. Win and the sector is yours with its people; lose and everyone you send is gone. Each sector that sends soldiers pays mobility.</DialogDescription></DialogHeader>
+        <div className="grid gap-2 text-sm">
+          {from.map(o => (
+            <label key={key(o.at)} className="flex items-center justify-between gap-3">
+              <span>{o.relative.x},{o.relative.y} {o.designation ?? ""} <span className="text-xs text-muted-foreground">· {Math.floor(o.stock["mil"] ?? 0)} mil · mob {Math.floor(o.mobility)}</span></span>
+              <Input className="w-24" inputMode="numeric" value={sent[key(o.at)] ?? ""} placeholder="0" onChange={e => setSent({ ...sent, [key(o.at)]: e.target.value })} />
+            </label>
+          ))}
+          <p className="text-xs text-muted-foreground">{total} soldiers{tooMany ? " — more than a sector has" : ""}</p>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="danger" disabled={busy || total < 1 || tooMany} onClick={async () => { await onCommand({ verb: "attack", x: t.at.x, y: t.at.y, parties: parties.map(p => ({ from: p.from, mil: p.mil })) }); onClose(); }}>Attack</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

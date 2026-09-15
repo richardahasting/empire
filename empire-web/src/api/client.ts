@@ -156,6 +156,8 @@ export interface CommandRequest {
   points?: Coord[]; ward?: number;
   /** Many sectors by list, absolute — a selection dragged on the map (instead of scope). */
   sectors?: Coord[];
+  /** An attack's parties: military from your sectors next to x,y, absolute (issue #236). */
+  parties?: { from: Coord; mil: number }[];
   /** Many sectors instead of x,y: "*" (all mine), "*:TYPE" (one designation), "x1:x2,y1:y2" (a rectangle, relative). Standing orders only. */
   scope?: string;
   /** deliver: e ne nw w sw se (or "none" to clear). */
