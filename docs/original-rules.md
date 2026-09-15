@@ -66,7 +66,7 @@ for lack of the mechanic; decide those in the morning.
 
 | Rule | Original | Ours before | Now |
 |---|---|---|---|
-| Taxes | civ 0.0083333, uw 0.0017777 per ETU | ≈ same | matched |
+| Taxes | civ 0.0083333, uw 0.0017777 per ETU × sector effic/100 (`update/prepare.c` tax); captured civilians pay ¼ | same rates, efficiency ignored | **matched** (efficiency, issue #221); captured-civilian ¼ not modelled |
 | Military pay | 0.0833333 per soldier per ETU (10× a civilian's tax) | 0.0083 | **matched** |
 | Start cash | 25000 | 5000 | **matched** |
 | BTUs | ETU × civilians (≤ 1000) × efficiency-in-percent × 0.0012, cap 640: a full capital refills 640 every update | 24 per update | **matched** |

@@ -21,7 +21,8 @@ public final class MoneyStep implements Step {
             double civ = Math.max(0, s.stock().get(ctx.com.civ) + ctx.led().st(i, ctx.com.civ));
             double uw = Math.max(0, s.stock().get(ctx.com.uw) + ctx.led().st(i, ctx.com.uw));
             double mil = Math.max(0, s.stock().get(ctx.com.mil) + ctx.led().st(i, ctx.com.mil));
-            income[c] += (civ * m.taxPerCivPerEtu() + uw * m.taxPerUwPerEtu()) * ctx.etus;
+            // KNOWN (update/prepare.c tax): civilians and workers pay by the sector's efficiency; military pay is not scaled (issue #221)
+            income[c] += (civ * m.taxPerCivPerEtu() + uw * m.taxPerUwPerEtu()) * ctx.etus * s.efficiency() / 100;
             expense[c] += mil * m.payPerMilPerEtu() * ctx.etus;
             // KNOWN (update/prepare.c bank_income): bars × ETUs × bankint × efficiency / 100 (issue #219)
             if (interest && ctx.type(s).hasFlag("interest_bearing")) income[c] += Math.max(0, s.stock().get(bar) + ctx.led().st(i, bar)) * m.bankInterestPerBarPerEtu() * ctx.etus * s.efficiency() / 100;

@@ -605,7 +605,7 @@ economy:
   # KNOWN: original taxed civs and paid mil per ETU; research/tech cost money.
   # GUESS at every number.
   money:
-    tax_per_civ_per_etu: 0.0083333       # KNOWN: money_civ
+    tax_per_civ_per_etu: 0.0083333       # KNOWN: money_civ; civilian and worker tax × sector efficiency% (prepare.c tax, issue #221)
     tax_per_uw_per_etu:  0.0017777       # KNOWN: money_uw
     pay_per_mil_per_etu: 0.0833333       # KNOWN: money_mil (ten times a civilian's tax)
     sector_maintenance_per_etu: 0.0      # most sectors free; infra decay is the maintenance sink

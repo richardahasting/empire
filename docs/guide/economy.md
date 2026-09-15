@@ -110,8 +110,9 @@ part of your score** — there is no advantage to hoarding them.
 
 ## Money
 
-Income is tax on civilians and workers, plus interest on gold bars if the game
-has it. **Only bars in a bank earn**: each pays $0.25 an ETU, scaled by the bank's
+Income is tax on civilians and workers, **scaled by their sector's efficiency**
+(a sector at 40% pays 40% of its tax, so redesignating a crowded sector costs tax
+while it builds back up), plus interest on gold bars if the game has it. **Only bars in a bank earn**: each pays $0.25 an ETU, scaled by the bank's
 efficiency, so at 60 ETUs a bar in a 100% bank earns $15 an update. A bank holds
 10,000 bars; bars sitting in a warehouse earn nothing, so set a bank's `bar`
 threshold high enough to keep them there. Spending is military pay, infrastructure maintenance, and the cash cost
