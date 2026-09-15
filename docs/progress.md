@@ -2,7 +2,24 @@
 
 A running note of the state of play, so a session can pick up without re-deriving
 it. Ordered work lives in `m5-plan.md`; this page says how far along it is and
-where the open decisions sit. Last updated **2026-09-14**.
+where the open decisions sit. Last updated **2026-09-15**.
+
+## Landed 2026-09-15: what the levels cost, forests as parks, a workforce as happy as it is
+
+- **Education, compared with the original** (#215, closed): the rule is line for line the original's; Wolfy's
+  schools were starved of lcm. Its upkeep is now on the dashboard, points made against points to hold the level
+  (#226); holding 44 takes ~1,450 points an update per 100,000 civilians. Richard kept the rest as the original
+  had it, including education discounting happiness ("we've never been more educated, and never less happy").
+- **A forest doubles as a park** (#227): its lcm, plus half a park's happiness per worker at $0.25 a point, and
+  500 people to a park's 1,000. `production_cash_by_output` prices one output of a sector type separately.
+- **Happiness: +1% work a point, no ceiling** (#230). The bonus stopped at 20 (×1.2). The guides wrongly said
+  unhappy countries do half the work.
+- **Fixes:** a hand leg cut short for fuel ends in port and the order resumes (#213); the console API takes
+  `command` as `line` and refuses anything else with a 400 instead of a silent no-op (#225).
+- **Closed as already fixed or declined:** #185 (done in #186), #195 (Reload ship rules), #214 (the same
+  military-pay and interest causes as Rick's), #216 (Richard: scrap stays a plain command).
+- **Game 82 hand edits**, in `deity_edit`: the forest type from the preset (Rick's ten forests went from 1,000
+  people to 500), and the happiness ceiling removed from its rules.
 
 ## Landed 2026-09-14: ships that do not strand, landings, radar, money as the original paid it
 
@@ -310,6 +327,12 @@ and #77 making the tallies `long[]` means per-thread partials merge identically.
   reserves, market, loans or trade-ship payouts.
 - **Agents do not know the new verbs** (`supply`, `fire`, the missions, `land`,
   `demob`); the scripted agent is a fixture and is not taught strategy.
+- **Unrest (#72) needs a decision before it is built.** The original's loyalty decays faster than
+  unhappiness raises it at 60 ETUs, so a faithful copy almost never cuts work; its unrest came from conquest
+  and starvation. Options are on the issue.
+- **Land warfare and planes (#71)** have a plan for review in `m5-land-air-plan.md`.
+- **Dead config:** `levels.curves` (`research_to_tech`, `education_to_research`) in schema.yaml is read by
+  nothing.
 
 ## The standing caveat
 
