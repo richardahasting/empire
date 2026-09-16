@@ -61,6 +61,8 @@ public class Console {
                     need(t, 3, "build HARBOUR SHIPCLASS [name] | build HEADQUARTERS UNITCLASS");
                     // a land unit class builds a unit in a headquarters (issue #247); anything else is a ship
                     if (cfg.units().land() != null && cfg.units().land().hasClass(t[2])) yield cmd(gameId, a, new Command.BuildUnit(abs(v, t[1]), t[2]));
+                    // a plane class builds a plane on an airfield (issue #262)
+                    if (cfg.units().planes() != null && cfg.units().planes().planeClass(t[2]) != null) yield cmd(gameId, a, new Command.BuildPlane(abs(v, t[1]), t[2]));
                     yield cmd(gameId, a, new Command.BuildShip(abs(v, t[1]), t[2], t.length > 3 ? String.join(" ", Arrays.copyOfRange(t, 3, t.length)) : null));
                 }
                 case "sail" -> { need(t, 3, "sail SHIP x,y | sail SHIP hold"); yield cmd(gameId, a, new Command.Sail(Long.parseLong(t[1].replace("#", "")), t[2].equalsIgnoreCase("hold") ? null : abs(v, t[2]))); }
@@ -121,7 +123,10 @@ public class Console {
                     yield cmd(gameId, a, new Command.Attack(abs(v, t[1]), parties, units));
                 }
                 case "army", "units" -> new Reply(army(v), true, null, null);
+                case "air", "planes" -> new Reply(air(v), true, null, null);
                 case "march", "mar" -> { need(t, 3, "march UNIT x,y"); yield cmd(gameId, a, new Command.March(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
+                case "bomb" -> { need(t, 3, "bomb PLANE x,y [strategic]"); yield cmd(gameId, a, new Command.Bomb(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]), t.length < 4 || !t[3].toLowerCase().startsWith("s"))); }
+                case "recon" -> { need(t, 3, "recon PLANE x,y"); yield cmd(gameId, a, new Command.Recon(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
                 case "work" -> { need(t, 2, "work UNIT [mobility]"); yield cmd(gameId, a, new Command.Work(Long.parseLong(t[1].replace("#", "")), t.length > 2 ? Double.parseDouble(t[2]) : 0)); }
                 case "ufire" -> { need(t, 3, "ufire UNIT x,y"); yield cmd(gameId, a, new Command.UnitFire(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
                 case "sabotage" -> { need(t, 2, "sabotage UNIT"); yield cmd(gameId, a, new Command.Sabotage(Long.parseLong(t[1].replace("#", "")))); }
@@ -402,6 +407,16 @@ public class Console {
                     u.stock().getOrDefault("food", 0.0), u.mobility(), u.attack(), u.defense(), rest, u.note() == null || u.note().isBlank() ? "" : " · " + u.note()));
         }
         return sb.append("att/def: mil × strength × efficiency; @#N = aboard ship N. march UNIT x,y · lload UNIT mil N · board UNIT SHIP · ashore UNIT · attack x,y unit UNIT · a spy: sabotage UNIT · incite UNIT").toString();
+    }
+
+    /** Your planes (issue #262): where each sits, its condition, what it carries and how far it strikes. */
+    static String air(CountryView v) {
+        if (v.planes().isEmpty()) return "no planes — designate an airfield and build one there (build x,y bomber)";
+        StringBuilder sb = new StringBuilder(String.format("%-5s %-14s %-8s %4s %5s %5s %6s  %s%n", "plane", "class", "at", "eff", "bombs", "acc", "strike", "last"));
+        for (var p : v.planes())
+            sb.append(String.format("#%-4d %-14s %-8s %3.0f%% %5.0f %4.0f%% %6.0f  %s%n", p.id(), p.cls(), rel(p.relative()), p.efficiency(),
+                    p.load(), p.accuracy(), Math.floor(p.reach()), p.note() == null ? "" : p.note()));
+        return sb.append("strike: hexes there and back again. bomb PLANE x,y [strategic] · recon PLANE x,y").toString();
     }
 
     /** Sectors with unrest (issue #72): disloyal, not all at work, occupied, or with guerrillas; and the happiness they want. */

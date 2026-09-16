@@ -27,6 +27,7 @@ public final class LandStep implements Step {
     public String name() { return "land"; }
 
     public void run(Ctx ctx) {
+        planes(ctx);
         UnitsCfg.LandCfg lc = ctx.cfg.units().land();
         if (lc == null || ctx.units.isEmpty()) return;
         var money = ctx.cfg.economy().money();
@@ -105,6 +106,37 @@ public final class LandStep implements Step {
             // mobility
             u = u.withMobility(Math.min(lc.mobilityMax(), u.mobility() + ctx.etus * lc.mobilityPerEtu()));
             ctx.units.set(k, u.withNote(note.toString()));
+        }
+    }
+
+    /**
+     * Planes on their fields (issue #262): they fit out toward 100% on an airfield of yours, and cost their
+     * maintenance like any other machine. A plane whose upkeep goes unpaid loses condition instead.
+     */
+    private static void planes(Ctx ctx) {
+        UnitsCfg.PlanesCfg pc = ctx.cfg.units().planes();
+        if (pc == null || ctx.planes.isEmpty()) return;
+        for (int k = 0; k < ctx.planes.size(); k++) {
+            org.hastingtx.empire.engine.model.Plane p = ctx.planes.get(k);
+            UnitsCfg.PlaneClassCfg cls = pc.planeClass(p.cls());
+            if (cls == null || p.owner() < 0) continue;
+            Country c = ctx.country(p.owner());
+            double upkeep = ctx.etus * pc.maintenancePerEtuPerCost() * cls.build().getOrDefault("cash", 0.0);
+            String note = "";
+            if (c.cash() + ctx.led().cash[p.owner()] < upkeep) {
+                double lost = Math.min(ctx.etus / 5.0, p.efficiency() - pc.minEfficiency());
+                if (lost > 0) { p = p.withEfficiency(p.efficiency() - lost); note = "lost " + Ledger.q(lost) + "% to lack of maintenance"; }
+            } else {
+                ctx.led().cash[p.owner()] -= upkeep;
+                int i = ctx.idx(p.at());
+                Sector field = ctx.sector(i);
+                boolean onOurField = field.owner() == p.owner() && ctx.type(field).hasFlag("builds_planes");
+                if (onOurField && p.efficiency() < 100) {
+                    double gain = Math.min(100 - p.efficiency(), pc.growScale() * ctx.etus * field.efficiency() / 100.0);
+                    if (gain > 0) { p = p.withEfficiency(p.efficiency() + gain); note = "fitted out +" + Ledger.q(gain) + "%"; }
+                }
+            }
+            ctx.planes.set(k, p.withNote(note));
         }
     }
 }

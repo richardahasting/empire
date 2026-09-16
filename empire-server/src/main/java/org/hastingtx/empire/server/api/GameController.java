@@ -100,7 +100,9 @@ public class GameController {
                         /** How research scales a sector's population ceiling (issue #153): {type: none | res_pop | linear…}. */
                         org.hastingtx.empire.engine.config.EconomyCfg.PopulationCfg.MaxPopCurve maxPopCurve,
                         /** Land unit classes and rules (issue #247); null in a world without them. */
-                        org.hastingtx.empire.engine.config.UnitsCfg.LandCfg land) {}
+                        org.hastingtx.empire.engine.config.UnitsCfg.LandCfg land,
+                        /** Plane classes and rules (issue #262); null in a world without them. */
+                        org.hastingtx.empire.engine.config.UnitsCfg.PlanesCfg planes) {}
 
     @GetMapping("/{id}/rules")
     public Rules rules(@PathVariable long id) {
@@ -108,7 +110,7 @@ public class GameController {
         Double minEff = cfg.economy().efficiency().productionMinEfficiency();
         return new Rules(cfg.economy().sectorTypes(), cfg.commodities(), cfg.etus(), cfg.economy().btu().costByCommand(), cfg.infrastructure().road(), cfg.economy().defaultCapacity(),
                 cfg.infrastructure().rail(), minEff == null ? 0 : minEff, cfg.distribution().massThresholdMultiplierByType() == null ? Map.of() : cfg.distribution().massThresholdMultiplierByType(), cfg.units().ships(),
-                cfg.economy().work(), cfg.economy().curves() == null ? Map.of() : cfg.economy().curves(), cfg.economy().population().maxPopResearchCurve(), cfg.units().land());
+                cfg.economy().work(), cfg.economy().curves() == null ? Map.of() : cfg.economy().curves(), cfg.economy().population().maxPopResearchCurve(), cfg.units().land(), cfg.units().planes());
     }
 
     /**
@@ -127,7 +129,9 @@ public class GameController {
                                  /** An attack's parties: military from sectors next to x,y, absolute (issue #236). */
                                  List<Command.Attack.Party> parties,
                                  /** A land unit's id for march / lload / lunload; land units joining an attack (issue #247). */
-                                 Long unit, List<Long> units) {
+                                 Long unit, List<Long> units,
+                                 /** A plane's id for bomb / recon (issue #262). */
+                                 Long plane) {
         boolean isMass() { return (scope != null && !scope.isBlank()) || (sectors != null && !sectors.isEmpty()); }
         boolean listed() { return sectors != null && !sectors.isEmpty(); }
         Command toCommand() { return toCommand(x == null || y == null ? null : new Coord(x, y)); }
@@ -167,6 +171,9 @@ public class GameController {
                 case "march" -> new Command.March(needUnit(), at(x, y));
                 case "unit_fire" -> new Command.UnitFire(needUnit(), at(x, y));
                 case "work" -> new Command.Work(needUnit(), amount == null ? 0 : amount);
+                case "build_plane" -> new Command.BuildPlane(at(x, y), type);
+                case "bomb" -> new Command.Bomb(needPlane(), at(x, y), !"strategic".equalsIgnoreCase(type));
+                case "recon" -> new Command.Recon(needPlane(), at(x, y));
                 case "sabotage" -> new Command.Sabotage(needUnit());
                 case "incite" -> new Command.Incite(needUnit());
                 case "board" -> new Command.Board(needUnit(), needShip());
@@ -179,6 +186,7 @@ public class GameController {
             };
         }
         private long needUnit() { if (unit == null) throw new IllegalArgumentException("unit id required"); return unit; }
+        private long needPlane() { if (plane == null) throw new IllegalArgumentException("plane id required"); return plane; }
         private long needShip() { if (ship == null) throw new IllegalArgumentException("ship id required"); return ship; }
         private static Coord need(Coord c) {
             if (c == null) throw new IllegalArgumentException("coordinates required");

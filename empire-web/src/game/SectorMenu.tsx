@@ -3,6 +3,7 @@ import { deliveryTarget, surplusLine } from "./bearing";
 import { estimate, type CommandRequest, type Coord, type CountryView, type Estimate, type Macro, type Rules, type SectorView, type ShipView } from "@/api/client";
 import { BuildShipDialog } from "@/game/Fleet";
 import { BuildUnitDialog } from "@/game/Army";
+import { BuildPlaneDialog } from "@/game/Air";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuLabel, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { describeMacro } from "@/game/Macros";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -10,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 
-type DialogKind = "move" | "explore" | "designate" | "threshold" | "deliver" | "road" | "rail" | "railship" | "buildship" | "buildunit" | "demobilize" | "attack" | null;
+type DialogKind = "move" | "explore" | "designate" | "threshold" | "deliver" | "road" | "rail" | "railship" | "buildship" | "buildunit" | "buildplane" | "demobilize" | "attack" | null;
 
 export interface PickSpec { verb: "move" | "explore" | "distribute" | "sail"; from: SectorView; commodity: string; qty: number; supply?: boolean; /** sail: the ship and where it is now */ ship?: ShipView; /** distribute: every sector of a dragged selection, not just from */ area?: Coord[] }
 
@@ -99,6 +100,7 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
               <ContextMenuItem disabled={view.levels.tech < (rules.rail?.techRequired ?? 60)} onSelect={() => setDialog("rail")}>Build rail…{view.levels.tech < (rules.rail?.techRequired ?? 60) ? ` (tech ${rules.rail?.techRequired ?? 60})` : ""}</ContextMenuItem>
               {isDepot(s, rules) && <ContextMenuItem onSelect={() => setDialog("railship")}>Ship by rail…</ContextMenuItem>}
               {rules.land && (rules.sectorTypes.find(t => t.id === s.designation)?.flags ?? []).includes("builds_units") && <ContextMenuItem onSelect={() => setDialog("buildunit")}>Build unit…{(view.units ?? []).filter(u => u.at.x === s.at.x && u.at.y === s.at.y).length ? ` (${(view.units ?? []).filter(u => u.at.x === s.at.x && u.at.y === s.at.y).length} here)` : ""}</ContextMenuItem>}
+              {rules.planes && (rules.sectorTypes.find(t => t.id === s.designation)?.flags ?? []).includes("builds_planes") && <ContextMenuItem onSelect={() => setDialog("buildplane")}>Build plane…{(view.planes ?? []).filter(p => p.at.x === s.at.x && p.at.y === s.at.y).length ? ` (${(view.planes ?? []).filter(p => p.at.x === s.at.x && p.at.y === s.at.y).length} on the field)` : ""}</ContextMenuItem>}
               {isHarbor(s, rules) && <ContextMenuItem onSelect={() => setDialog("buildship")}>Build ship…{view.ships.filter(x => x.at.x === s.at.x && x.at.y === s.at.y).length ? ` (${view.ships.filter(x => x.at.x === s.at.x && x.at.y === s.at.y).length} docked)` : ""}</ContextMenuItem>}
               <ContextMenuSeparator />
               <ContextMenuItem onSelect={() => onStartPick({ verb: "distribute", from: s, commodity: "", qty: 0 })}>Send surplus to… (pick the centre on the map)</ContextMenuItem>
@@ -131,6 +133,7 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
       {s && owned && dialog === "deliver" && <DeliverDialog view={view} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "road" && <RoadDialog rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && (owned || s.terrain === "ocean") && dialog === "rail" && <RailDialog rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
+      {s && owned && dialog === "buildplane" && <BuildPlaneDialog view={view} rules={rules} field={s} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {s && owned && dialog === "buildunit" && <BuildUnitDialog view={view} rules={rules} hq={s} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {s && owned && dialog === "buildship" && <BuildShipDialog view={view} rules={rules} harbor={s} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {s && owned && dialog === "railship" && <RailShipDialog gameId={gameId} view={view} rules={rules} from={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}

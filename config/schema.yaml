@@ -331,7 +331,7 @@ economy:
       # somewhere to land its catch; everything else keeps the ordinary cap.
       capacity: { food: 10000 }
       flags: [coastal_required, builds_ships]
-    - id: airfield
+    - id: airfield                     # KNOWN (sect.config "*", SCT_AIRPT): planes are built and kept here (issue #262)
       glyph: "*"
       category: infrastructure
       build: { cash: 1 }
@@ -1013,6 +1013,41 @@ units:
       - { id: infiltrator, name: infiltrator, glyph: p, tech_required: 40, build: { lcm: 5, hcm: 2, cash: 1500 }, bwork: 20, attack: 0.0, defense: 0.0, vulnerability: 100, speed: 50, visibility: 3, carries: { mil: 1, shell: 5, food: 6 }, flags: [light, spy] }
       - { id: commando, name: commando, glyph: k, tech_required: 55, build: { lcm: 8, hcm: 4, cash: 2500 }, bwork: 30, attack: 0.0, defense: 0.0, vulnerability: 100, speed: 40, visibility: 4, carries: { mil: 5, shell: 20, food: 12 }, flags: [light, spy] }
       - { id: security,  name: security,  glyph: z, tech_required: 170, build: { lcm: 10, hcm: 5,  cash: 600 },  bwork: 40, attack: 1.0, defense: 2.0, vulnerability: 60, speed: 25, visibility: 15, carries: { mil: 50, shell: 4, food: 30 }, flags: [security, light] }
+  # PLANES (issue #262, #71 slice 3a). KNOWN plane.config and include/plane.h: built at an airfield the way a
+  # land unit is built in a headquarters, flown as a sortie that takes petrol for the flight and shells for the
+  # bombs out of the field, and shot at by the flak of whatever it flies over.
+  planes:
+    start_efficiency: 10              # KNOWN PLANE_MINEFF, as land units
+    min_efficiency: 10                # KNOWN PLANE_MINEFF: below this it is wreckage
+    abort_below: 80                   # KNOWN aircombat.c: under 80% it may turn back, by (80 - eff)/100
+    grow_scale: 2.0                   # as land units: ETUs x this, in its own airfield
+    maintenance_per_etu_per_cost: 0.001
+    # KNOWN aircombat.c ac_flak_dam: the multiplier by (guns - plane defence), then (roll(8) + 2) x it.
+    flak:
+      gun_max: 8                      # KNOWN FLAK_GUN_MAX
+      gun_multiple: 2.0
+      roll: 8
+      roll_offset: 2
+      table: [0.132, 0.20, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 1.1305]
+      table_offset: 8                 # index = (guns - def) + 8, clamped
+      high_flying_step: 1             # KNOWN: anything but a tactical bomber flies high and is a step harder to hit
+    # KNOWN plnsub.c pln_damage: roll(load)+1 bombs, each roll(6) plus 8 on a 10% roll, 5 on a hit by accuracy,
+    # else 1; doubled when the plane is the right kind for that sort of bombing.
+    bombing:
+      bomb_roll: 6
+      blam: 8
+      blam_chance: 90                 # roll(100) >= this
+      hit: 5
+      miss: 1
+      effective_multiple: 2.0
+      strategic_aim_base: 30          # KNOWN: strategic aim is 30 + (100 - accuracy) for a tactical bomber
+    classes:
+      # build is per 100% (plane.config); a plane is laid down at start_efficiency of it. range is the round
+      # trip, so a sortie reaches half of it. fuel is petrol for one sortie; load is bombs (shells).
+      - { id: bomber,           name: bomber,           glyph: B, tech_required: 90,  build: { lcm: 30, hcm: 25, cash: 3000 }, bwork: 80, accuracy: 40, load: 8, attack: 0.0, defense: 1.0, range: 16, fuel: 3, flags: [bomber] }
+      - { id: tactical_bomber,  name: tactical bomber,  glyph: T, tech_required: 110, build: { lcm: 25, hcm: 20, cash: 2800 }, bwork: 70, accuracy: 70, load: 4, attack: 1.0, defense: 2.0, range: 12, fuel: 2, flags: [tactical] }
+      - { id: recon,            name: reconnaissance,   glyph: R, tech_required: 70,  build: { lcm: 15, hcm: 10, cash: 1800 }, bwork: 50, accuracy: 50, load: 0, attack: 0.0, defense: 3.0, range: 20, fuel: 2, flags: [spy] }
+
   # SHIPS — NEW (Richard 2026-09-09, issue #56). A data table gated on tech; every number a GUESS to tune
   # except where marked. Harbours build them from their own lcm/hcm and cash; a hull leaves the yard at
   # start_efficiency and fits out while docked. Speed is sea hexes per update at 100%, × efficiency.

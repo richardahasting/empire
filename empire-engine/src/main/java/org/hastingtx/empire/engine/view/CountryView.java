@@ -42,7 +42,13 @@ public record CountryView(
         /** Trains of yours stopped on the line, part-way to somewhere (issue #70). */
         List<TrainView> trains,
         /** Your land units (issue #247). */
-        List<UnitView> units) {
+        List<UnitView> units,
+        /** Your planes (issue #262). */
+        List<PlaneView> planes) {
+
+    /** A plane of yours (issue #262): where it sits, its condition, what it can carry and how far it strikes. */
+    public record PlaneView(long id, String cls, String name, Coord at, Coord relative, double efficiency, double tech,
+                            double load, double accuracy, double reach, String note, boolean bomber, boolean tactical, boolean spy) {}
 
     /**
      * A land unit of yours (issue #247): where, how fit, what it carries, its own mobility, what it is worth in a fight
@@ -274,7 +280,22 @@ public record CountryView(
             if (r.atWar() && r.involves(countryId)) atWar.add(w.country(r.other(countryId)).name());
 
         return new CountryView(countryId, c.name(), w.updateNumber(), c.capital(), w.wrapX(), w.wrapY(), w.width(), w.height(), c.cash(), c.btu(), c.levels(), c.handicap(),
-                c.inSanctuary(), c.bankrupt(), ids, views, others, atWar, ships, contacts, railLanes, trains, units(w, cfg, com, c));
+                c.inSanctuary(), c.bankrupt(), ids, views, others, atWar, ships, contacts, railLanes, trains, units(w, cfg, com, c), planes(w, cfg, c));
+    }
+
+    private static List<PlaneView> planes(World w, GameConfig cfg, Country c) {
+        var air = cfg.units().planes();
+        if (air == null) return List.of();
+        List<PlaneView> out = new ArrayList<>();
+        for (var p : w.planes()) {
+            if (p.owner() != c.id()) continue;
+            var cls = air.planeClass(p.cls());
+            if (cls == null) continue;
+            out.add(new PlaneView(p.id(), p.cls(), cls.name(), p.at(), relative(w, c.capital(), p.at()), p.efficiency(), p.tech(),
+                    cls.loadAt(p.tech()), cls.accuracyAt(p.tech()), cls.reachAt(p.tech()), p.note(),
+                    cls.has("bomber"), cls.has("tactical"), cls.has("spy")));
+        }
+        return out;
     }
 
     private static List<UnitView> units(World w, GameConfig cfg, Commodities com, Country c) {
