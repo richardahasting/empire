@@ -33,6 +33,9 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
     /** NEW (Richard 2026-09-15): what one attempt at inciting unrest does to a sector. */
     public record InciteCfg(int loyalty, double cheShare, double minCivilians) {}
 
+    /** KNOWN landgun.c landunitgun() and land.h LAND_MINFIREEFF: what a gun on a land unit is worth. */
+    public record GunneryCfg(double minEfficiency, double damageBase, int damageRoll) {}
+
     public record LandCfg(
             /** KNOWN LAND_MINEFF: a unit is laid down at this efficiency, for this share of its materials and cost. */
             double startEfficiency,
@@ -52,6 +55,8 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
             double securityBonus, int securityKillDivisor,
             /** Spies (issue #254); null in a snapshot taken before them, and then nobody can be raised who spies. */
             SpyCfg spy,
+            /** Artillery (issue #256); null in a snapshot taken before it, and then no unit fires. */
+            GunneryCfg gunnery,
             List<LandClassCfg> classes) {
 
         public LandClassCfg landClass(String id) {
@@ -67,7 +72,17 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
                                /** Most of each commodity it carries: mil, shell, gun, pet, food, ... */
                                Map<String, Double> carries,
                                /** light, recon, assault, supply, engineer, security, marine, ... */
-                               List<String> flags) {
+                               List<String> flags,
+                               /** KNOWN l_dam, l_ammo, l_frg (issue #256): guns in a salvo, shells a salvo eats, and the range factor. Null: it does not shoot. */
+                               Double guns, Double ammo, Double range) {
+        public double gunsOr0() { return guns == null ? 0 : guns; }
+        public double ammoOr1() { return ammo == null || ammo < 1 ? 1 : ammo; }
+        /** KNOWN effrange(): techfact(tech, range/2) hexes. */
+        public double rangeAt(double tech) {
+            if (range == null || range <= 0) return 0;
+            double r = range / 2.0;
+            return r * (1 + Math.sqrt(Math.max(0, tech - techRequired)) / 100 * 2.1);
+        }
         public boolean has(String flag) { return flags != null && flags.contains(flag); }
         public double carriesOf(String commodity) { return carries == null ? 0 : carries.getOrDefault(commodity, 0.0); }
         /** KNOWN LND_ATTDEF / LND_SPD: a unit laid above its class's tech is a little stronger and faster, attack and defence at most 127. */

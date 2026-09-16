@@ -68,6 +68,8 @@ export interface UnitView {
   ship: number; light: boolean;
   /** A spy walks in their land, and can sabotage or incite the sector it stands in (issue #254). */
   spy: boolean;
+  /** Guns it can bring to bear and how far they reach, 0 for a unit that does not shoot (issue #256). */
+  guns: number; range: number;
 }
 export interface LandClass { id: string; name: string; glyph: string; techRequired: number; build: Record<string, number>; bwork: number; attack: number; defense: number; speed: number; carries: Record<string, number>; flags: string[] }
 export interface LandRules { startEfficiency: number; classes: LandClass[] }

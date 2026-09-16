@@ -993,12 +993,18 @@ units:
         loyalty: 12
         che_share: 0.02
         min_civilians: 10
+    # ARTILLERY (issue #256). KNOWN landgun.c lnd_fire and landunitgun: a unit at 40% or better with guns,
+    # shells and men to work them throws (4 + roll(6)) per gun, by its efficiency, at a sector within range.
+    gunnery:
+      min_efficiency: 40          # KNOWN LAND_MINFIREEFF
+      damage_base: 4.0
+      damage_roll: 6
     classes:
       # build is per 100% (land.config l_b, h_b, cost); a unit is laid down at 10% of it. carries: the unit's capacity.
       - { id: cavalry,   name: cavalry,   glyph: c, tech_required: 30,  build: { lcm: 10, hcm: 5,  cash: 500 },  bwork: 40, attack: 1.2, defense: 0.5, vulnerability: 80, speed: 32, visibility: 18, carries: { mil: 20, food: 12 }, flags: [light, recon] }
       - { id: infantry,  name: infantry,  glyph: i, tech_required: 50,  build: { lcm: 10, hcm: 5,  cash: 500 },  bwork: 40, attack: 1.0, defense: 1.5, vulnerability: 60, speed: 25, visibility: 15, carries: { mil: 100, food: 24 }, flags: [light, assault] }
-      - { id: artillery, name: artillery, glyph: a, tech_required: 35,  build: { lcm: 20, hcm: 10, cash: 800 },  bwork: 60, attack: 0.1, defense: 0.4, vulnerability: 70, speed: 18, visibility: 20, carries: { mil: 25, shell: 40, gun: 10, food: 24 }, flags: [light] }
-      - { id: engineer,  name: engineer,  glyph: e, tech_required: 130, build: { lcm: 10, hcm: 5,  cash: 3000 }, bwork: 40, attack: 1.2, defense: 2.4, vulnerability: 50, speed: 25, visibility: 14, carries: { mil: 20, shell: 3, food: 12 }, flags: [engineer, light, assault] }
+      - { id: artillery, name: artillery, glyph: a, tech_required: 35,  build: { lcm: 20, hcm: 10, cash: 800 },  bwork: 60, attack: 0.1, defense: 0.4, vulnerability: 70, speed: 18, visibility: 20, carries: { mil: 25, shell: 40, gun: 10, food: 24 }, flags: [light], guns: 10, ammo: 3, range: 6 }
+      - { id: engineer,  name: engineer,  glyph: e, tech_required: 130, build: { lcm: 10, hcm: 5,  cash: 3000 }, bwork: 40, attack: 1.2, defense: 2.4, vulnerability: 50, speed: 25, visibility: 14, carries: { mil: 20, shell: 3, food: 12 }, flags: [engineer, light, assault], guns: 1, ammo: 1, range: 2 }
       - { id: supply,    name: supply,    glyph: s, tech_required: 50,  build: { lcm: 10, hcm: 5,  cash: 500 },  bwork: 40, attack: 0.1, defense: 0.2, vulnerability: 80, speed: 25, visibility: 20, carries: { mil: 25, shell: 200, gun: 10, pet: 300, iron: 100, dust: 100, bar: 10, food: 300, lcm: 200, hcm: 100 }, flags: [supply, light] }
       - { id: infiltrator, name: infiltrator, glyph: p, tech_required: 40, build: { lcm: 5, hcm: 2, cash: 1500 }, bwork: 20, attack: 0.0, defense: 0.0, vulnerability: 100, speed: 50, visibility: 3, carries: { mil: 1, shell: 5, food: 6 }, flags: [light, spy] }
       - { id: commando, name: commando, glyph: k, tech_required: 55, build: { lcm: 8, hcm: 4, cash: 2500 }, bwork: 30, attack: 0.0, defense: 0.0, vulnerability: 100, speed: 40, visibility: 4, carries: { mil: 5, shell: 20, food: 12 }, flags: [light, spy] }

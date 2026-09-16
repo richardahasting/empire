@@ -1185,6 +1185,7 @@ public class GameService {
             case Command.LoadUnit lu -> null;
             case Command.Board bo -> null;
             case Command.Sabotage sb -> null;
+            case Command.UnitFire uf -> uf.at();
             case Command.Incite in -> null;
             case Command.Demobilize d -> d.sector();
             case Command.Telegram t -> null;
