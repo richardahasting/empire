@@ -330,7 +330,14 @@ and #77 making the tallies `long[]` means per-thread partials merge identically.
 - **Unrest (#72) is the original's**, built 2026-09-15: loyalty, work, revolt, guerrillas, `anti`,
   capture at loyalty 50 with a quarter tax. Unhappiness alone rarely bites at 60 ETUs (the original's decay);
   conquest and hunger do. Security land units against guerrillas wait for #71.
-- **Land warfare and planes (#71)** have a plan for review in `m5-land-air-plan.md`.
+- **Land units (#247, slice 2)** are the original's: six classes raised in a headquarters, marching on
+  their own mobility, fighting in attacks and defence, captured or blown up with the sector they hold.
+  Security troops raid guerrillas (#72). Built 2026-09-15.
+- **Ships carry them (#252, slice 2b)**, built 2026-09-16: `board`/`ashore`, berths from `ship.config`'s
+  nla (ferry and cargo 2, super cargo 4, assault ship 6); assault-trained units aboard storm the beach with
+  the landing party and take their share of the survivors ashore; a sinking takes what she carried.
+- **Land warfare and planes (#71)** have a plan for review in `m5-land-air-plan.md`; artillery fire,
+  engineers' works, spies (including Richard's `incite`) and planes are what is left.
 - **Dead config:** `levels.curves` (`research_to_tech`, `education_to_research`) in schema.yaml is read by
   nothing.
 
