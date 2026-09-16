@@ -341,8 +341,14 @@ and #77 making the tallies `long[]` means per-thread partials merge identically.
   original's; `incite` is Richard's, and gives #72's unrest an offensive use.
 - **Artillery (#256)** and **engineers' works (#258)**, built 2026-09-16: `ufire` shells a sector without
   taking it, and `work` turns an engineer's mobility into a sector's efficiency at 600 mobility a point.
-- **Land warfare and planes (#71)** have a plan for review in `m5-land-air-plan.md`; what is left is
-  supporting fire in an attack (`lnd_support`), land mines, planes, and then missiles and satellites.
+- **Supporting fire (#260)**, built 2026-09-16: batteries in range of a contested sector fire for both sides
+  and multiply that side's strength by `1 + damage/100`, which is what makes artillery worth its shells.
+- **Planes, first slice (#262)**, built 2026-09-16: airfields build bombers, tactical bombers and recon planes;
+  a sortie takes petrol and bombs off the field, bombs by `pln_damage`, and is shot at by `ac_flak_dam`'s flak.
+  See `docs/guide/air.md`.
+- **Land warfare and planes (#71)** have a plan for review in `m5-land-air-plan.md`; what is left is fighters
+  and interception, escorts, transports and paradrops, carriers as airfields, land mines, and then missiles
+  and satellites.
 - **Dead config:** `levels.curves` (`research_to_tech`, `education_to_research`) in schema.yaml is read by
   nothing.
 
