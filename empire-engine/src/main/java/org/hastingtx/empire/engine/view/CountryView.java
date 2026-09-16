@@ -51,7 +51,9 @@ public record CountryView(
     public record UnitView(long id, String cls, String name, Coord at, Coord relative, double efficiency, Map<String, Double> stock, Map<String, Double> carries,
                            double mobility, double tech, double attack, double defense, String note,
                            /** The ship carrying it (issue #252), or 0 ashore; {@code light} says whether it may go aboard at all. */
-                           long ship, boolean light) {}
+                           long ship, boolean light,
+                           /** A spy walks in their land and can sabotage or incite the sector it stands in (issue #254). */
+                           boolean spy) {}
 
     public record ShipView(long id, String cls, String name, Coord at, Coord relative, double efficiency, Map<String, Double> stock, double load, double hold,
                            Coord dest, Coord destRelative, LaneView lane, String note, boolean docked, double tech, int hexesPerUpdate, String mission, Coord homeRelative,
@@ -283,7 +285,7 @@ public record CountryView(
             for (int i = 0; i < com.size(); i++) if (u.stock().get(i) > 0) st.put(com.id(i), u.stock().get(i));
             double men = u.stock().get(com.mil);
             out.add(new UnitView(u.id(), u.cls(), cls.name(), u.at(), relative(w, c.capital(), u.at()), u.efficiency(), st, cls.carries(), u.mobility(), u.tech(),
-                    men * cls.attackAt(u.tech()) * u.efficiency() / 100.0, men * cls.defenseAt(u.tech()) * u.efficiency() / 100.0, u.note(), u.ship(), cls.has("light")));
+                    men * cls.attackAt(u.tech()) * u.efficiency() / 100.0, men * cls.defenseAt(u.tech()) * u.efficiency() / 100.0, u.note(), u.ship(), cls.has("light"), cls.has("spy")));
         }
         return out;
     }

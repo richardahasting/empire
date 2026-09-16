@@ -968,6 +968,31 @@ units:
     capture_loss_roll: 100
     security_bonus: 3.0           # revolt.c
     security_kill_divisor: 500
+    # SPIES (issue #254). A spy walks into land that is not yours; anything else is kidnapped there.
+    # It guides itself without soldiers and adds nothing to a sector's defence (KNOWN lndsub.c).
+    spy:
+      # KNOWN land.h LND_SPY_DETECT_CHANCE: (110 - effic)/100 — one chance in ten at full efficiency,
+      # taken every time it walks into a sector that is not yours and on every attempt it makes there.
+      # At war it is shot; at peace it is only spotted, and the country it was seen in turns hostile.
+      detect_base: 110
+      detect_divisor: 100
+      # KNOWN sabo.c and landgun.c lnd_sabo: one shell, fortgun(3 x effic, 7), and the sector's own
+      # shells over 20 and petrol over 100 go up with it.
+      sabotage:
+        shells: 1
+        fortgun_efficiency_multiple: 3.0
+        fortgun_guns: 7
+        shells_above: 20
+        shells_divisor: 10
+        petrol_above: 100
+        petrol_divisor: 50
+      # NEW (Richard 2026-09-15): the spy who goes in to make trouble. Every attempt adds this much
+      # disloyalty (the original's sct_loyal, capped at 127) and turns this share of the sector's
+      # civilians into guerrillas fighting for whoever held it before. GUESS, both of them.
+      incite:
+        loyalty: 12
+        che_share: 0.02
+        min_civilians: 10
     classes:
       # build is per 100% (land.config l_b, h_b, cost); a unit is laid down at 10% of it. carries: the unit's capacity.
       - { id: cavalry,   name: cavalry,   glyph: c, tech_required: 30,  build: { lcm: 10, hcm: 5,  cash: 500 },  bwork: 40, attack: 1.2, defense: 0.5, vulnerability: 80, speed: 32, visibility: 18, carries: { mil: 20, food: 12 }, flags: [light, recon] }
@@ -975,6 +1000,8 @@ units:
       - { id: artillery, name: artillery, glyph: a, tech_required: 35,  build: { lcm: 20, hcm: 10, cash: 800 },  bwork: 60, attack: 0.1, defense: 0.4, vulnerability: 70, speed: 18, visibility: 20, carries: { mil: 25, shell: 40, gun: 10, food: 24 }, flags: [light] }
       - { id: engineer,  name: engineer,  glyph: e, tech_required: 130, build: { lcm: 10, hcm: 5,  cash: 3000 }, bwork: 40, attack: 1.2, defense: 2.4, vulnerability: 50, speed: 25, visibility: 14, carries: { mil: 20, shell: 3, food: 12 }, flags: [engineer, light, assault] }
       - { id: supply,    name: supply,    glyph: s, tech_required: 50,  build: { lcm: 10, hcm: 5,  cash: 500 },  bwork: 40, attack: 0.1, defense: 0.2, vulnerability: 80, speed: 25, visibility: 20, carries: { mil: 25, shell: 200, gun: 10, pet: 300, iron: 100, dust: 100, bar: 10, food: 300, lcm: 200, hcm: 100 }, flags: [supply, light] }
+      - { id: infiltrator, name: infiltrator, glyph: p, tech_required: 40, build: { lcm: 5, hcm: 2, cash: 1500 }, bwork: 20, attack: 0.0, defense: 0.0, vulnerability: 100, speed: 50, visibility: 3, carries: { mil: 1, shell: 5, food: 6 }, flags: [light, spy] }
+      - { id: commando, name: commando, glyph: k, tech_required: 55, build: { lcm: 8, hcm: 4, cash: 2500 }, bwork: 30, attack: 0.0, defense: 0.0, vulnerability: 100, speed: 40, visibility: 4, carries: { mil: 5, shell: 20, food: 12 }, flags: [light, spy] }
       - { id: security,  name: security,  glyph: z, tech_required: 170, build: { lcm: 10, hcm: 5,  cash: 600 },  bwork: 40, attack: 1.0, defense: 2.0, vulnerability: 60, speed: 25, visibility: 15, carries: { mil: 50, shell: 4, food: 30 }, flags: [security, light] }
   # SHIPS — NEW (Richard 2026-09-09, issue #56). A data table gated on tech; every number a GUESS to tune
   # except where marked. Harbours build them from their own lcm/hcm and cash; a hull leaves the yard at

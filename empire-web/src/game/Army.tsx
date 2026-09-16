@@ -27,7 +27,9 @@ export function Army({ view, rules, busy, onCommand }: { view: CountryView; rule
           <div className="text-muted-foreground">
             {Object.keys(u.carries).map(c => `${c} ${Math.floor(u.stock[c] ?? 0)}/${u.carries[c]}`).join(" · ")}{u.note ? ` · ${u.note}` : ""}
           </div>
-          {(u.stock["mil"] ?? 0) < 1 && <div className="text-destructive">No soldiers: it cannot fight or defend. Load mil in a sector that has them.</div>}
+          {u.spy
+            ? <div className="text-muted-foreground">A spy: it walks in their land, where anything else would be seized. Every hex of theirs is one chance in ten of being caught.</div>
+            : (u.stock["mil"] ?? 0) < 1 && <div className="text-destructive">No soldiers: it cannot fight or defend. Load mil in a sector that has them.</div>}
           <div className="mt-1 flex flex-wrap gap-1">
             <Button size="sm" variant="secondary" disabled={busy || u.mobility < 1 || !!u.ship} title={u.ship ? "it is at sea" : undefined} onClick={() => setDialog({ kind: "march", unit: u })}>March…</Button>
             {u.ship
@@ -35,6 +37,18 @@ export function Army({ view, rules, busy, onCommand }: { view: CountryView; rule
               : u.light && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "board", unit: u })}>Board…</Button>}
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "load", unit: u })}>Load…</Button>
             <Button size="sm" variant="ghost" disabled={busy || Object.keys(u.stock).length === 0} onClick={() => setDialog({ kind: "unload", unit: u })}>Unload…</Button>
+            {u.spy && !u.ship && (() => {
+              const here = view.sectors.find(s => s.at.x === u.at.x && s.at.y === u.at.y);
+              // a spy deep in their land may be standing where our chart has nothing, so an unknown sector is allowed and the server decides
+              const theirs = here ? here.owner >= 0 && here.owner !== view.countryId : true;
+              const why = theirs ? undefined : "march it into one of their sectors first";
+              return (<>
+                <Button size="sm" variant="ghost" disabled={busy || !theirs || (u.stock["shell"] ?? 0) < 1} title={theirs ? "one shell, and what the sector was keeping goes up with it — it may be caught" : why}
+                        onClick={() => void onCommand({ verb: "sabotage", unit: u.id })}>Sabotage</Button>
+                <Button size="sm" variant="ghost" disabled={busy || !theirs} title={theirs ? "turn its people against their owner — it may be caught" : why}
+                        onClick={() => void onCommand({ verb: "incite", unit: u.id })}>Incite</Button>
+              </>);
+            })()}
           </div>
         </div>
       ))}

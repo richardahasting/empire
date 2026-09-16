@@ -52,6 +52,8 @@ army                         your land units: where, efficiency, soldiers, food,
 build HQ CLASS               raise a land unit (cavalry, infantry, artillery, engineer, supply, security) in a headquarters
 march UNIT x,y               march a unit through your own land on its own mobility
 lload / lunload UNIT COMMODITY N   a unit takes on, or puts down, soldiers and supplies in its sector
+sabotage UNIT                a spy blows up the enemy sector it stands in, with one of its shells
+incite UNIT                  a spy turns that sector's people against their owner
 board UNIT SHIP              a light unit goes aboard a ship of yours in harbour; it travels with her
 ashore UNIT                  it steps ashore where she lies (your own sector); on enemy coast, land SHIP x,y
 attack x,y N from x2,y2 [N2 from x3,y3 ...] [unit U ...]   at war: N military from your sector x2,y2 (and more from others next to
