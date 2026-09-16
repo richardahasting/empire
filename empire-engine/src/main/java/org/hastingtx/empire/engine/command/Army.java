@@ -219,16 +219,12 @@ final class Army {
         var r = new org.hastingtx.empire.engine.update.steps.UnrestStep.R(
                 org.hastingtx.empire.engine.update.Rng.stream("unit-fire:" + u.id() + ">" + f.at() + ":" + w.updateNumber() + ":" + (long) shells,
                         cfg.world() == null ? 0 : cfg.world().seed()));
-        double salvo = 0;
-        for (int i = 0; i < (int) guns; i++) salvo += g.damageBase() + r.roll(g.damageRoll());
-        salvo *= u.efficiency() / 100.0;
-        double ammo = cls.ammoOr1();
-        if (shells < ammo) { salvo *= shells / ammo; ammo = shells; }
-        int dam = (int) salvo;
-        LandUnit fired = u.withStock(u.stock().plus(com.index("shell"), -ammo));
+        Salvo s = salvo(cfg, com, r, u, cls, guns, shells);
+        int dam = (int) s.damage();
+        LandUnit fired = s.unit();
         World next = w.withSector(Spy.damage(cfg, com, r, target, dam)).withUnit(fired);
         return new CommandResult(next, null, 0, "unit #" + u.id() + " fired " + (int) guns + (guns == 1 ? " gun" : " guns") + " at " + f.at()
-                + ": " + dam + "% of everything " + w.country(target.owner()).name() + " had there, " + Ledger.q(shells - ammo) + " shells left");
+                + ": " + dam + "% of everything " + w.country(target.owner()).name() + " had there, " + Ledger.q(fired.stock().get(com.index("shell"))) + " shells left");
     }
 
     /**
@@ -285,6 +281,61 @@ final class Army {
         return new CommandResult(next, null, 0, "unit #" + u.id() + " worked " + u.at() + " up to " + q(s.efficiency() + points) + "%"
                 + (used.isEmpty() ? "" : " using " + used) + ", " + q(spent) + " mobility"
                 + (shortOf.isEmpty() ? "" : "; it would have done more with " + shortOf + " there"));
+    }
+
+    /** One salvo: what it did, and the unit with its shells spent. */
+    record Salvo(double damage, LandUnit unit) {}
+
+    /** KNOWN landunitgun(): (base + roll) a gun by efficiency, cut proportionally when it is short of a salvo's shells. */
+    private static Salvo salvo(GameConfig cfg, Commodities com, org.hastingtx.empire.engine.update.steps.UnrestStep.R r,
+                               LandUnit u, UnitsCfg.LandClassCfg cls, double guns, double shells) {
+        var g = cfg.units().land().gunnery();
+        double dam = 0;
+        for (int i = 0; i < (int) guns; i++) dam += g.damageBase() + r.roll(g.damageRoll());
+        dam *= u.efficiency() / 100.0;
+        double ammo = cls.ammoOr1();
+        if (shells < ammo) { dam *= shells / ammo; ammo = shells; }
+        return new Salvo(dam, u.withStock(u.stock().plus(com.index("shell"), -ammo)));
+    }
+
+    /** What supporting fire did for one side, and the world with its batteries' shells spent. */
+    record Support(World world, double damage, String story) {
+        /** KNOWN get_osupport / get_dsupport: the damage becomes a multiplier on that side's strength. */
+        public double multiplier() { return 1 + damage / 100.0; }
+    }
+
+    /**
+     * Supporting fire (issue #260; KNOWN subs/lndsub.c {@code lnd_support}). Every battery of {@code side}'s that is
+     * not in the target sector itself, is within range of it and can fire, fires the salvo {@code ufire} fires and
+     * spends the same shells. The damage becomes a multiplier on that side's strength in the fight.
+     *
+     * <p>The original's accuracy roll, which halves some salvos, is not modelled: our class table has no
+     * {@code l_acc}.
+     */
+    static Support support(GameConfig cfg, Commodities com, World w, int side, Coord target, String key) {
+        UnitsCfg.LandCfg lc = cfg.units().land();
+        if (lc == null || lc.gunnery() == null) return new Support(w, 0, "");
+        var g = lc.gunnery();
+        World next = w;
+        double total = 0;
+        StringBuilder story = new StringBuilder();
+        for (LandUnit u : w.units()) {
+            if (u.owner() != side || u.aboard() || u.at().equals(target)) continue;
+            UnitsCfg.LandClassCfg cls = lc.landClass(u.cls());
+            if (cls == null || cls.gunsOr0() < 1 || u.efficiency() < g.minEfficiency()) continue;
+            if (u.stock().get(com.mil) < 1) continue;
+            double guns = Math.min(cls.gunsOr0(), Math.floor(u.stock().get(com.index("gun"))));
+            double shells = Math.floor(u.stock().get(com.index("shell")));
+            if (guns < 1 || shells < 1) continue;
+            if (Hex.distance(w, u.at(), target) > cls.rangeAt(u.tech())) continue;
+            var r = new org.hastingtx.empire.engine.update.steps.UnrestStep.R(org.hastingtx.empire.engine.update.Rng.stream(
+                    key + ":support:" + u.id() + ":" + w.updateNumber(), cfg.world() == null ? 0 : cfg.world().seed()));
+            Salvo s = salvo(cfg, com, r, u, cls, guns, shells);
+            total += s.damage();
+            next = next.withUnit(s.unit());
+            story.append(story.isEmpty() ? "" : ", ").append("#").append(u.id());
+        }
+        return new Support(next, total, story.isEmpty() ? "" : "batteries " + story + " fired in support (+" + (int) total + "%)");
     }
 
     private static String article(String name) { return ("aeiou".indexOf(Character.toLowerCase(name.charAt(0))) >= 0 ? "an " : "a ") + name; }

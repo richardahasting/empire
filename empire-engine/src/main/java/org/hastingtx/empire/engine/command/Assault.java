@@ -37,6 +37,13 @@ final class Assault {
     }
 
     /** Refusals common to both ways in; null when the fight may go ahead. */
+    /** What the guns behind each line added, for the reply (issue #260). */
+    private static String supportStory(Army.Support mine, Army.Support theirs) {
+        String a = mine.story().isEmpty() ? "" : "; your " + mine.story();
+        String b = theirs.story().isEmpty() ? "" : "; their " + theirs.story();
+        return a + b;
+    }
+
     static String refused(GameConfig cfg, World w, Country c, Sector target, String verb) {
         CaptureCfg cap = cfg.capture();
         Country them = w.country(target.owner());
@@ -47,6 +54,12 @@ final class Assault {
     }
 
     private static Fight fight(GameConfig cfg, Commodities com, World w, Sector target, double attackers, double attStrength, String streamKey) {
+        return fight(cfg, com, w, target, attackers, attStrength, 1.0, streamKey);
+    }
+
+    /** {@code defenceSupport} is what the defender's batteries behind the line are worth (issue #260). */
+    private static Fight fight(GameConfig cfg, Commodities com, World w, Sector target, double attackers, double attStrength,
+                               double defenceSupport, String streamKey) {
         CaptureCfg.AssaultCfg ac = cfg.capture().assault();
         int them = target.owner();
         record Group(Coord at, double men, double strength, long unit) {}
@@ -75,6 +88,7 @@ final class Assault {
         while (att >= 1) {
             double d = 0, left = 0;
             for (int k = 0; k < men.length; k++) { d += men[k] * defence.get(k).strength(); left += men[k]; }
+            d *= defenceSupport;
             if (left < 1) break;
             double a = att * attStrength;
             if (rng.nextDouble() < a / (a + d)) {
@@ -188,8 +202,15 @@ final class Assault {
         if (attackers < 1) return CommandResult.fail(w, "ship #" + ship.id() + " has no military aboard to assault with");
         double strength = (aboardMil * cfg.capture().assault().perMan(ship.efficiency()) + unitWorth) / attackers;
 
-        Fight f = fight(cfg, com, w, target, attackers, strength, "assault:" + ship.id() + ">" + target.at());
-        String story = f.story("assault", target.at(), attackers);
+        // batteries on both sides in range of the beach fire before the landing (issue #260; KNOWN lnd_support)
+        String key = "assault:" + ship.id() + ">" + target.at();
+        Army.Support mySupport = Army.support(cfg, com, w, c.id(), target.at(), key);
+        Army.Support theirs = Army.support(cfg, com, mySupport.world(), target.owner(), target.at(), key + ":def");
+        w = theirs.world();
+        target = w.sector(target.at());
+        strength *= mySupport.multiplier();
+        Fight f = fight(cfg, com, w, target, attackers, strength, theirs.multiplier(), key);
+        String story = f.story("assault", target.at(), attackers) + supportStory(mySupport, theirs);
         if (!f.won()) {
             World next = f.next().withShip(ship.withStock(ship.stock().with(com.mil, 0)));
             for (LandUnit u : riding) next = next.withoutUnit(u.id());   // a unit that storms a beach and loses is gone
@@ -280,7 +301,12 @@ final class Assault {
             worth += men * cls.attackAt(u.tech()) * u.efficiency() / 100.0;
         }
 
-        Fight f = fight(cfg, com, next, next.sector(a.target()), attackers, worth / attackers, "attack:" + c.id() + ">" + a.target());
+        String key = "attack:" + c.id() + ">" + a.target();
+        Army.Support mySupport = Army.support(cfg, com, next, c.id(), a.target(), key);
+        Army.Support theirSupport = Army.support(cfg, com, mySupport.world(), target.owner(), a.target(), key + ":def");
+        next = theirSupport.world();
+        Fight f = fight(cfg, com, next, next.sector(a.target()), attackers, worth / attackers * mySupport.multiplier(),
+                theirSupport.multiplier(), key);
         // the dead cost their sectors mobility, in proportion to the share of the garrison lost, at most the cap each (attsub.c)
         double dead = attackers - f.survivors();
         World after = f.next();
@@ -292,7 +318,7 @@ final class Assault {
             after = after.withSector(s.withMobility(Math.max(0, s.mobility() - extra)));
         }
         f = new Fight(after, f.won(), f.survivors(), f.defendersAtStart(), f.defendersLost(), f.inSector(), f.fort());
-        String story = f.story("attack", a.target(), attackers);
+        String story = f.story("attack", a.target(), attackers) + supportStory(mySupport, theirSupport);
         if (!f.won())
             return new CommandResult(f.next(), null, 0, story + " — beaten off: all " + q(attackers) + " lost; they lost " + q(f.defendersLost()));
         World[] held = {f.next()};
