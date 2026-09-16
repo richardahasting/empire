@@ -71,6 +71,22 @@ A unit can ride a ship (issue #252, as the original's `ship.config` carried them
 - **If she sinks**, whatever she carried goes down with her.
 - She cannot be **scrapped** with a unit aboard.
 
+## Artillery
+
+A unit with guns shells a sector of theirs from where it stands (issue #256, the original's
+`lnd_fire`): **`ufire UNIT x,y`**, or **Fire…** in the Army panel.
+
+- **Artillery** carries ten guns, forty shells and a salvo of three; an **engineer** has one
+  gun for close work. Load guns and shells into it with `lload` in a sector that has them.
+- **It must be at 40% or better** (`LAND_MINFIREEFF`), ashore, with soldiers to work the guns.
+- **Range** is `techfact(tech, range/2)` hexes — about three for artillery at the tech it is
+  built at, further as your tech rises.
+- **Damage** is `4 + roll(6)` a gun, by its efficiency: ten guns at 100% wreck something like
+  half of a sector. Short of a full salvo it fires what it has, for proportionally less.
+- **What it hits:** the sector's efficiency, roads, rail, mobility and every commodity in it.
+  Shelling takes no ground — that is what `attack` is for; soften first, then attack.
+- At war only.
+
 ## Spies
 
 Two classes carry no army at all (issue #254): the **infiltrator** (tech 40) and the

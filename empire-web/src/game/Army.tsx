@@ -12,7 +12,7 @@ const rel = (c: { x: number; y: number }) => `${c.x},${c.y}`;
  * a fight; and its orders — march, take on or put down soldiers and supplies. Attacks are given from the enemy sector's menu.
  */
 export function Army({ view, rules, busy, onCommand }: { view: CountryView; rules: Rules; busy: boolean; onCommand: (c: CommandRequest) => Promise<void> }) {
-  const [dialog, setDialog] = useState<{ kind: "march" | "load" | "unload" | "board"; unit: UnitView } | null>(null);
+  const [dialog, setDialog] = useState<{ kind: "march" | "load" | "unload" | "board" | "fire"; unit: UnitView } | null>(null);
   const units = view.units ?? [];
   if (units.length === 0) return <p className="text-xs text-muted-foreground">No land units. Designate a headquarters, then right-click it and choose “Build unit…”.</p>;
   return (
@@ -37,6 +37,9 @@ export function Army({ view, rules, busy, onCommand }: { view: CountryView; rule
               : u.light && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "board", unit: u })}>Board…</Button>}
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "load", unit: u })}>Load…</Button>
             <Button size="sm" variant="ghost" disabled={busy || Object.keys(u.stock).length === 0} onClick={() => setDialog({ kind: "unload", unit: u })}>Unload…</Button>
+            {u.guns > 0 && !u.ship && <Button size="sm" variant="secondary" disabled={busy || (u.stock["shell"] ?? 0) < 1}
+                title={(u.stock["shell"] ?? 0) < 1 ? "no shells: load some" : `${u.guns} guns, ${Math.floor(u.range)} hexes`}
+                onClick={() => setDialog({ kind: "fire", unit: u })}>Fire…</Button>}
             {u.spy && !u.ship && (() => {
               const here = view.sectors.find(s => s.at.x === u.at.x && s.at.y === u.at.y);
               // a spy deep in their land may be standing where our chart has nothing, so an unknown sector is allowed and the server decides
@@ -52,10 +55,33 @@ export function Army({ view, rules, busy, onCommand }: { view: CountryView; rule
           </div>
         </div>
       ))}
+      {dialog?.kind === "fire" && <FireDialog unit={dialog.unit} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {dialog?.kind === "board" && <BoardDialog unit={dialog.unit} view={view} rules={rules} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {dialog?.kind === "march" && <MarchDialog unit={dialog.unit} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {dialog && (dialog.kind === "load" || dialog.kind === "unload") && <UnitCargoDialog kind={dialog.kind} unit={dialog.unit} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
     </div>
+  );
+}
+
+/** Artillery throws a salvo at a sector of theirs within range (issue #256): it wrecks, it does not take. */
+function FireDialog({ unit, view, busy, onClose, onCommand }: { unit: UnitView; view: CountryView; busy: boolean; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void> }) {
+  const [to, setTo] = useState("");
+  const [tx, ty] = to.split(",").map(s => Number(s.trim()));
+  const target = Number.isFinite(tx) && Number.isFinite(ty) ? view.sectors.find(s => s.relative.x === tx && s.relative.y === ty) : undefined;
+  const theirs = !!target && target.owner >= 0 && target.owner !== view.countryId && target.terrain !== "ocean";
+  return (
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Fire unit #{unit.id} from {rel(unit.relative)}</DialogTitle>
+          <DialogDescription>{unit.guns} guns reaching {Math.floor(unit.range)} hexes. A salvo wrecks a share of everything in the sector — efficiency, roads, rail, mobility and stores — and takes no ground. At war only.</DialogDescription></DialogHeader>
+        <label className="grid gap-1 text-sm">At (x,y)<Input value={to} onChange={e => setTo(e.target.value)} placeholder="e.g. 4,-1" autoFocus /></label>
+        {to && !theirs && <p className="text-xs text-destructive">{target ? "Not a land sector of somebody else's." : "Nothing of theirs on your chart there."}</p>}
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button disabled={busy || !theirs} onClick={async () => { if (!target) return; await onCommand({ verb: "unit_fire", unit: unit.id, x: target.at.x, y: target.at.y }); onClose(); }}>Fire</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

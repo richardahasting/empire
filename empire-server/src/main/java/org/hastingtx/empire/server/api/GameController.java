@@ -165,6 +165,7 @@ public class GameController {
                 case "anti" -> new Command.Anti(need(at));
                 case "build_unit" -> new Command.BuildUnit(need(at), type);
                 case "march" -> new Command.March(needUnit(), at(x, y));
+                case "unit_fire" -> new Command.UnitFire(needUnit(), at(x, y));
                 case "sabotage" -> new Command.Sabotage(needUnit());
                 case "incite" -> new Command.Incite(needUnit());
                 case "board" -> new Command.Board(needUnit(), needShip());

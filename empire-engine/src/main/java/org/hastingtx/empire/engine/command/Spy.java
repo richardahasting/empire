@@ -164,7 +164,7 @@ final class Spy {
      * KNOWN subs/sectdamage.c sect_damage(), applied to a sector outside an update: efficiency, road, rail,
      * mobility and every item lose {@code dam} percent. The update's own copy works through the ledger instead.
      */
-    private static Sector damage(GameConfig cfg, Commodities com, UnrestStep.R r, Sector s, int dam) {
+    static Sector damage(GameConfig cfg, Commodities com, UnrestStep.R r, Sector s, int dam) {
         if (dam <= 0) return s;
         dam = Math.min(100, dam);
         Stocks st = s.stock();

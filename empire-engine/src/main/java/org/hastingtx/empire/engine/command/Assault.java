@@ -37,7 +37,7 @@ final class Assault {
     }
 
     /** Refusals common to both ways in; null when the fight may go ahead. */
-    private static String refused(GameConfig cfg, World w, Country c, Sector target, String verb) {
+    static String refused(GameConfig cfg, World w, Country c, Sector target, String verb) {
         CaptureCfg cap = cfg.capture();
         Country them = w.country(target.owner());
         if (cap == null || cap.assault() == null) return target.at() + " belongs to " + them.name() + ", and this world has no rules for taking sectors by force";

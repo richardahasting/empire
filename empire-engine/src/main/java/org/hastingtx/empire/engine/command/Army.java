@@ -183,5 +183,53 @@ final class Army {
         return new CommandResult(w.withUnit(u.withShip(ship.id())), null, 0, "unit #" + u.id() + " went aboard ship #" + ship.id() + " (" + (aboard + 1) + "/" + sc.landUnitsOr0() + ")");
     }
 
+    /**
+     * Artillery fire (issue #256; KNOWN subs/landgun.c {@code lnd_fire}, {@code landunitgun}). A unit at
+     * {@code LAND_MINFIREEFF} or better, ashore, with guns, shells and men to work them throws
+     * {@code (4 + roll(6))} per gun by its efficiency at a sector within {@code techfact(tech, range/2)} hexes.
+     * A salvo eats the class's ammunition, and a unit with less than that fires a weaker one with what it has.
+     * The sector takes it as {@code sect_damage}: efficiency, roads, rail, mobility and every commodity.
+     */
+    static CommandResult fire(GameConfig cfg, Commodities com, World w, Country c, Command.UnitFire f) {
+        UnitsCfg.LandCfg lc = cfg.units().land();
+        if (lc == null || lc.gunnery() == null) return CommandResult.fail(w, "this world has no artillery");
+        var g = lc.gunnery();
+        LandUnit u = w.unit(f.unit());
+        if (u == null || u.owner() != c.id()) return CommandResult.fail(w, "no land unit #" + f.unit() + " of yours");
+        if (u.aboard()) return CommandResult.fail(w, "unit #" + u.id() + " is aboard ship #" + u.ship() + "; guns are worked ashore");
+        UnitsCfg.LandClassCfg cls = lc.landClass(u.cls());
+        if (cls == null || cls.gunsOr0() < 1) return CommandResult.fail(w, article(cls == null ? u.cls() : cls.name()) + " carries no guns");
+        if (u.efficiency() < g.minEfficiency()) return CommandResult.fail(w, "unit #" + u.id() + " is at " + q(u.efficiency()) + "%; guns need " + q(g.minEfficiency()) + "%");
+        if (u.stock().get(com.mil) < 1) return CommandResult.fail(w, "unit #" + u.id() + " has nobody to work the guns");
+        double guns = Math.min(cls.gunsOr0(), Math.floor(u.stock().get(com.index("gun"))));
+        if (guns < 1) return CommandResult.fail(w, "unit #" + u.id() + " has no guns aboard (lload " + u.id() + " gun N)");
+        double shells = Math.floor(u.stock().get(com.index("shell")));
+        if (shells < 1) return CommandResult.fail(w, "unit #" + u.id() + " has no shells (lload " + u.id() + " shell N)");
+        if (f.at() == null || !w.inBounds(f.at())) return CommandResult.fail(w, "fire at where?");
+        Sector target = w.sector(f.at());
+        if (!target.terrain().isLand()) return CommandResult.fail(w, f.at() + " is sea; ships are the navy's business");
+        if (target.owner() == c.id()) return CommandResult.fail(w, f.at() + " is yours");
+        if (!target.owned()) return CommandResult.fail(w, f.at() + " belongs to nobody");
+        String no = Assault.refused(cfg, w, c, target, "fire on");
+        if (no != null) return CommandResult.fail(w, no);
+        double range = cls.rangeAt(u.tech());
+        int dist = Hex.distance(w, u.at(), f.at());
+        if (dist > range) return CommandResult.fail(w, f.at() + " is " + dist + " hexes away; " + article(cls.name()) + " reaches " + Ledger.q(Math.floor(range)));
+
+        var r = new org.hastingtx.empire.engine.update.steps.UnrestStep.R(
+                org.hastingtx.empire.engine.update.Rng.stream("unit-fire:" + u.id() + ">" + f.at() + ":" + w.updateNumber() + ":" + (long) shells,
+                        cfg.world() == null ? 0 : cfg.world().seed()));
+        double salvo = 0;
+        for (int i = 0; i < (int) guns; i++) salvo += g.damageBase() + r.roll(g.damageRoll());
+        salvo *= u.efficiency() / 100.0;
+        double ammo = cls.ammoOr1();
+        if (shells < ammo) { salvo *= shells / ammo; ammo = shells; }
+        int dam = (int) salvo;
+        LandUnit fired = u.withStock(u.stock().plus(com.index("shell"), -ammo));
+        World next = w.withSector(Spy.damage(cfg, com, r, target, dam)).withUnit(fired);
+        return new CommandResult(next, null, 0, "unit #" + u.id() + " fired " + (int) guns + (guns == 1 ? " gun" : " guns") + " at " + f.at()
+                + ": " + dam + "% of everything " + w.country(target.owner()).name() + " had there, " + Ledger.q(shells - ammo) + " shells left");
+    }
+
     private static String article(String name) { return ("aeiou".indexOf(Character.toLowerCase(name.charAt(0))) >= 0 ? "an " : "a ") + name; }
 }
