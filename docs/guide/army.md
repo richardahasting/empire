@@ -42,6 +42,7 @@ A unit with no soldiers cannot fight. **`army`** (or the Army panel) lists your 
   carries it. Each hex costs the sector's move cost, adjusted for the unit's speed.
 - **Defence:** units in a sector that is attacked, or next to it, fight with **soldiers ×
   defence × efficiency**. A hundred infantry at full strength are worth 150 of a sector's own.
+- **Guns behind the line** fire for both sides in any attack: see supporting fire, below.
 - **Attack:** `attack x,y [N from x2,y2 ...] unit U` sends a unit from next door with **soldiers ×
   attack × efficiency**; it pays its march in, and if the sector falls it moves in with its
   survivors. The enemy sector's **Attack…** menu offers your units there.
@@ -104,6 +105,21 @@ A unit with guns shells a sector of theirs from where it stands (issue #256, the
 - **What it hits:** the sector's efficiency, roads, rail, mobility and every commodity in it.
   Shelling takes no ground — that is what `attack` is for; soften first, then attack.
 - At war only.
+
+### Supporting fire
+
+You do not have to order it (issue #260, the original's `lnd_support`). When a sector is
+attacked or assaulted, **every battery within range of it fires**, on both sides, and what
+it does becomes a **multiplier on that side's strength**: 60 points of damage is ×1.6.
+
+- A battery in the sector being fought over is in the fight, not behind it; everything else
+  of yours in range supports.
+- It spends the same shells a salvo spends, and the reply names the batteries that fired.
+- Their guns answer yours, so an attack into artillery country is much dearer than the
+  garrison alone suggests.
+
+Our class table has no accuracy figure, so the original's roll that halves some supporting
+salvos is not modelled.
 
 ## Spies
 
