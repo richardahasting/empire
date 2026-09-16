@@ -73,6 +73,14 @@ export interface UnitView {
   /** An engineer builds the sector it stands in with its own mobility (issue #258). */
   engineer: boolean;
 }
+/** A plane of yours (issue #262). reach: hexes it strikes at, half its round-trip range. */
+export interface PlaneView {
+  id: number; cls: string; name: string; at: Coord; relative: Coord; efficiency: number; tech: number;
+  load: number; accuracy: number; reach: number; note: string; bomber: boolean; tactical: boolean; spy: boolean;
+}
+export interface PlaneClass { id: string; name: string; glyph: string; techRequired: number; build: Record<string, number>; bwork: number; accuracy: number; load: number; attack: number; defense: number; range: number; fuel: number; flags: string[] }
+export interface PlanesRules { startEfficiency: number; minEfficiency: number; abortBelow: number; classes: PlaneClass[] }
+
 export interface LandClass { id: string; name: string; glyph: string; techRequired: number; build: Record<string, number>; bwork: number; attack: number; defense: number; speed: number; carries: Record<string, number>; flags: string[] }
 export interface LandRules { startEfficiency: number; classes: LandClass[] }
 
@@ -107,6 +115,7 @@ export interface CountryView {
   ships: ShipView[];
   /** Your land units (issue #247). */
   units?: UnitView[];
+  planes?: PlaneView[];
   /** Countries you are at war with, by name (issue #137). */
   atWarWith?: string[];
   /** Enemy ships your sensors have found (issue #75); what you can aim at (issue #68). */
@@ -171,7 +180,7 @@ export interface ShipClass { id: string; name: string; glyph: string; role: stri
   /** How many light land units she carries (issue #252); absent or 0 for a ship that carries none. */
   landUnits?: number | null }
 export interface ShipsRules { startEfficiency: number; dockPointsPerUpdate: number; harborMinEfficiency: number; classes: ShipClass[] }
-export interface Rules { sectorTypes: SectorType[]; commodities: Commodity[]; etusPerUpdate: number; btuCosts: Record<string, number>; road?: RoadRules; defaultCapacity?: number; rail?: RailRules; productionMinEfficiency?: number; massThresholdMultiplierByType?: Record<string, number>; ships?: ShipsRules | null; work?: WorkRules; curves?: Record<string, Curve>; maxPopCurve?: { type: string; base?: number | null; perResearchPoint?: number | null; cap?: number | null } | null; land?: LandRules | null }
+export interface Rules { sectorTypes: SectorType[]; commodities: Commodity[]; etusPerUpdate: number; btuCosts: Record<string, number>; road?: RoadRules; defaultCapacity?: number; rail?: RailRules; productionMinEfficiency?: number; massThresholdMultiplierByType?: Record<string, number>; ships?: ShipsRules | null; work?: WorkRules; curves?: Record<string, Curve>; maxPopCurve?: { type: string; base?: number | null; perResearchPoint?: number | null; cap?: number | null } | null; land?: LandRules | null; planes?: PlanesRules | null }
 export interface Outcome { accepted: boolean; error?: string; btuSpent: number; view: CountryView; info?: string | null }
 export interface ConsoleReply { output: string; accepted: boolean; error?: string; view?: CountryView }
 export interface CommandRequest {
@@ -190,6 +199,8 @@ export interface CommandRequest {
   direction?: string;
   /** ships: which ship; lane cargo; build_ship name. */
   ship?: number; cargo?: string[]; name?: string;
+  /** A plane's id for bomb / recon (issue #262). */
+  plane?: number;
 }
 
 /** A macro step: a panel command with the sector left blank (issue #47). */

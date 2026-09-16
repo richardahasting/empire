@@ -32,6 +32,7 @@ public class WorldRepository {
         writeRail(gameId, w.pendingRail(), com);
         writeShips(gameId, w, com);
         writeUnits(gameId, w, com);
+        writePlanes(gameId, w);
         writeContacts(gameId, w);
         writeSeen(gameId, w);
         writeRailLanes(gameId, w, com);
@@ -52,6 +53,7 @@ public class WorldRepository {
         if (!after.pendingRail().equals(before.pendingRail())) writeRail(gameId, after.pendingRail(), com);
         if (!after.ships().equals(before.ships()) || after.nextShipId() != before.nextShipId()) writeShips(gameId, after, com);
         if (!after.units().equals(before.units()) || after.nextUnitId() != before.nextUnitId()) writeUnits(gameId, after, com);
+        if (!after.planes().equals(before.planes()) || after.nextPlaneId() != before.nextPlaneId()) writePlanes(gameId, after);
         if (!after.contacts().equals(before.contacts())) writeContacts(gameId, after);
         if (!after.seen().equals(before.seen())) writeSeen(gameId, after);
         if (!after.railLanes().equals(before.railLanes())) writeRailLanes(gameId, after, com);
@@ -195,6 +197,17 @@ public class WorldRepository {
         }
         jdbc.batchUpdate("INSERT INTO land_unit (game_id, id, owner, class, x, y, efficiency, mobility, tech, built, note, ship_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", rows);
         if (!stock.isEmpty()) jdbc.batchUpdate("INSERT INTO land_unit_stock (game_id, unit_id, commodity, qty) VALUES (?,?,?,?)", stock);
+    }
+
+    /** Planes (issue #262): few, so all of them are rewritten whenever any changed. */
+    private void writePlanes(long gameId, World w) {
+        jdbc.update("DELETE FROM plane WHERE game_id = ?", gameId);
+        jdbc.update("UPDATE game SET next_plane_id = ? WHERE id = ?", w.nextPlaneId(), gameId);
+        if (w.planes().isEmpty()) return;
+        List<Object[]> rows = new ArrayList<>();
+        for (var p : w.planes())
+            rows.add(new Object[] {gameId, p.id(), p.owner(), p.cls(), p.at().x(), p.at().y(), p.efficiency(), p.tech(), p.built(), p.note() == null ? "" : p.note()});
+        jdbc.batchUpdate("INSERT INTO plane (game_id, id, owner, class, x, y, efficiency, tech, built, note) VALUES (?,?,?,?,?,?,?,?,?,?)", rows);
     }
 
     private void writeShips(long gameId, World w, Commodities com) {
@@ -349,6 +362,10 @@ public class WorldRepository {
                 rs.getLong("id"), rs.getInt("owner"), rs.getString("class"), new Coord(rs.getInt("x"), rs.getInt("y")), rs.getDouble("efficiency"),
                 Stocks.of(unitStock.getOrDefault(rs.getLong("id"), new double[n])), rs.getDouble("mobility"), rs.getDouble("tech"), rs.getLong("built"), rs.getString("note"), rs.getLong("ship_id")), g.id());
         Long nextUnit = jdbc.queryForObject("SELECT next_unit_id FROM game WHERE id = ?", Long.class, g.id());
+        List<org.hastingtx.empire.engine.model.Plane> planes = jdbc.query("SELECT * FROM plane WHERE game_id = ? ORDER BY id", (rs, i) -> new org.hastingtx.empire.engine.model.Plane(
+                rs.getLong("id"), rs.getInt("owner"), rs.getString("class"), new Coord(rs.getInt("x"), rs.getInt("y")), rs.getDouble("efficiency"),
+                rs.getDouble("tech"), rs.getLong("built"), rs.getString("note")), g.id());
+        Long nextPlane = jdbc.queryForObject("SELECT next_plane_id FROM game WHERE id = ?", Long.class, g.id());
         List<Contact> contacts = jdbc.query("SELECT * FROM contact WHERE game_id = ? ORDER BY owner, ship_id", (rs, i) ->
                 new Contact(rs.getInt("owner"), rs.getLong("ship_id"), rs.getInt("target_owner"), rs.getString("class"),
                         new Coord(rs.getInt("x"), rs.getInt("y")), rs.getLong("seen_update"), rs.getDouble("confidence")), g.id());
@@ -364,6 +381,6 @@ public class WorldRepository {
             int o = rs.getInt("owner"), fx = rs.getInt("from_x"), fy = rs.getInt("from_y"), tx = rs.getInt("to_x"), ty = rs.getInt("to_y");
             return new RailLane(o, new Coord(fx, fy), new Coord(tx, ty), laneCargo.getOrDefault(laneKey(o, fx, fy, tx, ty), List.of()));
         }, g.id());
-        return new World(g.width(), g.height(), g.wrapX(), g.wrapY(), list, countries, moves, g.updateNumber(), rail, ships, nextShip == null ? 1 : nextShip, contacts, seen, lanes, readRelations(g.id()), units, nextUnit == null ? 1 : nextUnit);
+        return new World(g.width(), g.height(), g.wrapX(), g.wrapY(), list, countries, moves, g.updateNumber(), rail, ships, nextShip == null ? 1 : nextShip, contacts, seen, lanes, readRelations(g.id()), units, nextUnit == null ? 1 : nextUnit, planes, nextPlane == null ? 1 : nextPlane);
     }
 }

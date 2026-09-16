@@ -1187,6 +1187,9 @@ public class GameService {
             case Command.Sabotage sb -> null;
             case Command.UnitFire uf -> uf.at();
             case Command.Work wk -> null;
+            case Command.BuildPlane bp -> bp.at();
+            case Command.Bomb bo2 -> bo2.at();
+            case Command.Recon rc -> rc.at();
             case Command.Incite in -> null;
             case Command.Demobilize d -> d.sector();
             case Command.Telegram t -> null;

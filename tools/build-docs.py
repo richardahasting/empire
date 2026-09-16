@@ -27,7 +27,7 @@ OUT = ROOT / "empire-web" / "public" / "guide"
 MDVIEW = Path.home() / "bin" / "mdview"
 
 # The order the guide is meant to be read in; anything not listed is appended.
-ORDER = ["index", "first-turn", "the-update", "economy", "moving-goods", "ships", "army", "levels", "commands", "deity", "pogo"]
+ORDER = ["index", "first-turn", "the-update", "economy", "moving-goods", "ships", "army", "air", "levels", "commands", "deity", "pogo"]
 
 
 def load_mdview():

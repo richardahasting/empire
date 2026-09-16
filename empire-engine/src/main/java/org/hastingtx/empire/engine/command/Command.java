@@ -9,7 +9,7 @@ import org.hastingtx.empire.engine.model.Coord;
 public sealed interface Command permits
         Command.BreakSanctuary, Command.Designate, Command.Threshold, Command.Distribute,
         Command.Move, Command.Explore, Command.BuildRoad, Command.BuildRail, Command.RailShip, Command.Deliver,
-        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission, Command.Land, Command.Demobilize, Command.Attack, Command.Anti, Command.BuildUnit, Command.March, Command.LoadUnit, Command.Board, Command.Sabotage, Command.Incite, Command.UnitFire, Command.Work,
+        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission, Command.Land, Command.Demobilize, Command.Attack, Command.Anti, Command.BuildUnit, Command.March, Command.LoadUnit, Command.Board, Command.Sabotage, Command.Incite, Command.UnitFire, Command.Work, Command.BuildPlane, Command.Bomb, Command.Recon,
         Command.RailLane, Command.Telegram, Command.Announce, Command.DeclareWar, Command.OfferPeace {
 
     String verb();
@@ -85,6 +85,15 @@ public sealed interface Command permits
 
     /** A land unit goes aboard a ship, or ashore from her ({@code ship} 0) — issue #252; KNOWN load.c, lnd_land. */
     record Board(long unit, long ship) implements Command { public String verb() { return ship == 0 ? "ashore" : "board"; } }
+
+    /** A plane is laid down on an airfield of yours (issue #262). */
+    record BuildPlane(Coord at, String cls) implements Command { public String verb() { return "build_plane"; } }
+
+    /** A bombing sortie (issue #262); pinpoint aims at what is in the sector, strategic at the sector itself. */
+    record Bomb(long plane, Coord at, boolean pinpoint) implements Command { public String verb() { return "bomb"; } }
+
+    /** A reconnaissance sortie (issue #262). */
+    record Recon(long plane, Coord at) implements Command { public String verb() { return "recon"; } }
 
     /** An engineer spends its mobility building the sector it stands in (issue #258); mobility 0 means all it has. */
     record Work(long unit, double mobility) implements Command { public String verb() { return "work"; } }

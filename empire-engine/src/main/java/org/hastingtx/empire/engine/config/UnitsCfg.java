@@ -6,10 +6,57 @@ import java.util.Map;
 /** Units. Phase 1 (issue #56): ships. {@code table} is the M5 land/air table, not read yet. */
 public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
                        /** Land units (issue #247, #71 slice 2). Null in a game whose rules predate them: none can be built. */
-                       LandCfg land) {
+                       LandCfg land,
+                       /** Planes (issue #262, #71 slice 3a). Null in a game whose rules predate them: none can be built. */
+                       PlanesCfg planes) {
 
     /** The ships-only shape, for fixtures and callers that predate land units. */
-    public UnitsCfg(boolean enabled, String table, ShipsCfg ships) { this(enabled, table, ships, null); }
+    public UnitsCfg(boolean enabled, String table, ShipsCfg ships) { this(enabled, table, ships, null, null); }
+
+    /** Before planes. */
+    public UnitsCfg(boolean enabled, String table, ShipsCfg ships, LandCfg land) { this(enabled, table, ships, land, null); }
+
+    /**
+     * KNOWN plane.config, include/plane.h, subs/plnsub.c and subs/aircombat.c (issue #262): a plane is built on an
+     * airfield, flies a sortie that takes petrol and bombs off the field, and is shot at by whatever it flies over.
+     */
+    public record PlanesCfg(double startEfficiency, double minEfficiency, double abortBelow, double growScale,
+                            double maintenancePerEtuPerCost, FlakCfg flak, BombingCfg bombing, List<PlaneClassCfg> classes) {
+        public PlaneClassCfg planeClass(String id) {
+            for (PlaneClassCfg c : classes) if (c.id().equals(id)) return c;
+            return null;
+        }
+    }
+
+    /** KNOWN aircombat.c ac_flak_dam: a multiplier by (guns − the plane's defence), then (roll(8) + 2) × it. */
+    public record FlakCfg(double gunMax, double gunMultiple, int roll, int rollOffset, List<Double> table, int tableOffset,
+                          Integer highFlyingStep) {
+        /** KNOWN: {@code flak = guns − defence}, a step less for anything but a low-flying tactical bomber. */
+        public double multiplier(double guns, double defence, boolean tactical) {
+            int i = (int) Math.round(guns - defence) - (tactical ? 0 : (highFlyingStep == null ? 0 : highFlyingStep)) + tableOffset;
+            return table.get(Math.max(0, Math.min(table.size() - 1, i)));
+        }
+    }
+
+    /** KNOWN plnsub.c pln_damage. */
+    public record BombingCfg(int bombRoll, int blam, int blamChance, int hit, int miss, double effectiveMultiple, int strategicAimBase) {}
+
+    /** One class of plane (plane.config). {@code range} is the round trip, so a sortie reaches half of it. */
+    public record PlaneClassCfg(String id, String name, String glyph, double techRequired, Map<String, Double> build, double bwork,
+                                double accuracy, double load, double attack, double defense, double range, double fuel,
+                                List<String> flags) {
+        public boolean has(String flag) { return flags != null && flags.contains(flag); }
+        /** KNOWN PLN_ATTDEF / pl_range: a plane built above its class's tech is a little better and flies further. */
+        private static double better(double base, double tech, double required, double scale) {
+            return base * (1 + Math.sqrt(Math.max(0, tech - required)) / 100 * scale);
+        }
+        public double accuracyAt(double tech) { return Math.min(100, better(accuracy, tech, techRequired, 2.1)); }
+        public double defenseAt(double tech) { return better(defense, tech, techRequired, 4); }
+        public double loadAt(double tech) { return Math.floor(better(load, tech, techRequired, 2.1)); }
+        public double rangeAt(double tech) { return better(range, tech, techRequired, 2.1); }
+        /** How far it may strike: the range is the round trip (KNOWN pl_range, "total distance, not radius"). */
+        public double reachAt(double tech) { return rangeAt(tech) / 2.0; }
+    }
 
     /**
      * KNOWN (gefla/empserver land.config, commands/buil.c, update/land.c, subs/lndsub.c; Richard 2026-09-15: the original is

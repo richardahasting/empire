@@ -156,4 +156,4 @@ fight the garrison, sabotage production, recruit, spread, and hand a sector back
 Rates for inciting are a GUESS in `config/schema.yaml`; everything else here is the
 original's.
 
-Artillery fire, engineers' works and planes come in later slices.
+Planes have [a chapter of their own](air.md).
