@@ -37,6 +37,13 @@ export function Army({ view, rules, busy, onCommand }: { view: CountryView; rule
               : u.light && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "board", unit: u })}>Board…</Button>}
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "load", unit: u })}>Load…</Button>
             <Button size="sm" variant="ghost" disabled={busy || Object.keys(u.stock).length === 0} onClick={() => setDialog({ kind: "unload", unit: u })}>Unload…</Button>
+            {u.engineer && !u.ship && (() => {
+              const here = view.sectors.find(s => s.at.x === u.at.x && s.at.y === u.at.y);
+              const buildable = !!here && here.full && here.efficiency < 100 && !!here.designation;
+              return <Button size="sm" variant="secondary" disabled={busy || !buildable || u.mobility < 6}
+                title={buildable ? "spend its mobility building this sector, buying the materials from what is stored here" : "nothing to build here"}
+                onClick={() => void onCommand({ verb: "work", unit: u.id })}>Work</Button>;
+            })()}
             {u.guns > 0 && !u.ship && <Button size="sm" variant="secondary" disabled={busy || (u.stock["shell"] ?? 0) < 1}
                 title={(u.stock["shell"] ?? 0) < 1 ? "no shells: load some" : `${u.guns} guns, ${Math.floor(u.range)} hexes`}
                 onClick={() => setDialog({ kind: "fire", unit: u })}>Fire…</Button>}

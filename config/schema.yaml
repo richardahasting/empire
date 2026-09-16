@@ -995,6 +995,10 @@ units:
         min_civilians: 10
     # ARTILLERY (issue #256). KNOWN landgun.c lnd_fire and landunitgun: a unit at 40% or better with guns,
     # shells and men to work them throws (4 + roll(6)) per gun, by its efficiency, at a sector within range.
+    # ENGINEERS (issue #258). KNOWN commands/work.c: an engineer spends its own mobility to build the sector
+    # it stands in — mobility x efficiency / 600 points of it — and buys the materials a build always buys.
+    engineer_work:
+      mobility_per_point: 600
     gunnery:
       min_efficiency: 40          # KNOWN LAND_MINFIREEFF
       damage_base: 4.0

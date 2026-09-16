@@ -71,6 +71,24 @@ A unit can ride a ship (issue #252, as the original's `ship.config` carried them
 - **If she sinks**, whatever she carried goes down with her.
 - She cannot be **scrapped** with a unit aboard.
 
+## Engineers' works
+
+An **engineer** standing in a sector of yours builds it with its own hands (issue #258,
+the original's `work`): **`work UNIT [mobility]`**, or **Work** in the Army panel.
+
+- **How much:** `mobility spent × its efficiency / 600` points of the sector's efficiency.
+  A fresh engineer with 127 mobility puts on **21 points at once** — a quarter of a sector,
+  where its own people might take several updates.
+- **What it costs:** the sector type's ordinary build materials, out of **that sector's own
+  stock**, and its cash out of the treasury. A city costs 1 lcm and 2 hcm a point; most
+  types cost only a dollar. Short of materials it does what it can and says so.
+- **Mobility** comes back the way a march's does: 60 a update, at most 127.
+- Give it no number and it spends everything it has.
+
+This is what makes an engineer worth its **three times the upkeep**: a forward harbour or
+a new city can be finished the day it is designated instead of waiting on a workforce that
+is not there yet.
+
 ## Artillery
 
 A unit with guns shells a sector of theirs from where it stands (issue #256, the original's

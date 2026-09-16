@@ -122,6 +122,7 @@ public class Console {
                 }
                 case "army", "units" -> new Reply(army(v), true, null, null);
                 case "march", "mar" -> { need(t, 3, "march UNIT x,y"); yield cmd(gameId, a, new Command.March(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
+                case "work" -> { need(t, 2, "work UNIT [mobility]"); yield cmd(gameId, a, new Command.Work(Long.parseLong(t[1].replace("#", "")), t.length > 2 ? Double.parseDouble(t[2]) : 0)); }
                 case "ufire" -> { need(t, 3, "ufire UNIT x,y"); yield cmd(gameId, a, new Command.UnitFire(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
                 case "sabotage" -> { need(t, 2, "sabotage UNIT"); yield cmd(gameId, a, new Command.Sabotage(Long.parseLong(t[1].replace("#", "")))); }
                 case "incite" -> { need(t, 2, "incite UNIT"); yield cmd(gameId, a, new Command.Incite(Long.parseLong(t[1].replace("#", "")))); }
