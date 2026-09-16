@@ -231,5 +231,61 @@ final class Army {
                 + ": " + dam + "% of everything " + w.country(target.owner()).name() + " had there, " + Ledger.q(shells - ammo) + " shells left");
     }
 
+    /**
+     * An engineer's own labour (issue #258; KNOWN commands/work.c). It spends its mobility on the sector it stands
+     * in: {@code mobility × efficiency / 600} points of efficiency, each buying the sector type's materials out of
+     * that sector's own stock and its cash out of the treasury — the same table the update's build-up uses. Whole
+     * points only (#77): nothing is bought with a fraction.
+     */
+    static CommandResult work(GameConfig cfg, Commodities com, World w, Country c, Command.Work wk) {
+        UnitsCfg.LandCfg lc = cfg.units().land();
+        if (lc == null || lc.engineerWork() == null) return CommandResult.fail(w, "this world has no engineers' works");
+        LandUnit u = w.unit(wk.unit());
+        if (u == null || u.owner() != c.id()) return CommandResult.fail(w, "no land unit #" + wk.unit() + " of yours");
+        if (u.aboard()) return CommandResult.fail(w, "unit #" + u.id() + " is aboard ship #" + u.ship() + "; it works ashore");
+        UnitsCfg.LandClassCfg cls = lc.landClass(u.cls());
+        if (cls == null || !cls.has("engineer")) return CommandResult.fail(w, article(cls == null ? u.cls() : cls.name()) + " is not an engineer");
+        Sector s = w.sector(u.at());
+        if (s.owner() != c.id()) return CommandResult.fail(w, u.at() + " is not yours");
+        var type = cfg.sectorType(s.designation());
+        if (type.hasFlag("undesignated")) return CommandResult.fail(w, u.at() + " has no designation to build; designate it first");
+        if (s.efficiency() >= 100) return CommandResult.fail(w, u.at() + " is finished; nothing for unit #" + u.id() + " to do");
+        double perPoint = lc.engineerWork().mobilityPerPoint();
+        double spend = wk.mobility() > 0 ? Math.min(wk.mobility(), u.mobility()) : u.mobility();
+        if (spend < 1) return CommandResult.fail(w, "unit #" + u.id() + " has no mobility left");
+        double points = Math.floor(spend * u.efficiency() / perPoint);
+        points = Math.min(points, 100 - s.efficiency());
+        if (points < 1) return CommandResult.fail(w, "unit #" + u.id() + " would not finish a whole point with " + q(spend)
+                + " mobility; " + (int) Math.ceil(perPoint / Math.max(1e-9, u.efficiency())) + " buys one");
+
+        // what its materials and the treasury allow, whole points only (issue #77)
+        Map<String, Double> build = type.build();
+        StringBuilder shortOf = new StringBuilder();
+        for (var e : build.entrySet()) {
+            if (e.getValue() <= 0) continue;
+            double could = e.getKey().equals("cash") ? c.cash() / e.getValue() : s.stock().get(com.index(e.getKey())) / e.getValue();
+            if (could < points) shortOf.append(shortOf.isEmpty() ? "" : ", ").append(e.getKey());
+            points = Math.min(points, Math.floor(could));
+        }
+        if (points < 1) return CommandResult.fail(w, u.at() + " has not the " + shortOf + " for a single point");
+
+        Stocks st = s.stock();
+        double cash = 0;
+        StringBuilder used = new StringBuilder();
+        for (var e : build.entrySet()) {
+            if (e.getValue() <= 0) continue;
+            double amount = points * e.getValue();
+            if (e.getKey().equals("cash")) { cash = amount; used.append(used.isEmpty() ? "" : ", ").append("$").append(q(amount)); }
+            else { st = st.plus(com.index(e.getKey()), -amount); used.append(used.isEmpty() ? "" : ", ").append(q(amount)).append(' ').append(e.getKey()); }
+        }
+        double spent = Math.min(u.mobility(), Math.ceil(points * perPoint / u.efficiency()));
+        World next = w.withSector(s.withStock(st).withEfficiency(s.efficiency() + points))
+                     .withUnit(u.withMobility(u.mobility() - spent))
+                     .withCountry(c.withCash(c.cash() - cash));
+        return new CommandResult(next, null, 0, "unit #" + u.id() + " worked " + u.at() + " up to " + q(s.efficiency() + points) + "%"
+                + (used.isEmpty() ? "" : " using " + used) + ", " + q(spent) + " mobility"
+                + (shortOf.isEmpty() ? "" : "; it would have done more with " + shortOf + " there"));
+    }
+
     private static String article(String name) { return ("aeiou".indexOf(Character.toLowerCase(name.charAt(0))) >= 0 ? "an " : "a ") + name; }
 }

@@ -9,7 +9,7 @@ import org.hastingtx.empire.engine.model.Coord;
 public sealed interface Command permits
         Command.BreakSanctuary, Command.Designate, Command.Threshold, Command.Distribute,
         Command.Move, Command.Explore, Command.BuildRoad, Command.BuildRail, Command.RailShip, Command.Deliver,
-        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission, Command.Land, Command.Demobilize, Command.Attack, Command.Anti, Command.BuildUnit, Command.March, Command.LoadUnit, Command.Board, Command.Sabotage, Command.Incite, Command.UnitFire,
+        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission, Command.Land, Command.Demobilize, Command.Attack, Command.Anti, Command.BuildUnit, Command.March, Command.LoadUnit, Command.Board, Command.Sabotage, Command.Incite, Command.UnitFire, Command.Work,
         Command.RailLane, Command.Telegram, Command.Announce, Command.DeclareWar, Command.OfferPeace {
 
     String verb();
@@ -85,6 +85,9 @@ public sealed interface Command permits
 
     /** A land unit goes aboard a ship, or ashore from her ({@code ship} 0) — issue #252; KNOWN load.c, lnd_land. */
     record Board(long unit, long ship) implements Command { public String verb() { return ship == 0 ? "ashore" : "board"; } }
+
+    /** An engineer spends its mobility building the sector it stands in (issue #258); mobility 0 means all it has. */
+    record Work(long unit, double mobility) implements Command { public String verb() { return "work"; } }
 
     /** Artillery throws a salvo at a sector within its range (issue #256). */
     record UnitFire(long unit, Coord at) implements Command { public String verb() { return "unit_fire"; } }

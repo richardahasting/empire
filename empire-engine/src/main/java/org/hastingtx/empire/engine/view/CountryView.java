@@ -55,7 +55,9 @@ public record CountryView(
                            /** A spy walks in their land and can sabotage or incite the sector it stands in (issue #254). */
                            boolean spy,
                            /** Guns in a salvo and how far they reach now, 0 for a unit that does not shoot (issue #256). */
-                           double guns, double range) {}
+                           double guns, double range,
+                           /** An engineer builds the sector it stands in with its own mobility (issue #258). */
+                           boolean engineer) {}
 
     public record ShipView(long id, String cls, String name, Coord at, Coord relative, double efficiency, Map<String, Double> stock, double load, double hold,
                            Coord dest, Coord destRelative, LaneView lane, String note, boolean docked, double tech, int hexesPerUpdate, String mission, Coord homeRelative,
@@ -288,7 +290,7 @@ public record CountryView(
             double men = u.stock().get(com.mil);
             out.add(new UnitView(u.id(), u.cls(), cls.name(), u.at(), relative(w, c.capital(), u.at()), u.efficiency(), st, cls.carries(), u.mobility(), u.tech(),
                     men * cls.attackAt(u.tech()) * u.efficiency() / 100.0, men * cls.defenseAt(u.tech()) * u.efficiency() / 100.0, u.note(), u.ship(), cls.has("light"), cls.has("spy"),
-                    Math.min(cls.gunsOr0(), Math.floor(u.stock().get(com.index("gun")))), cls.rangeAt(u.tech())));
+                    Math.min(cls.gunsOr0(), Math.floor(u.stock().get(com.index("gun")))), cls.rangeAt(u.tech()), cls.has("engineer")));
         }
         return out;
     }

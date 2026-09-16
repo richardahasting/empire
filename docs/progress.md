@@ -336,8 +336,13 @@ and #77 making the tallies `long[]` means per-thread partials merge identically.
 - **Ships carry them (#252, slice 2b)**, built 2026-09-16: `board`/`ashore`, berths from `ship.config`'s
   nla (ferry and cargo 2, super cargo 4, assault ship 6); assault-trained units aboard storm the beach with
   the landing party and take their share of the survivors ashore; a sinking takes what she carried.
-- **Land warfare and planes (#71)** have a plan for review in `m5-land-air-plan.md`; artillery fire,
-  engineers' works, spies (including Richard's `incite`) and planes are what is left.
+- **Spies (#254)**, built 2026-09-16: infiltrator and commando walk in enemy land where nothing else may
+  stand, are worth nothing in a fight, and risk `(110 − eff)/100` wherever they go. `sabotage` is the
+  original's; `incite` is Richard's, and gives #72's unrest an offensive use.
+- **Artillery (#256)** and **engineers' works (#258)**, built 2026-09-16: `ufire` shells a sector without
+  taking it, and `work` turns an engineer's mobility into a sector's efficiency at 600 mobility a point.
+- **Land warfare and planes (#71)** have a plan for review in `m5-land-air-plan.md`; what is left is
+  supporting fire in an attack (`lnd_support`), land mines, planes, and then missiles and satellites.
 - **Dead config:** `levels.curves` (`research_to_tech`, `education_to_research`) in schema.yaml is read by
   nothing.
 

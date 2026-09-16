@@ -70,6 +70,8 @@ export interface UnitView {
   spy: boolean;
   /** Guns it can bring to bear and how far they reach, 0 for a unit that does not shoot (issue #256). */
   guns: number; range: number;
+  /** An engineer builds the sector it stands in with its own mobility (issue #258). */
+  engineer: boolean;
 }
 export interface LandClass { id: string; name: string; glyph: string; techRequired: number; build: Record<string, number>; bwork: number; attack: number; defense: number; speed: number; carries: Record<string, number>; flags: string[] }
 export interface LandRules { startEfficiency: number; classes: LandClass[] }

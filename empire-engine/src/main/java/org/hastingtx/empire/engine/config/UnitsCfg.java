@@ -33,6 +33,9 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
     /** NEW (Richard 2026-09-15): what one attempt at inciting unrest does to a sector. */
     public record InciteCfg(int loyalty, double cheShare, double minCivilians) {}
 
+    /** KNOWN commands/work.c: one point of a sector's efficiency costs this much mobility at full efficiency. */
+    public record EngineerWorkCfg(double mobilityPerPoint) {}
+
     /** KNOWN landgun.c landunitgun() and land.h LAND_MINFIREEFF: what a gun on a land unit is worth. */
     public record GunneryCfg(double minEfficiency, double damageBase, int damageRoll) {}
 
@@ -57,6 +60,8 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
             SpyCfg spy,
             /** Artillery (issue #256); null in a snapshot taken before it, and then no unit fires. */
             GunneryCfg gunnery,
+            /** An engineer's own labour (issue #258); null in a snapshot taken before it, and then it only marches. */
+            EngineerWorkCfg engineerWork,
             List<LandClassCfg> classes) {
 
         public LandClassCfg landClass(String id) {
