@@ -63,7 +63,8 @@ final class Assault {
         if (land != null) for (LandUnit u : w.units()) {
             if (u.owner() != them || u.stock().get(com.mil) < 1 || !(u.at().equals(target.at()) || around.contains(u.at()))) continue;
             var cls = land.landClass(u.cls());
-            if (cls == null) continue;
+            // KNOWN lnd_defense: a spy is worth nothing in a fight, not even the one man every other unit is worth
+            if (cls == null || cls.has("spy")) continue;
             defence.add(new Group(u.at(), Math.floor(u.stock().get(com.mil)), cls.defenseAt(u.tech()) * u.efficiency() / 100.0 * fort(cfg, ac, w.sector(u.at())), u.id()));
         }
         double[] men = defence.stream().mapToDouble(Group::men).toArray();
@@ -268,6 +269,7 @@ final class Assault {
             if (land == null || u == null || u.owner() != c.id()) return CommandResult.fail(w, "no land unit #" + id + " of yours");
             if (!Hex.neighbours(w, a.target()).contains(u.at())) return CommandResult.fail(w, "unit #" + id + " at " + u.at() + " is not next to " + a.target());
             var cls = land.landClass(u.cls());
+            if (cls != null && cls.has("spy")) return CommandResult.fail(w, "unit #" + id + " is a spy; it works behind their lines, not in a battle line");
             double men = Math.floor(u.stock().get(com.mil));
             if (men < 1) return CommandResult.fail(w, "unit #" + id + " has no soldiers (lload " + id + " mil N)");
             double cost = Army.costInto(cfg, mctx, u, target);

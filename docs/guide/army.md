@@ -71,4 +71,39 @@ A unit can ride a ship (issue #252, as the original's `ship.config` carried them
 - **If she sinks**, whatever she carried goes down with her.
 - She cannot be **scrapped** with a unit aboard.
 
-Artillery fire, engineers' works and spies come in later slices.
+## Spies
+
+Two classes carry no army at all (issue #254): the **infiltrator** (tech 40) and the
+**commando** (tech 55), which carries twenty shells. They are the original's `L_SPY`
+units, and they break the rule every other unit obeys:
+
+- **A spy marches into land that is not yours.** Anything else standing in another
+  country's sector is seized, which is why `march` refuses it — `attack` is how the rest
+  take ground.
+- **It is worth nothing in a fight.** No defence for the sector it is in, and `attack`
+  refuses to send it. It carries one or five soldiers to guide it, not to fight.
+- **Being caught:** every sector of theirs it walks into, and every attempt it makes
+  there, is a chance of `(110 − efficiency)/100` — one in ten at 100%, four in five at
+  30%. **At war it is shot.** At peace it is only spotted, and they know it is there.
+
+### `sabotage UNIT`
+
+One shell, laid where it will hurt. The sector loses a percentage of **everything** —
+efficiency, roads, rail, mobility and every commodity in it — of roughly 60 to 150 at
+full efficiency, and **its own shells and petrol go up with it**: over 20 shells or over
+100 petrol stored there add to the blast. The victim reads in the news that saboteurs
+wrecked the place; it does not say whose they were. A second roll after the charge goes
+off can kill the spy in his own explosion.
+
+### `incite UNIT`
+
+Richard's addition (2026-09-15), and the offensive use of unrest (#72). The spy works on
+the sector's people: each attempt makes them **more disloyal to their owner**, and once
+they are past the line where they stop working, some of them **take up arms** as
+guerrillas fighting whoever holds the sector. From there #72 does the rest — guerrillas
+fight the garrison, sabotage production, recruit, spread, and hand a sector back.
+
+Rates for inciting are a GUESS in `config/schema.yaml`; everything else here is the
+original's.
+
+Artillery fire, engineers' works and planes come in later slices.

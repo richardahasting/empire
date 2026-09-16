@@ -62,7 +62,13 @@ final class Army {
         return sector * lc.pathFactor() * lc.speedNumerator() / Math.max(1e-9, spd + techfact);
     }
 
-    /** March through your own land, as far as the unit's mobility carries it, by the cheapest way (commands/marc.c). */
+    /**
+     * March through your own land, as far as the unit's mobility carries it, by the cheapest way (commands/marc.c).
+     *
+     * <p>A <b>spy</b> walks anywhere on land instead (KNOWN lndsub.c: anything else is kidnapped the moment it
+     * stands in someone else's sector). Every hex of theirs it enters is a chance of being caught — shot at war,
+     * merely spotted at peace — so the reply tells you how far it got and whether it is still alive.
+     */
     static CommandResult march(GameConfig cfg, Commodities com, World w, Country c, Command.March m) {
         if (cfg.units().land() == null) return CommandResult.fail(w, "this world has no land units");
         LandUnit u = w.unit(m.unit());
@@ -72,7 +78,9 @@ final class Army {
         if (m.to().equals(u.at())) return CommandResult.fail(w, "unit #" + u.id() + " is already at " + u.at());
         Sector dest = w.sector(m.to());
         if (!dest.terrain().isLand()) return CommandResult.fail(w, m.to() + " is sea; a unit goes by ship");
-        if (dest.owner() != c.id()) return CommandResult.fail(w, m.to() + " is not yours; to take it, attack it (attack " + m.to() + " ... unit " + u.id() + ")");
+        UnitsCfg.LandClassCfg ucls = cfg.units().land().landClass(u.cls());
+        boolean spy = ucls != null && ucls.has("spy") && cfg.units().land().spy() != null;
+        if (!spy && dest.owner() != c.id()) return CommandResult.fail(w, m.to() + " is not yours; to take it, attack it (attack " + m.to() + " ... unit " + u.id() + ")");
         Ctx ctx = new Ctx(w, cfg, com, 0);
         // cheapest path over your own land (Dijkstra, ties by index for determinism)
         int from = w.index(u.at()), to = w.index(m.to());
@@ -91,12 +99,12 @@ final class Army {
                 int j = ctx.neighbour(i, d);
                 if (j < 0) continue;
                 Sector s = w.sectors().get(j);
-                if (!s.terrain().isLand() || s.owner() != c.id()) continue;
+                if (!s.terrain().isLand() || (!spy && s.owner() != c.id())) continue;
                 double nd = dist[i] + costInto(cfg, ctx, u, s);
                 if (nd < dist[j]) { dist[j] = nd; prev[j] = i; open.add(new double[] {nd, j}); }
             }
         }
-        if (Double.isInfinite(dist[to])) return CommandResult.fail(w, "no way over your own land from " + u.at() + " to " + m.to());
+        if (Double.isInfinite(dist[to])) return CommandResult.fail(w, "no way over " + (spy ? "land" : "your own land") + " from " + u.at() + " to " + m.to());
         List<Integer> path = new ArrayList<>();
         for (int i = to; i != from; i = prev[i]) path.add(0, i);
         double mob = u.mobility(), spent = 0;
@@ -108,6 +116,8 @@ final class Army {
             spent += cost; steps++;
         }
         if (steps == 0) return CommandResult.fail(w, "unit #" + u.id() + " has " + q(u.mobility()) + " mobility; the first hex costs " + q(costInto(cfg, ctx, u, w.sectors().get(path.get(0)))));
+        // a spy is rolled for in every sector of theirs it walks into, and stops where it is caught (KNOWN lndsub.c)
+        if (spy) return Spy.marchThrough(cfg, com, w, c, u, path, steps, m.to());
         Coord at = w.sectors().get(path.get(steps - 1)).at();
         LandUnit moved = u.withAt(at).withMobility(u.mobility() - spent);
         return new CommandResult(w.withUnit(moved), null, 0, "unit #" + u.id() + " marched " + steps + (steps == 1 ? " hex" : " hexes") + " to " + at

@@ -16,6 +16,17 @@ final class TestWorlds {
 
     static GameConfig teaching() { return new ConfigLoader().loadPreset("teaching").config(); }
 
+    /** The same rules under a different world seed, for a test that wants many rolls of the same dice. */
+    static GameConfig teaching(long seed) {
+        GameConfig c = teaching();
+        var w = c.world();
+        var seeded = new org.hastingtx.empire.engine.config.WorldCfg(w.name(), w.width(), w.height(), w.wrapX(), w.wrapY(),
+                seed, w.coordinates(), w.terrain(), w.elevationByTerrain(), w.resources());
+        return new GameConfig(c.schemaVersion(), seeded, c.schedule(), c.players(), c.commodities(), c.terrain(), c.economy(),
+                c.distribution(), c.infrastructure(), c.capture(), c.detection(), c.tech(), c.units(), c.agents(),
+                c.handicapDefaults(), c.scoring(), c.news(), c.options());
+    }
+
     static final int SIZE = 23;
     static final Coord CENTER = new Coord(11, 11);
 

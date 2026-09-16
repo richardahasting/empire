@@ -16,6 +16,23 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
      * the default). A unit is a body of soldiers with supplies, built in a headquarters at {@code startEfficiency}, repaired
      * toward 100% by the work of the sector it stands in, and paid and fed like any military.
      */
+    /**
+     * What a spy does behind enemy lines (issue #254). Detection is the original's
+     * {@code LND_SPY_DETECT_CHANCE}; sabotage is {@code lnd_sabo}; inciting unrest is NEW
+     * (Richard 2026-09-15) and its rates are a GUESS.
+     */
+    public record SpyCfg(double detectBase, double detectDivisor, SabotageCfg sabotage, InciteCfg incite) {
+        /** KNOWN land.h: (110 - efficiency) / 100. */
+        public double detectChance(double efficiency) { return Math.max(0, (detectBase - efficiency) / detectDivisor); }
+    }
+
+    /** KNOWN sabo.c, landgun.c lnd_sabo. */
+    public record SabotageCfg(double shells, double fortgunEfficiencyMultiple, int fortgunGuns,
+                              double shellsAbove, double shellsDivisor, double petrolAbove, double petrolDivisor) {}
+
+    /** NEW (Richard 2026-09-15): what one attempt at inciting unrest does to a sector. */
+    public record InciteCfg(int loyalty, double cheShare, double minCivilians) {}
+
     public record LandCfg(
             /** KNOWN LAND_MINEFF: a unit is laid down at this efficiency, for this share of its materials and cost. */
             double startEfficiency,
@@ -33,6 +50,8 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
             int captureLossBase, int captureLossRoll,
             /** KNOWN revolt.c: security troops add bonus × mil × eff to the garrison against che and kill up to mil × eff / kill_divisor of them. */
             double securityBonus, int securityKillDivisor,
+            /** Spies (issue #254); null in a snapshot taken before them, and then nobody can be raised who spies. */
+            SpyCfg spy,
             List<LandClassCfg> classes) {
 
         public LandClassCfg landClass(String id) {

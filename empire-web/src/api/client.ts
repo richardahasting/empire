@@ -66,6 +66,8 @@ export interface UnitView {
   mobility: number; tech: number; attack: number; defense: number; note: string;
   /** The ship carrying it (issue #252), or 0 ashore; `light` says whether it may go aboard at all. */
   ship: number; light: boolean;
+  /** A spy walks in their land, and can sabotage or incite the sector it stands in (issue #254). */
+  spy: boolean;
 }
 export interface LandClass { id: string; name: string; glyph: string; techRequired: number; build: Record<string, number>; bwork: number; attack: number; defense: number; speed: number; carries: Record<string, number>; flags: string[] }
 export interface LandRules { startEfficiency: number; classes: LandClass[] }

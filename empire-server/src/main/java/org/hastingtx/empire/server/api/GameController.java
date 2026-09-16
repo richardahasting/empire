@@ -165,6 +165,8 @@ public class GameController {
                 case "anti" -> new Command.Anti(need(at));
                 case "build_unit" -> new Command.BuildUnit(need(at), type);
                 case "march" -> new Command.March(needUnit(), at(x, y));
+                case "sabotage" -> new Command.Sabotage(needUnit());
+                case "incite" -> new Command.Incite(needUnit());
                 case "board" -> new Command.Board(needUnit(), needShip());
                 case "ashore" -> new Command.Board(needUnit(), 0);
                 case "lload", "lunload" -> new Command.LoadUnit(needUnit(), commodity, amount == null ? 0 : amount, verb.equals("lunload"));

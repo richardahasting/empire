@@ -55,6 +55,8 @@ public final class CommandExecutor {
             case Command.March ma -> Army.march(cfg, com, w, c, ma);
             case Command.LoadUnit lu -> Army.load(cfg, com, w, c, lu);
             case Command.Board bo -> Army.board(cfg, com, w, c, bo);
+            case Command.Sabotage sb -> Spy.sabotage(cfg, com, w, c, sb);
+            case Command.Incite in -> Spy.incite(cfg, com, w, c, in);
             case Command.Move m -> move(w, c, m);
             case Command.Explore e -> explore(w, c, e);
             case Command.BuildRoad br -> buildRoad(w, c, br);
