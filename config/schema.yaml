@@ -1046,12 +1046,12 @@ units:
       - { id: fishing_boat,            name: fishing boat,            glyph: f, role: fishing, tech_required: 0,  build: { lcm: 25, cash: 300 },             hold: 300,  speed: 3, fishing_rate: 1.0, tank: 60, fuel_per_hex: 2, crew: 5 }
       - { id: mining_ship,             name: deep sea miner,          glyph: M, role: mining,  tech_required: 35, build: { lcm: 150, hcm: 120, cash: 6000 }, hold: 1500, speed: 3, mining_rate: 1.0, tank: 250, fuel_per_hex: 9, crew: 25 }
       - { id: industrial_fishing_boat, name: industrial fishing boat, glyph: F, role: fishing, tech_required: 20, build: { lcm: 60, hcm: 30, cash: 1500 },   hold: 1200, speed: 4, fishing_rate: 3.0, tank: 150, fuel_per_hex: 5, crew: 15 }
-      - { id: cargo_ship,              name: cargo ship,              glyph: c, role: cargo,   tech_required: 0,  build: { lcm: 60, hcm: 30, cash: 1000 },   hold: 600,  speed: 3, carries: [goods], tank: 120, fuel_per_hex: 4, crew: 10 }
-      - { id: super_cargo,             name: super cargo ship,        glyph: C, role: cargo,   tech_required: 25, build: { lcm: 150, hcm: 100, cash: 4000 }, hold: 2400, speed: 4, carries: [goods], tank: 400, fuel_per_hex: 12, crew: 30 }
+      - { id: cargo_ship,              name: cargo ship,              glyph: c, role: cargo,   tech_required: 0,  build: { lcm: 60, hcm: 30, cash: 1000 },   hold: 600,  speed: 3, carries: [goods], tank: 120, fuel_per_hex: 4, crew: 10, land_units: 2 }
+      - { id: super_cargo,             name: super cargo ship,        glyph: C, role: cargo,   tech_required: 25, build: { lcm: 150, hcm: 100, cash: 4000 }, hold: 2400, speed: 4, carries: [goods], tank: 400, fuel_per_hex: 12, crew: 30, land_units: 4 }
       # Richard 2026-09-15 (issue #242): "Cargo ships should not be used as busses." Cargo ships carry goods only
       # (the original's cargo ship also took 600 civ and 50 mil); people go by ferry, between your own harbours.
       # A ferry cannot land anyone: that is the assault ship's job. NEW; numbers GUESS.
-      - { id: ferry,                   name: ferry,                   glyph: y, role: ferry,   tech_required: 10, build: { lcm: 40, hcm: 20, cash: 800 },    hold: 300,  speed: 4, carries: [people], tank: 100, fuel_per_hex: 3, crew: 5 }
+      - { id: ferry,                   name: ferry,                   glyph: y, role: ferry,   tech_required: 10, build: { lcm: 40, hcm: 20, cash: 800 },    hold: 300,  speed: 4, carries: [people], tank: 100, fuel_per_hex: 3, crew: 5, land_units: 2 }
       - { id: tanker,                  name: tanker,                  glyph: t, role: tanker,  tech_required: 15, build: { lcm: 80, hcm: 40, cash: 1500 },   hold: 1500, speed: 3, carries: [oil, pet], tank: 200, fuel_per_hex: 6, crew: 15 }
       - { id: super_tanker,            name: super tanker,            glyph: T, role: tanker,  tech_required: 35, build: { lcm: 200, hcm: 120, cash: 6000 }, hold: 6000, speed: 4, carries: [oil, pet], tank: 700, fuel_per_hex: 20, crew: 40 }
       # A tender (issue #182, Richard 2026-09-14): slow; hears a stranded ship's distress call, sails out, fills her
@@ -1059,7 +1059,7 @@ units:
       - { id: tender,                  name: tender,                  glyph: r, role: tender,  tech_required: 20, build: { lcm: 50, hcm: 20, cash: 1500 },   hold: 600,  speed: 2, carries: [pet, lcm], tank: 150, fuel_per_hex: 3, crew: 10 }
       # An assault ship (issue #193, Richard 2026-09-14: "they can take 100 mil and 20 civ"): puts everyone aboard
       # ashore on unowned coast next to her, which becomes yours as explore claims it. Tech, cost and speed GUESS.
-      - { id: assault_ship,            name: assault ship,            glyph: a, role: assault, tech_required: 30, build: { lcm: 80, hcm: 60, cash: 3000 },   hold: 120,  speed: 4, carries: [mil, civ], limits: { mil: 100, civ: 20 }, tank: 150, fuel_per_hex: 5, crew: 15 }
+      - { id: assault_ship,            name: assault ship,            glyph: a, role: assault, tech_required: 30, build: { lcm: 80, hcm: 60, cash: 3000 },   hold: 120,  speed: 4, carries: [mil, civ], limits: { mil: 100, civ: 20 }, tank: 150, fuel_per_hex: 5, crew: 15, land_units: 6 }
       - { id: luxury_craft,            name: luxury craft,            glyph: l, role: luxury,  tech_required: 30, build: { lcm: 120, hcm: 40, cash: 5000 },  hold: 100,  speed: 3, happiness_per_etu: 1.0, carries: [civ], upkeep_per_update: { cash: 50 }, tank: 100, fuel_per_hex: 3, crew: 8 }
       # warships need guns, shells and oil in the harbour to lay down (Richard 2026-09-09); fuel per voyage comes with units.ships.fuel.
       # The guns and shells in the build go aboard as her armament (issue #68). guns: how many she brings to

@@ -30,13 +30,13 @@ improve ships already built.
 | class | tech | hold | speed | what it is for |
 |---|---|---|---|---|
 | fishing_boat | 0 | 300 | 3 | food from the sea |
-| cargo_ship | 0 | 600 | 3 | goods, not people |
-| ferry | 10 | 300 | 4 | people: civilians, military, workers |
+| cargo_ship | 0 | 600 | 3 | goods, not people; 2 land units |
+| ferry | 10 | 300 | 4 | people: civilians, military, workers; 2 land units |
 | tanker | 15 | 1500 | 3 | oil and petrol only |
 | industrial_fishing_boat | 20 | 1200 | 4 | three times the catch |
-| super_cargo | 25 | 2400 | 4 | goods in bulk, not people |
+| super_cargo | 25 | 2400 | 4 | goods in bulk, not people; 4 land units |
 | tender | 20 | 600 | 2 | answers distress calls: petrol and repairs at sea |
-| assault_ship | 30 | 100 mil + 20 civ | 4 | lands people on unowned coast |
+| assault_ship | 30 | 100 mil + 20 civ | 4 | lands people on unowned coast; 6 land units |
 | luxury_craft | 30 | 100 | 3 | happiness, at $50 an update |
 | super_tanker | 35 | 6000 | 4 | oil and petrol in bulk |
 | destroyer | 40 | — | 5 | 10 guns, range 3, armour 20; hunts submarines |
@@ -170,6 +170,10 @@ gives the result.
   goods are lost in the fighting, roads lose 30% and rail 50%, and its distribution
   centre and delivery orders are cleared.
 - **If you lose,** every soldier aboard is gone. The civilians never went ashore.
+- **Land units aboard** (issue #252) storm the beach with the party if they are trained
+  for it — infantry and engineers. Their men count in the fight and add their own attack
+  strength; on a win they are ashore with their share of the survivors, on a loss they
+  are gone. See [the army](army.md).
 
 At peace, held coast is refused: declare war first. Either way it is news.
 

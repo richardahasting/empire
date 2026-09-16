@@ -293,6 +293,12 @@ public final class ShipStep implements Step {
             out.add(ship.withNote(String.join("; ", lines)));
         }
         ctx.ships.clear(); ctx.ships.addAll(out);
+        // a land unit aboard travels with her (issue #252)
+        for (int k = 0; k < ctx.units.size(); k++) {
+            var u = ctx.units.get(k);
+            if (!u.aboard()) continue;
+            for (Ship s : ctx.ships) if (s.id() == u.ship() && !s.at().equals(u.at())) { ctx.units.set(k, u.withAt(s.at())); break; }
+        }
     }
 
     /**

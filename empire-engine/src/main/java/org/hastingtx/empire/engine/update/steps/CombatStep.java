@@ -113,7 +113,16 @@ public final class CombatStep implements Step {
         // sink what is at or below the line; her cargo is salvaged by the victors in her hex
         List<Ship> sunk = new ArrayList<>();
         for (Ship s : ctx.ships) if (damage.containsKey(s.id()) && s.efficiency() <= cc.sinkAt()) sunk.add(s);
-        for (Ship s : sunk) sink(ctx, sc, s, victors.get(s.id()));
+        for (Ship s : sunk) {
+            sink(ctx, sc, s, victors.get(s.id()));
+            // whatever she carried goes down with her (issue #252)
+            for (var u : new java.util.ArrayList<>(ctx.units)) {
+                if (u.ship() != s.id()) continue;
+                for (int c = 0; c < ctx.com.size(); c++) if (u.stock().get(c) > 0) ctx.led().destroyed[c] += (long) u.stock().get(c);
+                ctx.units.remove(u);
+                note(ctx, s.id(), "unit #" + u.id() + " went down with her");
+            }
+        }
     }
 
     private static boolean interdicting(Ctx ctx, long shipId) {

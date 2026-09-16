@@ -1169,6 +1169,7 @@ public class GameService {
             case Command.BuildUnit bu -> bu.sector();
             case Command.March ma -> ma.to();
             case Command.LoadUnit lu -> null;
+            case Command.Board bo -> null;
             case Command.Demobilize d -> d.sector();
             case Command.Telegram t -> null;
             case Command.Announce a -> null;

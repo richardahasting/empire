@@ -54,6 +54,7 @@ public final class CommandExecutor {
             case Command.BuildUnit bu -> Army.build(cfg, com, w, c, bu);
             case Command.March ma -> Army.march(cfg, com, w, c, ma);
             case Command.LoadUnit lu -> Army.load(cfg, com, w, c, lu);
+            case Command.Board bo -> Army.board(cfg, com, w, c, bo);
             case Command.Move m -> move(w, c, m);
             case Command.Explore e -> explore(w, c, e);
             case Command.BuildRoad br -> buildRoad(w, c, br);
@@ -708,6 +709,7 @@ public final class CommandExecutor {
         if (ship == null) return CommandResult.fail(w, "no ship #" + s.ship() + " of yours");
         Sector h = w.sector(ship.at());
         if (!harborOf(w, c, h)) return CommandResult.fail(w, "ship #" + s.ship() + " must be in one of your harbours to be scrapped");
+        for (var u : w.units()) if (u.ship() == ship.id()) return CommandResult.fail(w, "unit #" + u.id() + " is aboard her; put it ashore first (ashore " + u.id() + ")");
         Stocks st = h.stock();
         for (int ci = 0; ci < com.size(); ci++) st = st.plus(ci, ship.stock().get(ci));   // the hold goes ashore (capacity applies at the update)
         // and so do the crew and the fuel in her tank (issues #65, #66): breaking a hull up does not
@@ -961,9 +963,12 @@ public final class CommandExecutor {
         double civAshore = Math.min(civ, room);   // civilians over the sector's ceiling would be lost at the update; they stay aboard
         World next = w.withShip(ship.withStock(ship.stock().plus(com.civ, -civAshore).plus(com.mil, -mil)));
         next = next.withSector(to.withOwner(c.id()).withStock(to.stock().plus(com.civ, civAshore).plus(com.mil, mil)));
+        StringBuilder ashore = new StringBuilder();
+        for (var u : w.units()) if (u.ship() == ship.id()) { next = next.withUnit(u.withShip(0).withAt(l.at())); ashore.append(ashore.isEmpty() ? "" : ", ").append("#").append(u.id()); }
         var sub = cfg.economy().population().subsistence();
         double forage = sub == null ? 0 : sub.civsPerSector() * (sub.scaleByFertility() ? to.resource("fertility") / 100.0 : 1.0);
-        StringBuilder info = new StringBuilder("ship #" + ship.id() + " landed " + q(mil) + " mil and " + q(civAshore) + " civ at " + l.at() + "; it is yours");
+        StringBuilder info = new StringBuilder("ship #" + ship.id() + " landed " + q(mil) + " mil and " + q(civAshore) + " civ"
+                + (ashore.isEmpty() ? "" : " and units " + ashore) + " at " + l.at() + "; it is yours");
         if (civAshore < civ) info.append(" (").append(q(civ - civAshore)).append(" civ stay aboard: the sector holds ").append(q(room)).append(")");
         if (civAshore + mil > forage)
             info.append(" — WARNING: fertility ").append(to.resource("fertility")).append(" feeds only ").append(q(Math.floor(forage)))

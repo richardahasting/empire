@@ -168,14 +168,32 @@ final class Assault {
     static CommandResult run(GameConfig cfg, Commodities com, World w, Country c, Ship ship, Sector target) {
         String no = refused(cfg, w, c, target, "assault");
         if (no != null) return CommandResult.fail(w, no);
-        double attackers = Math.floor(ship.stock().get(com.mil));
+        double aboardMil = Math.floor(ship.stock().get(com.mil));
+        // land units aboard storm the beach with the landing party (issue #252; KNOWN attsub.c A_ASSAULT)
+        var land = cfg.units().land();
+        List<LandUnit> riding = new ArrayList<>();
+        double unitMen = 0, unitWorth = 0;
+        if (land != null) for (LandUnit u : w.units()) {
+            if (u.ship() != ship.id() || u.stock().get(com.mil) < 1) continue;
+            var cls = land.landClass(u.cls());
+            // KNOWN attsub.c: only a unit trained to assault storms a beach; the rest ride it out and go ashore after
+            if (cls == null || !cls.has("assault")) continue;
+            riding.add(u);
+            double men = Math.floor(u.stock().get(com.mil));
+            unitMen += men;
+            unitWorth += men * cls.attackAt(u.tech()) * u.efficiency() / 100.0;
+        }
+        double attackers = aboardMil + unitMen;
         if (attackers < 1) return CommandResult.fail(w, "ship #" + ship.id() + " has no military aboard to assault with");
+        double strength = (aboardMil * cfg.capture().assault().perMan(ship.efficiency()) + unitWorth) / attackers;
 
-        Fight f = fight(cfg, com, w, target, attackers, cfg.capture().assault().perMan(ship.efficiency()), "assault:" + ship.id() + ">" + target.at());
+        Fight f = fight(cfg, com, w, target, attackers, strength, "assault:" + ship.id() + ">" + target.at());
         String story = f.story("assault", target.at(), attackers);
         if (!f.won()) {
             World next = f.next().withShip(ship.withStock(ship.stock().with(com.mil, 0)));
-            return new CommandResult(next, null, 0, story + " — thrown back: all " + q(attackers) + " lost; they lost " + q(f.defendersLost()));
+            for (LandUnit u : riding) next = next.withoutUnit(u.id());   // a unit that storms a beach and loses is gone
+            return new CommandResult(next, null, 0, story + " — thrown back: all " + q(attackers) + " lost"
+                    + (riding.isEmpty() ? "" : ", units " + riding.stream().map(x -> "#" + x.id()).toList() + " with them") + "; they lost " + q(f.defendersLost()));
         }
         org.hastingtx.empire.engine.update.Ctx rctx = new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0);
         double civAboard = Math.floor(ship.stock().get(com.civ));
@@ -183,9 +201,17 @@ final class Assault {
         double stockAfterLoss = held.stock().get(com.civ) + held.stock().get(com.uw);
         double civAshore = Math.min(civAboard, Math.max(0, Math.floor(rctx.maxPopulation(target)) - stockAfterLoss));
         World[] next = {f.next()};
-        String spoiled = capture(cfg, com, next, c.id(), target.at(), f.survivors(), civAshore);
+        // the survivors are shared out in proportion to what each sent; the units go ashore with theirs
+        double inUnits = 0;
+        for (LandUnit u : riding) inUnits += Math.floor(Math.floor(u.stock().get(com.mil)) * f.survivors() / attackers);
+        String spoiled = capture(cfg, com, next, c.id(), target.at(), f.survivors() - inUnits, civAshore);
+        for (LandUnit u : riding) {
+            double keep = Math.floor(Math.floor(u.stock().get(com.mil)) * f.survivors() / attackers);
+            next[0] = next[0].withUnit(u.withShip(0).withAt(target.at()).withStock(u.stock().with(com.mil, keep)));
+        }
         next[0] = next[0].withShip(ship.withStock(ship.stock().with(com.mil, 0).plus(com.civ, -civAshore)));
         return new CommandResult(next[0], null, 0, story + " — taken: " + q(f.survivors()) + " survivors hold it; they lost " + q(f.defendersLost())
+                + (riding.isEmpty() ? "" : "; units " + riding.stream().map(x -> "#" + x.id()).toList() + " ashore")
                 + (civAshore >= 1 ? "; " + q(civAshore) + " civ came ashore behind them" : "")
                 + (spoiled.isEmpty() ? "" : "; lost in the fighting: " + spoiled));
     }

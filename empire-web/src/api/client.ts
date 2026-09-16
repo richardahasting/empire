@@ -64,6 +64,8 @@ export interface SectorView {
 export interface UnitView {
   id: number; cls: string; name: string; at: Coord; relative: Coord; efficiency: number; stock: Record<string, number>; carries: Record<string, number>;
   mobility: number; tech: number; attack: number; defense: number; note: string;
+  /** The ship carrying it (issue #252), or 0 ashore; `light` says whether it may go aboard at all. */
+  ship: number; light: boolean;
 }
 export interface LandClass { id: string; name: string; glyph: string; techRequired: number; build: Record<string, number>; bwork: number; attack: number; defense: number; speed: number; carries: Record<string, number>; flags: string[] }
 export interface LandRules { startEfficiency: number; classes: LandClass[] }
@@ -159,7 +161,9 @@ export interface ShipClass { id: string; name: string; glyph: string; role: stri
   /** Gunnery (issue #68): guns per salvo, range in hexes, armour, shells carried, whether she hunts submarines. */
   guns?: number | null; range?: number | null; armor?: number | null; magazine?: number | null; asw?: boolean | null;
   /** Most of a commodity she may carry, by id (issue #193: an assault ship takes 100 mil and 20 civ). */
-  limits?: Record<string, number> | null }
+  limits?: Record<string, number> | null;
+  /** How many light land units she carries (issue #252); absent or 0 for a ship that carries none. */
+  landUnits?: number | null }
 export interface ShipsRules { startEfficiency: number; dockPointsPerUpdate: number; harborMinEfficiency: number; classes: ShipClass[] }
 export interface Rules { sectorTypes: SectorType[]; commodities: Commodity[]; etusPerUpdate: number; btuCosts: Record<string, number>; road?: RoadRules; defaultCapacity?: number; rail?: RailRules; productionMinEfficiency?: number; massThresholdMultiplierByType?: Record<string, number>; ships?: ShipsRules | null; work?: WorkRules; curves?: Record<string, Curve>; maxPopCurve?: { type: string; base?: number | null; perResearchPoint?: number | null; cap?: number | null } | null; land?: LandRules | null }
 export interface Outcome { accepted: boolean; error?: string; btuSpent: number; view: CountryView; info?: string | null }

@@ -122,6 +122,8 @@ public class Console {
                 }
                 case "army", "units" -> new Reply(army(v), true, null, null);
                 case "march", "mar" -> { need(t, 3, "march UNIT x,y"); yield cmd(gameId, a, new Command.March(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
+                case "board" -> { need(t, 3, "board UNIT SHIP"); yield cmd(gameId, a, new Command.Board(Long.parseLong(t[1].replace("#", "")), Long.parseLong(t[2].replace("#", "")))); }
+                case "ashore" -> { need(t, 2, "ashore UNIT"); yield cmd(gameId, a, new Command.Board(Long.parseLong(t[1].replace("#", "")), 0)); }
                 case "lload", "lunload" -> { need(t, 4, verb + " UNIT COMMODITY N"); yield cmd(gameId, a, new Command.LoadUnit(Long.parseLong(t[1].replace("#", "")), t[2], Double.parseDouble(t[3]), verb.equals("lunload"))); }
                 case "land" -> { need(t, 3, "land SHIP x,y"); yield cmd(gameId, a, new Command.Land(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
                 case "fire" -> { need(t, 3, "fire SHIP x,y [CLASS]"); yield cmd(gameId, a, new Command.Fire(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]), t.length > 3 ? t[3] : null)); }
@@ -392,10 +394,10 @@ public class Console {
         StringBuilder sb = new StringBuilder(String.format("%-5s %-10s %-8s %4s %5s %5s %5s %4s %5s  %s%n", "unit", "class", "at", "eff", "mil", "food", "mob", "att", "def", "carries"));
         for (var u : v.units()) {
             String rest = String.join(", ", u.stock().entrySet().stream().filter(e -> !e.getKey().equals("mil") && !e.getKey().equals("food")).map(e -> String.format("%.0f %s", e.getValue(), e.getKey())).toList());
-            sb.append(String.format("#%-4d %-10s %-8s %3.0f%% %5.0f %5.0f %5.0f %4.0f %5.0f  %s%s%n", u.id(), u.cls(), rel(u.relative()), u.efficiency(), u.stock().getOrDefault("mil", 0.0),
+            sb.append(String.format("#%-4d %-10s %-8s %3.0f%% %5.0f %5.0f %5.0f %4.0f %5.0f  %s%s%n", u.id(), u.cls(), (u.ship() != 0 ? "@#" + u.ship() : rel(u.relative())), u.efficiency(), u.stock().getOrDefault("mil", 0.0),
                     u.stock().getOrDefault("food", 0.0), u.mobility(), u.attack(), u.defense(), rest, u.note() == null || u.note().isBlank() ? "" : " · " + u.note()));
         }
-        return sb.append("att/def: mil × strength × efficiency. march UNIT x,y · lload UNIT mil N · attack x,y unit UNIT").toString();
+        return sb.append("att/def: mil × strength × efficiency; @#N = aboard ship N. march UNIT x,y · lload UNIT mil N · board UNIT SHIP · ashore UNIT · attack x,y unit UNIT").toString();
     }
 
     /** Sectors with unrest (issue #72): disloyal, not all at work, occupied, or with guerrillas; and the happiness they want. */

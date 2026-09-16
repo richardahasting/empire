@@ -9,7 +9,7 @@ import org.hastingtx.empire.engine.model.Coord;
 public sealed interface Command permits
         Command.BreakSanctuary, Command.Designate, Command.Threshold, Command.Distribute,
         Command.Move, Command.Explore, Command.BuildRoad, Command.BuildRail, Command.RailShip, Command.Deliver,
-        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission, Command.Land, Command.Demobilize, Command.Attack, Command.Anti, Command.BuildUnit, Command.March, Command.LoadUnit,
+        Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission, Command.Land, Command.Demobilize, Command.Attack, Command.Anti, Command.BuildUnit, Command.March, Command.LoadUnit, Command.Board,
         Command.RailLane, Command.Telegram, Command.Announce, Command.DeclareWar, Command.OfferPeace {
 
     String verb();
@@ -82,6 +82,9 @@ public sealed interface Command permits
     record March(long unit, Coord to) implements Command { public String verb() { return "march"; } }
     /** A land unit takes on ({@code unload} false) or puts down what its sector has (issue #247; KNOWN lload, lunload). */
     record LoadUnit(long unit, String commodity, double qty, boolean unload) implements Command { public String verb() { return unload ? "lunload" : "lload"; } }
+
+    /** A land unit goes aboard a ship, or ashore from her ({@code ship} 0) — issue #252; KNOWN load.c, lnd_land. */
+    record Board(long unit, long ship) implements Command { public String verb() { return ship == 0 ? "ashore" : "board"; } }
 
     /** Send a sector's garrison after the guerrillas in it (issue #72; KNOWN commands/anti.c). */
     record Anti(Coord sector) implements Command { public String verb() { return "anti"; } }

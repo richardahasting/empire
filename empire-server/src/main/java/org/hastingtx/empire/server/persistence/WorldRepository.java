@@ -190,10 +190,10 @@ public class WorldRepository {
         if (w.units().isEmpty()) return;
         List<Object[]> rows = new ArrayList<>(), stock = new ArrayList<>();
         for (var u : w.units()) {
-            rows.add(new Object[] {gameId, u.id(), u.owner(), u.cls(), u.at().x(), u.at().y(), u.efficiency(), u.mobility(), u.tech(), u.built(), u.note() == null ? "" : u.note()});
+            rows.add(new Object[] {gameId, u.id(), u.owner(), u.cls(), u.at().x(), u.at().y(), u.efficiency(), u.mobility(), u.tech(), u.built(), u.note() == null ? "" : u.note(), u.ship()});
             for (int c = 0; c < com.size(); c++) if (u.stock().get(c) > 0) stock.add(new Object[] {gameId, u.id(), com.id(c), u.stock().get(c)});
         }
-        jdbc.batchUpdate("INSERT INTO land_unit (game_id, id, owner, class, x, y, efficiency, mobility, tech, built, note) VALUES (?,?,?,?,?,?,?,?,?,?,?)", rows);
+        jdbc.batchUpdate("INSERT INTO land_unit (game_id, id, owner, class, x, y, efficiency, mobility, tech, built, note, ship_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", rows);
         if (!stock.isEmpty()) jdbc.batchUpdate("INSERT INTO land_unit_stock (game_id, unit_id, commodity, qty) VALUES (?,?,?,?)", stock);
     }
 
@@ -347,7 +347,7 @@ public class WorldRepository {
         }, g.id());
         List<org.hastingtx.empire.engine.model.LandUnit> units = jdbc.query("SELECT * FROM land_unit WHERE game_id = ? ORDER BY id", (rs, i) -> new org.hastingtx.empire.engine.model.LandUnit(
                 rs.getLong("id"), rs.getInt("owner"), rs.getString("class"), new Coord(rs.getInt("x"), rs.getInt("y")), rs.getDouble("efficiency"),
-                Stocks.of(unitStock.getOrDefault(rs.getLong("id"), new double[n])), rs.getDouble("mobility"), rs.getDouble("tech"), rs.getLong("built"), rs.getString("note")), g.id());
+                Stocks.of(unitStock.getOrDefault(rs.getLong("id"), new double[n])), rs.getDouble("mobility"), rs.getDouble("tech"), rs.getLong("built"), rs.getString("note"), rs.getLong("ship_id")), g.id());
         Long nextUnit = jdbc.queryForObject("SELECT next_unit_id FROM game WHERE id = ?", Long.class, g.id());
         List<Contact> contacts = jdbc.query("SELECT * FROM contact WHERE game_id = ? ORDER BY owner, ship_id", (rs, i) ->
                 new Contact(rs.getInt("owner"), rs.getLong("ship_id"), rs.getInt("target_owner"), rs.getString("class"),
