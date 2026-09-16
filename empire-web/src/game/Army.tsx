@@ -11,8 +11,8 @@ const rel = (c: { x: number; y: number }) => `${c.x},${c.y}`;
  * Your land units (issue #247): where each stands, how fit, soldiers and supplies, its own mobility, and what it is worth in
  * a fight; and its orders — march, take on or put down soldiers and supplies. Attacks are given from the enemy sector's menu.
  */
-export function Army({ view, busy, onCommand }: { view: CountryView; busy: boolean; onCommand: (c: CommandRequest) => Promise<void> }) {
-  const [dialog, setDialog] = useState<{ kind: "march" | "load" | "unload"; unit: UnitView } | null>(null);
+export function Army({ view, rules, busy, onCommand }: { view: CountryView; rules: Rules; busy: boolean; onCommand: (c: CommandRequest) => Promise<void> }) {
+  const [dialog, setDialog] = useState<{ kind: "march" | "load" | "unload" | "board"; unit: UnitView } | null>(null);
   const units = view.units ?? [];
   if (units.length === 0) return <p className="text-xs text-muted-foreground">No land units. Designate a headquarters, then right-click it and choose “Build unit…”.</p>;
   return (
@@ -22,22 +22,56 @@ export function Army({ view, busy, onCommand }: { view: CountryView; busy: boole
           <div className="flex flex-wrap items-baseline gap-x-2">
             <span className="font-mono">#{u.id}</span>
             <span className="font-medium">{u.name}</span>
-            <span className="text-muted-foreground">at {rel(u.relative)} · {u.efficiency.toFixed(0)}% · mob {u.mobility.toFixed(0)} · att {u.attack.toFixed(0)} · def {u.defense.toFixed(0)}</span>
+            <span className="text-muted-foreground">{u.ship ? `aboard ship #${u.ship} at ${rel(u.relative)}` : `at ${rel(u.relative)}`} · {u.efficiency.toFixed(0)}% · mob {u.mobility.toFixed(0)} · att {u.attack.toFixed(0)} · def {u.defense.toFixed(0)}</span>
           </div>
           <div className="text-muted-foreground">
             {Object.keys(u.carries).map(c => `${c} ${Math.floor(u.stock[c] ?? 0)}/${u.carries[c]}`).join(" · ")}{u.note ? ` · ${u.note}` : ""}
           </div>
           {(u.stock["mil"] ?? 0) < 1 && <div className="text-destructive">No soldiers: it cannot fight or defend. Load mil in a sector that has them.</div>}
           <div className="mt-1 flex flex-wrap gap-1">
-            <Button size="sm" variant="secondary" disabled={busy || u.mobility < 1} onClick={() => setDialog({ kind: "march", unit: u })}>March…</Button>
+            <Button size="sm" variant="secondary" disabled={busy || u.mobility < 1 || !!u.ship} title={u.ship ? "it is at sea" : undefined} onClick={() => setDialog({ kind: "march", unit: u })}>March…</Button>
+            {u.ship
+              ? <Button size="sm" variant="secondary" disabled={busy} title="step ashore where she lies; on an enemy coast use the ship's Land… instead" onClick={() => void onCommand({ verb: "ashore", unit: u.id })}>Ashore</Button>
+              : u.light && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "board", unit: u })}>Board…</Button>}
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "load", unit: u })}>Load…</Button>
             <Button size="sm" variant="ghost" disabled={busy || Object.keys(u.stock).length === 0} onClick={() => setDialog({ kind: "unload", unit: u })}>Unload…</Button>
           </div>
         </div>
       ))}
+      {dialog?.kind === "board" && <BoardDialog unit={dialog.unit} view={view} rules={rules} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {dialog?.kind === "march" && <MarchDialog unit={dialog.unit} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
-      {dialog && dialog.kind !== "march" && <UnitCargoDialog kind={dialog.kind} unit={dialog.unit} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
+      {dialog && (dialog.kind === "load" || dialog.kind === "unload") && <UnitCargoDialog kind={dialog.kind} unit={dialog.unit} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
     </div>
+  );
+}
+
+/** Put a light unit aboard a ship of yours lying in its sector (issue #252); she carries it wherever she sails. */
+function BoardDialog({ unit, view, rules, busy, onClose, onCommand }: { unit: UnitView; view: CountryView; rules: Rules; busy: boolean; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void> }) {
+  const berths = (s: { cls: string }) => rules.ships?.classes.find(c => c.id === s.cls)?.landUnits ?? 0;
+  const aboard = (id: number) => (view.units ?? []).filter(u => u.ship === id).length;
+  const here = view.ships.filter(s => s.at.x === unit.at.x && s.at.y === unit.at.y && berths(s) > 0);
+  const [ship, setShip] = useState(String(here.find(s => aboard(s.id) < berths(s))?.id ?? here[0]?.id ?? ""));
+  const chosen = here.find(s => String(s.id) === ship);
+  const full = !!chosen && aboard(chosen.id) >= berths(chosen);
+  return (
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Put unit #{unit.id} aboard at {rel(unit.relative)}</DialogTitle>
+          <DialogDescription>It rides with her, keeps its soldiers and supplies, and fights in her assaults. Ashore puts it down where she lies.</DialogDescription></DialogHeader>
+        {here.length === 0
+          ? <p className="text-xs text-destructive">No ship of yours that carries units is in this sector. March it to the harbour, or sail one there.</p>
+          : <label className="grid gap-1 text-sm">Ship
+              <Select value={ship} onChange={e => setShip(e.target.value)}>
+                {here.map(s => <option key={s.id} value={s.id}>#{s.id} {s.name || s.cls} — {aboard(s.id)}/{berths(s)} aboard</option>)}
+              </Select>
+            </label>}
+        {full && <p className="text-xs text-destructive">She has no berth free.</p>}
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button disabled={busy || !chosen || full} onClick={async () => { if (!chosen) return; await onCommand({ verb: "board", unit: unit.id, ship: chosen.id }); onClose(); }}>Aboard</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

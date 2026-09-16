@@ -59,6 +59,8 @@ export function Fleet({ gameId, view, rules, busy, onCommand, onSail, at, onShow
         // a tender's job is distress calls; lane and supply stay console orders so they are not picked by mistake
         const carrier = !armed && !tender && (cls?.carries ?? []).length > 0;
         const cargo = Object.entries(s.stock).map(([c, q]) => `${Math.floor(q)} ${c}`).join(", ");
+        const riding = (view.units ?? []).filter(u => u.ship === s.id);      // land units aboard (issue #252)
+        const berths = rules.ships?.classes.find(c => c.id === s.cls)?.landUnits ?? 0;
         return (
           <div key={s.id}>{heading}<div className="rounded-md border border-border p-2">
             <div className="flex flex-wrap items-baseline gap-x-2">
@@ -70,6 +72,11 @@ export function Fleet({ gameId, view, rules, busy, onCommand, onSail, at, onShow
             {s.manifest && Object.keys(s.manifest).length > 0 && (
               <div className="text-muted-foreground" title="her running manifest: lifetime totals since she was built">
                 Since built: {Object.entries(s.manifest).map(([k, q]) => `${k} ${Math.round(q).toLocaleString()}`).join(" · ")}
+              </div>
+            )}
+            {berths > 0 && (
+              <div className="text-muted-foreground" title="light land units she carries; put them ashore with Ashore, or land SHIP x,y on an enemy coast">
+                Aboard: {riding.length}/{berths}{riding.length ? ` — ${riding.map(u => `${u.name} #${u.id} (${Math.floor(u.stock["mil"] ?? 0)} mil)`).join(", ")}` : ""}
               </div>
             )}
             {s.markedBy.length > 0 && <div className="text-destructive">Fired on {s.markedBy.join(", ")} in peacetime: they may shoot her on sight for now.</div>}

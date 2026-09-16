@@ -50,4 +50,25 @@ A unit with no soldiers cannot fight. **`army`** (or the Army panel) lists your 
 - **Security troops** in a sector with guerrillas fighting you raid them every update and count
   three times over against them.
 
-Loading units onto ships, artillery fire, engineers' works and spies come in later slices.
+## Going to sea
+
+A unit can ride a ship (issue #252, as the original's `ship.config` carried them):
+
+- **`board UNIT SHIP`** (or **Board…** in the Army panel) puts a unit aboard a ship of
+  yours lying **in one of your sectors**, where the unit stands. It keeps its soldiers,
+  its supplies and its efficiency, and travels wherever she sails.
+- **How many:** a ferry or a cargo ship takes **2**, a super cargo **4**, an assault ship
+  **6**. Only **light** units go aboard — every class we have today is light.
+- **`ashore UNIT`** (**Ashore**) steps it down where she lies, in a sector of yours.
+- **While aboard** it cannot march, and cannot load or unload: it is at sea. Its food is
+  eaten and its efficiency built up as usual.
+- **In an assault:** `land SHIP x,y` against enemy coast sends the ship's own party **and
+  every assault-trained unit aboard** (infantry, engineers). They fight as one body at the
+  average worth of the men, and the survivors are shared out in proportion to what each
+  sent. Win, and the units are ashore holding the sector; lose, and they are gone with the
+  party. Units aboard without assault training (cavalry, artillery, supply, security) ride
+  it out and stay aboard.
+- **If she sinks**, whatever she carried goes down with her.
+- She cannot be **scrapped** with a unit aboard.
+
+Artillery fire, engineers' works and spies come in later slices.

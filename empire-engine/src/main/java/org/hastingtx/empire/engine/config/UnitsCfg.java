@@ -224,7 +224,10 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
             /** Can find and fire on a submarine it has detected. */
             Boolean asw,
             /** Most of a commodity she may carry, by id, within the hold (issue #193: an assault ship takes 100 mil and 20 civ). */
-            Map<String, Double> limits) {
+            Map<String, Double> limits,
+            /** Land units she can carry (KNOWN ship.config nla; issue #252). Null on a class that predates them. */
+            Integer landUnits) {
+        public int landUnitsOr0() { return landUnits == null ? 0 : landUnits; }
         /** How much of {@code commodity} she may have aboard in all: its limit, or the whole hold. */
         public double limitOf(String commodity) { Double l = limits == null ? null : limits.get(commodity); return l == null ? hold : Math.min(hold, l); }
         /** Puts people ashore on unowned coast (issue #193). */
