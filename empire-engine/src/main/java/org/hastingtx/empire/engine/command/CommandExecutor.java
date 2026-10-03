@@ -627,6 +627,15 @@ public final class CommandExecutor {
                 what = "stays with ship #" + charge.id();
             }
             default -> {
+                // a search may be told which harbour to work from (issue #270): it was read and quietly dropped
+                if (points.size() > 1) return CommandResult.fail(w, "a search works from one harbour: give at most one x,y");
+                if (points.size() == 1) {
+                    Coord base = points.get(0);
+                    if (!w.inBounds(base) || !harborOf(w, c, w.sector(base))) return CommandResult.fail(w, base + " is not a harbour of yours");
+                    if (!base.equals(ship.at()) && org.hastingtx.empire.engine.update.SeaRoutes.path(w, cfg, c.id(), ship.at(), base) == null)
+                        return CommandResult.fail(w, "ship #" + ship.id() + " has no sea route to " + base);
+                    home = base;
+                }
                 points = List.of();
                 what = "searches the water within " + sc.missionsOrDefault().searchRadiusOr0() + " of " + home + ", going where you have not looked lately";
             }

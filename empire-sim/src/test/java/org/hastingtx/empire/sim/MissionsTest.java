@@ -147,6 +147,20 @@ class MissionsTest {
     }
 
     @Test
+    void aSearchWorksFromTheHarbourItIsGiven() {
+        // issue #270: "search 139 3,5" answered "comes home to 1,-1" — the harbour was read and dropped
+        Coord west = Hex.stepRaw(CAP, 3, 2);
+        World w = TestWorlds.own(ship(world(false), 0, "destroyer", HARBOUR), CFG, west, "harbor", 100, 127, Map.of("civ", 100.0), Map.of());
+        CommandResult r = new CommandExecutor(CFG).execute(w, 0, new Command.Mission(1, "search", List.of(west), 0, false));
+        assertThat(r.error()).as(r.error()).isNull();
+        assertThat(r.world().ship(1).home()).isEqualTo(west);
+        assertThat(r.info()).contains("within " + CFG.units().ships().missionsOrDefault().searchRadiusOr0() + " of " + west).contains("comes home to " + west);
+        assertThat(new CommandExecutor(CFG).execute(w, 0, new Command.Mission(1, "search", List.of(A), 0, false)).error()).contains("is not a harbour of yours");
+        assertThat(new CommandExecutor(CFG).execute(w, 0, new Command.Mission(1, "search", List.of(west, HARBOUR), 0, false)).error()).contains("at most one");
+        assertThat(order(w, 0, new Command.Mission(1, "search", List.of(), 0, false)).ship(1).home()).as("no harbour named: the one she is in").isEqualTo(HARBOUR);
+    }
+
+    @Test
     void anInterdictionShellsAnEnemyTrainAtWar() {
         Coord station = Hex.stepRaw(THEIR_CAP, 0, 2);
         for (boolean war : new boolean[] {true, false}) {

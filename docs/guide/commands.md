@@ -78,7 +78,8 @@ fire SHIP x,y [CLASS]        fire now on a ship you can see at x,y (a fresh cont
                              target and everything of hers in reach answer at once. At peace it declares
                              nothing but marks your ship: they may shoot her on sight for 3 updates
 patrol SHIP x,y x2,y2 ... | off   warship: walk the points in order, and round again
-search SHIP | off            warship: wander the water near home, where you have not looked lately
+search SHIP [x,y] | off      warship: wander the water near home, where you have not looked lately; x,y names
+                             the harbour of yours she works from (else the one she is in, or the nearest)
 escort SHIP OTHER | off      warship: stay with one of your other ships
 blockade SHIP x,y | off      warship: hold x,y; at war, a hostile ship next to her is stopped there
 interdict SHIP x,y | off     warship: hold x,y; at war, shell enemy trains within her guns' reach
