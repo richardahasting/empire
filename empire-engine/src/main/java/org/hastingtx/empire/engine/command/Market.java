@@ -167,6 +167,8 @@ final class Market {
                 return CommandResult.fail(w, "you do not control " + it.at() + ", where " + it.label() + " is");
             if (it.civ() >= 1) return CommandResult.fail(w, it.label() + " has civilians aboard; people are not for sale");
             if (it.aboard() != 0) return CommandResult.fail(w, it.label() + " is aboard ship #" + it.aboard() + "; put it ashore first");
+            // a lot left from a former owner (captured since) is dead: clear it, so one item never has two lots
+            for (TradeLot old : List.copyOf(w.trades())) if (old.kind().equals(kind) && old.item() == id && old.owner() != c.id()) w = w.withoutTrade(old.id());
             TradeLot was = w.onTheBlock(kind, id);
             if (sp.price() == 0) {
                 if (was != null) { w = w.withoutTrade(was.id()); done.add(it.label() + " is off the market"); }
