@@ -163,5 +163,4 @@ dogfight each side adds a point of strength for every 25 of stealth.
 
 ## What is not here yet
 
-Missile interceptors, mines from the
-air, and then missiles and satellites.
+Missile interceptors, and then missiles and satellites.

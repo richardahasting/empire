@@ -8,13 +8,29 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
                        /** Land units (issue #247, #71 slice 2). Null in a game whose rules predate them: none can be built. */
                        LandCfg land,
                        /** Planes (issue #262, #71 slice 3a). Null in a game whose rules predate them: none can be built. */
-                       PlanesCfg planes) {
+                       PlanesCfg planes,
+                       /** Mines, sea and land (issue #71). Null in a game whose rules predate them: nobody lays any. */
+                       MinesCfg mines) {
 
     /** The ships-only shape, for fixtures and callers that predate land units. */
-    public UnitsCfg(boolean enabled, String table, ShipsCfg ships) { this(enabled, table, ships, null, null); }
+    public UnitsCfg(boolean enabled, String table, ShipsCfg ships) { this(enabled, table, ships, null, null, null); }
 
     /** Before planes. */
-    public UnitsCfg(boolean enabled, String table, ShipsCfg ships, LandCfg land) { this(enabled, table, ships, land, null); }
+    public UnitsCfg(boolean enabled, String table, ShipsCfg ships, LandCfg land) { this(enabled, table, ships, land, null, null); }
+
+    /** Before mines. */
+    public UnitsCfg(boolean enabled, String table, ShipsCfg ships, LandCfg land, PlanesCfg planes) { this(enabled, table, ships, land, planes, null); }
+
+    /**
+     * KNOWN include/damage.h, shpsub.c, lndsub.c, mine.c, attsub.c (issue #71): a ship entering a mined sea hex strikes
+     * one with chance N/(N + {@code seaHitAdd}) and takes {@code seaDamageBase} + roll({@code seaDamageRoll}); a unit
+     * marching into mined land, N/(N + {@code landHitAdd}), a {@code engineerHitDivisor}th of that with an engineer, and
+     * {@code landDamageBase} + roll({@code landDamageRoll}); a sweeper makes {@code sweepTries} tries at {@code sweepChance};
+     * a defender's land mines add {@code defencePerMine} a mine to its strength, counting at most {@code defenceMineCap}.
+     */
+    public record MinesCfg(int seaHitAdd, int seaDamageBase, int seaDamageRoll, int landHitAdd, int landDamageBase, int landDamageRoll,
+                           int engineerHitDivisor, int sweepTries, double sweepChance, double defencePerMine, int defenceMineCap,
+                           double planeDropMultiple) {}
 
     /**
      * KNOWN plane.config, include/plane.h, subs/plnsub.c and subs/aircombat.c (issue #262): a plane is built on an
@@ -334,7 +350,11 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
             /** Land units she can carry (KNOWN ship.config nla; issue #252). Null on a class that predates them. */
             Integer landUnits,
             /** Planes she can carry and fly (KNOWN ship.config nplanes, nchoppers, nxlight; issue #71): light planes, helicopters, extra-light. */
-            Integer planes, Integer choppers, Integer xlight) {
+            Integer planes, Integer choppers, Integer xlight,
+            /** KNOWN M_MINE: lays sea mines from her shells; M_SWEEP: sweeps them as she goes (issue #71). */
+            Boolean laysMines, Boolean sweeps) {
+        public boolean laysMinesOr0() { return laysMines != null && laysMines; }
+        public boolean sweepsOr0() { return sweeps != null && sweeps; }
         public int landUnitsOr0() { return landUnits == null ? 0 : landUnits; }
         public int planesOr0() { return planes == null ? 0 : planes; }
         public int choppersOr0() { return choppers == null ? 0 : choppers; }

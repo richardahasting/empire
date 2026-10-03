@@ -1225,6 +1225,9 @@ public class GameService {
             case Command.Fly fl -> fl.to();
             case Command.Drop dr -> dr.at();
             case Command.Paradrop pd -> pd.at();
+            case Command.Lay ly -> null;
+            case Command.LandMine lm -> null;
+            case Command.SweepAir sw -> sw.at();
             case Command.Telegram t -> null;
             case Command.Announce a -> null;
             case Command.DeclareWar d -> null;

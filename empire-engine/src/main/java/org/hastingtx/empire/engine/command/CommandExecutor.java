@@ -46,6 +46,9 @@ public final class CommandExecutor {
             case Command.Fly fl -> { org.hastingtx.empire.engine.update.Ctx rc = new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0); yield Air.fly(cfg, com, w, c, fl, (to, ci) -> roomFor(rc, to, ci)); }
             case Command.Drop dr -> { org.hastingtx.empire.engine.update.Ctx rc = new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0); yield Air.drop(cfg, com, w, c, dr, (to, ci) -> roomFor(rc, to, ci)); }
             case Command.Paradrop pd -> Air.paradrop(cfg, com, w, c, pd);
+            case Command.Lay ly -> Mines.lay(cfg, com, w, c, ly);
+            case Command.LandMine lm -> Mines.landmine(cfg, com, w, c, lm);
+            case Command.SweepAir sw -> Air.sweep(cfg, com, w, c, sw);
             case Command.Distribute d -> distribute(w, c, d);
             case Command.Deliver d -> deliver(w, c, d);
             case Command.BuildShip b -> buildShip(w, c, b);
@@ -448,9 +451,17 @@ public final class CommandExecutor {
                 return new CommandResult(w.withShip(ship), null, 0, "ship #" + s.ship() + " sails " + hops + (hops == 1 ? " hex" : " hexes") + " and is stopped by " + who + "'s blockade at " + to + ended);
             }
             if (hops > 0) {
+                // mines on the way, hex by hex (issue #71; KNOWN shp_nav_gauntlet): a strike stops her, and may sink her
+                Mines.Passage pass = Mines.sail(cfg, com, w, ship, path, hops);
+                w = pass.world();
+                ship = pass.ship();
+                hops = pass.hops();
                 Coord to = path.get(hops);
                 ship = ship.withAt(to).withMobility(ship.mobility() - hops * rush);
                 if (perHex > 0) ship = ship.withFuel(ship.fuel() - hops * perHex);
+                if (pass.sinks()) return new CommandResult(Engagement.sink(cfg, sc, com, w.withShip(ship), ship, -1), null, 0,
+                        "ship #" + s.ship() + " sails " + hops + (hops == 1 ? " hex" : " hexes") + "; " + pass.story() + " — and she goes down, with all she carried");
+                if (!pass.story().isEmpty()) ended = "; " + pass.story() + ended;
                 boolean there = to.equals(s.dest());
                 if (there) { ship = ship.withDest(null).withHandLeg(false); if (order != null) ended = " (her " + order + " resumes)"; }
                 // her note said "in harbour" until the next update, after she had sailed out (issue #267)

@@ -32,6 +32,7 @@ public final class ShipStep implements Step {
         // lines for ships not yet processed, written by a tender that reached them first (issue #182)
         Map<Long, List<String>> told = new HashMap<>();
         dispatchTenders(ctx, sc, harbours, told);
+        java.util.Set<Long> mineStruck = new java.util.HashSet<>();   // issue #71: who struck a mine this update, for the sinking after
         for (int si = 0; si < ctx.ships.size(); si++) {
             Ship ship = ctx.ships.get(si);
             UnitsCfg.ShipClassCfg cls = sc.shipClass(ship.cls());
@@ -270,6 +271,36 @@ public final class ShipStep implements Step {
                     }
                     else if (hops <= 0) note.next().append("too unfit to sail (").append(Ledger.q(ship.efficiency())).append("%)");
                     else {
+                        // mines, hex by hex (issue #71; KNOWN shp_nav_gauntlet): a sweeper sweeps, a strike stops her there
+                        var mc = ctx.cfg.units().mines();
+                        if (mc != null) {
+                            org.hastingtx.empire.engine.update.steps.UnrestStep.R mr = new org.hastingtx.empire.engine.update.steps.UnrestStep.R(
+                                    org.hastingtx.empire.engine.update.Rng.stream("mines:" + ship.id() + ":" + ctx.snap.updateNumber(), ctx.seed));
+                            int shell = ctx.com.index("shell");
+                            for (int k = 1; k <= hops; k++) {
+                                int mi = ctx.idx(path.get(k));
+                                Sector sea = ctx.sector(mi);
+                                if (sea.isLand()) continue;   // KNOWN: a harbour holds no sea mines
+                                int there = sea.mines() + ctx.led().mines.getOrDefault(mi, 0);
+                                if (there <= 0) continue;
+                                var hex = org.hastingtx.empire.engine.command.Mines.crossSea(mc, cls, mr, there);
+                                if (hex.swept() > 0) {
+                                    ctx.led().mines(mi, -hex.swept());
+                                    double back = org.hastingtx.empire.engine.command.Mines.shellsBack(cls, ship, shell, hex.swept());
+                                    if (back > 0) { ship = ship.withStock(ship.stock().plus(shell, back)); ctx.led().produced[shell] += (long) back; }   // a swept mine is a shell again
+                                    note.next().append("swept ").append(hex.swept()).append(hex.swept() == 1 ? " mine" : " mines").append(" at ").append(path.get(k));
+                                }
+                                if (hex.struck()) {
+                                    ctx.led().mines(mi, -1);
+                                    ship = ship.withEfficiency(ship.efficiency() - hex.damage());
+                                    note.next().append("struck a mine at ").append(path.get(k)).append(": ").append(Ledger.q(hex.damage())).append("% of her hull");
+                                    ctx.led().event("mine_struck", ship.owner(), path.get(k), label(ship) + " struck a mine at " + path.get(k), hex.damage());
+                                    mineStruck.add(ship.id());
+                                    hops = k;   // KNOWN: a strike stops her
+                                    break;
+                                }
+                            }
+                        }
                         Coord to = path.get(hops);
                         ship = ship.withAt(to).withMobility(ship.mobility() - hops);
                         if (perHex > 0) {
@@ -310,6 +341,9 @@ public final class ShipStep implements Step {
             out.add(ship.withNote(String.join("; ", lines)));
         }
         ctx.ships.clear(); ctx.ships.addAll(out);
+        // a hull a mine wrecked goes down, with all she carried (issue #71): after the loop, so the ships keep their places in it
+        if (ctx.cfg.units().mines() != null && sc.combat() != null)
+            for (Ship s : new ArrayList<>(ctx.ships)) if (mineStruck.contains(s.id()) && s.efficiency() <= sc.combat().sinkAt()) sunkByMine(ctx, sc, s);
         // a land unit aboard travels with her (issue #252)
         for (int k = 0; k < ctx.units.size(); k++) {
             var u = ctx.units.get(k);
@@ -661,6 +695,22 @@ public final class ShipStep implements Step {
         if (tender.stock().get(pet) >= 1) return true;
         if (!ownHarbor(ctx, tender.owner(), ctx.snap.sector(tender.at()))) return false;
         return sc.tendersOrDefault().restockOrDefault().getOrDefault(sc.fuelId(), 0.0) >= 1 && harbourFuel(ctx, sc, ctx.idx(tender.at()), tender.owner()) >= 1;
+    }
+
+    /** Gone to the bottom: her hold, her tank and her crew lost, and whoever and whatever was aboard her (issue #71). */
+    private static void sunkByMine(Ctx ctx, UnitsCfg.ShipsCfg sc, Ship s) {
+        UnitsCfg.ShipClassCfg cls = sc.shipClass(s.cls());
+        for (int c = 0; c < ctx.com.size(); c++) if (s.stock().get(c) > 0) ctx.led().destroyed(c, s.stock().get(c));
+        if (sc.fuel() && s.fuel() > 0) ctx.led().destroyed(ctx.com.index(sc.fuelId()), s.fuel());
+        if (sc.crews() && s.crew() > 0) ctx.led().destroyed(crewCommodity(ctx, cls), s.crew());
+        for (var u : new ArrayList<>(ctx.units)) if (u.ship() == s.id()) {
+            for (int c = 0; c < ctx.com.size(); c++) if (u.stock().get(c) > 0) ctx.led().destroyed(c, u.stock().get(c));
+            ctx.units.remove(u);
+        }
+        ctx.planes.removeIf(p -> p.ship() == s.id());
+        ctx.ships.removeIf(x -> x.id() == s.id());
+        ctx.contacts.removeIf(c -> c.shipId() == s.id());
+        ctx.led().event("ship_sunk", s.owner(), s.at(), ctx.country(s.owner()).name() + "'s " + cls.name() + " #" + s.id() + " was sunk by a mine", 0);
     }
 
     /** The tender answering this ship's call, if one is. */

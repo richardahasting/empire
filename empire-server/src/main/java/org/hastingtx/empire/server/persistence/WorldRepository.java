@@ -88,20 +88,20 @@ public class WorldRepository {
                 && a.roadLevel() == b.roadLevel() && a.railLevel() == b.railLevel() && a.radarLevel() == b.radarLevel()
                 && a.loyalty() == b.loyalty() && a.work() == b.work() && a.oldOwner() == b.oldOwner() && a.che() == b.che() && a.cheTarget() == b.cheTarget()
                 && a.held().equals(b.held()) && a.sanctuary() == b.sanctuary() && a.terrain() == b.terrain() && a.roadTarget() == b.roadTarget() && a.railTarget() == b.railTarget()
-                && a.deliver().equals(b.deliver()) && a.resources().equals(b.resources()) && a.elevation() == b.elevation();
+                && a.deliver().equals(b.deliver()) && a.resources().equals(b.resources()) && a.elevation() == b.elevation() && a.mines() == b.mines();
     }
 
     private void writeSectors(long gameId, List<Sector> sectors, Commodities com) {
         if (sectors.isEmpty()) return;
         jdbc.batchUpdate("""
                 INSERT INTO sector (game_id, x, y, terrain, elevation, fertility, minerals, gold, oil, uranium, owner, designation, efficiency, mobility,
-                                    road_level, rail_level, radar_level, dist_x, dist_y, sanctuary, road_target, rail_target, loyalty, work, old_owner, che, che_target)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                                    road_level, rail_level, radar_level, dist_x, dist_y, sanctuary, road_target, rail_target, loyalty, work, old_owner, che, che_target, mines)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT (game_id, x, y) DO UPDATE SET terrain = EXCLUDED.terrain, elevation = EXCLUDED.elevation, fertility = EXCLUDED.fertility,
                     minerals = EXCLUDED.minerals, gold = EXCLUDED.gold, oil = EXCLUDED.oil, uranium = EXCLUDED.uranium, owner = EXCLUDED.owner,
                     designation = EXCLUDED.designation, efficiency = EXCLUDED.efficiency, mobility = EXCLUDED.mobility, road_level = EXCLUDED.road_level,
                     rail_level = EXCLUDED.rail_level, radar_level = EXCLUDED.radar_level, dist_x = EXCLUDED.dist_x, dist_y = EXCLUDED.dist_y, sanctuary = EXCLUDED.sanctuary, road_target = EXCLUDED.road_target, rail_target = EXCLUDED.rail_target,
-                    loyalty = EXCLUDED.loyalty, work = EXCLUDED.work, old_owner = EXCLUDED.old_owner, che = EXCLUDED.che, che_target = EXCLUDED.che_target""",
+                    loyalty = EXCLUDED.loyalty, work = EXCLUDED.work, old_owner = EXCLUDED.old_owner, che = EXCLUDED.che, che_target = EXCLUDED.che_target, mines = EXCLUDED.mines""",
                 sectors, 500, (PreparedStatement ps, Sector s) -> {
                     Resources r = s.resources();
                     ps.setLong(1, gameId); ps.setInt(2, s.at().x()); ps.setInt(3, s.at().y()); ps.setString(4, s.terrain().id()); ps.setInt(5, s.elevation());
@@ -113,7 +113,7 @@ public class WorldRepository {
                     ps.setBoolean(20, s.sanctuary());
                     ps.setDouble(21, s.roadTarget());
                     ps.setDouble(22, s.railTarget());
-                    ps.setInt(23, s.loyalty()); ps.setInt(24, s.work()); ps.setInt(25, s.occupied() ? s.oldOwner() : -1); ps.setInt(26, s.che()); ps.setInt(27, s.cheTarget());
+                    ps.setInt(23, s.loyalty()); ps.setInt(24, s.work()); ps.setInt(25, s.occupied() ? s.oldOwner() : -1); ps.setInt(26, s.che()); ps.setInt(27, s.cheTarget()); ps.setInt(28, s.mines());
                 });
         List<Object[]> stockRows = new ArrayList<>();
         List<Object[]> parcelRows = new ArrayList<>();
@@ -322,7 +322,8 @@ public class WorldRepository {
                     new Resources(rs.getInt("fertility"), rs.getInt("minerals"), rs.getInt("gold"), rs.getInt("oil"), rs.getInt("uranium")), n)
                     .withOwner(rs.getInt("owner")).withDesignation(rs.getString("designation"), rs.getDouble("efficiency")).withMobility(rs.getDouble("mobility"))
                     .withRoadLevel(rs.getDouble("road_level")).withRoadTarget(rs.getDouble("road_target")).withRailLevel(rs.getDouble("rail_level")).withRailTarget(rs.getDouble("rail_target")).withDistCenter(noDist ? null : new Coord(dx, dy)).withSanctuary(rs.getBoolean("sanctuary"))
-                    .withUnrest(rs.getInt("loyalty"), rs.getInt("work"), rs.getInt("old_owner"), rs.getInt("che"), rs.getInt("che_target"));
+                    .withUnrest(rs.getInt("loyalty"), rs.getInt("work"), rs.getInt("old_owner"), rs.getInt("che"), rs.getInt("che_target"))
+                    .withMines(rs.getInt("mines"));
             sectors[at.y() * g.width() + at.x()] = s;
         }, g.id());
         double[][] stock = new double[sectors.length][n];

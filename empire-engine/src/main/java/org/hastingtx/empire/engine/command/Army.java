@@ -118,10 +118,56 @@ final class Army {
         if (steps == 0) return CommandResult.fail(w, "unit #" + u.id() + " has " + q(u.mobility()) + " mobility; the first hex costs " + q(costInto(cfg, ctx, u, w.sectors().get(path.get(0)))));
         // a spy is rolled for in every sector of theirs it walks into, and stops where it is caught (KNOWN lndsub.c)
         if (spy) return Spy.marchThrough(cfg, com, w, c, u, path, steps, m.to());
+        // land mines on the way (issue #71; KNOWN lnd_mar_gauntlet): only another country's — the land's old owner's, in
+        // land you took from them; an engineer sweeps first and makes a strike less likely; a strike stops the march
+        World next = w;
+        LandUnit walker = u;
+        String mined = "";
+        var mc = cfg.units().mines();
+        if (mc != null && ucls != null) {
+            boolean engineer = ucls.has("engineer");
+            int shell = com.index("shell");
+            var r = new org.hastingtx.empire.engine.update.steps.UnrestStep.R(org.hastingtx.empire.engine.update.Rng.stream(
+                    "lmines:" + u.id() + ":" + w.updateNumber() + ":" + u.at(), cfg.world() == null ? 0 : cfg.world().seed()));
+            for (int k = 0; k < steps; k++) {
+                Sector s = next.sectors().get(path.get(k));
+                if (!s.isLand() || s.mines() <= 0 || s.mineOwner() == c.id()) continue;
+                int there = s.mines();
+                if (engineer) {
+                    // KNOWN lnd_sweep: 2 × the shells it carries tries, each at half its attack; a swept mine is a shell again
+                    int tries = (int) (2 * ucls.carries().getOrDefault("shell", 0.0)), swept = 0;
+                    for (int i = 0; i < tries && there - swept > 0; i++) if (r.chance(0.5 * ucls.attack())) swept++;
+                    if (swept > 0) {
+                        double room = Math.max(0, ucls.carries().getOrDefault("shell", 0.0) - walker.stock().get(shell)), back = Math.min(swept, room);
+                        walker = walker.withStock(walker.stock().plus(shell, back));
+                        s = s.withMines(there - swept).withStock(s.stock().plus(shell, swept - back));
+                        there -= swept;
+                        mined += "; swept " + swept + (swept == 1 ? " mine" : " mines") + " at " + s.at();
+                    }
+                }
+                double chance = there <= 0 ? 0 : (double) there / (there + mc.landHitAdd());
+                if (engineer) chance /= mc.engineerHitDivisor();
+                if (there > 0 && r.chance(chance)) {
+                    int dmg = mc.landDamageBase() + r.roll(mc.landDamageRoll());
+                    if (engineer) dmg /= 2;
+                    double loss = dmg * ucls.vulnerability() / 100.0;   // KNOWN landdamage: by its vulnerability
+                    walker = walker.withEfficiency(walker.efficiency() - loss);
+                    next = next.withSector(s.withMines(there - 1));
+                    mined += "; struck a mine at " + s.at() + ": " + q(loss) + "% of its strength";
+                    steps = k + 1;
+                    break;
+                }
+                next = next.withSector(s);
+            }
+            spent = 0;
+            for (int k = 0; k < steps; k++) spent += costInto(cfg, ctx, u, w.sectors().get(path.get(k)));
+        }
         Coord at = w.sectors().get(path.get(steps - 1)).at();
-        LandUnit moved = u.withAt(at).withMobility(u.mobility() - spent);
-        return new CommandResult(w.withUnit(moved), null, 0, "unit #" + u.id() + " marched " + steps + (steps == 1 ? " hex" : " hexes") + " to " + at
-                + (at.equals(m.to()) ? "" : " (" + (path.size() - steps) + " to go; its mobility is spent)") + ", " + q(spent) + " mobility");
+        LandUnit moved = walker.withAt(at).withMobility(u.mobility() - spent);
+        if (moved.efficiency() < cfg.units().land().startEfficiency())   // KNOWN: below LAND_MINEFF it is gone
+            return new CommandResult(next.withoutUnit(u.id()), null, 0, "unit #" + u.id() + " marched " + steps + (steps == 1 ? " hex" : " hexes") + mined + " — and was destroyed");
+        return new CommandResult(next.withUnit(moved), null, 0, "unit #" + u.id() + " marched " + steps + (steps == 1 ? " hex" : " hexes") + " to " + at
+                + (at.equals(m.to()) ? "" : " (" + (path.size() - steps) + " to go; " + (mined.contains("struck") ? "it stopped" : "its mobility is spent") + ")") + ", " + q(spent) + " mobility" + mined);
     }
 
     /** KNOWN lload / lunload: a unit takes on, or puts down, what its sector has, up to its capacity for that commodity. */

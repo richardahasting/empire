@@ -181,7 +181,17 @@ public record CountryView(
             /** Hexes a radar station of yours reaches (issue #208); 0 for anything else. */
             double radarRange,
             /** Loyalty, work and guerrillas in a sector of yours (issue #72); null for anyone else's, or a world without unrest. */
-            UnrestView unrest) {
+            UnrestView unrest,
+            /** Your land mines here (issue #71; KNOWN lmine, stre.c): shown only in land of yours whose old owner you are; 0 otherwise. */
+            int mines) {
+        /** Before mines. */
+        public SectorView(Coord at, Coord relative, boolean full, String terrain, int elevation, int owner, String designation, double efficiency,
+                          double mobility, double roadLevel, double roadTarget, double railLevel, double railTarget, Map<String, Double> stock,
+                          Map<String, Double> thresholds, Coord distCenter, Map<String, Double> held, Resources resources, Map<String, Delivery> deliveries,
+                          boolean sanctuary, String ownerName, boolean remembered, long seenUpdate, long age, double radarRange, UnrestView unrest) {
+            this(at, relative, full, terrain, elevation, owner, designation, efficiency, mobility, roadLevel, roadTarget, railLevel, railTarget, stock, thresholds,
+                    distCenter, held, resources, deliveries, sanctuary, ownerName, remembered, seenUpdate, age, radarRange, unrest, 0);
+        }
         public SectorView(Coord at, Coord relative, boolean full, String terrain, int elevation, int owner, String designation, double efficiency,
                           double mobility, double roadLevel, double roadTarget, double railLevel, double railTarget, Map<String, Double> stock,
                           Map<String, Double> thresholds, Coord distCenter, Map<String, Double> held, Resources resources, Map<String, Delivery> deliveries,
@@ -256,7 +266,8 @@ public record CountryView(
                         s.mobility(), s.roadLevel(), s.roadTarget(), s.railLevel(), s.railTarget(), stock, th, s.distCenter(), held, s.resources(), deliveries, s.sanctuary(), null,
                         false, w.updateNumber(), 0, Radar.range(cfg, s, c.levels().tech()),
                         cfg.economy().unrest() == null ? null : new UnrestView(s.loyalty(), s.work(), s.occupied() ? w.country(s.oldOwner()).name() : null,
-                                s.cheTarget() == countryId ? s.che() : 0, cfg.economy().unrest().populace().disloyalAbove())));
+                                s.cheTarget() == countryId ? s.che() : 0, cfg.economy().unrest().populace().disloyalAbove()),
+                        s.isLand() && s.mineOwner() == countryId ? s.mines() : 0));
             } else {
                 // a neighbour: terrain and owner only. Sanctuaries are shown as such, with the owner's name (the original marked them 's').
                 String ownerName = s.owned() ? w.country(s.owner()).name() : null;

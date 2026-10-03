@@ -32,7 +32,7 @@ public final class ApplyStep {
             // nothing to add, nothing to truncate, and no reason to build a new object for it. Owned
             // sectors always take the full path even when untouched, because a designation command
             // between updates can change a cap and leave stock above it.
-            if (!s.owned() && untouched(led, i, nCom) && !led.unrest.containsKey(i)) { next.add(s); continue; }
+            if (!s.owned() && untouched(led, i, nCom) && !led.unrest.containsKey(i) && !led.mines.containsKey(i)) { next.add(s); continue; }
             rebuilt[nRebuilt++] = i;
             // Whole units throughout (issue #77): the snapshot is integral, every delta is integral, so
             // the result is integral and conservation below can be checked by equality rather than tolerance.
@@ -55,6 +55,8 @@ public final class ApplyStep {
                     .withRoadLevel(clamp(s.roadLevel() + led.road[i], 0, 100))
                     .withRailLevel(clamp(s.railLevel() + led.rail[i], 0, 100));
             if (led.heldNext[i] != null) n = n.withHeld(led.heldNext[i]);
+            Integer mined = led.mines.get(i);
+            if (mined != null) n = n.withMines(s.mines() + mined);
             n = unrest(ctx, led.unrest.get(i), s, n, q);
             next.add(n);
         }

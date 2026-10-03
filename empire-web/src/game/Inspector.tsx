@@ -57,6 +57,7 @@ export function Inspector({ sector: s, view, rules, onCommand, busy, history, hi
         <Badge tone="neutral">eff {s.efficiency.toFixed(0)}%</Badge><Badge tone="neutral">mob {s.mobility.toFixed(0)}</Badge>
         {s.roadLevel > 0 && <Badge tone="neutral">road {s.roadLevel.toFixed(0)}</Badge>}
       </div>
+      {(s.mines ?? 0) > 0 && <div className="text-xs text-muted-foreground">Land mines: {s.mines} — an enemy marching in may strike one, and they stiffen the defence.</div>}
       {s.unrest && (s.unrest.loyalty > 0 || s.unrest.work < 100 || s.unrest.peopleOf || s.unrest.che > 0) && (
         <div className={"flex flex-wrap items-center gap-2 text-xs " + (s.unrest.loyalty > s.unrest.disloyalAbove || s.unrest.che > 0 ? "text-destructive" : "text-muted-foreground")}
              title="loyalty 0 is loyal; past the line the civilians stop working and may revolt. Hunger raises it, and so does unhappiness below what your tech and education demand">
