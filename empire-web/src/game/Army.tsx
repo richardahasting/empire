@@ -120,7 +120,7 @@ function LandMineDialog({ unit, view, busy, onClose, onCommand }: { unit: UnitVi
           <DialogDescription>A shell and a point of its mobility a mine — its own shells first, then the sector's. They are the land's, not yours: your own units walk through them, an enemy marching in may strike one, and they stiffen the sector against an attack. A sector you lose keeps them.</DialogDescription></DialogHeader>
         {most < 1
           ? <p className="text-sm text-destructive">{own + stored < 1 ? "No shells with the unit or in the sector to make mines of." : "No mobility left: it recovers some each update."}</p>
-          : <label className="grid gap-1 text-sm">How many <span className="text-xs text-muted-foreground">(at most {most} — mobility {Math.floor(unit.mobility)}, {own} shell{own === 1 ? "" : "s"} aboard and {stored} here)</span>
+          : <label className="grid gap-1 text-sm">How many <span className="text-xs text-muted-foreground">(at most {most} — mobility {Math.floor(unit.mobility)}, {own} shell{own === 1 ? "" : "s"} with it and {stored} in the sector)</span>
               <Input value={n} onChange={e => setN(e.target.value)} inputMode="numeric" autoFocus />
             </label>}
         {most >= 1 && n !== "" && !ok && <p className="text-xs text-destructive">A whole number of mines, 1 to {most}.</p>}

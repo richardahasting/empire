@@ -224,11 +224,17 @@ function SweepDialog({ plane, view, rules, busy, onClose, onCommand }:
   const [to, setTo] = useState("");
   const [with_, setWith] = useState<number[]>([]);
   const [escorts, setEscorts] = useState<number[]>([]);
-  const mates = (view.planes ?? []).filter(p => p.id !== plane.id && p.at.x === plane.at.x && p.at.y === plane.at.y && planeFlags(rules, p.cls).includes("sweep"));
+  // Same base, not merely the same hex: lift flies a sortie "from one field or one carrier", so two carriers
+  // anchored together — or a carrier over your own harbour — would be refused outright if both were offered.
+  const mates = (view.planes ?? []).filter(p => p.id !== plane.id && p.aboard === plane.aboard
+    && p.at.x === plane.at.x && p.at.y === plane.at.y && planeFlags(rules, p.cls).includes("sweep"));
   const canEscort = (view.planes ?? []).filter(p => p.id !== plane.id && !p.missile && !p.satellite && (p.intercept || p.escort));
   const [tx, ty] = to.split(",").map(s => Number(s.trim()));
   const target = Number.isFinite(tx) && Number.isFinite(ty) ? view.sectors.find(s => s.relative.x === tx && s.relative.y === ty) : undefined;
-  const sea = !!target && target.terrain === "ocean";
+  // The far end need not be water: Air.sweep sweeps every sea hex along the flight path and lift only asks that the
+  // hex be in bounds, so a run at a coast to clear its approaches is legal. Say so rather than refusing it here —
+  // the server stays the judge of what is allowed, and a client guard stricter than the engine hides a real order.
+  const overland = !!target && target.terrain !== "ocean";
   return (
     <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent>
@@ -261,10 +267,11 @@ function SweepDialog({ plane, view, rules, busy, onClose, onCommand }:
             </fieldset>
           )}
         </div>
-        {to && !sea && <p className="text-xs text-destructive">{target ? "Not open water: sea mines lie at sea, so sweep a hex of ocean." : "Nothing on your chart there."}</p>}
+        {to && !target && <p className="text-xs text-destructive">Nothing on your chart there.</p>}
+        {overland && <p className="text-xs text-muted-foreground">That hex is land: they will sweep whatever sea they cross on the way there and back, and find nothing if the whole run is overland — the petrol goes either way.</p>}
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button disabled={busy || !sea} onClick={async () => {
+          <Button disabled={busy || !target} onClick={async () => {
             if (!target) return;
             await onCommand({ verb: "sweep", planes: [plane.id, ...with_], x: target.at.x, y: target.at.y, units: escorts });
             onClose();
@@ -286,7 +293,11 @@ function TransportDialog({ kind, plane, view, rules, busy, onClose, onCommand }:
   const [with_, setWith] = useState<number[]>([]);
   const [to, setTo] = useState("");
   const [what, setWhat] = useState("");
-  const goods = field ? Object.entries(field.stock).filter(([, q]) => q >= 1).map(([c]) => c) : [];
+  // A plane aboard a carrier loads out of her hold, not out of the hex she floats on (Air.Base.stock does the same).
+  // Reading the sector here left the list empty for a carrier's planes, since open sea stores nothing.
+  const carrier = plane.aboard ? view.ships.find(s => s.id === plane.aboard) : undefined;
+  const hold = carrier ? carrier.stock : field?.stock;
+  const goods = hold ? Object.entries(hold).filter(([, q]) => q >= 1).map(([c]) => c) : [];
   const [tx, ty] = to.split(",").map(s => Number(s.trim()));
   const target = Number.isFinite(tx) && Number.isFinite(ty) ? view.sectors.find(s => s.relative.x === tx && s.relative.y === ty) : undefined;
   const mine = !!target && target.owner === view.countryId;
@@ -295,7 +306,8 @@ function TransportDialog({ kind, plane, view, rules, busy, onClose, onCommand }:
   // so the target is open ocean rather than land of yours, and only planes that can mine may go.
   const layer = (p: PlaneView) => planeFlags(rules, p.cls).includes("mine");
   const mineDrop = kind === "drop" && what === "shell" && !!target && target.terrain === "ocean" && layer(plane);
-  const mates = (view.planes ?? []).filter(p => p.id !== plane.id && !p.missile && !p.satellite && p.at.x === plane.at.x && p.at.y === plane.at.y
+  const mates = (view.planes ?? []).filter(p => p.id !== plane.id && !p.missile && !p.satellite && p.aboard === plane.aboard
+    && p.at.x === plane.at.x && p.at.y === plane.at.y
     && (kind === "fly" || (kind === "drop" ? (mineDrop ? layer(p) : p.cargo) : p.para)));
   const ok = !!target && (kind === "paradrop" ? !mine && target.terrain !== "ocean"
     : kind === "drop" ? !!what && (mineDrop || mine)
@@ -304,7 +316,7 @@ function TransportDialog({ kind, plane, view, rules, busy, onClose, onCommand }:
   return (
     <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent>
-        <DialogHeader><DialogTitle>{title} from {rel(plane.relative)}</DialogTitle>
+        <DialogHeader><DialogTitle>{mineDrop ? "Lay mines" : title} from {rel(plane.relative)}</DialogTitle>
           <DialogDescription>
             {kind === "fly" ? "One way, to an airfield of yours or onto a carrier of yours there (light planes only); they stay there. Transports carry twice their load." : kind === "drop" ? `Onto land of yours${layer(plane) ? ", or shells onto open water, where they go in as mines" : ""}; the planes fly home.` : "The field's soldiers, onto a sector not yours (not mountains, a capital, a fortress or a wasteland); they fight for it."}
             {" "}At war, enemy fighters rise on the way, and what a plane that is shot down or turns back carried is lost.
@@ -315,7 +327,7 @@ function TransportDialog({ kind, plane, view, rules, busy, onClose, onCommand }:
             <label className="grid gap-1">{kind === "fly" ? "Carry (optional)" : "Drop"}
               <Select value={what} onChange={e => setWhat(e.target.value)}>
                 <option value="">{kind === "fly" ? "nothing" : "—"}</option>
-                {goods.map(c => <option key={c} value={c}>{c} ({Math.floor(field?.stock[c] ?? 0)} on the field)</option>)}
+                {goods.map(c => <option key={c} value={c}>{c} ({Math.floor(hold?.[c] ?? 0)} {carrier ? `aboard ship #${carrier.id}` : "on the field"})</option>)}
               </Select>
             </label>
           )}
