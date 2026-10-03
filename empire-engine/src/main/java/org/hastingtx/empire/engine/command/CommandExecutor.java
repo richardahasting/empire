@@ -1,6 +1,7 @@
 package org.hastingtx.empire.engine.command;
 
 import org.hastingtx.empire.engine.config.EconomyCfg;
+import org.hastingtx.empire.engine.config.EnlistCfg;
 import org.hastingtx.empire.engine.config.GameConfig;
 import org.hastingtx.empire.engine.config.SectorTypeCfg;
 import org.hastingtx.empire.engine.geo.Hex;
@@ -33,6 +34,7 @@ public final class CommandExecutor {
             case Command.Designate d -> designate(w, c, d);
             case Command.Threshold t -> threshold(w, c, t);
             case Command.Demobilize d -> demobilize(w, c, d);
+            case Command.Enlist en -> enlist(w, c, en);
             case Command.Distribute d -> distribute(w, c, d);
             case Command.Deliver d -> deliver(w, c, d);
             case Command.BuildShip b -> buildShip(w, c, b);
@@ -75,7 +77,7 @@ public final class CommandExecutor {
         World next = r.world();
         Country nc = next.country(countryId);
         next = next.withCountry(nc.withBtu(nc.btu() - cost));
-        return new CommandResult(next, null, cost, r.info());
+        return new CommandResult(next, null, cost + r.btuSpent(), r.info());   // a handler's own spend (enlist's draftees) is already off the country
     }
 
     private CommandResult breakSanctuary(World w, Country c) {
@@ -203,7 +205,7 @@ public final class CommandExecutor {
     private CommandResult demobilize(World w, Country c, Command.Demobilize d) {
         Sector s = owned(w, c, d.sector());
         if (s == null) return CommandResult.fail(w, "you do not own " + d.sector());
-        if (d.qty() < 0) return CommandResult.fail(w, "the number must be 0 or more");
+        if (!(d.qty() >= 0) || Double.isInfinite(d.qty())) return CommandResult.fail(w, "the number must be 0 or more");   // NaN fails every comparison: test the good case
         double have = Math.floor(s.stock().get(com.mil));
         double leave = d.keep() ? Math.max(0, have - Math.floor(d.qty())) : Math.min(have, Math.floor(d.qty()));
         if (have < 1) return CommandResult.fail(w, "no military at " + d.sector());
@@ -215,6 +217,36 @@ public final class CommandExecutor {
         return new CommandResult(w.withSector(n), null, 0,
                 fmt(leave) + " military stood down at " + d.sector() + (toCiv >= 1 ? "; " + fmt(toCiv) + " became civilians" : "") + gone
                         + "; " + fmt(have - leave) + " remain");
+    }
+
+    /**
+     * Civilians answer the call (issue #276). Empire 1.x's enlist: any sector of yours, straight from the population,
+     * with no national reserve — Richard 2026-10-03, who played it that way; the reserve came between 1.2 and 2.0.
+     * 4.x's refusals: the disloyal will not report and conquered people never serve. Paperwork is per draftee, and
+     * a call-up the BTUs cannot pay for in full takes as many as they can.
+     */
+    private CommandResult enlist(World w, Country c, Command.Enlist e) {
+        EnlistCfg ec = cfg.economy().enlist();
+        if (ec == null) return CommandResult.fail(w, "this game's rules have no enlistment");
+        Sector s = owned(w, c, e.sector());
+        if (s == null) return CommandResult.fail(w, "you do not own " + e.sector());
+        if (!(e.qty() >= 1) || Double.isInfinite(e.qty())) return CommandResult.fail(w, "the number must be at least 1");   // NaN fails every comparison: test the good case
+        if (s.occupied()) return CommandResult.fail(w, "the people of " + e.sector() + " are not yours yet; conquered civilians will not serve");
+        if (s.loyalty() > ec.refuseAboveLoyalty()) return CommandResult.fail(w, "civilians refuse to report in " + e.sector() + " (disloyalty " + s.loyalty() + "; they answer at " + ec.refuseAboveLoyalty() + " or less)");
+        double civ = Math.floor(s.stock().get(com.civ)), mil = Math.floor(s.stock().get(com.mil));
+        if (civ < 1) return CommandResult.fail(w, "no civilians at " + e.sector());
+        double want = e.upTo() ? Math.floor(e.qty()) - mil : Math.floor(e.qty());
+        if (want < 1) return CommandResult.fail(w, e.sector() + " already has " + fmt(mil) + " military");
+        double room = ec.maxMilPerSector() - mil;
+        if (room < 1) return CommandResult.fail(w, e.sector() + " already has " + fmt(mil) + " military, the most a sector holds");
+        double n = Math.min(Math.min(want, room), Math.floor(civ * ec.civShare()));
+        double btuLeft = c.btu() - cfg.economy().btu().cost(e.verb());
+        if (ec.btuPerDraftee() > 0) n = Math.min(n, Math.floor(btuLeft / ec.btuPerDraftee() + 1e-9));
+        if (n < 1) return CommandResult.fail(w, ec.btuPerDraftee() > 0 && btuLeft < ec.btuPerDraftee() ? "not enough BTUs for the paperwork: " + ec.btuPerDraftee() + " a draftee" : "too few civilians at " + e.sector() + " to call any up");
+        double spent = n * ec.btuPerDraftee();
+        World next = w.withSector(s.withStock(s.stock().plus(com.civ, -n).plus(com.mil, n))).withCountry(c.withBtu(c.btu() - spent));
+        String held = n < want ? " (" + fmt(want) + " sought; " + (n == room ? "the sector is full" : n == Math.floor(civ * ec.civShare()) ? "no more than " + fmt(Math.floor(civ * ec.civShare())) + " of the " + fmt(civ) + " civilians answer at once" : "the BTUs ran out") + ")" : "";
+        return new CommandResult(next, null, spent, fmt(n) + " enlisted in " + e.sector() + " (" + fmt(mil + n) + ")" + held);
     }
 
     /** A standing order; validated now, executed at every update by the flow step. Issue #45. */

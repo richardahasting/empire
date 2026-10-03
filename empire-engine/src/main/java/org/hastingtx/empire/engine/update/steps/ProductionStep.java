@@ -1,5 +1,6 @@
 package org.hastingtx.empire.engine.update.steps;
 
+import org.hastingtx.empire.engine.config.EnlistCfg;
 import org.hastingtx.empire.engine.config.SectorTypeCfg;
 import org.hastingtx.empire.engine.model.Country;
 import org.hastingtx.empire.engine.model.Sector;
@@ -23,10 +24,13 @@ public final class ProductionStep implements Step {
         for (int i : ctx.owned()) {          // issue #87: the owned list, not the map
             Sector s = ctx.sector(i);
             SectorTypeCfg t = ctx.type(s);
-            if (t.produces().isEmpty() && t.producesLevel().isEmpty()) continue;
+            EnlistCfg.Centre centre = ctx.cfg.economy().enlist() == null ? null : ctx.cfg.economy().enlist().centre();
+            boolean isCentre = centre != null && t.id().equals(centre.sectorType());
+            if (!isCentre && t.produces().isEmpty() && t.producesLevel().isEmpty()) continue;
             Country c = ctx.country(s.owner());
             Double minEff = ctx.cfg.economy().efficiency().productionMinEfficiency();
             if (minEff != null && s.efficiency() < minEff) continue;          // KNOWN: nothing below 60%
+            if (isCentre) { enlistmentCentre(ctx, i, s, t, c, centre); continue; }
             double work = ctx.workAvailablePost(i);
             if (work <= 0) continue;
 
@@ -87,6 +91,41 @@ public final class ProductionStep implements Step {
             if (cash > 0) { ctx.led().cash[c.id()] -= cash; used.append(used.isEmpty() ? "" : ", ").append('$').append(Ledger.q(cash)); }
             if (!made.isEmpty()) ctx.led().note(i, "made " + made + (used.isEmpty() ? "" : " using " + used) + (scale < 1 - 1e-9 ? " (short of inputs)" : ""));
         }
+    }
+
+    /**
+     * The enlistment centre (issue #276; KNOWN update/sect.c enlist()): it needs soldiers to make soldiers, so a
+     * centre with a garrison fills fast and an empty one trickles. It runs at the original's gates — the
+     * efficiency floor above, and never with a conquered people (sct_own == sct_oldown) — and pays $ per soldier.
+     */
+    private static void enlistmentCentre(Ctx ctx, int i, Sector s, SectorTypeCfg t, Country c, EnlistCfg.Centre centre) {
+        if (s.occupied()) return;
+        int civ = (int) (s.stock().get(ctx.com.civ) + ctx.led().st(i, ctx.com.civ));
+        int mil = (int) (s.stock().get(ctx.com.mil) + ctx.led().st(i, ctx.com.mil));
+        int n = Math.min(civ, centreDraft(ctx, centre, civ, mil));
+        if (n <= 0) return;
+        ctx.led().die(i, ctx.com.civ, n);
+        ctx.led().grow(i, ctx.com.mil, n);
+        double cash = n * t.productionCashFor(ctx.com.id(ctx.com.mil));
+        if (cash > 0) ctx.led().cash[c.id()] -= cash;
+        ctx.led().note(i, "enlisted " + n + " mil" + (cash > 0 ? " for $" + Ledger.q(cash) : "") + " (" + (mil + n) + " now)");
+    }
+
+    /**
+     * How many of the centre's civilians become military this update, given {@code civ} and {@code mil} there now.
+     * Whole people only: every quantity in the world is a whole number (issue #77).
+     *
+     * <p>KNOWN sect.c enlist(): {@code maxmil = civ / 2 − mil; if (maxmil > 0) enlisted = min(etu × (10 + mil) × 0.05, maxmil)}
+     * — here {@code centre.civShare()}, {@code centre.baseMil()}, {@code centre.perEtu()}, and {@code ctx.etus}.
+     *
+     * <p>Tech does not speed it, though tech scales every other output (Richard 2026-10-03: "Rome could mobilize
+     * people too, and today, we don't mobilize them that much faster. People are the same, the weapons are not.").
+     */
+    static int centreDraft(Ctx ctx, EnlistCfg.Centre centre, int civ, int mil) {
+        int room = (int) Math.floor(civ * centre.civShare()) - mil;
+        if (room <= 0) return 0;
+        int n = (int) Math.floor(ctx.etus * (centre.baseMil() + mil) * centre.perEtu());
+        return Math.min(n, room);
     }
 
     private static double people(Ctx ctx, int i) {

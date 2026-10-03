@@ -17,7 +17,9 @@ public record EconomyCfg(
         LevelsCfg levels,
         BtuCfg btu,
         /** Loyalty, work and guerrillas (issue #72). Null in a game whose rules predate them: no unrest. */
-        UnrestCfg unrest) {
+        UnrestCfg unrest,
+        /** The enlist command and the enlistment centre (issue #276). Null in a game whose rules predate it: no enlist. */
+        EnlistCfg enlist) {
 
     public double poorGroundBelowOrDefault() { return poorGroundBelow == null ? 30 : poorGroundBelow; }
 

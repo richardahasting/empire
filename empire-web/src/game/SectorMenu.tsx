@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 
-type DialogKind = "move" | "explore" | "designate" | "threshold" | "deliver" | "road" | "rail" | "railship" | "buildship" | "buildunit" | "buildplane" | "demobilize" | "attack" | null;
+type DialogKind = "move" | "explore" | "designate" | "threshold" | "deliver" | "road" | "rail" | "railship" | "buildship" | "buildunit" | "buildplane" | "demobilize" | "enlist" | "attack" | null;
 
 export interface PickSpec { verb: "move" | "explore" | "distribute" | "sail"; from: SectorView; commodity: string; qty: number; supply?: boolean; /** sail: the ship and where it is now */ ship?: ShipView; /** distribute: every sector of a dragged selection, not just from */ area?: Coord[] }
 
@@ -94,6 +94,7 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
               <ContextMenuSeparator />
               <ContextMenuItem onSelect={() => setDialog("designate")}>Designate…</ContextMenuItem>
               <ContextMenuItem onSelect={() => setDialog("threshold")}>Set threshold…</ContextMenuItem>
+              <ContextMenuItem disabled={(s.stock["civ"] ?? 0) < 2} onSelect={() => setDialog("enlist")}>Enlist…</ContextMenuItem>
               <ContextMenuItem disabled={(s.stock["mil"] ?? 0) < 1} onSelect={() => setDialog("demobilize")}>Demobilize…{(s.stock["mil"] ?? 0) >= 1 ? ` (${(s.stock["mil"] ?? 0).toFixed(0)} mil)` : ""}</ContextMenuItem>
               <ContextMenuItem onSelect={() => setDialog("deliver")}>Deliver to a neighbour…{Object.keys(s.deliveries).length ? ` (${Object.keys(s.deliveries).length} set)` : ""}</ContextMenuItem>
               <ContextMenuItem onSelect={() => setDialog("road")}>Build road…</ContextMenuItem>
@@ -129,6 +130,7 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
       {s && owned && dialog === "designate" && <DesignateDialog view={view} rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "threshold" && <ThresholdDialog view={view} rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && !owned && dialog === "attack" && <AttackDialog target={s} from={attackFrom} units={unitsNextDoor} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
+      {s && owned && dialog === "enlist" && <EnlistDialog sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "demobilize" && <DemobilizeDialog sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "deliver" && <DeliverDialog view={view} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
       {s && owned && dialog === "road" && <RoadDialog rules={rules} sector={s} onClose={() => setDialog(null)} onCommand={onCommand} busy={busy} />}
@@ -388,6 +390,42 @@ function AttackDialog({ target: t, from, units, onClose, onCommand, busy }: { ta
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button variant="danger" disabled={busy || total < 1 || tooMany} onClick={async () => { await onCommand({ verb: "attack", x: t.at.x, y: t.at.y, parties: parties.map(p => ({ from: p.from, mil: p.mil })), units: withUnits }); onClose(); }}>Attack</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Call civilians up now (issue #276; Empire 1.x enlist): any sector of yours, half its civilians at most, 0.02 BTU a
+ * draftee. "Up to" is the original's quota form — the way to put a garrison everywhere with one order.
+ */
+function EnlistDialog({ sector: s, onClose, onCommand, busy }: { sector: SectorView; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean }) {
+  const civ = Math.floor(s.stock["civ"] ?? 0);
+  const have = Math.floor(s.stock["mil"] ?? 0);
+  const [mode, setMode] = useState<"upto" | "more">("upto");
+  const [amount, setAmount] = useState(String(Math.max(1, Math.ceil(civ / 20))));
+  const [scope, setScope] = useState("");
+  const n = Number(amount);
+  const joining = scope ? null : Math.max(0, Math.min(Math.floor(civ / 2), mode === "upto" ? Math.floor(n) - have : Math.floor(n)));
+  return (
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Enlist at {s.relative.x},{s.relative.y}</DialogTitle><DialogDescription>{civ} civilians and {have} military here. Half the civilians answer at most, and the paperwork is 0.02 BTU a draftee. One soldier per twenty civilians keeps an unhappy sector from revolting.</DialogDescription></DialogHeader>
+        <div className="grid gap-3 text-sm">
+          <label>How
+            <Select value={mode} onChange={e => setMode(e.target.value as "upto" | "more")}>
+              <option value="upto">bring the garrison up to this many</option>
+              <option value="more">call this many more up</option>
+            </Select>
+          </label>
+          <label>Number<Input value={amount} onChange={e => setAmount(e.target.value)} inputMode="numeric" autoFocus /></label>
+          <ScopeSelect s={s} scope={scope} setScope={setScope} />
+          {joining !== null && <p className="text-xs text-muted-foreground">{joining} answer the call; {have + joining} military after.</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button disabled={busy || amount === "" || !(n >= 1) || joining === 0} onClick={async () => { await onCommand({ verb: "enlist", x: s.at.x, y: s.at.y, amount: n, type: mode === "upto" ? "upto" : undefined, scope: scope || undefined }); onClose(); }}>Enlist</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

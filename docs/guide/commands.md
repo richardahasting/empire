@@ -23,6 +23,8 @@ thresh SECTOR COMMODITY N    set a distribution threshold (negative clears)
 dist SECTOR cx,cy | none     name a sector's distribution centre
 demob SECTOR N               stand N military down now (demob SECTOR all · demob SECTOR keep N leaves N); they become
                              civilians while the sector has room and the rest go home. Soldiers draw pay every update
+enlist SECTOR N              call N civilians up as military, now (enlist SECTOR -N brings each sector up to N); half
+                             the civilians at most, 0.02 BTU a draftee; the disloyal and the conquered refuse
 deliver COMMODITY SECTOR DIR N   standing order: above N, push it one hex DIR (e ne nw w sw se) every update; DIR none clears
 deliver COMMODITY SECTOR DIR N check   the same, described but not made: what lies that way, and whether it would deliver
   food out of a sector that keeps less than its own people eat in an update WARNS (a self-starving pipe)
@@ -142,6 +144,16 @@ sector has room under its population cap; the rest go home and are gone. `demob
 SECTOR all` stands them all down, and `demob SECTOR keep N` leaves N. Like `des`,
 SECTOR can be many sectors (`demob * keep 50`). In the web client it is on the sector
 menu, and on a dragged selection.
+
+**`enlist SECTOR N`** calls N civilians up as military in each sector, now —
+Empire 1.x's enlist: any sector of yours will do, no enlistment centre needed.
+`enlist SECTOR -N` is the quota form: enough in each sector to bring its garrison
+up to N, so `enlist * -20` puts twenty soldiers everywhere. Only half a sector's
+civilians answer at once, a sector holds 999 military at most, and the paperwork is
+0.02 BTU a draftee. Civilians who are disloyal (above 70) refuse to report, and the
+people of a sector you conquered do not serve you. A garrison of one soldier per
+twenty civilians is what keeps an unhappy sector from revolting. An enlistment centre
+makes military on its own every update, and the more it has the faster it makes them.
 
 **`attack x,y N from x2,y2`** takes an enemy sector over land, at war. Name as many
 of your sectors next to it as you like (`attack 5,2 80 from 4,2 40 from 4,3`); their

@@ -499,8 +499,8 @@ economy:
       category: social
       build: { cash: 1 }
       max_population: 1000
-      produces: { mil: 0.001 }        # GUESS: the original enlists ETU × (10 + mil) × 0.05 per update at >= 60%, $3 each, up to civ/2 − mil
-      level_effect: { level: tech, curve: tech_easy }   # NEW (Richard 2026-09-09): tech scales every production value
+      produces: { mil: 0.001 }        # used only when economy.enlist is absent; with it, the KNOWN snowball (issue #276)
+      level_effect: { level: tech, curve: tech_easy }   # NEW (Richard 2026-09-09); not the snowball: people mobilize no faster with tech (2026-10-03)
       consumes: { civ: 1.0 }
       production_cash_per_unit: 3
     - id: school                      # NEW two-tier ladder (Richard keeps it). Original "library/school": 1 lcm -> 1 education, $9
@@ -723,6 +723,23 @@ economy:
       lose_roll: 4
       lose_share_add: 3
 
+  # --- Enlistment (issue #276) ---------------------------------------------------
+  # The command is Empire 1.x's (1987 Usenix tapes, COMMANDS/enli.c): civilians answer the call in any sector of
+  # yours, straight from the population — no national reserve (Richard 2026-10-03; the reserve and demobilize-to-
+  # reserve arrived between 1.2 and 2.0). The refusals are 4.x's (gefla/empserver commands/enli.c). The centre is
+  # 4.x's update/sect.c enlist(): it needs soldiers to make soldiers, so it snowballs. Remove the section and
+  # there is no enlist command; the centre falls back to its sector type's produces.
+  enlist:
+    civ_share: 0.5                # KNOWN (1.x, 4.x): only half the civilians can be called up at once
+    max_mil_per_sector: 999       # KNOWN 4.x: 999 (1.x: 127, which was the width of a char, not a rule)
+    btu_per_draftee: 0.02         # KNOWN (1.x tot/50, 4.x totalmil × 0.02)
+    refuse_above_loyalty: 70      # KNOWN 4.x: "civilians refuse to report"; occupied people never serve
+    centre:
+      sector_type: enlistment_center
+      base_mil: 10                # KNOWN sect.c: etu × (10 + mil) × 0.05 ...
+      per_etu: 0.05               #   not scaled by tech (Richard 2026-10-03: "people are the same, the weapons are not")
+      civ_share: 0.5              # KNOWN: ... up to civ / 2 − mil
+
   btu:
     accrual_per_capital_civ_per_etu: 0.0012   # KNOWN: btu_build_rate 0.0012, × ETUs × civilians (≤1000) × efficiency in PERCENT
     scale_by_efficiency_percent: true         # KNOWN: a 100% capital with 1000 civilians refills 640 every update
@@ -737,6 +754,7 @@ economy:
       distribute: 1
       threshold: 1
       demobilize: 1                      # NEW (issue #217)
+      enlist: 0                          # issue #276: the cost is per draftee (enlist.btu_per_draftee), not per sector
       deliver: 1
       explore: 2
       telegram: 1

@@ -55,6 +55,8 @@ class DemobilizeTest {
         assertThat(EX.execute(world(100, 0), 0, new Command.Demobilize(AT, 0, true)).error()).contains("no military");
         assertThat(EX.execute(world(100, 50), 0, new Command.Demobilize(AT, 80, true)).error()).contains("no more than the 80.0 to keep");
         assertThat(EX.execute(world(100, 50), 0, new Command.Demobilize(AT, -1, false)).error()).contains("0 or more");
+        for (double bad : new double[] {Double.NaN, Double.POSITIVE_INFINITY})
+            assertThat(EX.execute(world(100, 50), 0, new Command.Demobilize(AT, bad, false)).error()).as("NaN fails every comparison; #278 refuses it first").contains("qty must be a number");
         assertThat(EX.execute(world(100, 50), 0, new Command.Demobilize(new Coord(20, 20), 10, false)).error()).contains("do not own");
     }
 

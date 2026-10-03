@@ -16,7 +16,7 @@ interface Props {
 
 /**
  * Orders for many sectors at once (issue #191, Richard 2026-09-14): shift-drag a rectangle on the map,
- * then designate, point at a centre, set a threshold, pave road or rail, or demobilize (#217) across the lot. Each order
+ * then designate, point at a centre, set a threshold, pave road or rail, enlist (#276) or demobilize (#217) across the lot. Each order
  * goes to the server as one mass command over the listed sectors, so each sector pays its own BTU and a
  * sector that refuses (wrong terrain, not enough tech) is reported rather than stopping the rest.
  */
@@ -36,6 +36,7 @@ export function AreaActions({ view, rules, busy, area, onCommand, onClear, onPic
   const [road, setRoad] = useState("100");
   const [rail, setRail] = useState("100");
   const [keep, setKeep] = useState("0");
+  const [garrison, setGarrison] = useState("20");
   const mil = sectors.reduce((n, s) => n + Math.floor(s.stock["mil"] ?? 0), 0);
   const all = { sectors: area };
   const cost = (verb: string) => (rules.btuCosts?.[verb] ?? rules.btuCosts?.default ?? 1) * area.length;
@@ -88,6 +89,14 @@ export function AreaActions({ view, rules, busy, area, onCommand, onClear, onPic
           <Input value={rail} onChange={e => setRail(e.target.value)} inputMode="numeric" className="w-20" />
         </label>
         <Button size="sm" disabled={busy || !(Number(rail) >= 0)} onClick={() => void onCommand({ verb: "build_rail", amount: Number(rail), ...all })}>Build rail</Button>
+      </div>
+
+      <div className="flex items-end gap-2">
+        <label className="grid gap-1 text-xs">Enlist, up to per sector
+          <Input value={garrison} onChange={e => setGarrison(e.target.value)} inputMode="numeric" className="w-24" />
+        </label>
+        <Button size="sm" disabled={busy || !(Number(garrison) >= 1)} onClick={() => void onCommand({ verb: "enlist", type: "upto", amount: Number(garrison), ...all })}>Enlist</Button>
+        <span className="pb-1 text-xs text-muted-foreground">half the civilians at most; 0.02 BTU a draftee</span>
       </div>
 
       <div className="flex items-end gap-2">

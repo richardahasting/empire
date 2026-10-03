@@ -35,7 +35,7 @@ for lack of the mechanic; decide those in the morning.
 | tech / research | 0.000625 (1 dust + 5 oil + 10 lcm), $300 / $90, education ≥ 5 | 0.0003 | **matched** |
 | education / happiness | 0.01 per lcm, $9 | 0.0002 / 0.0004 | **matched** (school = original library; university is ours) |
 | Resource depletion | gold −20, oil −10, uranium −35 per 100 units produced | none | **deviation** — not modelled yet |
-| Enlistment | at ≥ 60 %: ETU × (10 + mil) × 0.05 per update, ≤ civ/2 − mil, $3 each | flat 0.001 per work | **deviation** — special formula not modelled; $3 now charged; military no longer capped by the civilian population ceiling (issue #204) |
+| Enlistment | centre at ≥ 60 %: ETU × (10 + mil) × 0.05 per update, ≤ civ/2 − mil, $3 each; `enlist` command (1.x: any sector, from civilians; 2.0+: only from the national reserve) | centre: the original's snowball (`economy.enlist.centre`); `enlist SECTS N` / `-N` | **ours** (issue #276): the 1.x command — no reserve — with 4.x's refusals (loyalty > 70, conquered people); military not capped by the civilian ceiling (issue #204) |
 | Demobilize | `demob`: military to civilians, or to active reserves (paid `money_res`) | none | **ours**: `demob SECTOR N / all / keep N` (issue #217); to civilians where there is room, the rest discharged; no reserves |
 | Land units | land.config classes, build in HQ at 10%, landrepair, lnd_mobcost, attack/defense_val, takeover_land, security vs che | none | **matched, core** (issue #247): cavalry, infantry, artillery, engineer, supply, security. Not yet: ships carrying units, artillery fire, engineers' works, spies, reaction and support |
 | Big-city ceiling | `res_pop.c`: a big city's max population rises from `maxpop` to `10 × maxpop` (≤ 9999) with efficiency | flat 10,000 | **deviation** — not scaled by efficiency |
@@ -86,7 +86,7 @@ for lack of the mechanic; decide those in the morning.
 2. **Hand moves are all-or-nothing in the original**; ours moves what fits. Keeping ours unless you object.
 3. **Redesignation tear-down** (4× build speed) versus our keep-fraction knob.
 4. **Resource depletion** for gold, oil, uranium.
-5. **Enlistment** formula.
+5. **Enlistment** formula — settled: the original's snowball, and 1.x's enlist command (issue #276).
 6. **Distribution reach limit** is the spec's invention; the original had none.
 7. **Forest, university, hospital, defense plant** have no original numbers; theirs are guesses.
 8. Subsistence: yours (300 × fertility) stays; the modern server's version is negligible.
