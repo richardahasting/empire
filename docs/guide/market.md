@@ -46,10 +46,35 @@ time again. **`reset LOT 0`** takes it back: the goods return to the sector they
 which must still be a working harbour or warehouse of yours. Once somebody has bid, the lot
 is out of your hands until it sells.
 
+## Ships, planes and land units
+
+Whole ships, planes and land units are traded too (the original's `set` and `trade`).
+
+- **`set ship|plane|unit IDS PRICE`** puts them up for sale, at `PRICE` dollars each, in
+  whole dollars: `set ship 4,7 25000`. **`set ship 4 0`** takes it off. Setting a price again
+  starts the lot afresh: any bid on it is void, as in the original.
+- Nobody aboard may be a **civilian** — people are not for sale — and a land unit aboard a
+  ship must be put ashore first.
+- **While it is for sale it does nothing**: a ship holds where she is (no sailing, no lane, no
+  mission, no tender calls, her guns silent), a plane neither flies nor rises against raids,
+  a unit neither marches, loads nor fights. Any order naming it is refused until you take it
+  off the market.
+- **`trade`** lists everything for sale: what it is, its tech and condition, what a ship or
+  unit carries, the price, and who is winning it.
+- **`trade LOT PRICE [SECTOR]`** bids, in whole dollars, **more** than the lot's price, which
+  you must be able to pay on top of everything else you are winning. A **plane** needs an
+  **airfield** of yours to go to, a **unit** a **headquarters**, at 60% or better; a **ship**
+  changes hands where she lies.
+- It sells **4 updates** after it was set, at the update, to the high bidder, who pays the
+  price; the seller keeps **99%** of it. A ship goes with her hold and whoever is aboard her,
+  and none of her old orders. A plane flies to the buyer's airfield; a unit goes to their
+  headquarters with what it carries. If the buyer cannot pay, or no longer has the place
+  they named, the lot is taken off the market and the thing stays with its seller.
+
 ## How this differs from the original
 
 The original timed lots by the **wall clock** (two hours, settled every five minutes) and could
 sell between updates. This game's engine has no clock, so a lot's time is counted in updates
 and it sells at the update. In the original a sale that fell through told both sides the goods
-stayed on the market and then deleted them; here they stay. Trading whole ships, planes and
-units (`set` and `trade`) is not here yet.
+stayed on the market and then deleted them; here they stay. Object trade is timed in updates
+too (`trade_delay_updates`, 4).

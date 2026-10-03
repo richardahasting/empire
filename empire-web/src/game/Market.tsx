@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { CommandRequest, CountryView, LotView, MarketRules } from "@/api/client";
+import type { CommandRequest, CountryView, LotView, MarketRules, Rules, TradeView } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -13,8 +13,10 @@ const money = (v: number) => `$${v.toFixed(2)}`;
  * they are listed; a lot sells to its high bidder when its time is up, and the goods arrive in the buyer's harbour or
  * warehouse. Every lot is public.
  */
-export function Market({ view, rules, busy, onCommand }: { view: CountryView; rules: MarketRules; busy: boolean; onCommand: (c: CommandRequest) => Promise<void> }) {
-  const [dialog, setDialog] = useState<{ kind: "buy" | "lower"; lot: LotView } | { kind: "sell" } | null>(null);
+export function Market({ view, rules, sectorRules, busy, onCommand }: { view: CountryView; rules: MarketRules; sectorRules: Rules; busy: boolean; onCommand: (c: CommandRequest) => Promise<void> }) {
+  const [dialog, setDialog] = useState<{ kind: "buy" | "lower"; lot: LotView } | { kind: "sell" } | { kind: "trade"; lot: TradeView } | { kind: "offer" } | null>(null);
+  const trades = view.trades ?? [];
+  const objectTrade = rules.tradeTax != null && rules.tradeDelayUpdates != null;
   const lots = view.market ?? [];
   const quays = view.sectors.filter(s => s.full && s.owner === view.countryId && !!s.designation && rules.sectorTypes.includes(s.designation) && s.efficiency >= rules.minEfficiency);
   return (
@@ -41,6 +43,34 @@ export function Market({ view, rules, busy, onCommand }: { view: CountryView; ru
           </div>
         </div>
       ))}
+      {objectTrade && (
+        <div className="space-y-2 border-t border-border pt-2">
+          <div className="flex items-center gap-2">
+            <span className="font-medium">Ships, planes and units for sale</span>
+            <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "offer" })}>Put up for sale…</Button>
+          </div>
+          {trades.length === 0 && <p className="text-muted-foreground">Nothing for sale.</p>}
+          {trades.map(t => (
+            <div key={t.id} className="rounded-md border border-border p-2">
+              <div className="flex flex-wrap items-baseline gap-x-2">
+                <span className="font-mono">T{t.id}</span>
+                <span className="font-medium">{t.kind} #{t.item} {t.cls.replace(/_/g, " ")}</span>
+                <span className="text-muted-foreground">
+                  tech {t.tech.toFixed(0)} · {t.efficiency.toFixed(0)}%{Object.keys(t.cargo).length ? ` · ${Object.entries(t.cargo).map(([c, q]) => `${c} ${Math.round(q)}`).join(", ")}` : ""}
+                  {" · "}{money(t.price)} · {t.seller}{t.bidder ? ` · high bid ${t.bidder}, sells in ${t.updatesLeft}` : " · no bids yet"}
+                  {t.yourBid && t.destRelative ? ` · your bid, to ${rel(t.destRelative)}` : t.yourBid ? " · your bid" : ""}
+                </span>
+              </div>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {!t.yours && <Button size="sm" variant="secondary" disabled={busy} onClick={() => setDialog({ kind: "trade", lot: t })}>Bid…</Button>}
+                {t.yours && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: "set_price", type: t.kind, units: [t.item], price: 0 })}>Take off the market</Button>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {dialog?.kind === "trade" && <TradeDialog lot={dialog.lot} view={view} rules={rules} sectorRules={sectorRules} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
+      {dialog?.kind === "offer" && <OfferDialog view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {dialog?.kind === "sell" && <SellDialog rules={rules} quays={quays} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {dialog?.kind === "buy" && <BidDialog lot={dialog.lot} rules={rules} quays={quays} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {dialog?.kind === "lower" && <LowerDialog lot={dialog.lot} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
@@ -133,6 +163,74 @@ function LowerDialog({ lot, busy, onClose, onCommand }: { lot: LotView; busy: bo
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button disabled={busy || !ok} onClick={async () => { await onCommand({ verb: "reset_lot", lot: lot.id, price: p }); onClose(); }}>Lower it</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Bid on a ship, plane or unit (issue #141): whole dollars, more than its price; a plane needs an airfield, a unit a headquarters. */
+function TradeDialog({ lot, view, rules, sectorRules, busy, onClose, onCommand }: { lot: TradeView; view: CountryView; rules: MarketRules; sectorRules: Rules; busy: boolean; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void> }) {
+  const flag = lot.kind === "plane" ? "builds_planes" : lot.kind === "unit" ? "builds_units" : null;
+  const kinds = new Set(sectorRules.sectorTypes.filter(t => flag && (t.flags ?? []).includes(flag)).map(t => t.id));
+  const places = flag ? view.sectors.filter(s => s.full && s.owner === view.countryId && !!s.designation && kinds.has(s.designation) && s.efficiency >= rules.minEfficiency) : [];
+  const [price, setPrice] = useState(String(Math.floor(lot.price) + 1));
+  const [to, setTo] = useState(places[0] ? rel(places[0].relative) : "");
+  const dest = places.find(s => rel(s.relative) === to);
+  const p = Number(price);
+  const ok = Number.isInteger(p) && p > lot.price && p <= view.cash && (!flag || !!dest);
+  return (
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Bid on {lot.kind} #{lot.item} ({lot.cls.replace(/_/g, " ")})</DialogTitle>
+          <DialogDescription>In whole dollars, more than {money(lot.price)}. You pay only if it sells to you. {lot.kind === "ship" ? "A ship changes hands where she lies." : `It goes to the ${lot.kind === "plane" ? "airfield" : "headquarters"} you name.`}</DialogDescription></DialogHeader>
+        <div className="grid gap-3 text-sm">
+          <label className="grid gap-1">Bid<Input value={price} onChange={e => setPrice(e.target.value)} inputMode="numeric" autoFocus /></label>
+          {flag && (places.length === 0
+            ? <p className="text-xs text-destructive">You have no {lot.kind === "plane" ? "airfield" : "headquarters"} at {rules.minEfficiency}% or better for it to go to.</p>
+            : <label className="grid gap-1">Deliver to
+                <Select value={to} onChange={e => setTo(e.target.value)}>
+                  {places.map(s => <option key={rel(s.relative)} value={rel(s.relative)}>{rel(s.relative)} {s.designation}</option>)}
+                </Select>
+              </label>)}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button disabled={busy || !ok} onClick={async () => { await onCommand({ verb: "trade", lot: lot.id, price: p, x: dest?.at.x, y: dest?.at.y }); onClose(); }}>Bid</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Put a ship, plane or unit of yours up for sale (issue #141): a price in whole dollars; while it is for sale it does nothing. */
+function OfferDialog({ view, busy, onClose, onCommand }: { view: CountryView; busy: boolean; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void> }) {
+  const options = [
+    ...view.ships.map(s => ({ kind: "ship", id: s.id, label: `ship #${s.id} ${s.cls.replace(/_/g, " ")}` })),
+    ...(view.planes ?? []).map(p => ({ kind: "plane", id: p.id, label: `plane #${p.id} ${p.name}` })),
+    ...(view.units ?? []).map(u => ({ kind: "unit", id: u.id, label: `unit #${u.id} ${u.name}` })),
+  ];
+  const [pick, setPick] = useState(options[0] ? `${options[0].kind}:${options[0].id}` : "");
+  const [price, setPrice] = useState("");
+  const [kind, id] = pick.split(":");
+  const p = Number(price);
+  const ok = !!pick && Number.isInteger(p) && p > 0;
+  return (
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Put up for sale</DialogTitle>
+          <DialogDescription>While it is for sale it stays where it is and does nothing. If anybody bids, it sells to the highest; you keep most of the price. Nobody aboard may be a civilian.</DialogDescription></DialogHeader>
+        <div className="grid gap-3 text-sm">
+          <label className="grid gap-1">What
+            <Select value={pick} onChange={e => setPick(e.target.value)}>
+              {options.map(o => <option key={`${o.kind}:${o.id}`} value={`${o.kind}:${o.id}`}>{o.label}</option>)}
+            </Select>
+          </label>
+          <label className="grid gap-1">Price (whole dollars)<Input value={price} onChange={e => setPrice(e.target.value)} inputMode="numeric" /></label>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button disabled={busy || !ok} onClick={async () => { await onCommand({ verb: "set_price", type: kind, units: [Number(id)], price: p }); onClose(); }}>Offer it</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

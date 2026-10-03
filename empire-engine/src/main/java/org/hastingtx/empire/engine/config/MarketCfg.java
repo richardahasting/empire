@@ -23,4 +23,10 @@ public record MarketCfg(
         /** GUESS for the original's last-5-minutes rule: a new high bid this close to the sale pushes it back to this many. */
         int snipeUpdates,
         /** KNOWN item.config i_sell: what cannot be sold. */
-        List<String> unsellable) {}
+        List<String> unsellable,
+        /** KNOWN constants.c tradetax: the share of a ship, plane or unit's price its seller keeps. Null: no object trade. */
+        Double tradeTax,
+        /** GUESS for TRADE_DELAY (7200 s of wall clock): updates from set to sale. */
+        Integer tradeDelayUpdates) {
+    public boolean objectTrade() { return tradeTax != null && tradeDelayUpdates != null; }
+}

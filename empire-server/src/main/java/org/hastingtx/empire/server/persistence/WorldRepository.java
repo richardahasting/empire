@@ -34,6 +34,7 @@ public class WorldRepository {
         writeUnits(gameId, w, com);
         writePlanes(gameId, w);
         writeMarket(gameId, w, com);
+        writeTrades(gameId, w);
         writeContacts(gameId, w);
         writeSeen(gameId, w);
         writeRailLanes(gameId, w, com);
@@ -56,6 +57,7 @@ public class WorldRepository {
         if (!after.units().equals(before.units()) || after.nextUnitId() != before.nextUnitId()) writeUnits(gameId, after, com);
         if (!after.planes().equals(before.planes()) || after.nextPlaneId() != before.nextPlaneId()) writePlanes(gameId, after);
         if (!after.market().equals(before.market()) || after.nextLotId() != before.nextLotId()) writeMarket(gameId, after, com);
+        if (!after.trades().equals(before.trades()) || after.nextTradeId() != before.nextTradeId()) writeTrades(gameId, after);
         if (!after.contacts().equals(before.contacts())) writeContacts(gameId, after);
         if (!after.seen().equals(before.seen())) writeSeen(gameId, after);
         if (!after.railLanes().equals(before.railLanes())) writeRailLanes(gameId, after, com);
@@ -224,6 +226,18 @@ public class WorldRepository {
         jdbc.batchUpdate("INSERT INTO market_lot (game_id, id, owner, commodity, amount, price, bidder, from_x, from_y, dest_x, dest_y, listed, settles) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", rows);
     }
 
+    /** Ships, planes and units for sale (issue #141): few, so all of them are rewritten whenever any changed. */
+    private void writeTrades(long gameId, World w) {
+        jdbc.update("DELETE FROM trade_lot WHERE game_id = ?", gameId);
+        jdbc.update("UPDATE game SET next_trade_id = ? WHERE id = ?", w.nextTradeId(), gameId);
+        if (w.trades().isEmpty()) return;
+        List<Object[]> rows = new ArrayList<>();
+        for (var l : w.trades())
+            rows.add(new Object[] {gameId, l.id(), l.owner(), l.kind(), l.item(), l.price(), l.bidder(),
+                    l.dest() == null ? null : l.dest().x(), l.dest() == null ? null : l.dest().y(), l.listed(), l.settles()});
+        jdbc.batchUpdate("INSERT INTO trade_lot (game_id, id, owner, kind, item, price, bidder, dest_x, dest_y, listed, settles) VALUES (?,?,?,?,?,?,?,?,?,?,?)", rows);
+    }
+
     private void writeShips(long gameId, World w, Commodities com) {
         jdbc.update("DELETE FROM ship WHERE game_id = ?", gameId);
         jdbc.update("UPDATE game SET next_ship_id = ? WHERE id = ?", w.nextShipId(), gameId);
@@ -387,6 +401,12 @@ public class WorldRepository {
                     rs.getLong("listed"), rs.getLong("settles"));
         }, g.id());
         Long nextLot = jdbc.queryForObject("SELECT next_lot_id FROM game WHERE id = ?", Long.class, g.id());
+        List<org.hastingtx.empire.engine.model.TradeLot> trades = jdbc.query("SELECT * FROM trade_lot WHERE game_id = ? ORDER BY id", (rs, i) -> {
+            Integer dx = (Integer) rs.getObject("dest_x"), dy = (Integer) rs.getObject("dest_y");
+            return new org.hastingtx.empire.engine.model.TradeLot(rs.getLong("id"), rs.getInt("owner"), rs.getString("kind"), rs.getLong("item"), rs.getDouble("price"),
+                    rs.getInt("bidder"), dx == null ? null : new Coord(dx, dy), rs.getLong("listed"), rs.getLong("settles"));
+        }, g.id());
+        Long nextTrade = jdbc.queryForObject("SELECT next_trade_id FROM game WHERE id = ?", Long.class, g.id());
         List<Contact> contacts = jdbc.query("SELECT * FROM contact WHERE game_id = ? ORDER BY owner, ship_id", (rs, i) ->
                 new Contact(rs.getInt("owner"), rs.getLong("ship_id"), rs.getInt("target_owner"), rs.getString("class"),
                         new Coord(rs.getInt("x"), rs.getInt("y")), rs.getLong("seen_update"), rs.getDouble("confidence")), g.id());
@@ -402,6 +422,6 @@ public class WorldRepository {
             int o = rs.getInt("owner"), fx = rs.getInt("from_x"), fy = rs.getInt("from_y"), tx = rs.getInt("to_x"), ty = rs.getInt("to_y");
             return new RailLane(o, new Coord(fx, fy), new Coord(tx, ty), laneCargo.getOrDefault(laneKey(o, fx, fy, tx, ty), List.of()));
         }, g.id());
-        return new World(g.width(), g.height(), g.wrapX(), g.wrapY(), list, countries, moves, g.updateNumber(), rail, ships, nextShip == null ? 1 : nextShip, contacts, seen, lanes, readRelations(g.id()), units, nextUnit == null ? 1 : nextUnit, planes, nextPlane == null ? 1 : nextPlane, market, nextLot == null ? 1 : nextLot);
+        return new World(g.width(), g.height(), g.wrapX(), g.wrapY(), list, countries, moves, g.updateNumber(), rail, ships, nextShip == null ? 1 : nextShip, contacts, seen, lanes, readRelations(g.id()), units, nextUnit == null ? 1 : nextUnit, planes, nextPlane == null ? 1 : nextPlane, market, nextLot == null ? 1 : nextLot, trades, nextTrade == null ? 1 : nextTrade);
     }
 }

@@ -52,6 +52,10 @@ sell COMMODITY SECTOR N PRICE   list N (negative: all but N) from a harbour or w
                              leave now, and the lot sells to its high bidder 4 updates on
 buy LOT PRICE SECTOR         bid PRICE a unit (at least $0.05 over the lot's price) for delivery to SECTOR
 reset LOT PRICE              lower an unbid lot's price; reset LOT 0 takes it back
+set ship|plane|unit IDS PRICE   put them up for sale at PRICE each (whole dollars; 0 takes them off); while for sale
+                             they do nothing
+trade                        every ship, plane and unit for sale; trade LOT PRICE [SECTOR] bids (a plane goes to your
+                             airfield SECTOR, a unit to your headquarters; a ship changes hands where she lies)
 build HARBOUR CLASS [name]   lay a hull in your harbour (fishing_boat, cargo_ship, ferry, tanker, luxury_craft, ...; tech gates apply)
 sail SHIP x,y | hold         sail to a sea hex or one of your harbours (speed × efficiency hexes per update);
                              a standing mission or lane is paused, and resumes when she arrives

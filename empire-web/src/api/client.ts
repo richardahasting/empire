@@ -119,6 +119,7 @@ export interface CountryView {
   units?: UnitView[];
   planes?: PlaneView[];
   market?: LotView[];
+  trades?: TradeView[];
   /** Countries you are at war with, by name (issue #137). */
   atWarWith?: string[];
   /** Enemy ships your sensors have found (issue #75); what you can aim at (issue #68). */
@@ -185,8 +186,10 @@ export interface ShipClass { id: string; name: string; glyph: string; role: stri
 export interface ShipsRules { startEfficiency: number; dockPointsPerUpdate: number; harborMinEfficiency: number; classes: ShipClass[] }
 export interface Rules { sectorTypes: SectorType[]; commodities: Commodity[]; etusPerUpdate: number; btuCosts: Record<string, number>; road?: RoadRules; defaultCapacity?: number; rail?: RailRules; productionMinEfficiency?: number; massThresholdMultiplierByType?: Record<string, number>; ships?: ShipsRules | null; work?: WorkRules; curves?: Record<string, Curve>; maxPopCurve?: { type: string; base?: number | null; perResearchPoint?: number | null; cap?: number | null } | null; land?: LandRules | null; planes?: PlanesRules | null; market?: MarketRules | null }
 /** The commodity market's rules (issue #141); null in a game without one. */
-export interface MarketRules { sectorTypes: string[]; minEfficiency: number; maxPrice: number; minRaise: number; buyTax: number; delayUpdates: number; snipeUpdates: number; unsellable: string[] }
+export interface MarketRules { sectorTypes: string[]; minEfficiency: number; maxPrice: number; minRaise: number; buyTax: number; delayUpdates: number; snipeUpdates: number; unsellable: string[]; tradeTax?: number | null; tradeDelayUpdates?: number | null }
 /** A lot on the market (issue #141). from/dest are only yours: your lot's sector, your bid's destination. */
+/** A ship, plane or unit for sale (issue #141). destRelative: where it goes if your bid wins. */
+export interface TradeView { id: number; seller: string; kind: "ship" | "plane" | "unit"; item: number; cls: string; tech: number; efficiency: number; cargo: Record<string, number>; price: number; bidder: string | null; updatesLeft: number; yours: boolean; yourBid: boolean; destRelative: Coord | null }
 export interface LotView { id: number; seller: string; commodity: string; amount: number; price: number; bidder: string | null; updatesLeft: number; yours: boolean; fromRelative: Coord | null; yourBid: boolean; destRelative: Coord | null }
 export interface Outcome { accepted: boolean; error?: string; btuSpent: number; view: CountryView; info?: string | null }
 export interface ConsoleReply { output: string; accepted: boolean; error?: string; view?: CountryView }

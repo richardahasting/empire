@@ -2,6 +2,8 @@ package org.hastingtx.empire.engine.update.steps;
 
 import org.hastingtx.empire.engine.config.MarketCfg;
 import org.hastingtx.empire.engine.model.MarketLot;
+import org.hastingtx.empire.engine.model.Ship;
+import org.hastingtx.empire.engine.model.TradeLot;
 import org.hastingtx.empire.engine.model.Sector;
 import org.hastingtx.empire.engine.update.Ctx;
 import org.hastingtx.empire.engine.update.Ledger;
@@ -24,7 +26,7 @@ public final class MarketStep implements Step {
 
     public void run(Ctx ctx) {
         MarketCfg mc = ctx.cfg.options() != null && ctx.cfg.options().market() ? ctx.cfg.economy().market() : null;
-        if (mc == null || ctx.market.isEmpty()) return;
+        if (mc == null) return;
         long now = ctx.snap.updateNumber() + 1;   // the update this one makes
         List<MarketLot> left = new ArrayList<>();
         for (MarketLot lot : ctx.market) {
@@ -55,6 +57,62 @@ public final class MarketStep implements Step {
         }
         ctx.market.clear();
         ctx.market.addAll(left);
+        if (mc.objectTrade()) trades(ctx, mc, now);
+    }
+
+    /**
+     * Ships, planes and units (KNOWN trad.c check_trade). A lot whose thing is gone, or no longer its seller's, is
+     * dropped. One with a bid whose time is up sells: the buyer pays the price and the seller keeps {@code trade_tax} of
+     * it; a ship changes hands where she lies, with her hold and whoever is aboard her and none of her old orders; a
+     * plane flies to the buyer's airfield and a unit goes to their headquarters. If the buyer cannot pay, or the place
+     * they named is no longer theirs, the lot is taken off the market and the thing stays with its seller.
+     */
+    private static void trades(Ctx ctx, MarketCfg mc, long now) {
+        List<TradeLot> left = new ArrayList<>();
+        for (TradeLot lot : ctx.trades) {
+            int at = index(ctx, lot);
+            if (at < 0) continue;   // gone, or taken from its seller: the lot goes with it
+            if (!lot.bid() || lot.settles() > now) { left.add(lot); continue; }
+            String what = lot.kind() + " #" + lot.item();
+            String why = null;
+            if (ctx.country(lot.bidder()).cash() + ctx.led().cash[lot.bidder()] < lot.price()) why = "could not pay " + money(lot.price());
+            if (why == null && lot.dest() != null) {
+                Sector to = ctx.sector(ctx.idx(lot.dest()));
+                String flag = lot.kind().equals(TradeLot.PLANE) ? "builds_planes" : "builds_units";
+                if (to.owner() != lot.bidder() || !ctx.type(to).hasFlag(flag) || to.efficiency() < mc.minEfficiency()) why = "had nowhere to take it";
+            }
+            if (why != null) {
+                ctx.led().event("trade_failed", lot.owner(), null, "the buyer of your " + what + " (lot T" + lot.id() + ") could not complete the sale; it is off the market and still yours", lot.price());
+                ctx.led().event("trade_failed", lot.bidder(), lot.dest(), "you " + why + " for " + what + " (lot T" + lot.id() + "); it stays with " + ctx.country(lot.owner()).name(), lot.price());
+                continue;
+            }
+            ctx.led().cash[lot.bidder()] -= lot.price();
+            ctx.led().cash[lot.owner()] += lot.price() * mc.tradeTax();
+            String buyer = ctx.country(lot.bidder()).name(), seller = ctx.country(lot.owner()).name();
+            switch (lot.kind()) {
+                case TradeLot.SHIP -> {
+                    Ship s = ctx.ships.get(at);
+                    ctx.ships.set(at, s.soldTo(lot.bidder()).withNote("bought from " + seller));
+                    for (int k = 0; k < ctx.units.size(); k++) if (ctx.units.get(k).ship() == s.id()) ctx.units.set(k, ctx.units.get(k).withOwner(lot.bidder()));   // aboard her, sold with her
+                }
+                case TradeLot.PLANE -> ctx.planes.set(at, ctx.planes.get(at).withOwner(lot.bidder()).withAt(lot.dest()).withNote("bought from " + seller));
+                default -> ctx.units.set(at, ctx.units.get(at).withOwner(lot.bidder()).withAt(lot.dest()).withMobility(0).withNote("bought from " + seller));
+            }
+            ctx.led().event("trade_sale", lot.owner(), null, "lot T" + lot.id() + " sold: your " + what + " to " + buyer + " for " + money(lot.price()) + " (you keep " + money(lot.price() * mc.tradeTax()) + ")", lot.price());
+            ctx.led().event("trade_sale", lot.bidder(), lot.dest(), "you bought " + what + " from " + seller + " for " + money(lot.price()) + (lot.dest() == null ? "" : "; it is at " + lot.dest()), lot.price());
+        }
+        ctx.trades.clear();
+        ctx.trades.addAll(left);
+    }
+
+    /** Where the thing a lot sells is in its list, or −1 if it is gone or no longer its seller's. */
+    private static int index(Ctx ctx, TradeLot lot) {
+        switch (lot.kind()) {
+            case TradeLot.SHIP -> { for (int i = 0; i < ctx.ships.size(); i++) if (ctx.ships.get(i).id() == lot.item()) return ctx.ships.get(i).owner() == lot.owner() ? i : -1; }
+            case TradeLot.PLANE -> { for (int i = 0; i < ctx.planes.size(); i++) if (ctx.planes.get(i).id() == lot.item()) return ctx.planes.get(i).owner() == lot.owner() ? i : -1; }
+            default -> { for (int i = 0; i < ctx.units.size(); i++) if (ctx.units.get(i).id() == lot.item()) return ctx.units.get(i).owner() == lot.owner() ? i : -1; }
+        }
+        return -1;
     }
 
     /**

@@ -25,6 +25,8 @@ public final class CommandExecutor {
         if (countryId < 0 || countryId >= w.countries().size()) return CommandResult.fail(w, "no such country");
         String notANumber = nonFinite(cmd);
         if (notANumber != null) return CommandResult.fail(w, notANumber + " must be a number");
+        String forSale = Market.frozen(w, cmd);   // issue #141: what is on the trading block does nothing
+        if (forSale != null) return CommandResult.fail(w, forSale);
         Country c = w.country(countryId);
         double cost = cfg.economy().btu().cost(cmd.verb());
         if (c.btu() < cost) return CommandResult.fail(w, "not enough BTUs: need " + cost + ", have " + fmt(c.btu()));
@@ -38,6 +40,8 @@ public final class CommandExecutor {
             case Command.Sell sl -> Market.sell(cfg, com, w, c, sl);
             case Command.Buy by -> { org.hastingtx.empire.engine.update.Ctx rc = new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0); yield Market.buy(cfg, com, w, c, by, (to, ci) -> roomFor(rc, to, ci)); }
             case Command.ResetLot rl -> Market.reset(cfg, com, w, c, rl);
+            case Command.SetPrice sp -> Market.setPrice(cfg, com, w, c, sp);
+            case Command.Trade tr -> Market.tradeBid(cfg, com, w, c, tr);
             case Command.Distribute d -> distribute(w, c, d);
             case Command.Deliver d -> deliver(w, c, d);
             case Command.BuildShip b -> buildShip(w, c, b);

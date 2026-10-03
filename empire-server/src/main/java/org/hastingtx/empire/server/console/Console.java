@@ -147,6 +147,19 @@ public class Console {
                     need(t, 4, usage); most(t, 4, usage);
                     yield cmd(run, new Command.Buy(Long.parseLong(t[1].replace("#", "")), Double.parseDouble(t[2].replace("$", "")), abs(v, t[3])));
                 }
+                case "set" -> {
+                    String usage = "set ship|plane|unit IDS PRICE   (IDS like 3 or 3,5,7; whole dollars; 0 takes them off)";
+                    need(t, 4, usage); most(t, 4, usage);
+                    List<Long> ids = new ArrayList<>();
+                    for (String id : t[2].split(",")) if (!id.isBlank()) ids.add(Long.parseLong(id.replace("#", "").trim()));
+                    yield cmd(run, new Command.SetPrice(t[1], ids, Double.parseDouble(t[3].replace("$", ""))));
+                }
+                case "trade" -> {
+                    if (t.length == 1) yield new Reply(trades(v), true, null, null);
+                    String usage = "trade | trade LOT PRICE [SECTOR]   (a plane goes to SECTOR, an airfield; a unit to a headquarters; a ship changes hands where she lies)";
+                    need(t, 3, usage); most(t, 4, usage);
+                    yield cmd(run, new Command.Trade(Long.parseLong(t[1].replaceFirst("^[Tt#]", "")), Double.parseDouble(t[2].replace("$", "")), t.length > 3 ? abs(v, t[3]) : null));
+                }
                 case "reset" -> { String usage = "reset LOT PRICE   (lower; 0 takes the lot back)"; need(t, 3, usage); most(t, 3, usage); yield cmd(run, new Command.ResetLot(Long.parseLong(t[1].replace("#", "")), Double.parseDouble(t[2].replace("$", "")))); }
                 case "air", "planes" -> new Reply(air(v), true, null, null);
                 case "march", "mar" -> { need(t, 3, "march UNIT x,y"); most(t, 3, "march UNIT x,y"); yield cmd(run, new Command.March(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
@@ -260,7 +273,7 @@ public class Console {
 
     static final Set<String> PREVIEWABLE = Set.of("designate", "threshold", "demobilize", "enlist", "distribute", "move", "explore",
             "build_road", "build_rail", "rail_ship", "rail_lane", "build_ship", "build_unit", "build_plane", "load", "unload", "lload", "lunload",
-            "lane", "fish", "mine", "supply", "scrap", "sell", "buy", "reset_lot");
+            "lane", "fish", "mine", "supply", "scrap", "sell", "buy", "reset_lot", "set_price", "trade");
 
     /**
      * What an order would do, run against the world as it stands and thrown away (issues #272, #273): the
@@ -626,6 +639,20 @@ public class Console {
                     l.bidder() == null ? "-" : "in " + l.updatesLeft(), l.yours() ? "from " + rel(l.fromRelative()) : l.yourBid() ? "your bid, to " + rel(l.destRelative()) : ""));
         return sb.append(which == null ? "the cheapest of each; market COMMODITY or market all for every lot. " : "")
                  .append("buy LOT PRICE SECTOR bids a unit's price; a lot sells to its high bidder when its time is up").toString();
+    }
+
+    /** Ships, planes and units for sale (issue #141; KNOWN trdsub.c's trade report). Public. */
+    static String trades(CountryView v) {
+        List<CountryView.TradeView> lots = v.trades() == null ? List.of() : v.trades();
+        if (lots.isEmpty()) return "nothing for sale — set ship|plane|unit IDS PRICE puts something up";
+        StringBuilder sb = new StringBuilder(String.format("%-5s %10s %-14s %-14s %5s  %s%n", "lot", "price", "seller", "high bid", "sells", "what"));
+        for (var l : lots) {
+            String cargo = l.cargo().isEmpty() ? "" : " [" + String.join(" ", l.cargo().entrySet().stream().map(e -> e.getKey() + ":" + Math.round(e.getValue())).toList()) + "]";
+            sb.append(String.format("T%-4d %10.0f %-14s %-14s %5s  %s #%d %s, tech %.0f, %.0f%%%s%s%n", l.id(), l.price(), l.seller(), l.bidder() == null ? "-" : l.bidder(),
+                    l.bidder() == null ? "-" : "in " + l.updatesLeft(), l.kind(), l.item(), l.cls().replace('_', ' '), l.tech(), l.efficiency(), cargo,
+                    l.yours() ? " (yours)" : l.yourBid() ? " (your bid" + (l.destRelative() == null ? ")" : ", to " + rel(l.destRelative()) + ")") : ""));
+        }
+        return sb.append("trade LOT PRICE [SECTOR] bids, in whole dollars, more than the price; a lot sells to its high bidder when its time is up").toString();
     }
 
     /** Sectors with unrest (issue #72): disloyal, not all at work, occupied, or with guerrillas; and the happiness they want. */
