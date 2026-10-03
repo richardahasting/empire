@@ -346,9 +346,26 @@ and #77 making the tallies `long[]` means per-thread partials merge identically.
 - **Planes, first slice (#262)**, built 2026-09-16: airfields build bombers, tactical bombers and recon planes;
   a sortie takes petrol and bombs off the field, bombs by `pln_damage`, and is shot at by `ac_flak_dam`'s flak.
   See `docs/guide/air.md`.
-- **Land warfare and planes (#71)** have a plan for review in `m5-land-air-plan.md`; what is left is fighters
-  and interception, escorts, transports and paradrops, carriers as airfields, land mines, and then missiles
-  and satellites.
+- **Air war, the rest of slice 3 (#71)**, built 2026-10-03, every rule from empserver's source:
+  fighters, interception over the flight path and escorts (`aircombat.c`, #291); air-defence missions over
+  anyone's sectors (`miss.c`, #296); transports — `fly`, `drop`, `paradrop` (#297); carriers as floating
+  airfields, with planes captured or blown up on a taken sector (#298); stealth (`do_evade`, #299). And
+  #290: declaring war or peace used to delete every plane. See `docs/guide/air.md`.
+- **What is left of #71**: sea mines (laid by ships and dropped by planes, swept, and the damage they do), SAM
+  interceptors, then missiles and satellites — each a subsystem of its own.
+- **Trade (#141)**, built 2026-10-03: the original's MARKET option — the commodity market (`sell`, `buy`,
+  `reset`, `market`; #292) and ships, planes and units for sale (`set`, `trade`; #293), settled at the update
+  (step 8b) and timed in updates, not the wall clock. Richard's physical trade (foreign harbours, a shared
+  trade sector) is NEW and waits on his decisions in #294. See `docs/guide/market.md`.
+- **Enlist (#277)**: Empire 1.x's `enlist` in any sector, and the 4.x enlistment centre's snowball. Game 82
+  lost 295 sectors to partisans for want of a one-command garrison.
+- **The 2026-10-03 playtest sweep** (game 82, Wolfy): a trailing `check` is a dry run for every order without
+  dice (#280); `n`/`north` no longer mean south-east (#281); ship notes speak in relative coordinates (#282);
+  `search SHIP x,y` keeps its harbour (#284); tenders answer every call they can (#285); `census` says what
+  holds a sector back (#286) and what partisans took (#288); a deliver below the sector's own threshold is
+  refused (#287). #269 (mobility brownout) waits on a rules decision.
+- **Running games keep their rules**: game 82 needs the admin *refresh config* to get `economy.enlist`,
+  `economy.market` and `planes.air_combat` / `transport` / carriers.
 - **Dead config:** `levels.curves` (`research_to_tech`, `education_to_research`) in schema.yaml is read by
   nothing.
 
