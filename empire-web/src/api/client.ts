@@ -79,6 +79,8 @@ export interface PlaneView {
   load: number; accuracy: number; reach: number; note: string; bomber: boolean; tactical: boolean; spy: boolean;
   /** issue #71: rises against raids (and may escort); may only escort; dogfight attack and defence at its tech */
   intercept: boolean; escort: boolean; attack: number; defense: number;
+  /** air defence (issue #71): the op point it guards, relative, and the radius; null and 0 when on no mission */
+  opRelative: Coord | null; radius: number;
 }
 export interface PlaneClass { id: string; name: string; glyph: string; techRequired: number; build: Record<string, number>; bwork: number; accuracy: number; load: number; attack: number; defense: number; range: number; fuel: number; flags: string[] }
 export interface PlanesRules { startEfficiency: number; minEfficiency: number; abortBelow: number; classes: PlaneClass[] }

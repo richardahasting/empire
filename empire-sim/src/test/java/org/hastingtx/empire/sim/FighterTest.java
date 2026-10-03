@@ -112,6 +112,36 @@ class FighterTest {
         assertThat(b == null || b.efficiency() < 50).as("shot down or badly hurt: " + r.info()).isTrue();
     }
 
+    /** KNOWN aircombat.c only_mission, miss.c: on air defence a fighter rises over anyone's sector in its area, not only its own. */
+    @Test
+    void onAirDefenceAFighterRisesOverAnyonesSector() {
+        Coord ours = Hex.stepRaw(CAP, 0, 1);   // our land: a recon over it meets nobody's fighters, unless they guard it
+        World w = plane(plane(world(true), 1, 0, "recon", FIELD, 200), 2, 1, "fighter_2", THEIR_FIELD, 200);
+        assertThat(EX.execute(w, 0, new Command.Recon(1, ours)).info()).as("not their land, no mission: it stays down").doesNotContain("rose");
+        World guarding = run(w, 1, new Command.AirMission(2, ours, 1, false));
+        assertThat(guarding.plane(2).onAirDefence()).isTrue();
+        assertThat(EX.execute(guarding, 0, new Command.Recon(1, ours)).info()).contains("1 fighter of Them rose over");
+    }
+
+    @Test
+    void whatAirDefenceTakes() {
+        World w = plane(plane(plane(world(true), 1, 0, "bomber", FIELD, 200), 2, 1, "fighter_2", THEIR_FIELD, 200), 3, 1, "escort", THEIR_FIELD, 200);
+        assertThat(EX.execute(w, 1, new Command.AirMission(3, THEIRS, 1, false)).error()).contains("only fighters fly air defence");
+        assertThat(EX.execute(w, 1, new Command.AirMission(1, THEIRS, 1, false)).error()).contains("no plane #1 of yours");
+        assertThat(EX.execute(w, 1, new Command.AirMission(2, new Coord(2, 2), 1, false)).error()).contains("it guards within");
+        World r = run(w, 1, new Command.AirMission(2, THEIRS, 99, false));
+        int reach = (int) Math.floor(CFG.units().planes().planeClass("fighter_2").reachAt(200));
+        assertThat(r.plane(2).radius()).as("no further than it reaches").isEqualTo(reach);
+        assertThat(run(r, 1, new Command.AirMission(2, null, 0, true)).plane(2).onAirDefence()).isFalse();
+        assertThat(EX.execute(w, 1, new Command.AirMission(2, null, 0, true)).error()).contains("on no mission");
+    }
+
+    private static World run(World w, int who, Command c) {
+        CommandResult r = EX.execute(w, who, c);
+        assertThat(r.error()).as(r.error()).isNull();
+        return r.world();
+    }
+
     @Test
     void aBadEscortRefusesTheSortieBeforeAnythingFlies() {
         World w = plane(plane(world(true), 1, 0, "bomber", FIELD, 200), 3, 0, "recon", FIELD, 200);

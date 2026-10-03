@@ -11,7 +11,7 @@ public sealed interface Command permits
         Command.Move, Command.Explore, Command.BuildRoad, Command.BuildRail, Command.RailShip, Command.Deliver,
         Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission, Command.Land, Command.Demobilize, Command.Enlist, Command.Attack, Command.Anti, Command.BuildUnit, Command.March, Command.LoadUnit, Command.Board, Command.Sabotage, Command.Incite, Command.UnitFire, Command.Work, Command.BuildPlane, Command.Bomb, Command.Recon,
         Command.RailLane, Command.Telegram, Command.Announce, Command.DeclareWar, Command.OfferPeace,
-        Command.Sell, Command.Buy, Command.ResetLot, Command.SetPrice, Command.Trade {
+        Command.Sell, Command.Buy, Command.ResetLot, Command.SetPrice, Command.Trade, Command.AirMission {
 
     String verb();
 
@@ -116,6 +116,13 @@ public sealed interface Command permits
 
     /** Bid on a ship, plane or unit for sale (issue #141; KNOWN trad.c): a plane goes to {@code dest}, an airfield; a unit to a headquarters. */
     record Trade(long lot, double price, Coord dest) implements Command { public String verb() { return "trade"; } }
+
+    /**
+     * A fighter flies air defence (issue #71; KNOWN miss.c {@code mission PLANES a OP [radius]}): it rises against raids over
+     * any sector within {@code radius} of {@code op}, not only its own country's; a radius of 0 is as far as it can.
+     * {@code off} takes it off the mission.
+     */
+    record AirMission(long plane, Coord op, double radius, boolean off) implements Command { public String verb() { return "air_defence"; } }
 
     /** A plane is laid down on an airfield of yours (issue #262). */
     record BuildPlane(Coord at, String cls) implements Command { public String verb() { return "build_plane"; } }

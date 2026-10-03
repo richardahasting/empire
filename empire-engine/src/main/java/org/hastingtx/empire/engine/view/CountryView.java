@@ -88,7 +88,9 @@ public record CountryView(
     public record PlaneView(long id, String cls, String name, Coord at, Coord relative, double efficiency, double tech,
                             double load, double accuracy, double reach, String note, boolean bomber, boolean tactical, boolean spy,
                             /** Rises against raids (and may escort); may only escort (issue #71). Attack and defence in a dogfight, at its tech. */
-                            boolean intercept, boolean escort, double attack, double defense) {}
+                            boolean intercept, boolean escort, double attack, double defense,
+                            /** Air defence (issue #71): the op point, relative, and the radius it guards; null and 0 when on no mission. */
+                            Coord opRelative, int radius) {}
 
     /**
      * A land unit of yours (issue #247): where, how fit, what it carries, its own mobility, what it is worth in a fight
@@ -363,7 +365,8 @@ public record CountryView(
             if (cls == null) continue;
             out.add(new PlaneView(p.id(), p.cls(), cls.name(), p.at(), relative(w, c.capital(), p.at()), p.efficiency(), p.tech(),
                     cls.loadAt(p.tech()), cls.accuracyAt(p.tech()), cls.reachAt(p.tech()), relativise(w, c.capital(), p.note()),
-                    cls.has("bomber"), cls.has("tactical"), cls.has("spy"), cls.has("intercept"), cls.has("escort"), cls.attackAt(p.tech()), cls.defenseAt(p.tech())));
+                    cls.has("bomber"), cls.has("tactical"), cls.has("spy"), cls.has("intercept"), cls.has("escort"), cls.attackAt(p.tech()), cls.defenseAt(p.tech()),
+                    p.onAirDefence() ? relative(w, c.capital(), p.opPoint()) : null, p.onAirDefence() ? p.radius() : 0));
         }
         return out;
     }
