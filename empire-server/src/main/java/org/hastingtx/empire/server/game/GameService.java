@@ -1245,6 +1245,18 @@ public class GameService {
         return notes;
     }
 
+    /**
+     * Events of the given types that happened to whoever is asking over the last {@code updates} updates, oldest first,
+     * worded from their capital and marked with the update. A sector the partisans took is no longer yours, so its
+     * note never reached you (issue #268): the event does.
+     */
+    public List<String> recentEvents(long gameId, Account a, java.util.Collection<String> types, int updates) {
+        Game g = get(gameId);
+        int country = myCountry(gameId, a);
+        Coord cap = g.world.country(country).capital();
+        return logs.recentEvents(gameId, country, types, updates).stream().map(e -> "u" + e.updateNumber() + " " + relativise(g.world, cap, e.message())).toList();
+    }
+
     /** {@link #myNotes} from the last update, for whoever is asking; empty before the first update. */
     public Map<String, List<String>> lastNotes(long gameId, Account a, org.hastingtx.empire.server.persistence.Json json) {
         LogRepository.UpdateEntry e = logs.lastUpdate(gameId);

@@ -57,12 +57,20 @@ class CensusColumnsTest {
         CountryView v = CountryView.of(w, CFG, 0);
         var r = CountryView.relative(w, cap, at);
         String key = r.x() + "," + r.y();
-        String c = Console.census(v, CFG, java.util.Map.of(key, List.of("people ate 164 food", "shortage: 2500 civ, 4100 lcm")));
+        String c = Console.census(v, CFG, java.util.Map.of(key, List.of("people ate 164 food", "shortage: 2500 civ, 4100 lcm")), List.of());
         assertThat(c).contains("held back: " + key + " cit 0%: short of 2500 civ, 4100 lcm")
                 .contains("disloyal (loyalty 70, above ").contains("40% at work").contains("5 guerrillas");
         var q = CountryView.relative(w, cap, calm);
         assertThat(c).as("0% with no reason known is not listed").doesNotContain(q.x() + "," + q.y() + " cit 0%");
         assertThat(Console.census(V, CFG)).as("nothing held back, no line").doesNotContain("held back:");
+    }
+
+    /** Issue #268: sectors vanished between updates "without combat" — partisans took them, and nothing on the page said so. */
+    @Test
+    void censusSaysWhatTheLastUpdateTookAway() {
+        String c = Console.census(V, CFG, java.util.Map.of(), List.of("u3602 partisans take over 4,4", "u3643 revolt in 5,1"));
+        assertThat(c).contains("in the last " + Console.LOSS_WINDOW + " updates: u3602 partisans take over 4,4; u3643 revolt in 5,1 — guerrillas grow where there are no soldiers; enlist SECTOR -N puts a garrison in");
+        assertThat(Console.census(V, CFG)).doesNotContain("updates: u");
     }
 
     @Test
