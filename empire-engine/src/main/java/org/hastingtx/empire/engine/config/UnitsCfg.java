@@ -75,7 +75,9 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
                               double hardTargetBase, double hardTargetSpeedDivisor,
                               /** Satellites (issue #71; KNOWN launch_sat, sate.c, move_sat.c). */
                               double satPadFailBase, double offCourseScale, double reportRange, double reportRound, double reportRoundImage, double reportEffRoundDivisor, double unitSpotDivisor,
-                              double orbitStep, double orbitLaps, double orbitWaves, double orbitAmplitude) {
+                              double orbitStep, double orbitLaps, double orbitWaves, double orbitAmplitude,
+                              /** Ships' anti-missile defence (KNOWN shp_missile_defense). */
+                              int shipDefenseRange, double shipDefenseMinEfficiency, double shipDefenseShells, double shipDefenseTechScale, double shipDefenseFactor) {
         /** KNOWN tfact.c techfact(tech, 1). */
         public double techFactor(double tech) { return (techFactorBase + tech) / (techFactorScale + tech); }
     }
@@ -366,8 +368,11 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
             /** Planes she can carry and fly (KNOWN ship.config nplanes, nchoppers, nxlight; issue #71): light planes, helicopters, extra-light. */
             Integer planes, Integer choppers, Integer xlight,
             /** KNOWN M_MINE: lays sea mines from her shells; M_SWEEP: sweeps them as she goes (issue #71). */
-            Boolean laysMines, Boolean sweeps) {
+            Boolean laysMines, Boolean sweeps,
+            /** KNOWN M_ANTIMISSILE: the guns her anti-missile system brings against a missile (issue #71); null or 0 = none. */
+            Integer antiMissile) {
         public boolean laysMinesOr0() { return laysMines != null && laysMines; }
+        public int antiMissileOr0() { return antiMissile == null ? 0 : antiMissile; }
         public boolean sweepsOr0() { return sweeps != null && sweeps; }
         public int landUnitsOr0() { return landUnits == null ? 0 : landUnits; }
         public int planesOr0() { return planes == null ? 0 : planes; }

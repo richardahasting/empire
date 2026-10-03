@@ -97,9 +97,34 @@ class MissileTest {
         for (int u = 0; u < 20; u++) {
             CommandResult r = EX.execute(w.withUpdateNumber(u), 0, new Command.Launch(1, null, 9));
             assertThat(r.error()).as(r.error()).isNull();
-            if (r.info().contains("hit ship #9")) { hits++; assertThat(r.world().ship(9) == null || r.world().ship(9).efficiency() < 100).isTrue(); }
+            if (r.info().contains("it hit her")) { hits++; assertThat(r.world().ship(9) == null || r.world().ship(9).efficiency() < 100).isTrue(); }
         }
         assertThat(hits).isGreaterThan(0);
+    }
+
+    @Test
+    void anAegisCruiserBesideHerFiresAtTheMissile() {
+        // KNOWN shp_missile_defense: an anti-missile ship within a hex fires two shells at it, and may destroy it
+        var dc = CFG.units().ships().shipClass("destroyer");
+        var ac = CFG.units().ships().shipClass("aegis_cruiser");
+        assertThat(ac.antiMissileOr0()).isEqualTo(16);
+        Coord sea = Hex.stepRaw(FIELD, 1, 1), beside = Hex.stepRaw(sea, 0, 1);
+        World w = plane(world(true), 1, 0, "harpoon", FIELD)
+                .withShip(new Ship(9, 1, "destroyer", "", sea, 100, Stocks.zero(COM.size()), null, null, 0, "", 100, null, null, dc.tankOr0(), dc.crewOr0()))
+                .withShip(new Ship(10, 1, "aegis_cruiser", "", beside, 100, Stocks.of(COM.fromMap(Map.of("shell", 100.0))), null, null, 0, "", 400, null, null, ac.tankOr0(), ac.crewOr0()));
+        int downed = 0;
+        for (int u = 0; u < 20; u++) {
+            CommandResult r = EX.execute(w.withUpdateNumber(u), 0, new Command.Launch(1, sea, 0));
+            assertThat(r.error()).as(r.error()).isNull();
+            if (r.info().contains("blew up on launch")) continue;
+            assertThat(r.info()).contains("Them's anti-missile fire").doesNotContain("#10");
+            assertThat(r.world().ship(10).stock().get(SHELL)).as("two shells a missile").isEqualTo(98);
+            if (r.info().contains("destroyed it")) { downed++; assertThat(r.world().ship(9).efficiency()).isEqualTo(100); }
+        }
+        assertThat(downed).isGreaterThan(0);
+        // without shells she cannot
+        World dry = w.withShip(w.ship(10).withStock(Stocks.zero(COM.size())));
+        for (int u = 0; u < 5; u++) assertThat(EX.execute(dry.withUpdateNumber(u), 0, new Command.Launch(1, sea, 0)).info()).doesNotContain("anti-missile");
     }
 
     @Test

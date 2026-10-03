@@ -189,7 +189,9 @@ a carrier. Build them on an airfield like any plane.
   country at war with you), or **`launch HARPOON ship N`** at one you can see by number; a ship
   out of sight, a submarine and a number that is no ship all get the same answer. It may miss — a fast,
   small ship is harder to hit — and a hit does its damage to her hull, divided by her armour;
-  it can sink her.
+  it can sink her. An **aa cruiser** or **aegis cruiser** of theirs within a hex of her fires two shells
+  from her hold at it first, each with a chance by her anti-missile guns, condition and tech
+  (an aegis cruiser at tech 400 brings down about four in ten Harpoons).
 - **SAMs** rise like fighters (over their own land, or anywhere in their air-defence area), but
   only against raid planes that **cost $1,000 or more**, one SAM a plane, before the fighters.
   They fight as a dogfight would and are spent every time. **ABMs** and SAMs are never launched.
@@ -221,4 +223,4 @@ airfield like any plane; one goes up **once** and stays up.
 
 ## What is not here yet
 
-Ships' anti-missile guns; nuclear warheads.
+Nuclear warheads.
