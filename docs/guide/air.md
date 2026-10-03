@@ -100,7 +100,36 @@ over your own land but over **any** sector in that area — a neighbour's, the s
 the raider's own — when a raid flies over it. `mission PLANE off` takes it off; it still
 rises over your own land, as every fighter does.
 
+## Transports: fly, drop and paradrop
+
+The original's transports (`plane.config` `tr` and `jt`):
+
+| class | tech | load | range | petrol | |
+|---|---|---|---|---|---|
+| transport | 85 | 7 | 15 | 3 | cargo, paratroops |
+| jet transport | 160 | 16 | 35 | 4 | cargo, paratroops |
+
+Several planes may fly a sortie together if they are on the **same field**: name them with
+commas, `fly 4,5,6 …`. Each takes its petrol off the field. A plane's **load** is in pounds:
+it carries `load ÷ the commodity's weight` of it — guns weigh 10, gold bars 50, most things 1.
+
+- **`fly PLANES x,y [COMMODITY] [escort E,E]`** flies **one way** to an airfield of yours at
+  60% or better, and they stay there. Any plane can fly — that is how you move an air force
+  — but only a transport carries anything, and on a flight to land it carries **twice** its
+  load. Escorts fly along and land with them.
+- **`drop PLANES x,y COMMODITY [escort E,E]`** drops a transport's load on a sector of yours —
+  a cut-off garrison, a starving city — and flies home. Nothing lands.
+- **`paradrop PLANES x,y [escort E,E]`** carries the field's **soldiers**, one per pound of
+  load, onto a sector **not yours** and flies home. At war with its owner, or onto land
+  nobody holds. Not onto mountains or the sea, a capital, a fortress or a wasteland. The
+  paratroops fight like any attack, but alone: nothing supports them, while the defender's
+  guns fire as usual. Survivors take the sector; a lost drop leaves nobody.
+- **Civilians** fly only from land whose own people they are, and only into such land of yours.
+- On the way, enemy fighters rise against them as against any raid, and the flak over a drop
+  zone fires at each transport. **What a plane that is shot down or turns back carried is
+  lost** — it left the field when the plane took off.
+
 ## What is not here yet
 
-Stealth and missile interceptors, transports and paradrops, carriers as floating airfields, mines from the
+Stealth and missile interceptors, carriers as floating airfields, mines from the
 air, and then missiles and satellites.

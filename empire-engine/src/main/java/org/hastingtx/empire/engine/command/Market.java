@@ -245,6 +245,9 @@ final class Market {
             case Command.Bomb x -> { planes.add(new long[] {x.plane()}); for (long e : x.escorts()) planes.add(new long[] {e}); }
             case Command.Recon x -> { planes.add(new long[] {x.plane()}); for (long e : x.escorts()) planes.add(new long[] {e}); }
             case Command.AirMission x -> planes.add(new long[] {x.plane()});
+            case Command.Fly x -> { for (long p : x.planes()) planes.add(new long[] {p}); for (long e : x.escorts()) planes.add(new long[] {e}); }
+            case Command.Drop x -> { for (long p : x.planes()) planes.add(new long[] {p}); for (long e : x.escorts()) planes.add(new long[] {e}); }
+            case Command.Paradrop x -> { for (long p : x.planes()) planes.add(new long[] {p}); for (long e : x.escorts()) planes.add(new long[] {e}); }
             default -> { }
         }
         for (long[] s : ships) { TradeLot l = w.onTheBlock(TradeLot.SHIP, s[0]); if (l != null) return "ship #" + s[0] + " is for sale (lot T" + l.id() + "); set ship " + s[0] + " 0 takes it off"; }

@@ -170,6 +170,22 @@ public class Console {
                     List<Long> escorts = escorts(t, strategic ? 4 : 3, usage);
                     yield cmd(run, new Command.Bomb(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]), !strategic, escorts));
                 }
+                case "fly" -> {
+                    String usage = "fly PLANES x,y [COMMODITY] [escort E,E]   (one way to an airfield of yours; transports carry their load twice over)";
+                    need(t, 3, usage);
+                    boolean what = t.length > 3 && !t[3].equalsIgnoreCase("escort");
+                    yield cmd(run, new Command.Fly(ids(t[1]), abs(v, t[2]), what ? t[3] : null, escorts(t, what ? 4 : 3, usage)));
+                }
+                case "drop" -> {
+                    String usage = "drop PLANES x,y COMMODITY [escort E,E]   (transports drop on a sector of yours and fly home)";
+                    need(t, 4, usage);
+                    yield cmd(run, new Command.Drop(ids(t[1]), abs(v, t[2]), t[3], escorts(t, 4, usage)));
+                }
+                case "paradrop", "para" -> {
+                    String usage = "paradrop PLANES x,y [escort E,E]   (transports drop their field's soldiers on a sector not yours)";
+                    need(t, 3, usage);
+                    yield cmd(run, new Command.Paradrop(ids(t[1]), abs(v, t[2]), escorts(t, 3, usage)));
+                }
                 case "mission" -> {
                     String usage = "mission PLANE air x,y [RADIUS] | mission PLANE off   (air defence: a fighter rises over any sector within RADIUS of x,y)";
                     need(t, 3, usage);
@@ -283,6 +299,7 @@ public class Console {
     static final Set<String> PREVIEWABLE = Set.of("designate", "threshold", "demobilize", "enlist", "distribute", "move", "explore",
             "build_road", "build_rail", "rail_ship", "rail_lane", "build_ship", "build_unit", "build_plane", "load", "unload", "lload", "lunload",
             "lane", "fish", "mine", "supply", "scrap", "sell", "buy", "reset_lot", "set_price", "trade", "air_defence");
+    // fly, drop and paradrop are not here: the fighters that rise against them roll dice
 
     /**
      * What an order would do, run against the world as it stands and thrown away (issues #272, #273): the
@@ -396,6 +413,16 @@ public class Console {
     private static String lane(CountryView.LaneView l) { return l == null ? "none" : rel(l.fromRelative()) + " ⇄ " + rel(l.toRelative()) + (l.cargo().isEmpty() ? "" : " carrying " + String.join(", ", l.cargo())); }
     private static String centre(CountryView v, Coord c) { return c == null ? "none" : rel(rel(v, c)); }
     private static String delivery(CountryView.Delivery d) { return d == null ? "none" : d.dir() + " above " + fmtQ(d.threshold()); }
+
+    /** Plane numbers, by commas: {@code 3,5,#7}. */
+    static List<Long> ids(String s) {
+        List<Long> out = new ArrayList<>();
+        for (String id : s.split(",")) {
+            if (id.isBlank()) continue;
+            try { out.add(Long.parseLong(id.replace("#", "").trim())); } catch (NumberFormatException e) { throw new IllegalArgumentException("'" + id + "' is not a plane number"); }
+        }
+        return out;
+    }
 
     /** {@code escort E,E ...} from word {@code k} on (issue #71): plane numbers, by commas or spaces; nothing else may follow. */
     static List<Long> escorts(String[] t, int k, String usage) {
@@ -626,7 +653,7 @@ public class Console {
             sb.append(String.format("#%-4d %-16s %-8s %3.0f%% %5.0f %4.0f%% %6.0f %-9s  %s%n", p.id(), p.cls(), rel(p.relative()), p.efficiency(),
                     p.load(), p.accuracy(), Math.floor(p.reach()), p.intercept() ? "fighter" : p.escort() ? "escort" : "",
                     (p.opRelative() == null ? "" : "air defence within " + p.radius() + " of " + rel(p.opRelative()) + "; ") + (p.note() == null ? "" : p.note())));
-        return sb.append("strike: hexes there and back again. fighter: rises against raids at war, and escorts. bomb PLANE x,y [strategic] [escort E,E] · recon PLANE x,y [escort E,E] · mission PLANE air x,y [RADIUS]").toString();
+        return sb.append("strike: hexes there and back again. fighter: rises against raids at war, and escorts. bomb PLANE x,y [strategic] [escort E,E] · recon PLANE x,y [escort E,E] · mission PLANE air x,y [RADIUS] · fly / drop / paradrop PLANES x,y …").toString();
     }
 
     /**

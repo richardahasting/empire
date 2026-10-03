@@ -23,7 +23,9 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
     public record PlanesCfg(double startEfficiency, double minEfficiency, double abortBelow, double growScale,
                             double maintenancePerEtuPerCost, FlakCfg flak, BombingCfg bombing, List<PlaneClassCfg> classes,
                             /** Fighters, interception and escorts (issue #71). Null in rules that predate them: nobody intercepts. */
-                            AirCombatCfg airCombat) {
+                            AirCombatCfg airCombat,
+                            /** fly, drop and paradrop (issue #71). Null in rules that predate them: no air transport. */
+                            TransportCfg transport) {
         public PlaneClassCfg planeClass(String id) {
             for (PlaneClassCfg c : classes) if (c.id().equals(id)) return c;
             return null;
@@ -43,6 +45,10 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
     /** KNOWN aircombat.c ac_encounter / ac_dog and plnsub.c pln_sel: who rises, who may escort, and how a dogfight runs. */
     public record AirCombatCfg(double minEfficiency, double fieldMinEfficiency, int escortReach, int extraInterceptors,
                                int intensityDice, int intensityDie, int intensityAdd, double oddsFloor) {}
+
+    /** KNOWN commands/{fly,drop,para}.c, plnsub.c pln_equip and attsub.c. */
+    public record TransportCfg(double landingMinEfficiency, double flyLoadMultiple, double dropLoadMultiple, List<String> noParadropTerrain,
+                               List<String> noParadropDesignations, double paradropStrength) {}
 
     /** KNOWN plnsub.c pln_damage. */
     public record BombingCfg(int bombRoll, int blam, int blamChance, int hit, int miss, double effectiveMultiple, int strategicAimBase) {}

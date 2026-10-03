@@ -11,7 +11,8 @@ public sealed interface Command permits
         Command.Move, Command.Explore, Command.BuildRoad, Command.BuildRail, Command.RailShip, Command.Deliver,
         Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission, Command.Land, Command.Demobilize, Command.Enlist, Command.Attack, Command.Anti, Command.BuildUnit, Command.March, Command.LoadUnit, Command.Board, Command.Sabotage, Command.Incite, Command.UnitFire, Command.Work, Command.BuildPlane, Command.Bomb, Command.Recon,
         Command.RailLane, Command.Telegram, Command.Announce, Command.DeclareWar, Command.OfferPeace,
-        Command.Sell, Command.Buy, Command.ResetLot, Command.SetPrice, Command.Trade, Command.AirMission {
+        Command.Sell, Command.Buy, Command.ResetLot, Command.SetPrice, Command.Trade, Command.AirMission,
+        Command.Fly, Command.Drop, Command.Paradrop {
 
     String verb();
 
@@ -123,6 +124,27 @@ public sealed interface Command permits
      * {@code off} takes it off the mission.
      */
     record AirMission(long plane, Coord op, double radius, boolean off) implements Command { public String verb() { return "air_defence"; } }
+
+    /**
+     * Planes fly one way to an airfield of yours and stay there, transports carrying {@code commodity} (null: none) — issue
+     * #71; KNOWN fly.c. All of them from one field; escorts go along and land with them.
+     */
+    record Fly(java.util.List<Long> planes, Coord to, String commodity, java.util.List<Long> escorts) implements Command {
+        public Fly { planes = planes == null ? java.util.List.of() : java.util.List.copyOf(planes); escorts = escorts == null ? java.util.List.of() : java.util.List.copyOf(escorts); }
+        public String verb() { return "fly"; }
+    }
+
+    /** Transports drop {@code commodity} on a sector of yours and fly home (issue #71; KNOWN drop.c). */
+    record Drop(java.util.List<Long> planes, Coord at, String commodity, java.util.List<Long> escorts) implements Command {
+        public Drop { planes = planes == null ? java.util.List.of() : java.util.List.copyOf(planes); escorts = escorts == null ? java.util.List.of() : java.util.List.copyOf(escorts); }
+        public String verb() { return "drop"; }
+    }
+
+    /** Transports drop paratroops on a sector not yours, and fly home (issue #71; KNOWN para.c). */
+    record Paradrop(java.util.List<Long> planes, Coord at, java.util.List<Long> escorts) implements Command {
+        public Paradrop { planes = planes == null ? java.util.List.of() : java.util.List.copyOf(planes); escorts = escorts == null ? java.util.List.of() : java.util.List.copyOf(escorts); }
+        public String verb() { return "paradrop"; }
+    }
 
     /** A plane is laid down on an airfield of yours (issue #262). */
     record BuildPlane(Coord at, String cls) implements Command { public String verb() { return "build_plane"; } }

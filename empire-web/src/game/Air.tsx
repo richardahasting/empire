@@ -14,7 +14,7 @@ const rel = (c: { x: number; y: number }) => `${c.x},${c.y}`;
  * country at war with you rise against it on the way, and the escorts it takes fight them first (issue #71).
  */
 export function Air({ view, busy, onCommand }: { view: CountryView; busy: boolean; onCommand: (c: CommandRequest) => Promise<void> }) {
-  const [dialog, setDialog] = useState<{ kind: "bomb" | "recon" | "defend"; plane: PlaneView } | null>(null);
+  const [dialog, setDialog] = useState<{ kind: "bomb" | "recon" | "defend" | "fly" | "drop" | "paradrop"; plane: PlaneView } | null>(null);
   const planes = view.planes ?? [];
   if (planes.length === 0) return <p className="text-xs text-muted-foreground">No planes. Designate an airfield, then right-click it and choose “Build plane…”.</p>;
   return (
@@ -36,12 +36,16 @@ export function Air({ view, busy, onCommand }: { view: CountryView; busy: boolea
             {p.load > 0 && <Button size="sm" variant="secondary" disabled={busy} onClick={() => setDialog({ kind: "bomb", plane: p })}>Bomb…</Button>}
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "recon", plane: p })}>Reconnoitre…</Button>
             {p.intercept && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "defend", plane: p })}>Air defence…</Button>}
+            <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "fly", plane: p })}>Fly to…</Button>
+            {p.cargo && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "drop", plane: p })}>Drop supplies…</Button>}
+            {p.para && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "paradrop", plane: p })}>Paradrop…</Button>}
             {p.opRelative && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: "air_defence", plane: p.id, clear: true })}>Off air defence</Button>}
           </div>
         </div>
       ))}
       {dialog?.kind === "defend" && <DefendDialog plane={dialog.plane} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
-      {dialog && dialog.kind !== "defend" && <SortieDialog kind={dialog.kind} plane={dialog.plane} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
+      {dialog && (dialog.kind === "fly" || dialog.kind === "drop" || dialog.kind === "paradrop") && <TransportDialog kind={dialog.kind} plane={dialog.plane} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
+      {dialog && (dialog.kind === "bomb" || dialog.kind === "recon") && <SortieDialog kind={dialog.kind} plane={dialog.plane} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
     </div>
   );
 }
@@ -155,6 +159,67 @@ function DefendDialog({ plane, view, busy, onClose, onCommand }: { plane: PlaneV
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button disabled={busy || !ok} onClick={async () => { if (!at) return; await onCommand({ verb: "air_defence", plane: plane.id, x: at.at.x, y: at.at.y, amount: r }); onClose(); }}>Guard it</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Air transport (issue #71; the original's fly, drop and paradrop). Fly: one way to an airfield of yours, transports carrying
+ * their load twice over. Drop: supplies on a sector of yours, and home. Paradrop: the field's soldiers on a sector not yours.
+ * Other transports on the same field may go too; at war, enemy fighters rise on the way.
+ */
+function TransportDialog({ kind, plane, view, busy, onClose, onCommand }:
+  { kind: "fly" | "drop" | "paradrop"; plane: PlaneView; view: CountryView; busy: boolean; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void> }) {
+  const field = view.sectors.find(s => s.at.x === plane.at.x && s.at.y === plane.at.y);
+  const mates = (view.planes ?? []).filter(p => p.id !== plane.id && p.at.x === plane.at.x && p.at.y === plane.at.y && (kind === "fly" || (kind === "drop" ? p.cargo : p.para)));
+  const [with_, setWith] = useState<number[]>([]);
+  const [to, setTo] = useState("");
+  const [what, setWhat] = useState("");
+  const goods = field ? Object.entries(field.stock).filter(([, q]) => q >= 1).map(([c]) => c) : [];
+  const [tx, ty] = to.split(",").map(s => Number(s.trim()));
+  const target = Number.isFinite(tx) && Number.isFinite(ty) ? view.sectors.find(s => s.relative.x === tx && s.relative.y === ty) : undefined;
+  const mine = !!target && target.owner === view.countryId;
+  const ok = !!target && (kind === "paradrop" ? !mine && target.terrain !== "ocean" : mine) && (kind !== "drop" || !!what);
+  const title = kind === "fly" ? "Fly" : kind === "drop" ? "Drop supplies" : "Paradrop";
+  return (
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>{title} from {rel(plane.relative)}</DialogTitle>
+          <DialogDescription>
+            {kind === "fly" ? "One way, to an airfield of yours; they stay there. Transports carry twice their load." : kind === "drop" ? "Onto land of yours; the planes fly home." : "The field's soldiers, onto a sector not yours (not mountains, a capital, a fortress or a wasteland); they fight for it."}
+            {" "}At war, enemy fighters rise on the way, and what a plane that is shot down or turns back carried is lost.
+          </DialogDescription></DialogHeader>
+        <div className="grid gap-3 text-sm">
+          <label className="grid gap-1">{kind === "fly" ? "To airfield (x,y)" : "At (x,y)"}<Input value={to} onChange={e => setTo(e.target.value)} autoFocus /></label>
+          {kind !== "paradrop" && (
+            <label className="grid gap-1">{kind === "fly" ? "Carry (optional)" : "Drop"}
+              <Select value={what} onChange={e => setWhat(e.target.value)}>
+                <option value="">{kind === "fly" ? "nothing" : "—"}</option>
+                {goods.map(c => <option key={c} value={c}>{c} ({Math.floor(field?.stock[c] ?? 0)} on the field)</option>)}
+              </Select>
+            </label>
+          )}
+          {mates.length > 0 && (
+            <fieldset className="grid gap-1">
+              <legend className="mb-1">With them</legend>
+              {mates.map(m => (
+                <label key={m.id} className="flex items-center gap-2 text-xs">
+                  <Checkbox checked={with_.includes(m.id)} onChange={() => setWith(w => w.includes(m.id) ? w.filter(x => x !== m.id) : [...w, m.id])} />
+                  #{m.id} {m.name} · {m.efficiency.toFixed(0)}%
+                </label>
+              ))}
+            </fieldset>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button disabled={busy || !ok} onClick={async () => {
+            if (!target) return;
+            await onCommand({ verb: kind, planes: [plane.id, ...with_], x: target.at.x, y: target.at.y, commodity: what || undefined });
+            onClose();
+          }}>{title}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
