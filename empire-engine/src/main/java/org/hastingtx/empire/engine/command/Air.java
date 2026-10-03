@@ -82,8 +82,10 @@ final class Air {
         if (cls == null || !cls.has("intercept")) return CommandResult.fail(w, "only fighters fly air defence; " + article(cls == null ? p.cls() : cls.name()) + " does not");
         if (m.op() == null || !w.inBounds(m.op())) return CommandResult.fail(w, "air defence around where?");
         int oprange = (int) Math.floor(cls.reachAt(p.tech()));
-        int d = Hex.distance(w, p.at(), m.op());
-        if (d > oprange) return CommandResult.fail(w, m.op() + " is " + d + " hexes from its field at " + p.at() + "; it guards within " + oprange);
+        Base b = base(w, p);
+        if (b == null) return CommandResult.fail(w, "plane #" + p.id() + " has no ship to fly from");
+        int d = Hex.distance(w, b.at(), m.op());
+        if (d > oprange) return CommandResult.fail(w, m.op() + " is " + d + " hexes from " + b.name() + "; it guards within " + oprange);
         if (m.radius() < 0 || m.radius() != Math.rint(m.radius())) return CommandResult.fail(w, "the radius is a whole number of hexes");
         int radius = m.radius() == 0 ? oprange : (int) Math.min(oprange, m.radius());
         return new CommandResult(w.withPlane(p.withMission(Plane.AIR_DEFENCE, m.op(), radius)), null, 0,
@@ -91,10 +93,85 @@ final class Air {
                         + (m.radius() > oprange ? " (" + oprange + " is as far as it reaches)" : ""));
     }
 
+    // ------------------------------------------------------------------------------- bases: fields and carriers
+
+    /**
+     * Where a plane flies from and what it draws on (issue #71; KNOWN plnsub.c pln_airbase_ok, pln_equip): an airfield of
+     * its owner's, or the carrier it is aboard — her hold is its petrol, bombs and cargo, and she is where it takes off.
+     */
+    record Base(Sector field, Ship ship) {
+        Coord at() { return ship != null ? ship.at() : field.at(); }
+        Stocks stock() { return ship != null ? ship.stock() : field.stock(); }
+        String name() { return ship != null ? "ship #" + ship.id() : field.at().toString(); }
+        boolean same(Base o) { return ship != null ? o.ship != null && o.ship.id() == ship.id() : o.ship == null && o.field.at().equals(field.at()); }
+        /** The world with {@code q} of {@code ci} taken off this base, as it stands in {@code w}. */
+        World take(World w, int ci, double q) {
+            if (ship != null) { Ship sh = w.ship(ship.id()); return w.withShip(sh.withStock(sh.stock().plus(ci, -q))); }
+            Sector sec = w.sector(field.at());
+            return w.withSector(sec.withStock(sec.stock().plus(ci, -q)));
+        }
+        /** The same base as it stands in {@code w}. */
+        Base in(World w) { return ship != null ? new Base(null, w.ship(ship.id())) : new Base(w.sector(field.at()), null); }
+    }
+
+    static Base base(World w, Plane p) {
+        if (p.aboard()) { Ship sh = w.ship(p.ship()); return sh == null ? null : new Base(null, sh); }
+        return new Base(w.sector(p.at()), null);
+    }
+
+    /** Where a plane may sit on a carrier (KNOWN carrier_planes, inc_shp_nplane): a helicopter, an extra-light or a light plane. */
+    private static boolean carrierPlane(UnitsCfg.PlaneClassCfg cls) { return cls.has("light") || cls.has("helo") || cls.has("xlight"); }
+
+    /**
+     * Null when a plane may take off from its base (KNOWN pln_airbase_ok); otherwise why not. An airfield of its owner's at
+     * {@code field_min_efficiency}; or its owner's carrier at {@code carrier_min_efficiency}, of a class that works that
+     * kind of plane.
+     */
+    static String grounded(GameConfig cfg, World w, Plane p, int owner) {
+        UnitsCfg.PlanesCfg pc = cfg.units().planes();
+        double fieldMin = pc.airCombat() == null ? 0 : pc.airCombat().fieldMinEfficiency();
+        Base b = base(w, p);
+        if (b == null) return "plane #" + p.id() + " has no ship to fly from";
+        if (b.ship() != null) {
+            Ship sh = b.ship();
+            var sc = cfg.units().ships();
+            UnitsCfg.PlaneClassCfg cls = pc.planeClass(p.cls());
+            if (sh.owner() != owner) return "ship #" + sh.id() + " is not yours";
+            if (sc == null || !sc.shipClass(sh.cls()).carriesPlanes() || cls == null || !carrierPlane(cls)) return "plane #" + p.id() + " cannot fly from ship #" + sh.id();
+            double min = pc.carrierMinEfficiency() == null ? 0 : pc.carrierMinEfficiency();
+            if (sh.efficiency() < min) return "ship #" + sh.id() + " is at " + q(sh.efficiency()) + "%; a carrier works aircraft at " + q(min) + "% or better";
+            return null;
+        }
+        Sector f = b.field();
+        if (f.owner() != owner) return "plane #" + p.id() + " is on a field that is no longer yours";
+        if (!cfg.sectorType(f.designation()).hasFlag("builds_planes")) return "plane #" + p.id() + " is at " + f.at() + ", which is not an airfield";
+        if (f.efficiency() < fieldMin) return f.at() + " is at " + q(f.efficiency()) + "%; planes take off from an airfield at " + q(fieldMin) + "% or better";
+        return null;
+    }
+
+    /**
+     * Room aboard a carrier for {@code adding} more planes (KNOWN ship_can_carry): helicopters in their own slots and then the
+     * fixed-wing ones, extra-light in theirs, light planes in the fixed-wing slots.
+     */
+    static boolean roomAboard(GameConfig cfg, World w, Ship sh, List<Plane> adding) {
+        UnitsCfg.PlanesCfg pc = cfg.units().planes();
+        var sclass = cfg.units().ships().shipClass(sh.cls());
+        int helo = 0, xl = 0, light = 0;
+        List<Plane> all = new ArrayList<>(adding);
+        for (Plane p : w.planes()) if (p.ship() == sh.id() && adding.stream().noneMatch(a -> a.id() == p.id())) all.add(p);
+        for (Plane p : all) {
+            UnitsCfg.PlaneClassCfg cls = pc.planeClass(p.cls());
+            if (cls == null || !carrierPlane(cls)) return false;
+            if (cls.has("helo")) helo++; else if (cls.has("xlight")) xl++; else light++;
+        }
+        if (xl > sclass.xlightOr0()) return false;
+        return light + Math.max(0, helo - sclass.choppersOr0()) <= sclass.planesOr0();
+    }
+
     // ---------------------------------------------------------------------------------- air transport (#71)
 
     /** The planes of a transport sortie, ready: all from one field, fit, able to fly the leg, the petrol taken. */
-    private record Lift(String fail, World world, List<Plane> planes, Sector field) {}
+    private record Lift(String fail, World world, List<Plane> planes, Base base) {}
 
     /**
      * KNOWN plnsub.c pln_sel and pln_equip: every plane yours, at {@code min_efficiency} or better, on the same field of
@@ -110,7 +187,7 @@ final class Air {
         int pet = com.index("pet");
         List<Plane> out = new ArrayList<>();
         Set<Long> seen = new HashSet<>();
-        Coord base = null;
+        Base base = null;
         double fuel = 0;
         for (long id : ids) {
             Plane p = w.plane(id);
@@ -120,19 +197,20 @@ final class Air {
             if (cls == null) return new Lift("plane #" + id + " has no class in these rules", w, List.of(), null);
             for (String f : flags) if (!cls.has(f)) return new Lift(article(cls.name()) + " cannot " + verb + "; " + (f.equals("para") ? "it takes a transport that drops paratroops" : "it takes a cargo plane"), w, List.of(), null);
             if (p.efficiency() < minEff) return new Lift("plane #" + id + " is at " + q(p.efficiency()) + "%; it flies at " + q(minEff) + "% or better", w, List.of(), null);
-            if (base == null) base = p.at();
-            else if (!base.equals(p.at())) return new Lift("plane #" + id + " is at " + p.at() + ", not " + base + "; a sortie flies from one field", w, List.of(), null);
-            int leg = Hex.distance(w, p.at(), to);
+            String grounded = grounded(cfg, w, p, c.id());
+            if (grounded != null) return new Lift(grounded, w, List.of(), null);
+            Base b = base(w, p);
+            if (base == null) base = b;
+            else if (!base.same(b)) return new Lift("plane #" + id + " is at " + b.name() + ", not " + base.name() + "; a sortie flies from one field or one carrier", w, List.of(), null);
+            int leg = Hex.distance(w, b.at(), to);
             if (leg * mult > cls.rangeAt(p.tech())) return new Lift(to + " is " + leg + " hexes off; plane #" + id + " flies " + q(Math.floor(cls.rangeAt(p.tech())))
                     + (mult == 1 ? " one way" : " there and back"), w, List.of(), null);
             fuel += cls.fuel();
             out.add(p);
         }
-        Sector field = w.sector(base);
-        if (field.owner() != c.id()) return new Lift(base + " is no longer yours", w, List.of(), null);
-        if (field.stock().get(pet) < fuel) return new Lift(base + " has " + q(field.stock().get(pet)) + " petrol; the sortie takes " + q(fuel), w, List.of(), null);
-        w = w.withSector(field.withStock(field.stock().plus(pet, -fuel)));
-        return new Lift(null, w, out, w.sector(base));
+        if (base.stock().get(pet) < fuel) return new Lift(base.name() + " has " + q(base.stock().get(pet)) + " petrol; the sortie takes " + q(fuel), w, List.of(), null);
+        w = base.take(w, pet, fuel);
+        return new Lift(null, w, out, base.in(w));
     }
 
     /** What each plane carries (KNOWN pln_equip: load × the mission's multiple ÷ the commodity's weight), loaded in turn from {@code have}. */
@@ -151,9 +229,9 @@ final class Air {
     }
 
     /** KNOWN fly.c, pln_equip: civilians fly only from land whose own people they are, and only into land of yours that is. */
-    private static String civilianRule(Commodities com, int ci, Sector from, Sector to, int me) {
+    private static String civilianRule(Commodities com, int ci, Base from, Sector to, int me) {
         if (ci != com.civ) return null;
-        if (from.occupied()) return "the civilians at " + from.at() + " are a conquered people and will not board";
+        if (from.field() != null && from.field().occupied()) return "the civilians at " + from.name() + " are a conquered people and will not board";
         if (to.owner() != me || to.occupied()) return "civilians fly only into land of yours whose people they are";
         return null;
     }
@@ -169,24 +247,35 @@ final class Air {
         if (l.fail() != null) return CommandResult.fail(w, l.fail());
         var tc = pc.transport();
         Sector to = w.sector(f.to());
-        if (to.owner() != c.id() || !cfg.sectorType(to.designation()).hasFlag("builds_planes")) return CommandResult.fail(w, f.to() + " is not an airfield of yours to land on");
-        if (to.efficiency() < tc.landingMinEfficiency()) return CommandResult.fail(w, f.to() + " is at " + q(to.efficiency()) + "%; planes land at " + q(tc.landingMinEfficiency()) + "% or better");
-        if (f.to().equals(l.field().at())) return CommandResult.fail(w, "they are already at " + f.to());
+        // a carrier of yours there with the room takes them aboard (KNOWN pln_where_to_land offers carriers first); else an airfield
+        Ship carrier = null;
+        List<Plane> landing = new ArrayList<>(l.planes());
+        for (long e : f.escorts()) { Plane ep = w.plane(e); if (ep != null) landing.add(ep); }
+        for (Ship sh : w.shipsAt(f.to())) {
+            if (sh.owner() != c.id() || cfg.units().ships() == null || !cfg.units().ships().shipClass(sh.cls()).carriesPlanes()) continue;
+            if (sh.efficiency() < (pc.carrierMinEfficiency() == null ? 0 : pc.carrierMinEfficiency())) continue;
+            if (l.base().ship() != null && l.base().ship().id() == sh.id()) continue;
+            if (roomAboard(cfg, w, sh, landing)) { carrier = sh; break; }
+        }
+        if (carrier == null) {
+            if (to.owner() != c.id() || !cfg.sectorType(to.designation()).hasFlag("builds_planes")) return CommandResult.fail(w, f.to() + " is not an airfield of yours to land on, nor is there a carrier of yours there with the room");
+            if (to.efficiency() < tc.landingMinEfficiency()) return CommandResult.fail(w, f.to() + " is at " + q(to.efficiency()) + "%; planes land at " + q(tc.landingMinEfficiency()) + "% or better");
+            if (l.base().ship() == null && f.to().equals(l.base().at())) return CommandResult.fail(w, "they are already at " + f.to());
+        } else if (f.commodity() != null) return CommandResult.fail(w, "a carrier takes planes, not cargo: fly the " + f.commodity() + " to an airfield");
         World next = l.world();
         Map<Long, Double> load = Map.of();
         int ci = -1;
         if (f.commodity() != null) {
             if (!com.has(f.commodity())) return CommandResult.fail(w, "unknown commodity: " + f.commodity());
             ci = com.index(f.commodity());
-            String no = civilianRule(com, ci, l.field(), to, c.id());
+            String no = civilianRule(com, ci, l.base(), to, c.id());
             if (no != null) return CommandResult.fail(w, no);
             // no more than the field can take: what the update would cut away is lost (issue #103)
-            load = loads(cfg, com, l.planes(), ci, tc.flyLoadMultiple(), Math.floor(Math.min(l.field().stock().get(ci), room.roomFor(to, ci))));
+            load = loads(cfg, com, l.planes(), ci, tc.flyLoadMultiple(), Math.floor(Math.min(l.base().stock().get(ci), room.roomFor(to, ci))));
             double total = load.values().stream().mapToDouble(Double::doubleValue).sum();
-            if (total < 1) return CommandResult.fail(w, "nothing to carry: " + (l.field().stock().get(ci) < 1 ? l.field().at() + " has no " + f.commodity()
+            if (total < 1) return CommandResult.fail(w, "nothing to carry: " + (l.base().stock().get(ci) < 1 ? l.base().name() + " has no " + f.commodity()
                     : room.roomFor(to, ci) < 1 ? f.to() + " has no room for more " + f.commodity() : "none of them is a cargo plane"));
-            Sector fl = next.sector(l.field().at());
-            next = next.withSector(fl.withStock(fl.stock().plus(ci, -total)));
+            next = l.base().take(next, ci, total);
         }
         Escorts es = escorts(cfg, com, next, c, f.escorts(), l.planes(), f.to(), 1);
         if (es.fail() != null) return CommandResult.fail(w, es.fail());
@@ -196,14 +285,15 @@ final class Air {
         double delivered = 0;
         for (long id : raid.through()) {
             Plane p = next.plane(id);
-            next = next.withPlane(p.withAt(f.to()).withMission(null, null, 0).withNote("flew to " + f.to()));   // a mission was set from the old field
+            Plane landed = p.withShip(carrier != null ? carrier.id() : 0, f.to());
+            next = next.withPlane(landed.withMission(null, null, 0).withNote(carrier != null ? "landed on ship #" + carrier.id() : "flew to " + f.to()));   // a mission was set from the old base
             delivered += load.getOrDefault(id, 0.0);
         }
-        if (!raid.lost()) for (long id : raid.escortsThrough()) { Plane p = next.plane(id); if (p != null) next = next.withPlane(p.withAt(f.to()).withMission(null, null, 0)); }
+        if (!raid.lost()) for (long id : raid.escortsThrough()) { Plane p = next.plane(id); if (p != null) next = next.withPlane(p.withShip(carrier != null ? carrier.id() : 0, f.to()).withMission(null, null, 0)); }
         if (delivered > 0) { Sector d = next.sector(f.to()); next = next.withSector(d.withStock(d.stock().plus(ci, delivered))); }
         double carried = load.values().stream().mapToDouble(Double::doubleValue).sum();
         String what = carried > 0 ? "; " + q(delivered) + " of " + q(carried) + " " + f.commodity() + " arrived" : "";
-        return new CommandResult(next, null, 0, join(raid.story(), raid.through().size() + " of " + l.planes().size() + " landed at " + f.to() + what));
+        return new CommandResult(next, null, 0, join(raid.story(), raid.through().size() + " of " + l.planes().size() + " landed " + (carrier != null ? "on ship #" + carrier.id() + " at " : "at ") + f.to() + what));
     }
 
     /** KNOWN drop.c: transports drop their load (once over) on a sector of yours and fly home; nothing lands. */
@@ -215,14 +305,12 @@ final class Air {
         if (to.owner() != c.id() || !to.terrain().isLand()) return CommandResult.fail(w, "drop supplies on land of yours; " + d.at() + " is not");
         if (d.commodity() == null || !com.has(d.commodity())) return CommandResult.fail(w, "drop what?");
         int ci = com.index(d.commodity());
-        String no = civilianRule(com, ci, l.field(), to, c.id());
+        String no = civilianRule(com, ci, l.base(), to, c.id());
         if (no != null) return CommandResult.fail(w, no);
-        Map<Long, Double> load = loads(cfg, com, l.planes(), ci, pc.transport().dropLoadMultiple(), Math.floor(Math.min(l.field().stock().get(ci), room.roomFor(to, ci))));
+        Map<Long, Double> load = loads(cfg, com, l.planes(), ci, pc.transport().dropLoadMultiple(), Math.floor(Math.min(l.base().stock().get(ci), room.roomFor(to, ci))));
         double total = load.values().stream().mapToDouble(Double::doubleValue).sum();
-        if (total < 1) return CommandResult.fail(w, l.field().stock().get(ci) < 1 ? l.field().at() + " has no " + d.commodity() + " to drop" : d.at() + " has no room for more " + d.commodity());
-        World next = l.world();
-        Sector fl = next.sector(l.field().at());
-        next = next.withSector(fl.withStock(fl.stock().plus(ci, -total)));
+        if (total < 1) return CommandResult.fail(w, l.base().stock().get(ci) < 1 ? l.base().name() + " has no " + d.commodity() + " to drop" : d.at() + " has no room for more " + d.commodity());
+        World next = l.base().take(l.world(), ci, total);
         Escorts es = escorts(cfg, com, next, c, d.escorts(), l.planes(), d.at(), 2);
         if (es.fail() != null) return CommandResult.fail(w, es.fail());
         UnrestStep.R r = new UnrestStep.R(Rng.stream("drop:" + d.planes() + ">" + d.at() + ":" + w.updateNumber(), cfg.world() == null ? 0 : cfg.world().seed()));
@@ -249,12 +337,10 @@ final class Air {
         if (tc.noParadropTerrain().contains(target.terrain().name().toLowerCase(java.util.Locale.ROOT))) return CommandResult.fail(w, "paratroops cannot land on " + target.terrain().name().toLowerCase(java.util.Locale.ROOT));
         if (tc.noParadropDesignations().contains(target.designation())) return CommandResult.fail(w, "paratroops cannot take a " + target.designation());
         if (target.owned()) { String no = Assault.refused(cfg, w, c, target, "paradrop on"); if (no != null) return CommandResult.fail(w, no); }
-        Map<Long, Double> load = loads(cfg, com, l.planes(), com.mil, tc.dropLoadMultiple(), Math.floor(l.field().stock().get(com.mil)));
+        Map<Long, Double> load = loads(cfg, com, l.planes(), com.mil, tc.dropLoadMultiple(), Math.floor(l.base().stock().get(com.mil)));
         double total = load.values().stream().mapToDouble(Double::doubleValue).sum();
-        if (total < 1) return CommandResult.fail(w, l.field().at() + " has no soldiers to drop");
-        World next = l.world();
-        Sector fl = next.sector(l.field().at());
-        next = next.withSector(fl.withStock(fl.stock().plus(com.mil, -total)));
+        if (total < 1) return CommandResult.fail(w, l.base().name() + " has no soldiers to drop");
+        World next = l.base().take(l.world(), com.mil, total);
         Escorts es = escorts(cfg, com, next, c, pd.escorts(), l.planes(), pd.at(), 2);
         if (es.fail() != null) return CommandResult.fail(w, es.fail());
         UnrestStep.R r = new UnrestStep.R(Rng.stream("para:" + pd.planes() + ">" + pd.at() + ":" + w.updateNumber(), cfg.world() == null ? 0 : cfg.world().seed()));
@@ -278,7 +364,7 @@ final class Air {
     }
 
     /** What a sortie needs off the field, and what it costs when it flies. */
-    private record Sortie(CommandResult fail, Plane plane, UnitsCfg.PlaneClassCfg cls, Sector field, Sector target, double bombs) {}
+    private record Sortie(CommandResult fail, Plane plane, UnitsCfg.PlaneClassCfg cls, Base base, Sector target, double bombs) {}
 
     private static Sortie ready(GameConfig cfg, Commodities com, World w, Country c, long id, Coord at, boolean bombing) {
         UnitsCfg.PlanesCfg pc = cfg.units().planes();
@@ -289,20 +375,21 @@ final class Air {
         if (cls == null) return new Sortie(CommandResult.fail(w, "plane #" + id + " has no class in these rules"), null, null, null, null, 0);
         if (p.efficiency() < pc.minEfficiency()) return new Sortie(CommandResult.fail(w, "plane #" + id + " is wreckage at " + q(p.efficiency()) + "%"), null, null, null, null, 0);
         if (at == null || !w.inBounds(at)) return new Sortie(CommandResult.fail(w, "fly where?"), null, null, null, null, 0);
-        Sector field = w.sector(p.at());
-        if (field.owner() != c.id()) return new Sortie(CommandResult.fail(w, "plane #" + id + " is on a field that is no longer yours"), null, null, null, null, 0);
+        String grounded = grounded(cfg, w, p, c.id());
+        if (grounded != null) return new Sortie(CommandResult.fail(w, grounded), null, null, null, null, 0);
+        Base field = base(w, p);
         double reach = cls.reachAt(p.tech());
-        int dist = Hex.distance(w, p.at(), at);
+        int dist = Hex.distance(w, field.at(), at);
         if (dist > reach) return new Sortie(CommandResult.fail(w, at + " is " + dist + " hexes off; " + article(cls.name())
                 + " flies " + q(Math.floor(cls.rangeAt(p.tech()))) + " there and back, so it strikes at " + q(Math.floor(reach))), null, null, null, null, 0);
         int pet = com.index("pet");
-        if (field.stock().get(pet) < cls.fuel()) return new Sortie(CommandResult.fail(w, p.at() + " has "
+        if (field.stock().get(pet) < cls.fuel()) return new Sortie(CommandResult.fail(w, field.name() + " has "
                 + q(field.stock().get(pet)) + " petrol; the sortie takes " + q(cls.fuel())), null, null, null, null, 0);
         double bombs = 0;
         if (bombing) {
             if (cls.loadAt(p.tech()) < 1) return new Sortie(CommandResult.fail(w, article(cls.name()) + " carries no bombs"), null, null, null, null, 0);
             bombs = Math.min(cls.loadAt(p.tech()), Math.floor(field.stock().get(com.index("shell"))));
-            if (bombs < 1) return new Sortie(CommandResult.fail(w, p.at() + " has no shells to bomb with"), null, null, null, null, 0);
+            if (bombs < 1) return new Sortie(CommandResult.fail(w, field.name() + " has no shells to bomb with"), null, null, null, null, 0);
         }
         return new Sortie(null, p, cls, field, w.sector(at), bombs);
     }
@@ -328,8 +415,7 @@ final class Air {
         UnrestStep.R r = new UnrestStep.R(Rng.stream("bomb:" + p.id() + ">" + b.at() + ":" + w.updateNumber(), cfg.world() == null ? 0 : cfg.world().seed()));
 
         // off the field: petrol for the flight, shells for the bombs
-        Stocks fs = so.field().stock().plus(com.index("pet"), -cls.fuel()).plus(com.index("shell"), -so.bombs());
-        World next = w.withSector(so.field().withStock(fs));
+        World next = so.base().take(so.base().take(w, com.index("pet"), cls.fuel()), com.index("shell"), so.bombs());
 
         // the escorts take their petrol, and whoever is at war with you and under the flight path rises against it
         Escorts es = escorts(cfg, com, next, c, b.escorts(), p, b.at());
@@ -377,7 +463,7 @@ final class Air {
         Plane p = so.plane();
         UnitsCfg.PlaneClassCfg cls = so.cls();
         UnrestStep.R r = new UnrestStep.R(Rng.stream("recon:" + p.id() + ">" + rc.at() + ":" + w.updateNumber(), cfg.world() == null ? 0 : cfg.world().seed()));
-        World next = w.withSector(so.field().withStock(so.field().stock().plus(com.index("pet"), -cls.fuel())));
+        World next = so.base().take(w, com.index("pet"), cls.fuel());
         Escorts es = escorts(cfg, com, next, c, rc.escorts(), p, rc.at());
         if (es.fail() != null) return CommandResult.fail(w, es.fail());
         Raid raid = encounter(cfg, com, r, es.world(), c, p, es.planes(), rc.at());
@@ -462,7 +548,7 @@ final class Air {
         int pet = com.index("pet");
         List<Plane> out = new ArrayList<>();
         Set<Long> seen = new HashSet<>();
-        int leg = Hex.distance(w, lead.at(), target);
+        int leg = Hex.distance(w, base(w, lead).at(), target);
         for (long id : ids) {
             Plane e = w.plane(id);
             if (e == null || e.owner() != c.id()) return new Escorts("no plane #" + id + " of yours to fly escort", w, List.of());
@@ -470,13 +556,14 @@ final class Air {
             UnitsCfg.PlaneClassCfg cls = pc.planeClass(e.cls());
             if (cls == null || !(cls.has("intercept") || cls.has("escort"))) return new Escorts("plane #" + id + " cannot fly escort; fighters and escort planes can", w, List.of());
             if (e.efficiency() < ac.minEfficiency()) return new Escorts("plane #" + id + " is at " + q(e.efficiency()) + "%; an escort needs " + q(ac.minEfficiency()) + "%", w, List.of());
-            Sector field = w.sector(e.at());
-            if (field.owner() != c.id()) return new Escorts("plane #" + id + " is on a field that is no longer yours", w, List.of());
-            int toLead = Hex.distance(w, e.at(), lead.at());
-            if (toLead > ac.escortReach()) return new Escorts("plane #" + id + " is " + toLead + " hexes from " + lead.at() + "; escorts fly from within " + ac.escortReach(), w, List.of());
+            String grounded = grounded(cfg, w, e, c.id());
+            if (grounded != null) return new Escorts(grounded, w, List.of());
+            Base field = base(w, e), leadBase = base(w, lead);
+            int toLead = Hex.distance(w, field.at(), leadBase.at());
+            if (toLead > ac.escortReach()) return new Escorts("plane #" + id + " is " + toLead + " hexes from " + leadBase.name() + "; escorts fly from within " + ac.escortReach(), w, List.of());
             if ((toLead + leg) * mult > cls.rangeAt(e.tech())) return new Escorts("plane #" + id + " cannot fly to " + target + (mult == 2 ? " and back" : "") + ": it flies " + q(Math.floor(cls.rangeAt(e.tech()))) + (mult == 2 ? " there and back" : ""), w, List.of());
-            if (field.stock().get(pet) < cls.fuel()) return new Escorts(e.at() + " has " + q(field.stock().get(pet)) + " petrol; plane #" + id + "'s sortie takes " + q(cls.fuel()), w, List.of());
-            w = w.withSector(field.withStock(field.stock().plus(pet, -cls.fuel())));
+            if (field.stock().get(pet) < cls.fuel()) return new Escorts(field.name() + " has " + q(field.stock().get(pet)) + " petrol; plane #" + id + "'s sortie takes " + q(cls.fuel()), w, List.of());
+            w = field.take(w, pet, cls.fuel());
             out.add(e);
         }
         return new Escorts(null, w, out);
@@ -515,7 +602,7 @@ final class Air {
         List<Long> esc = new ArrayList<>(escorts.stream().map(Plane::id).toList());
         Set<Long> launched = new HashSet<>(), gone = new HashSet<>();
         List<String> story = new ArrayList<>();
-        for (Coord at : flightPath(w, leads.get(0).at(), target)) {
+        for (Coord at : flightPath(w, base(w, leads.get(0)).at(), target)) {
             Sector s = w.sector(at);
             // KNOWN aircombat.c:195-201: every country at war with the raider gets its chance over every sector — over its own
             // land any fighter of its may rise, elsewhere only those flying air defence over that sector (only_mission)
@@ -534,11 +621,11 @@ final class Air {
                     UnitsCfg.PlaneClassCfg fc = pc.planeClass(f.cls());
                     if (fc == null || !fc.has("intercept") || f.efficiency() < ac.minEfficiency()) continue;
                     if (!home && !(f.onAirDefence() && Hex.distance(w, at, f.opPoint()) <= f.radius())) continue;
-                    Sector field = w.sector(f.at());
-                    if (field.owner() != them || !cfg.sectorType(field.designation()).hasFlag("builds_planes") || field.efficiency() < ac.fieldMinEfficiency()) continue;
-                    if (fc.rangeAt(f.tech()) < 2 * Hex.distance(w, f.at(), at)) continue;
+                    if (grounded(cfg, w, f, them) != null) continue;   // KNOWN pln_airbase_ok: a field of theirs, or a carrier
+                    Base field = base(w, f);
+                    if (fc.rangeAt(f.tech()) < 2 * Hex.distance(w, field.at(), at)) continue;
                     if (field.stock().get(pet) < fc.fuel()) continue;
-                    w = w.withSector(field.withStock(field.stock().plus(pet, -fc.fuel())));
+                    w = field.take(w, pet, fc.fuel());
                     launched.add(f.id());
                     now.put(f.id(), f);
                     up.add(f);

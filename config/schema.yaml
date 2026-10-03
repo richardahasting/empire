@@ -1095,6 +1095,7 @@ units:
       intensity_die: 20
       intensity_add: 1
       odds_floor: 0.05                # KNOWN ac_dog: the attacker always has a 5% chance a round
+    carrier_min_efficiency: 50        # KNOWN include/ship.h SHP_AIROPS_EFF: a carrier under 50% works no aircraft
     # Air transport (issue #71): fly, drop, paradrop — KNOWN commands/{fly,drop,para}.c, plnsub.c pln_equip.
     transport:
       landing_min_efficiency: 60      # KNOWN pln_where_to_land: an airfield under 60% takes only VTOL (none here yet)
@@ -1112,9 +1113,11 @@ units:
       # Fighters and escorts (issue #71, slice 3b): KNOWN plane.config rows f1, f2, jf1, jf2, es, jes (lcm/hcm/tech/cost,
       # acc/load/att/def/range/fuel). "intercept" rises against raids and may escort; "escort" may only escort.
       - { id: fighter_1,        name: biplane fighter,  glyph: f, tech_required: 50,  build: { lcm: 8,  hcm: 2, cash: 400 },  bwork: 32, accuracy: 90, load: 1, attack: 1.0,  defense: 1.0,  range: 4,  fuel: 1, flags: [tactical, intercept] }
-      - { id: fighter_2,        name: fighter,          glyph: F, tech_required: 80,  build: { lcm: 8,  hcm: 2, cash: 400 },  bwork: 32, accuracy: 80, load: 1, attack: 4.0,  defense: 4.0,  range: 8,  fuel: 1, flags: [tactical, intercept] }
-      - { id: jet_fighter_1,    name: jet fighter,      glyph: J, tech_required: 125, build: { lcm: 12, hcm: 4, cash: 1000 }, bwork: 40, accuracy: 45, load: 1, attack: 14.0, defense: 14.0, range: 11, fuel: 3, flags: [tactical, intercept] }
-      - { id: jet_fighter_2,    name: VTOL jet fighter, glyph: H, tech_required: 195, build: { lcm: 12, hcm: 4, cash: 1400 }, bwork: 40, accuracy: 30, load: 1, attack: 17.0, defense: 17.0, range: 14, fuel: 3, flags: [tactical, intercept] }
+      - { id: fighter_2,        name: fighter,          glyph: F, tech_required: 80,  build: { lcm: 8,  hcm: 2, cash: 400 },  bwork: 32, accuracy: 80, load: 1, attack: 4.0,  defense: 4.0,  range: 8,  fuel: 1, flags: [tactical, intercept, light] }
+      - { id: jet_fighter_1,    name: jet fighter,      glyph: J, tech_required: 125, build: { lcm: 12, hcm: 4, cash: 1000 }, bwork: 40, accuracy: 45, load: 1, attack: 14.0, defense: 14.0, range: 11, fuel: 3, flags: [tactical, intercept, light] }
+      - { id: jet_fighter_2,    name: VTOL jet fighter, glyph: H, tech_required: 195, build: { lcm: 12, hcm: 4, cash: 1400 }, bwork: 40, accuracy: 30, load: 1, attack: 17.0, defense: 17.0, range: 14, fuel: 3, flags: [tactical, intercept, light] }
+      # A carrier's strike plane (KNOWN plane.config np): light, so it flies from a carrier, and a light bomber and cargo plane
+      - { id: naval_plane,      name: naval plane,      glyph: N, tech_required: 135, build: { lcm: 20, hcm: 10, cash: 1800 }, bwork: 60, accuracy: 70, load: 3, attack: 0.0, defense: 4.0, range: 28, fuel: 2, flags: [tactical, cargo, light] }
       - { id: escort,           name: escort fighter,   glyph: E, tech_required: 90,  build: { lcm: 9,  hcm: 3, cash: 700 },  bwork: 35, accuracy: 60, load: 1, attack: 5.0,  defense: 5.0,  range: 15, fuel: 2, flags: [tactical, escort] }
       # Transports (KNOWN plane.config tr, jt): cargo planes that also drop paratroops
       - { id: transport,        name: transport,        glyph: t, tech_required: 85,  build: { lcm: 14, hcm: 5, cash: 1000 }, bwork: 44, accuracy: 0,  load: 7,  attack: 0.0,  defense: 2.0,  range: 15, fuel: 3, flags: [cargo, para] }
@@ -1215,7 +1218,8 @@ units:
       - { id: frigate,                 name: frigate,                 glyph: g, role: warship, tech_required: 45, build: { lcm: 120, hcm: 200, gun: 15, shell: 80, oil: 80, cash: 7000 }, hold: 300,  speed: 5, sight: 3, tank: 300, fuel_per_hex: 10, crew: 70, guns: 15, range: 3, armor: 30, magazine: 90, asw: true }
       - { id: submarine,               name: submarine,               glyph: s, role: submarine, tech_required: 50, build: { lcm: 100, hcm: 250, gun: 5, shell: 60, oil: 100, cash: 9000 }, hold: 100, speed: 4, tank: 200, fuel_per_hex: 7, crew: 40, guns: 5, range: 2, armor: 0, magazine: 60, hit_per_gun: 6 }
       - { id: battleship,              name: battleship,              glyph: b, role: warship, tech_required: 60, build: { lcm: 200, hcm: 600, gun: 40, shell: 200, oil: 200, cash: 20000 }, hold: 500, speed: 4, tank: 500, fuel_per_hex: 18, crew: 150, guns: 40, range: 5, armor: 80, magazine: 240 }
-      - { id: carrier,                 name: aircraft carrier,        glyph: v, role: warship, tech_required: 70, build: { lcm: 300, hcm: 800, gun: 20, shell: 100, oil: 300, cash: 40000 }, hold: 800, speed: 4, sight: 4, tank: 800, fuel_per_hex: 25, crew: 200, guns: 20, range: 3, armor: 50, magazine: 120 }
+      - { id: carrier,                 name: aircraft carrier,        glyph: v, role: warship, tech_required: 70, build: { lcm: 300, hcm: 800, gun: 20, shell: 100, oil: 300, cash: 40000 }, hold: 800, speed: 4, sight: 4, tank: 800, fuel_per_hex: 25, crew: 200, guns: 20, range: 3, armor: 50, magazine: 120,
+          carries: [pet, shell, gun, food], planes: 20, choppers: 20, xlight: 4 }   # KNOWN ship.config cal: 20 planes, 20 helicopters, 4 extra-light; petrol and shells for them
     # COMBAT (issue #68). Richard 2026-09-11 and 2026-09-13: a declared war makes engagement automatic; anyone
     # may fire on anyone, but only by order, and it resolves now with the target answering; a ship that fired
     # on a country at peace is fair game to that country for a while; forts and harbours defend the coast;

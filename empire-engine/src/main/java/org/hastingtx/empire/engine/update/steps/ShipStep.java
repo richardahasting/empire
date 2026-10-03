@@ -316,6 +316,12 @@ public final class ShipStep implements Step {
             if (!u.aboard()) continue;
             for (Ship s : ctx.ships) if (s.id() == u.ship() && !s.at().equals(u.at())) { ctx.units.set(k, u.withAt(s.at())); break; }
         }
+        // and so does a plane on her deck (issue #71; KNOWN unit_update_cargo)
+        for (int k = 0; k < ctx.planes.size(); k++) {
+            var p = ctx.planes.get(k);
+            if (!p.aboard()) continue;
+            for (Ship s : ctx.ships) if (s.id() == p.ship() && !s.at().equals(p.at())) { ctx.planes.set(k, p.withShip(s.id(), s.at())); break; }
+        }
     }
 
     /**

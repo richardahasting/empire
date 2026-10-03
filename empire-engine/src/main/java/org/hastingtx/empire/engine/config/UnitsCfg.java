@@ -25,7 +25,9 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
                             /** Fighters, interception and escorts (issue #71). Null in rules that predate them: nobody intercepts. */
                             AirCombatCfg airCombat,
                             /** fly, drop and paradrop (issue #71). Null in rules that predate them: no air transport. */
-                            TransportCfg transport) {
+                            TransportCfg transport,
+                            /** KNOWN SHP_AIROPS_EFF: a carrier under this efficiency cannot work aircraft. Null: no carriers. */
+                            Double carrierMinEfficiency) {
         public PlaneClassCfg planeClass(String id) {
             for (PlaneClassCfg c : classes) if (c.id().equals(id)) return c;
             return null;
@@ -325,8 +327,15 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
             /** Most of a commodity she may carry, by id, within the hold (issue #193: an assault ship takes 100 mil and 20 civ). */
             Map<String, Double> limits,
             /** Land units she can carry (KNOWN ship.config nla; issue #252). Null on a class that predates them. */
-            Integer landUnits) {
+            Integer landUnits,
+            /** Planes she can carry and fly (KNOWN ship.config nplanes, nchoppers, nxlight; issue #71): light planes, helicopters, extra-light. */
+            Integer planes, Integer choppers, Integer xlight) {
         public int landUnitsOr0() { return landUnits == null ? 0 : landUnits; }
+        public int planesOr0() { return planes == null ? 0 : planes; }
+        public int choppersOr0() { return choppers == null ? 0 : choppers; }
+        public int xlightOr0() { return xlight == null ? 0 : xlight; }
+        /** A ship that works aircraft (KNOWN M_FLY, or plane slots of any kind). */
+        public boolean carriesPlanes() { return planesOr0() + choppersOr0() + xlightOr0() > 0; }
         /** How much of {@code commodity} she may have aboard in all: its limit, or the whole hold. */
         public double limitOf(String commodity) { Double l = limits == null ? null : limits.get(commodity); return l == null ? hold : Math.min(hold, l); }
         /** Puts people ashore on unowned coast (issue #193). */

@@ -652,7 +652,7 @@ public class Console {
         for (var p : v.planes())
             sb.append(String.format("#%-4d %-16s %-8s %3.0f%% %5.0f %4.0f%% %6.0f %-9s  %s%n", p.id(), p.cls(), rel(p.relative()), p.efficiency(),
                     p.load(), p.accuracy(), Math.floor(p.reach()), p.intercept() ? "fighter" : p.escort() ? "escort" : "",
-                    (p.opRelative() == null ? "" : "air defence within " + p.radius() + " of " + rel(p.opRelative()) + "; ") + (p.note() == null ? "" : p.note())));
+                    (p.aboard() != 0 ? "aboard ship #" + p.aboard() + "; " : "") + (p.opRelative() == null ? "" : "air defence within " + p.radius() + " of " + rel(p.opRelative()) + "; ") + (p.note() == null ? "" : p.note())));
         return sb.append("strike: hexes there and back again. fighter: rises against raids at war, and escorts. bomb PLANE x,y [strategic] [escort E,E] · recon PLANE x,y [escort E,E] · mission PLANE air x,y [RADIUS] · fly / drop / paradrop PLANES x,y …").toString();
     }
 

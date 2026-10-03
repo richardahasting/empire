@@ -92,7 +92,9 @@ public record CountryView(
                             /** Air defence (issue #71): the op point, relative, and the radius it guards; null and 0 when on no mission. */
                             Coord opRelative, int radius,
                             /** A transport (issue #71): carries cargo; drops paratroops. */
-                            boolean cargo, boolean para) {}
+                            boolean cargo, boolean para,
+                            /** The carrier it is aboard (issue #71), 0 when ashore; and whether it may sit on one. */
+                            long aboard, boolean light) {}
 
     /**
      * A land unit of yours (issue #247): where, how fit, what it carries, its own mobility, what it is worth in a fight
@@ -365,11 +367,13 @@ public record CountryView(
             if (p.owner() != c.id()) continue;
             var cls = air.planeClass(p.cls());
             if (cls == null) continue;
-            out.add(new PlaneView(p.id(), p.cls(), cls.name(), p.at(), relative(w, c.capital(), p.at()), p.efficiency(), p.tech(),
+            var ship = p.aboard() ? w.ship(p.ship()) : null;
+            Coord at = ship != null ? ship.at() : p.at();   // on a carrier it is where she is, even before the update catches up
+            out.add(new PlaneView(p.id(), p.cls(), cls.name(), at, relative(w, c.capital(), at), p.efficiency(), p.tech(),
                     cls.loadAt(p.tech()), cls.accuracyAt(p.tech()), cls.reachAt(p.tech()), relativise(w, c.capital(), p.note()),
                     cls.has("bomber"), cls.has("tactical"), cls.has("spy"), cls.has("intercept"), cls.has("escort"), cls.attackAt(p.tech()), cls.defenseAt(p.tech()),
                     p.onAirDefence() ? relative(w, c.capital(), p.opPoint()) : null, p.onAirDefence() ? p.radius() : 0,
-                    cls.has("cargo"), cls.has("para")));
+                    cls.has("cargo"), cls.has("para"), p.ship(), cls.has("light") || cls.has("helo") || cls.has("xlight")));
         }
         return out;
     }

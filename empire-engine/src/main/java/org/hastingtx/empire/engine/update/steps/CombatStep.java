@@ -123,6 +123,8 @@ public final class CombatStep implements Step {
                 ctx.units.remove(u);
                 note(ctx, s.id(), "unit #" + u.id() + " went down with her");
             }
+            // and the planes on her deck (issue #71; KNOWN pln_put1 on a sunk carrier)
+            for (var p : new java.util.ArrayList<>(ctx.planes)) if (p.ship() == s.id()) { ctx.planes.remove(p); note(ctx, s.id(), "plane #" + p.id() + " went down with her"); }
         }
     }
 

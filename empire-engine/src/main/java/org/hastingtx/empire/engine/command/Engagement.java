@@ -168,6 +168,9 @@ public final class Engagement {
         World next = w;
         for (Ship v : sal.victors()) next = next.withShip(v);
         next = next.withoutShip(s.id());
+        // whoever and whatever was aboard her goes down with her (issues #252, #71)
+        for (var u : w.units()) if (u.ship() == s.id()) next = next.withoutUnit(u.id());
+        for (var p : w.planes()) if (p.ship() == s.id()) next = next.withoutPlane(p.id());
         List<Contact> contacts = new ArrayList<>(next.contacts());
         contacts.removeIf(k -> k.shipId() == s.id());
         return next.withContacts(contacts);
