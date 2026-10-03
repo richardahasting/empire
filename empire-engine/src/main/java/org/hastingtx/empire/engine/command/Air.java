@@ -137,6 +137,8 @@ final class Air {
             var sc = cfg.units().ships();
             UnitsCfg.PlaneClassCfg cls = pc.planeClass(p.cls());
             if (sh.owner() != owner) return "ship #" + sh.id() + " is not yours";
+            // a ship for sale does nothing (issue #141): no aircraft fly from her, nor draw on her hold
+            if (w.onTheBlock(TradeLot.SHIP, sh.id()) != null) return "ship #" + sh.id() + " is for sale; no aircraft fly from her";
             if (sc == null || !sc.shipClass(sh.cls()).carriesPlanes() || cls == null || !carrierPlane(cls)) return "plane #" + p.id() + " cannot fly from ship #" + sh.id();
             double min = pc.carrierMinEfficiency() == null ? 0 : pc.carrierMinEfficiency();
             if (sh.efficiency() < min) return "ship #" + sh.id() + " is at " + q(sh.efficiency()) + "%; a carrier works aircraft at " + q(min) + "% or better";
@@ -255,6 +257,7 @@ final class Air {
             if (sh.owner() != c.id() || cfg.units().ships() == null || !cfg.units().ships().shipClass(sh.cls()).carriesPlanes()) continue;
             if (sh.efficiency() < (pc.carrierMinEfficiency() == null ? 0 : pc.carrierMinEfficiency())) continue;
             if (l.base().ship() != null && l.base().ship().id() == sh.id()) continue;
+            if (w.onTheBlock(TradeLot.SHIP, sh.id()) != null) continue;   // for sale: nothing lands on her (issue #141)
             if (roomAboard(cfg, w, sh, landing)) { carrier = sh; break; }
         }
         if (carrier == null) {

@@ -173,6 +173,23 @@ final class Assault {
                 }
             }
         }
+        // KNOWN (takeover.c takeover_plane): the loser's planes on the ground there lose 29 + roll(100) efficiency; below
+        // the minimum their crews blow them up, otherwise they are captured (issue #71). Planes on a ship stay with her.
+        var air = cfg.units().planes();
+        if (air != null && air.captureLossBase() != null && air.captureLossRoll() != null) {
+            var rng = new org.hastingtx.empire.engine.update.steps.UnrestStep.R(Rng.stream("takeover-plane:" + at + ":" + world[0].updateNumber(), cfg.world() == null ? 0 : cfg.world().seed()));
+            for (Plane p : new ArrayList<>(world[0].planes())) {
+                if (p.owner() != loser || p.aboard() || !p.at().equals(at)) continue;
+                double eff = p.efficiency() - (air.captureLossBase() + rng.roll(air.captureLossRoll()));
+                if (eff < air.minEfficiency()) {
+                    world[0] = world[0].withoutPlane(p.id());
+                    unitsTaken.append(unitsTaken.isEmpty() ? "" : "; ").append("their plane #").append(p.id()).append(" blown up by its crew");
+                } else {
+                    world[0] = world[0].withPlane(p.withOwner(attacker).withEfficiency(eff));
+                    unitsTaken.append(unitsTaken.isEmpty() ? "" : "; ").append("captured their plane #").append(p.id());
+                }
+            }
+        }
         String out = spoiled.toString();
         if (!partisans.isEmpty()) out = (out.isEmpty() ? "" : out + "; ") + partisans + " against you";
         if (!unitsTaken.isEmpty()) out = (out.isEmpty() ? "" : out + "; ") + unitsTaken;

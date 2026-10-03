@@ -117,6 +117,18 @@ class TransportTest {
         assertThat(lost.world().sector(THEIRS).owner()).isEqualTo(1);
     }
 
+    /** KNOWN takeover.c takeover_plane: the loser's planes on a taken sector lose 29 + roll(100); captured, or blown up by their crews. */
+    @Test
+    void theirPlanesOnATakenSectorAreCapturedOrBlownUp() {
+        World w = plane(plane(world(true, 0), 1, 0, "transport", FIELD), 2, 0, "transport", FIELD);
+        w = w.withPlane(new Plane(9, 1, "fighter_2", THEIRS, 100, 200, 0, ""));
+        CommandResult r = EX.execute(w, 0, new Command.Paradrop(List.of(1L, 2L), THEIRS, List.of()));
+        assertThat(r.world().sector(THEIRS).owner()).isZero();
+        Plane p = r.world().plane(9);
+        assertThat(p == null || (p.owner() == 0 && p.efficiency() <= 100 - 30)).as(r.info()).isTrue();
+        assertThat(r.info()).containsAnyOf("captured their plane #9", "their plane #9 blown up by its crew");
+    }
+
     @Test
     void whereParatroopsCannotGo() {
         World w = plane(world(false, 0), 1, 0, "transport", FIELD);

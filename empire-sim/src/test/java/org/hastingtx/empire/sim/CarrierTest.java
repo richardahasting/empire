@@ -78,6 +78,16 @@ class CarrierTest {
     }
 
     @Test
+    void nothingFliesFromOrOntoACarrierForSale() {
+        World aboard = ok(plane(world(100), 1, "fighter_2", FIELD), new Command.Fly(List.of(1L), SEA, null, List.of()));
+        World listed = ok(aboard, new Command.SetPrice("ship", List.of(1L), 50000));
+        assertThat(EX.execute(listed, 0, new Command.Recon(1, CAP)).error()).contains("is for sale; no aircraft fly from her");
+        assertThat(EX.execute(listed, 0, new Command.Fly(List.of(1L), FIELD, null, List.of())).error()).contains("is for sale");
+        World empty = ok(world(100), new Command.SetPrice("ship", List.of(1L), 50000));
+        assertThat(EX.execute(plane(empty, 2, "fighter_2", FIELD), 0, new Command.Fly(List.of(2L), SEA, null, List.of())).error()).contains("nor is there a carrier");
+    }
+
+    @Test
     void flyingAshoreLeavesHer() {
         World w = ok(plane(world(100), 1, "fighter_2", FIELD), new Command.Fly(List.of(1L), SEA, null, List.of()));
         World back = ok(w, new Command.Fly(List.of(1L), FIELD, null, List.of()));

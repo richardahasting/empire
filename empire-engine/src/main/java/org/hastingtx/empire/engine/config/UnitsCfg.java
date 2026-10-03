@@ -27,7 +27,9 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
                             /** fly, drop and paradrop (issue #71). Null in rules that predate them: no air transport. */
                             TransportCfg transport,
                             /** KNOWN SHP_AIROPS_EFF: a carrier under this efficiency cannot work aircraft. Null: no carriers. */
-                            Double carrierMinEfficiency) {
+                            Double carrierMinEfficiency,
+                            /** KNOWN takeover.c takeover_plane: what a plane on a taken sector loses. Null: planes are not taken. */
+                            Integer captureLossBase, Integer captureLossRoll) {
         public PlaneClassCfg planeClass(String id) {
             for (PlaneClassCfg c : classes) if (c.id().equals(id)) return c;
             return null;

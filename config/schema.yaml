@@ -1096,6 +1096,8 @@ units:
       intensity_add: 1
       odds_floor: 0.05                # KNOWN ac_dog: the attacker always has a 5% chance a round
     carrier_min_efficiency: 50        # KNOWN include/ship.h SHP_AIROPS_EFF: a carrier under 50% works no aircraft
+    capture_loss_base: 29             # KNOWN takeover.c takeover_plane: a plane on a sector taken loses 29 + roll(100);
+    capture_loss_roll: 100            #   below the minimum its crew blows it up, otherwise it is captured
     # Air transport (issue #71): fly, drop, paradrop — KNOWN commands/{fly,drop,para}.c, plnsub.c pln_equip.
     transport:
       landing_min_efficiency: 60      # KNOWN pln_where_to_land: an airfield under 60% takes only VTOL (none here yet)
