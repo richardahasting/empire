@@ -32,7 +32,7 @@ public final class ApplyStep {
             // nothing to add, nothing to truncate, and no reason to build a new object for it. Owned
             // sectors always take the full path even when untouched, because a designation command
             // between updates can change a cap and leave stock above it.
-            if (!s.owned() && untouched(led, i, nCom) && !led.unrest.containsKey(i)) { next.add(s); continue; }
+            if (!s.owned() && untouched(led, i, nCom) && !led.unrest.containsKey(i) && !led.mines.containsKey(i)) { next.add(s); continue; }
             rebuilt[nRebuilt++] = i;
             // Whole units throughout (issue #77): the snapshot is integral, every delta is integral, so
             // the result is integral and conservation below can be checked by equality rather than tolerance.
@@ -55,6 +55,8 @@ public final class ApplyStep {
                     .withRoadLevel(clamp(s.roadLevel() + led.road[i], 0, 100))
                     .withRailLevel(clamp(s.railLevel() + led.rail[i], 0, 100));
             if (led.heldNext[i] != null) n = n.withHeld(led.heldNext[i]);
+            Integer mined = led.mines.get(i);
+            if (mined != null) n = n.withMines(s.mines() + mined);
             n = unrest(ctx, led.unrest.get(i), s, n, q);
             next.add(n);
         }
@@ -192,6 +194,7 @@ public final class ApplyStep {
                 // unrest (issue #72), only where there is any, so a world without it hashes as it always did
                 if (s.loyalty() != 0 || s.work() != 100 || s.occupied() || s.che() != 0)
                     sb.append("|u").append(s.loyalty()).append(',').append(s.work()).append(',').append(s.oldOwner()).append(',').append(s.che()).append(',').append(s.cheTarget());
+                if (s.mines() != 0) sb.append("|m").append(s.mines());   // issue #71: only where there are any, so older hashes stand
                 sb.append('\n');
                 md.update(sb.toString().getBytes(StandardCharsets.UTF_8)); sb.setLength(0);
             }

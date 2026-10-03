@@ -186,6 +186,13 @@ public class Console {
                     need(t, 3, usage);
                     yield cmd(run, new Command.Paradrop(ids(t[1]), abs(v, t[2]), escorts(t, 3, usage)));
                 }
+                case "lay" -> { String usage = "lay SHIP N   (a minelayer at sea lays N mines from her shells)"; need(t, 3, usage); most(t, 3, usage); yield cmd(run, new Command.Lay(Long.parseLong(t[1].replace("#", "")), Double.parseDouble(t[2]))); }
+                case "lmine" -> { String usage = "lmine UNIT N   (an engineer lays N land mines in its sector: a shell and a mobility point each)"; need(t, 3, usage); most(t, 3, usage); yield cmd(run, new Command.LandMine(Long.parseLong(t[1].replace("#", "")), Double.parseDouble(t[2]))); }
+                case "sweep" -> {
+                    String usage = "sweep PLANES x,y [escort E,E]   (mine-sweeping planes fly over the sea and back, sweeping as they go)";
+                    need(t, 3, usage);
+                    yield cmd(run, new Command.SweepAir(ids(t[1]), abs(v, t[2]), escorts(t, 3, usage)));
+                }
                 case "mission" -> {
                     String usage = "mission PLANE air x,y [RADIUS] | mission PLANE off   (air defence: a fighter rises over any sector within RADIUS of x,y)";
                     need(t, 3, usage);
@@ -298,7 +305,7 @@ public class Console {
 
     static final Set<String> PREVIEWABLE = Set.of("designate", "threshold", "demobilize", "enlist", "distribute", "move", "explore",
             "build_road", "build_rail", "rail_ship", "rail_lane", "build_ship", "build_unit", "build_plane", "load", "unload", "lload", "lunload",
-            "lane", "fish", "mine", "supply", "scrap", "sell", "buy", "reset_lot", "set_price", "trade", "air_defence");
+            "lane", "fish", "mine", "supply", "scrap", "sell", "buy", "reset_lot", "set_price", "trade", "air_defence", "lay", "lmine");
     // fly, drop and paradrop are not here: the fighters that rise against them roll dice
 
     /**
@@ -786,6 +793,10 @@ public class Console {
         if (!losses.isEmpty())
             sb.append("in the last ").append(LOSS_WINDOW).append(" updates: ").append(String.join("; ", losses.subList(Math.max(0, losses.size() - 10), losses.size()))).append(losses.size() > 10 ? " (and " + (losses.size() - 10) + " before)" : "")
               .append(" — guerrillas grow where there are no soldiers").append(cfg.economy().enlist() == null ? "" : "; enlist SECTOR -N puts a garrison in").append('\n');
+        // your land mines (issue #71): only you know where they are
+        List<String> mined = new ArrayList<>();
+        for (SectorView s : v.sectors()) if (s.full() && s.mines() > 0) mined.add(rel(s.relative()) + " " + s.mines());
+        if (!mined.isEmpty()) sb.append("land mines: ").append(String.join("; ", mined)).append('\n');
         // a sector short of efficiency, and why (issue #275): a well-stocked city sat at 0% with nothing on this page to say so
         List<String> held = heldBack(v, notes);
         if (!held.isEmpty()) {

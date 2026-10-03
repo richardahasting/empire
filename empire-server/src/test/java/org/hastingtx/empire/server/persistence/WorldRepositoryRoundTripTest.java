@@ -69,6 +69,8 @@ class WorldRepositoryRoundTripTest {
         played = played.withPlane(new org.hastingtx.empire.engine.model.Plane(played.nextPlaneId(), 0, "fighter_2", cap, 90, 100, 0, "", org.hastingtx.empire.engine.model.Plane.AIR_DEFENCE, other, 3));
         // a plane on a ship's deck (issue #71): the ship it is aboard is its own column
         played = played.withPlane(new org.hastingtx.empire.engine.model.Plane(played.nextPlaneId(), 0, "fighter_2", marked.at(), 100, 100, 0, "", null, null, 0, marked.id()));
+        // mines (issue #71): a column on the sector
+        played = played.withSector(played.sector(other).withMines(37));
         // a ship for sale with a bid on it (issue #141): its own table
         played = played.withTrade(new org.hastingtx.empire.engine.model.TradeLot(played.nextTradeId(), 0, org.hastingtx.empire.engine.model.TradeLot.SHIP, marked.id(), 25000, 1, null, played.updateNumber(), played.updateNumber() + 4));
         // the market (issue #141): a lot with a bid and one without, its own table
@@ -87,6 +89,7 @@ class WorldRepositoryRoundTripTest {
         assertThat(loaded.market()).isEqualTo(played.market());
         assertThat(loaded.trades()).isEqualTo(played.trades());
         assertThat(loaded.planes()).isEqualTo(played.planes());
+        assertThat(loaded.sector(other).mines()).isEqualTo(37);
         assertThat(loaded.nextTradeId()).isEqualTo(played.nextTradeId());
         assertThat(loaded.nextLotId()).isEqualTo(played.nextLotId());
         for (int i = 0; i < played.sectors().size(); i++) assertThat(loaded.sectors().get(i).deliver()).as("deliver orders at %d", i).isEqualTo(played.sectors().get(i).deliver());

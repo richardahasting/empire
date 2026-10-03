@@ -130,6 +130,10 @@ public final class Ledger {
      * go through here, or the sector's delta stops being a whole number (issue #77).
      */
     public double toShip(int from, int c, double qty) { int q = (int) taken(qty); stock[from * nCom + c] -= q; return q; }
+    /** Mines laid (+) or swept and struck (−) this update, by sector (issue #71). */
+    public final java.util.Map<Integer, Integer> mines = new java.util.HashMap<>();
+    public void mines(int sector, int delta) { if (delta != 0) mines.merge(sector, delta, Integer::sum); }
+
     public double fromShip(int to, int c, double qty) { int q = (int) taken(qty); stock[to * nCom + c] += q; return q; }
     /** Goods bought on the market arrive (issue #141): moved, not made — the lot held them until now. */
     public double fromMarket(int to, int c, double qty) { return fromShip(to, c, qty); }

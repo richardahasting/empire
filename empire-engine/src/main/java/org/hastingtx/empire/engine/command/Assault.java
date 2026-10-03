@@ -212,7 +212,8 @@ final class Assault {
             defenceSupport = theirs.multiplier();
             target = w.sector(at);
         }
-        Fight f = fight(cfg, com, w, target, troops, strength, defenceSupport, key);
+        // the defender's land mines, if they are the defender's (issue #71; KNOWN get_mine_dsupport)
+        Fight f = fight(cfg, com, w, target, troops, strength, defenceSupport + Mines.defence(cfg, target, c.id(), false), key);
         String story = (before.isEmpty() ? "" : before + " — ") + f.story("paradrop", at, troops)
                 + (theirs == null || theirs.story().isEmpty() ? "" : "; their " + theirs.story());
         if (!f.won()) return new CommandResult(f.next(), null, 0, story + " — all of them lost; they lost " + q(f.defendersLost()));
@@ -252,7 +253,8 @@ final class Assault {
         w = theirs.world();
         target = w.sector(target.at());
         strength *= mySupport.multiplier();
-        Fight f = fight(cfg, com, w, target, attackers, strength, theirs.multiplier(), key);
+        boolean engineers = riding.stream().anyMatch(u -> { var k = land == null ? null : land.landClass(u.cls()); return k != null && k.has("engineer"); });
+        Fight f = fight(cfg, com, w, target, attackers, strength, theirs.multiplier() + Mines.defence(cfg, target, c.id(), engineers), key);
         String story = f.story("assault", target.at(), attackers) + supportStory(mySupport, theirs);
         if (!f.won()) {
             World next = f.next().withShip(ship.withStock(ship.stock().with(com.mil, 0)));
@@ -348,8 +350,10 @@ final class Assault {
         Army.Support mySupport = Army.support(cfg, com, next, c.id(), a.target(), key);
         Army.Support theirSupport = Army.support(cfg, com, mySupport.world(), target.owner(), a.target(), key + ":def");
         next = theirSupport.world();
+        boolean engineers = false;   // an engineer with the attack halves the mines that count (KNOWN attsub.c:1091)
+        for (UnitSent us : unitsSent) { var k = land == null ? null : land.landClass(next.unit(us.id()).cls()); if (k != null && k.has("engineer")) engineers = true; }
         Fight f = fight(cfg, com, next, next.sector(a.target()), attackers, worth / attackers * mySupport.multiplier(),
-                theirSupport.multiplier(), key);
+                theirSupport.multiplier() + Mines.defence(cfg, next.sector(a.target()), c.id(), engineers), key);
         // the dead cost their sectors mobility, in proportion to the share of the garrison lost, at most the cap each (attsub.c)
         double dead = attackers - f.survivors();
         World after = f.next();

@@ -991,6 +991,22 @@ tech:
 # UNITS — M5. Schema reserved; the table lives in units.yaml.
 # -----------------------------------------------------------------------------
 units:
+  # Mines (issue #71): KNOWN include/damage.h, shpsub.c, lndsub.c, mine.c, attsub.c, plnsub.c. One count a sector —
+  # sea mines on the sea, land mines on land — and nobody owns them: a ship strikes anyone's, a unit only the land's
+  # old owner's enemies'. Ships lay them from shells (lay), engineers on land (lmine), planes drop them on the sea.
+  mines:
+    sea_hit_add: 20                   # KNOWN DMINE_HITCHANCE: N/(N+20)
+    sea_damage_base: 21               # KNOWN MINE_DAMAGE: 21 + roll(21), halved for a sweeper, then armour
+    sea_damage_roll: 21
+    land_hit_add: 35                  # KNOWN DMINE_LHITCHANCE: N/(N+35)
+    land_damage_base: 10              # KNOWN MINE_LDAMAGE: 10 + roll(20), halved for an engineer
+    land_damage_roll: 20
+    engineer_hit_divisor: 3           # KNOWN lndsub.c:679: an engineer with them cuts the chance to a third
+    sweep_tries: 5                    # KNOWN shp_sweep: five tries a sweeper, each at 0.66, a shell back for each
+    sweep_chance: 0.66
+    defence_per_mine: 0.02            # KNOWN get_mine_dsupport: +0.02 a mine to the defence, at most 20 mines
+    defence_mine_cap: 20
+    plane_drop_multiple: 2.0          # KNOWN pln_equip 'm': a mine-laying plane carries twice its load in shells
   enabled: true
   table: units.yaml
   # LAND UNITS (issue #247, #71 slice 2). KNOWN, all of it: gefla/empserver land.config, commands/buil.c, update/land.c,
@@ -1123,7 +1139,7 @@ units:
       - { id: stealth_fighter,  name: stealth fighter,  glyph: S, tech_required: 325, build: { lcm: 15, hcm: 5, cash: 3000 }, bwork: 45, accuracy: 45, load: 3, attack: 19.0, defense: 19.0, range: 20, fuel: 4, stealth: 80, flags: [tactical, intercept, light] }
       - { id: stealth_bomber,   name: stealth bomber,   glyph: W, tech_required: 325, build: { lcm: 15, hcm: 5, cash: 4000 }, bwork: 45, accuracy: 25, load: 8, attack: 0.0,  defense: 15.0, range: 28, fuel: 5, stealth: 80, flags: [bomber, tactical] }
       # A carrier's strike plane (KNOWN plane.config np): light, so it flies from a carrier, and a light bomber and cargo plane
-      - { id: naval_plane,      name: naval plane,      glyph: N, tech_required: 135, build: { lcm: 20, hcm: 10, cash: 1800 }, bwork: 60, accuracy: 70, load: 3, attack: 0.0, defense: 4.0, range: 28, fuel: 2, flags: [tactical, cargo, light] }
+      - { id: naval_plane,      name: naval plane,      glyph: N, tech_required: 135, build: { lcm: 20, hcm: 10, cash: 1800 }, bwork: 60, accuracy: 70, load: 3, attack: 0.0, defense: 4.0, range: 28, fuel: 2, flags: [tactical, cargo, light, mine, sweep] }
       - { id: escort,           name: escort fighter,   glyph: E, tech_required: 90,  build: { lcm: 9,  hcm: 3, cash: 700 },  bwork: 35, accuracy: 60, load: 1, attack: 5.0,  defense: 5.0,  range: 15, fuel: 2, flags: [tactical, escort] }
       # Transports (KNOWN plane.config tr, jt): cargo planes that also drop paratroops
       - { id: transport,        name: transport,        glyph: t, tech_required: 85,  build: { lcm: 14, hcm: 5, cash: 1000 }, bwork: 44, accuracy: 0,  load: 7,  attack: 0.0,  defense: 2.0,  range: 15, fuel: 3, flags: [cargo, para] }
@@ -1220,12 +1236,14 @@ units:
       # bear in a salvo; range: hexes; armor: damage taken ÷ (1 + armor/100); magazine: shells a harbour
       # rearms her to; asw: can find and fire on a submarine she has detected; hit_per_gun: a torpedo hits
       # harder than a gun. All GUESS.
-      - { id: destroyer,               name: destroyer,               glyph: d, role: warship, tech_required: 40, build: { lcm: 100, hcm: 150, gun: 10, shell: 50, oil: 50, cash: 5000 }, hold: 200,  speed: 5, sight: 3, tank: 250, fuel_per_hex: 8, crew: 50, guns: 10, range: 3, armor: 20, magazine: 60, asw: true }
+      - { id: destroyer,               name: destroyer,               glyph: d, role: warship, tech_required: 40, build: { lcm: 100, hcm: 150, gun: 10, shell: 50, oil: 50, cash: 5000 }, hold: 200,  speed: 5, sight: 3, tank: 250, fuel_per_hex: 8, crew: 50, guns: 10, range: 3, armor: 20, magazine: 60, asw: true, lays_mines: true }
       - { id: frigate,                 name: frigate,                 glyph: g, role: warship, tech_required: 45, build: { lcm: 120, hcm: 200, gun: 15, shell: 80, oil: 80, cash: 7000 }, hold: 300,  speed: 5, sight: 3, tank: 300, fuel_per_hex: 10, crew: 70, guns: 15, range: 3, armor: 30, magazine: 90, asw: true }
-      - { id: submarine,               name: submarine,               glyph: s, role: submarine, tech_required: 50, build: { lcm: 100, hcm: 250, gun: 5, shell: 60, oil: 100, cash: 9000 }, hold: 100, speed: 4, tank: 200, fuel_per_hex: 7, crew: 40, guns: 5, range: 2, armor: 0, magazine: 60, hit_per_gun: 6 }
+      - { id: submarine,               name: submarine,               glyph: s, role: submarine, tech_required: 50, build: { lcm: 100, hcm: 250, gun: 5, shell: 60, oil: 100, cash: 9000 }, hold: 100, speed: 4, tank: 200, fuel_per_hex: 7, crew: 40, guns: 5, range: 2, armor: 0, magazine: 60, hit_per_gun: 6, lays_mines: true }
       - { id: battleship,              name: battleship,              glyph: b, role: warship, tech_required: 60, build: { lcm: 200, hcm: 600, gun: 40, shell: 200, oil: 200, cash: 20000 }, hold: 500, speed: 4, tank: 500, fuel_per_hex: 18, crew: 150, guns: 40, range: 5, armor: 80, magazine: 240 }
       - { id: carrier,                 name: aircraft carrier,        glyph: v, role: warship, tech_required: 70, build: { lcm: 300, hcm: 800, gun: 20, shell: 100, oil: 300, cash: 40000 }, hold: 800, speed: 4, sight: 4, tank: 800, fuel_per_hex: 25, crew: 200, guns: 20, range: 3, armor: 50, magazine: 120,
           carries: [pet, shell, gun, food], planes: 20, choppers: 20, xlight: 4 }   # KNOWN ship.config cal: 20 planes, 20 helicopters, 4 extra-light; petrol and shells for them
+      # KNOWN ship.config ms: lays and sweeps mines, 100 shells
+      - { id: minesweeper,             name: minesweeper,             glyph: k, role: warship, tech_required: 40, build: { lcm: 25, hcm: 15, cash: 400 }, hold: 100, speed: 4, sight: 2, tank: 90, fuel_per_hex: 2, crew: 10, guns: 1, range: 1, armor: 10, magazine: 100, lays_mines: true, sweeps: true }
     # COMBAT (issue #68). Richard 2026-09-11 and 2026-09-13: a declared war makes engagement automatic; anyone
     # may fire on anyone, but only by order, and it resolves now with the target answering; a ship that fired
     # on a country at peace is fair game to that country for a while; forts and harbours defend the coast;

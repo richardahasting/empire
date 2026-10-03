@@ -302,6 +302,8 @@ final class Air {
     /** KNOWN drop.c: transports drop their load (once over) on a sector of yours and fly home; nothing lands. */
     static CommandResult drop(GameConfig cfg, Commodities com, World w, Country c, Command.Drop d, Market.Room room) {
         UnitsCfg.PlanesCfg pc = cfg.units().planes();
+        // shells on the sea are mines (KNOWN drop.c, pln_mine)
+        if ("shell".equals(d.commodity()) && d.at() != null && w.inBounds(d.at()) && !w.sector(d.at()).isLand()) return mineDrop(cfg, com, w, c, d);
         Lift l = lift(cfg, com, w, c, d.planes(), d.at(), 2, List.of("cargo"), "drop supplies");
         if (l.fail() != null) return CommandResult.fail(w, l.fail());
         Sector to = w.sector(d.at());
@@ -323,6 +325,67 @@ final class Air {
         for (long id : raid.through()) { delivered += load.getOrDefault(id, 0.0); next = next.withPlane(next.plane(id).withNote("dropped " + d.commodity() + " on " + d.at())); }
         if (delivered > 0) { Sector s = next.sector(d.at()); next = next.withSector(s.withStock(s.stock().plus(ci, delivered))); }
         return new CommandResult(next, null, 0, join(raid.story(), q(delivered) + " of " + q(total) + " " + d.commodity() + " fell on " + d.at() + "; the planes flew home"));
+    }
+
+    /**
+     * KNOWN drop.c and pln_mine: mine-laying planes carry twice their load in shells ({@code plane_drop_multiple}) and drop
+     * them on the sea as mines, a shell a mine, and fly home. What a plane shot down or turned back carried is lost.
+     */
+    private static CommandResult mineDrop(GameConfig cfg, Commodities com, World w, Country c, Command.Drop d) {
+        UnitsCfg.PlanesCfg pc = cfg.units().planes();
+        UnitsCfg.MinesCfg mc = cfg.units().mines();
+        if (mc == null) return CommandResult.fail(w, "these rules have no mines");
+        Lift l = lift(cfg, com, w, c, d.planes(), d.at(), 2, List.of("mine"), "drop mines");
+        if (l.fail() != null) return CommandResult.fail(w, l.fail());
+        int shell = com.index("shell");
+        double have = Math.floor(l.base().stock().get(shell)), total = 0;
+        Map<Long, Double> load = new java.util.LinkedHashMap<>();
+        for (Plane p : l.planes()) {
+            double take = Math.min(Math.floor(pc.planeClass(p.cls()).loadAt(p.tech()) * mc.planeDropMultiple() / cfg.commodities().get(shell).weight()), have - total);
+            load.put(p.id(), take);
+            total += take;
+        }
+        if (total < 1) return CommandResult.fail(w, l.base().name() + " has no shells to make mines of");
+        World next = l.base().take(l.world(), shell, total);
+        Escorts es = escorts(cfg, com, next, c, d.escorts(), l.planes(), d.at(), 2);
+        if (es.fail() != null) return CommandResult.fail(w, es.fail());
+        UnrestStep.R r = new UnrestStep.R(Rng.stream("minedrop:" + d.planes() + ">" + d.at() + ":" + w.updateNumber(), cfg.world() == null ? 0 : cfg.world().seed()));
+        Raid raid = encounter(cfg, com, r, es.world(), c, l.planes(), es.planes(), d.at());
+        next = raid.world();
+        double laid = 0;
+        for (long id : raid.through()) { laid += load.getOrDefault(id, 0.0); next = next.withPlane(next.plane(id).withNote("dropped mines at " + d.at())); }
+        Sector sea = next.sector(d.at());
+        if (laid > 0) next = next.withSector(sea.withMines(sea.mines() + (int) laid));
+        return new CommandResult(next, null, 0, join(raid.story(), q(laid) + " of " + q(total) + " mines went into the sea at " + d.at() + "; the planes flew home"));
+    }
+
+    /**
+     * KNOWN reco.c sweep and pln_sweep: mine-sweeping planes fly to {@code at} over the sea and home; in each sea hex on the
+     * way each plane clears at most one mine, with chance (100 − accuracy)/100. No shells come back.
+     */
+    static CommandResult sweep(GameConfig cfg, Commodities com, World w, Country c, Command.SweepAir s) {
+        if (cfg.units().mines() == null) return CommandResult.fail(w, "these rules have no mines");
+        UnitsCfg.PlanesCfg pc = cfg.units().planes();
+        Lift l = lift(cfg, com, w, c, s.planes(), s.at(), 2, List.of("sweep"), "sweep");
+        if (l.fail() != null) return CommandResult.fail(w, l.fail());
+        Escorts es = escorts(cfg, com, l.world(), c, s.escorts(), l.planes(), s.at(), 2);
+        if (es.fail() != null) return CommandResult.fail(w, es.fail());
+        UnrestStep.R r = new UnrestStep.R(Rng.stream("sweep:" + s.planes() + ">" + s.at() + ":" + w.updateNumber(), cfg.world() == null ? 0 : cfg.world().seed()));
+        Raid raid = encounter(cfg, com, r, es.world(), c, l.planes(), es.planes(), s.at());
+        World next = raid.world();
+        int cleared = 0;
+        for (Coord at : flightPath(next, l.base().at(), s.at())) {
+            Sector sea = next.sector(at);
+            if (sea.isLand() || sea.mines() <= 0) continue;
+            int gone = 0;
+            for (long id : raid.through()) {
+                Plane p = next.plane(id);
+                if (sea.mines() - gone > 0 && r.chance((100 - pc.planeClass(p.cls()).accuracyAt(p.tech())) / 100.0)) gone++;
+            }
+            if (gone > 0) { next = next.withSector(sea.withMines(sea.mines() - gone)); cleared += gone; }
+        }
+        for (long id : raid.through()) next = next.withPlane(next.plane(id).withNote("swept for mines to " + s.at()));
+        return new CommandResult(next, null, 0, join(raid.story(), cleared == 0 ? "they found no mines" : "they swept " + cleared + (cleared == 1 ? " mine" : " mines")));
     }
 
     /**

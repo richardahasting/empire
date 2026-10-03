@@ -12,7 +12,7 @@ public sealed interface Command permits
         Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission, Command.Land, Command.Demobilize, Command.Enlist, Command.Attack, Command.Anti, Command.BuildUnit, Command.March, Command.LoadUnit, Command.Board, Command.Sabotage, Command.Incite, Command.UnitFire, Command.Work, Command.BuildPlane, Command.Bomb, Command.Recon,
         Command.RailLane, Command.Telegram, Command.Announce, Command.DeclareWar, Command.OfferPeace,
         Command.Sell, Command.Buy, Command.ResetLot, Command.SetPrice, Command.Trade, Command.AirMission,
-        Command.Fly, Command.Drop, Command.Paradrop {
+        Command.Fly, Command.Drop, Command.Paradrop, Command.Lay, Command.LandMine, Command.SweepAir {
 
     String verb();
 
@@ -144,6 +144,18 @@ public sealed interface Command permits
     record Paradrop(java.util.List<Long> planes, Coord at, java.util.List<Long> escorts) implements Command {
         public Paradrop { planes = planes == null ? java.util.List.of() : java.util.List.copyOf(planes); escorts = escorts == null ? java.util.List.of() : java.util.List.copyOf(escorts); }
         public String verb() { return "paradrop"; }
+    }
+
+    /** A minelayer lays {@code n} sea mines where she is (issue #71; KNOWN mine.c mine). */
+    record Lay(long ship, double n) implements Command { public String verb() { return "lay"; } }
+
+    /** An engineer lays {@code n} land mines in its sector (issue #71; KNOWN mine.c landmine). */
+    record LandMine(long unit, double n) implements Command { public String verb() { return "lmine"; } }
+
+    /** Mine-sweeping planes fly over the sea to {@code at} and back, sweeping as they go (issue #71; KNOWN reco.c sweep, pln_sweep). */
+    record SweepAir(java.util.List<Long> planes, Coord at, java.util.List<Long> escorts) implements Command {
+        public SweepAir { planes = planes == null ? java.util.List.of() : java.util.List.copyOf(planes); escorts = escorts == null ? java.util.List.of() : java.util.List.copyOf(escorts); }
+        public String verb() { return "sweep"; }
     }
 
     /** A plane is laid down on an airfield of yours (issue #262). */
