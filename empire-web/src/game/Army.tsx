@@ -12,7 +12,7 @@ const rel = (c: { x: number; y: number }) => `${c.x},${c.y}`;
  * a fight; and its orders — march, take on or put down soldiers and supplies. Attacks are given from the enemy sector's menu.
  */
 export function Army({ view, rules, busy, onCommand }: { view: CountryView; rules: Rules; busy: boolean; onCommand: (c: CommandRequest) => Promise<void> }) {
-  const [dialog, setDialog] = useState<{ kind: "march" | "load" | "unload" | "board" | "fire"; unit: UnitView } | null>(null);
+  const [dialog, setDialog] = useState<{ kind: "march" | "load" | "unload" | "board" | "fire" | "lmine"; unit: UnitView } | null>(null);
   const units = view.units ?? [];
   if (units.length === 0) return <p className="text-xs text-muted-foreground">No land units. Designate a headquarters, then right-click it and choose “Build unit…”.</p>;
   return (
@@ -44,6 +44,15 @@ export function Army({ view, rules, busy, onCommand }: { view: CountryView; rule
                 title={buildable ? "spend its mobility building this sector, buying the materials from what is stored here" : "nothing to build here"}
                 onClick={() => void onCommand({ verb: "work", unit: u.id })}>Work</Button>;
             })()}
+            {u.engineer && !u.ship && (() => {
+              const here = view.sectors.find(s => s.at.x === u.at.x && s.at.y === u.at.y);
+              const ours = !!here && here.terrain !== "ocean" && here.owner === view.countryId;
+              const shells = Math.floor(u.stock["shell"] ?? 0) + Math.floor(here?.stock["shell"] ?? 0);
+              const most = Math.min(Math.floor(u.mobility), shells);
+              return <Button size="sm" variant="secondary" disabled={busy || !ours || most < 1}
+                title={!ours ? "land mines go in land of yours" : shells < 1 ? "no shells with it or in the sector to make mines of" : most < 1 ? "no mobility left" : `up to ${most}: a shell and a point of mobility each`}
+                onClick={() => setDialog({ kind: "lmine", unit: u })}>Lay mines…</Button>;
+            })()}
             {u.guns > 0 && !u.ship && <Button size="sm" variant="secondary" disabled={busy || (u.stock["shell"] ?? 0) < 1}
                 title={(u.stock["shell"] ?? 0) < 1 ? "no shells: load some" : `${u.guns} guns, ${Math.floor(u.range)} hexes`}
                 onClick={() => setDialog({ kind: "fire", unit: u })}>Fire…</Button>}
@@ -63,6 +72,7 @@ export function Army({ view, rules, busy, onCommand }: { view: CountryView; rule
         </div>
       ))}
       {dialog?.kind === "fire" && <FireDialog unit={dialog.unit} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
+      {dialog?.kind === "lmine" && <LandMineDialog unit={dialog.unit} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {dialog?.kind === "board" && <BoardDialog unit={dialog.unit} view={view} rules={rules} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {dialog?.kind === "march" && <MarchDialog unit={dialog.unit} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {dialog && (dialog.kind === "load" || dialog.kind === "unload") && <UnitCargoDialog kind={dialog.kind} unit={dialog.unit} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
@@ -86,6 +96,37 @@ function FireDialog({ unit, view, busy, onClose, onCommand }: { unit: UnitView; 
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button disabled={busy || !theirs} onClick={async () => { if (!target) return; await onCommand({ verb: "unit_fire", unit: unit.id, x: target.at.x, y: target.at.y }); onClose(); }}>Fire</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Lay land mines (issue #71; the original's landmine): an engineer ashore in land of yours spends a shell —
+ * its own first, then the sector's — and a point of its mobility a mine. They belong to the land, not to you.
+ */
+function LandMineDialog({ unit, view, busy, onClose, onCommand }: { unit: UnitView; view: CountryView; busy: boolean; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void> }) {
+  const here = view.sectors.find(s => s.at.x === unit.at.x && s.at.y === unit.at.y);
+  const own = Math.floor(unit.stock["shell"] ?? 0), stored = Math.floor(here?.stock["shell"] ?? 0);
+  const most = Math.min(Math.floor(unit.mobility), own + stored);
+  const [n, setN] = useState(String(most));
+  const want = Number(n);
+  const ok = Number.isInteger(want) && want >= 1 && want <= most;
+  return (
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Lay land mines with unit #{unit.id} at {rel(unit.relative)}</DialogTitle>
+          <DialogDescription>A shell and a point of its mobility a mine — its own shells first, then the sector's. They are the land's, not yours: your own units walk through them, an enemy marching in may strike one, and they stiffen the sector against an attack. A sector you lose keeps them.</DialogDescription></DialogHeader>
+        {most < 1
+          ? <p className="text-sm text-destructive">{own + stored < 1 ? "No shells with the unit or in the sector to make mines of." : "No mobility left: it recovers some each update."}</p>
+          : <label className="grid gap-1 text-sm">How many <span className="text-xs text-muted-foreground">(at most {most} — mobility {Math.floor(unit.mobility)}, {own} shell{own === 1 ? "" : "s"} aboard and {stored} here)</span>
+              <Input value={n} onChange={e => setN(e.target.value)} inputMode="numeric" autoFocus />
+            </label>}
+        {most >= 1 && n !== "" && !ok && <p className="text-xs text-destructive">A whole number of mines, 1 to {most}.</p>}
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="danger" disabled={busy || !ok} onClick={async () => { await onCommand({ verb: "lmine", unit: unit.id, amount: want }); onClose(); }}>Lay them</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
