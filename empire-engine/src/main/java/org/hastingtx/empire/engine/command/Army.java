@@ -128,7 +128,7 @@ final class Army {
             boolean engineer = ucls.has("engineer");
             int shell = com.index("shell");
             var r = new org.hastingtx.empire.engine.update.steps.UnrestStep.R(org.hastingtx.empire.engine.update.Rng.stream(
-                    "lmines:" + u.id() + ":" + w.updateNumber() + ":" + u.at(), cfg.world() == null ? 0 : cfg.world().seed()));
+                    "lmines:" + u.id() + ":" + w.updateNumber() + ":" + u.at() + ":" + u.mobility(), cfg.world() == null ? 0 : cfg.world().seed()));
             for (int k = 0; k < steps; k++) {
                 Sector s = next.sectors().get(path.get(k));
                 if (!s.isLand() || s.mines() <= 0 || s.mineOwner() == c.id()) continue;

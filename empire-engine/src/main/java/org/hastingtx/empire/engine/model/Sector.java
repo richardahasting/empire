@@ -294,13 +294,13 @@ public final class Sector {
                 && efficiency == s.efficiency && mobility == s.mobility && roadLevel == s.roadLevel && railLevel == s.railLevel
                 && radarLevel == s.radarLevel && roadTarget == s.roadTarget && railTarget == s.railTarget && sanctuary == s.sanctuary
                 && distX == s.distX && distY == s.distY
-                && loyalty == s.loyalty && work == s.work && oldOwner == s.oldOwner && che == s.che && cheTarget == s.cheTarget
+                && loyalty == s.loyalty && work == s.work && oldOwner == s.oldOwner && che == s.che && cheTarget == s.cheTarget && mines == s.mines
                 && Arrays.equals(thresholds, s.thresholds) && stock.equals(s.stock) && held.equals(s.held) && deliver.equals(s.deliver);
     }
 
     @Override public int hashCode() {
         int h = Objects.hash(x, y, terrain, elevation, fertility, minerals, gold, oil, uranium, owner, designation,
-                efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget, sanctuary, distX, distY, stock, held, deliver, loyalty, work, oldOwner, che, cheTarget);
+                efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget, sanctuary, distX, distY, stock, held, deliver, loyalty, work, oldOwner, che, cheTarget, mines);
         return 31 * h + Arrays.hashCode(thresholds);
     }
 

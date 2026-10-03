@@ -89,6 +89,7 @@ class WorldRepositoryRoundTripTest {
         assertThat(loaded.market()).isEqualTo(played.market());
         assertThat(loaded.trades()).isEqualTo(played.trades());
         assertThat(loaded.planes()).isEqualTo(played.planes());
+        assertThat(loaded.sector(other).mines()).isEqualTo(37);
         assertThat(loaded.nextTradeId()).isEqualTo(played.nextTradeId());
         assertThat(loaded.nextLotId()).isEqualTo(played.nextLotId());
         for (int i = 0; i < played.sectors().size(); i++) assertThat(loaded.sectors().get(i).deliver()).as("deliver orders at %d", i).isEqualTo(played.sectors().get(i).deliver());

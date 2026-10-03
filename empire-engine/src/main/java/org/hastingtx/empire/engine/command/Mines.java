@@ -49,7 +49,7 @@ public final class Mines {
         var sc = cfg.units().ships();
         if (mc == null || sc == null) return new Passage(w, ship, hops, "", false);
         UnitsCfg.ShipClassCfg cls = sc.shipClass(ship.cls());
-        UnrestStep.R r = new UnrestStep.R(org.hastingtx.empire.engine.update.Rng.stream("mines:" + ship.id() + ":" + w.updateNumber() + ":hand:" + ship.at(), cfg.world() == null ? 0 : cfg.world().seed()));
+        UnrestStep.R r = new UnrestStep.R(org.hastingtx.empire.engine.update.Rng.stream("mines:" + ship.id() + ":" + w.updateNumber() + ":hand:" + ship.at() + ":" + ship.mobility() + ":" + ship.fuel(), cfg.world() == null ? 0 : cfg.world().seed()));
         int shell = com.index("shell");
         StringBuilder story = new StringBuilder();
         for (int k = 1; k <= hops; k++) {
