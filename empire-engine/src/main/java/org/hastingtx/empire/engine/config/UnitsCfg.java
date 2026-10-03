@@ -60,8 +60,11 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
     /** One class of plane (plane.config). {@code range} is the round trip, so a sortie reaches half of it. */
     public record PlaneClassCfg(String id, String name, String glyph, double techRequired, Map<String, Double> build, double bwork,
                                 double accuracy, double load, double attack, double defense, double range, double fuel,
-                                List<String> flags) {
+                                List<String> flags,
+                                /** KNOWN plane.config pl_stealth: the chance, in percent, of slipping past a sector unseen (issue #71). */
+                                Double stealth) {
         public boolean has(String flag) { return flags != null && flags.contains(flag); }
+        public double stealthOr0() { return stealth == null ? 0 : stealth; }
         /** KNOWN PLN_ATTDEF / pl_range: a plane built above its class's tech is a little better and flies further. */
         private static double better(double base, double tech, double required, double scale) {
             return base * (1 + Math.sqrt(Math.max(0, tech - required)) / 100 * scale);

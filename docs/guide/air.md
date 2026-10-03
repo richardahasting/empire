@@ -147,7 +147,21 @@ range 28, a light cargo plane) — bombers, transports and recon planes are too 
   with her; when she is sold, the seller's planes aboard are sold with her. She cannot be
   scrapped with planes aboard, and a plane aboard cannot be put up for sale on its own.
 
+## Stealth
+
+Two late classes are built to be hard to see (the original's `sf` and `sb`):
+
+| class | tech | attack | defence | range | stealth | |
+|---|---|---|---|---|---|---|
+| stealth fighter | 325 | 19 | 19 | 20 | 80 | rises against raids, escorts, light |
+| stealth bomber | 325 | — | 15 | 28 | 80 | 8 bombs |
+
+Over each sector on the way — the target too — a raid **slips past unseen** with the chance
+of its **least** stealthy plane (stealth 80: four times in five), and then nothing there fires
+at it or rises against it. One ordinary escort and the whole raid is as visible as it is. In a
+dogfight each side adds a point of strength for every 25 of stealth.
+
 ## What is not here yet
 
-Stealth and missile interceptors, mines from the
+Missile interceptors, mines from the
 air, and then missiles and satellites.

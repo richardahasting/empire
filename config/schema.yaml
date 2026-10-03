@@ -1118,6 +1118,10 @@ units:
       - { id: fighter_2,        name: fighter,          glyph: F, tech_required: 80,  build: { lcm: 8,  hcm: 2, cash: 400 },  bwork: 32, accuracy: 80, load: 1, attack: 4.0,  defense: 4.0,  range: 8,  fuel: 1, flags: [tactical, intercept, light] }
       - { id: jet_fighter_1,    name: jet fighter,      glyph: J, tech_required: 125, build: { lcm: 12, hcm: 4, cash: 1000 }, bwork: 40, accuracy: 45, load: 1, attack: 14.0, defense: 14.0, range: 11, fuel: 3, flags: [tactical, intercept, light] }
       - { id: jet_fighter_2,    name: VTOL jet fighter, glyph: H, tech_required: 195, build: { lcm: 12, hcm: 4, cash: 1400 }, bwork: 40, accuracy: 30, load: 1, attack: 17.0, defense: 17.0, range: 14, fuel: 3, flags: [tactical, intercept, light] }
+      # Stealth (KNOWN plane.config sf, sb; aircombat.c do_evade): a raid slips past a sector unseen with the chance of its
+      # least stealthy plane — no flak, no fighters there — and each side of a dogfight gains stealth / 25
+      - { id: stealth_fighter,  name: stealth fighter,  glyph: S, tech_required: 325, build: { lcm: 15, hcm: 5, cash: 3000 }, bwork: 45, accuracy: 45, load: 3, attack: 19.0, defense: 19.0, range: 20, fuel: 4, stealth: 80, flags: [tactical, intercept, light] }
+      - { id: stealth_bomber,   name: stealth bomber,   glyph: W, tech_required: 325, build: { lcm: 15, hcm: 5, cash: 4000 }, bwork: 45, accuracy: 25, load: 8, attack: 0.0,  defense: 15.0, range: 28, fuel: 5, stealth: 80, flags: [bomber, tactical] }
       # A carrier's strike plane (KNOWN plane.config np): light, so it flies from a carrier, and a light bomber and cargo plane
       - { id: naval_plane,      name: naval plane,      glyph: N, tech_required: 135, build: { lcm: 20, hcm: 10, cash: 1800 }, bwork: 60, accuracy: 70, load: 3, attack: 0.0, defense: 4.0, range: 28, fuel: 2, flags: [tactical, cargo, light] }
       - { id: escort,           name: escort fighter,   glyph: E, tech_required: 90,  build: { lcm: 9,  hcm: 3, cash: 700 },  bwork: 35, accuracy: 60, load: 1, attack: 5.0,  defense: 5.0,  range: 15, fuel: 2, flags: [tactical, escort] }
