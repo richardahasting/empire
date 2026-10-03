@@ -118,6 +118,7 @@ export interface CountryView {
   /** Your land units (issue #247). */
   units?: UnitView[];
   planes?: PlaneView[];
+  market?: LotView[];
   /** Countries you are at war with, by name (issue #137). */
   atWarWith?: string[];
   /** Enemy ships your sensors have found (issue #75); what you can aim at (issue #68). */
@@ -182,7 +183,11 @@ export interface ShipClass { id: string; name: string; glyph: string; role: stri
   /** How many light land units she carries (issue #252); absent or 0 for a ship that carries none. */
   landUnits?: number | null }
 export interface ShipsRules { startEfficiency: number; dockPointsPerUpdate: number; harborMinEfficiency: number; classes: ShipClass[] }
-export interface Rules { sectorTypes: SectorType[]; commodities: Commodity[]; etusPerUpdate: number; btuCosts: Record<string, number>; road?: RoadRules; defaultCapacity?: number; rail?: RailRules; productionMinEfficiency?: number; massThresholdMultiplierByType?: Record<string, number>; ships?: ShipsRules | null; work?: WorkRules; curves?: Record<string, Curve>; maxPopCurve?: { type: string; base?: number | null; perResearchPoint?: number | null; cap?: number | null } | null; land?: LandRules | null; planes?: PlanesRules | null }
+export interface Rules { sectorTypes: SectorType[]; commodities: Commodity[]; etusPerUpdate: number; btuCosts: Record<string, number>; road?: RoadRules; defaultCapacity?: number; rail?: RailRules; productionMinEfficiency?: number; massThresholdMultiplierByType?: Record<string, number>; ships?: ShipsRules | null; work?: WorkRules; curves?: Record<string, Curve>; maxPopCurve?: { type: string; base?: number | null; perResearchPoint?: number | null; cap?: number | null } | null; land?: LandRules | null; planes?: PlanesRules | null; market?: MarketRules | null }
+/** The commodity market's rules (issue #141); null in a game without one. */
+export interface MarketRules { sectorTypes: string[]; minEfficiency: number; maxPrice: number; minRaise: number; buyTax: number; delayUpdates: number; snipeUpdates: number; unsellable: string[] }
+/** A lot on the market (issue #141). from/dest are only yours: your lot's sector, your bid's destination. */
+export interface LotView { id: number; seller: string; commodity: string; amount: number; price: number; bidder: string | null; updatesLeft: number; yours: boolean; fromRelative: Coord | null; yourBid: boolean; destRelative: Coord | null }
 export interface Outcome { accepted: boolean; error?: string; btuSpent: number; view: CountryView; info?: string | null }
 export interface ConsoleReply { output: string; accepted: boolean; error?: string; view?: CountryView }
 export interface CommandRequest {
@@ -195,6 +200,8 @@ export interface CommandRequest {
   parties?: { from: Coord; mil: number }[];
   /** A land unit for march / lload / lunload; land units joining an attack (issue #247). */
   unit?: number; units?: number[];
+  /** The market (issue #141): a lot's number, and a price a unit. */
+  lot?: number; price?: number;
   /** Many sectors instead of x,y: "*" (all mine), "*:TYPE" (one designation), "x1:x2,y1:y2" (a rectangle, relative). Standing orders only. */
   scope?: string;
   /** deliver: e ne nw w sw se (or "none" to clear). */

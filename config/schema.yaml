@@ -740,6 +740,21 @@ economy:
       per_etu: 0.05               #   not scaled by tech (Richard 2026-10-03: "people are the same, the weapons are not")
       civ_share: 0.5              # KNOWN: ... up to civ / 2 − mil
 
+  # --- The commodity market (issue #141) -------------------------------------------------------------------------
+  # KNOWN Wolfpack Empire commands/{sell,buy,rese,mark}.c, under options.market (the original's MARKET option).
+  # Goods leave their harbour or warehouse the moment they are listed; a lot sells to its high bidder once its time
+  # is up, and the goods appear in the buyer's harbour or warehouse. The original counted time by the wall clock
+  # (MARK_DELAY, 7200 s, settled every 300 s); this engine has none, so it counts updates and settles at the update.
+  market:
+    sector_types: [harbor, warehouse] # KNOWN sell.c:84, buy.c:146
+    min_efficiency: 60                # KNOWN sell.c:89, buy.c:151
+    max_price: 1000                   # KNOWN sell.c:113: dollars a unit at most
+    min_raise: 0.05                   # KNOWN buy.c:166: a bid must beat the price by more than 0.04
+    buy_tax: 1.0                      # KNOWN constants.c:151 buytax
+    delay_updates: 4                  # GUESS for MARK_DELAY 7200 s: updates from listing (or a price cut) to the sale
+    snipe_updates: 1                  # GUESS for buy.c:169's last five minutes: a late high bid gives the others an update
+    unsellable: [civ]                 # KNOWN item.config i_sell: civilians cannot be sold
+
   btu:
     accrual_per_capital_civ_per_etu: 0.0012   # KNOWN: btu_build_rate 0.0012, × ETUs × civilians (≤1000) × efficiency in PERCENT
     scale_by_efficiency_percent: true         # KNOWN: a 100% capital with 1000 civilians refills 640 every update
@@ -754,6 +769,9 @@ economy:
       distribute: 1
       threshold: 1
       demobilize: 1                      # NEW (issue #217)
+      sell: 1                            # issue #141: listing a lot, bidding, re-pricing — a command each
+      buy: 1
+      reset_lot: 1
       enlist: 0                          # issue #276: the cost is per draftee (enlist.btu_per_draftee), not per sector
       deliver: 1
       explore: 2

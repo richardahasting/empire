@@ -30,7 +30,15 @@ public record World(
         long nextUnitId,
         /** Planes (issue #262), ids unique for the life of the world. */
         List<Plane> planes,
-        long nextPlaneId) {
+        long nextPlaneId,
+        /** The commodity market's open lots (issue #141), ids unique for the life of the world. */
+        List<MarketLot> market,
+        long nextLotId) {
+
+    /** Before the market. */
+    public World(int width, int height, boolean wrapX, boolean wrapY, List<Sector> sectors, List<Country> countries, List<MoveOrder> pendingMoves, long updateNumber, List<RailOrder> pendingRail, List<Ship> ships, long nextShipId, List<Contact> contacts, List<SeenSector> seen, List<RailLane> railLanes, List<Relation> relations, List<LandUnit> units, long nextUnitId, List<Plane> planes, long nextPlaneId) {
+        this(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen, railLanes, relations, units, nextUnitId, planes, nextPlaneId, List.of(), 1);
+    }
 
     /** Before planes. */
     public World(int width, int height, boolean wrapX, boolean wrapY, List<Sector> sectors, List<Country> countries, List<MoveOrder> pendingMoves, long updateNumber, List<RailOrder> pendingRail, List<Ship> ships, long nextShipId, List<Contact> contacts, List<SeenSector> seen, List<RailLane> railLanes, List<Relation> relations, List<LandUnit> units, long nextUnitId) {
@@ -64,6 +72,7 @@ public record World(
         relations = List.copyOf(relations);
         units = units == null ? List.of() : List.copyOf(units);
         planes = planes == null ? List.of() : List.copyOf(planes);
+        market = market == null ? List.of() : sorted(market, java.util.Comparator.comparingLong(MarketLot::id));
         contacts = List.copyOf(contacts);
         // Both of these are sets, not sequences: a country's chart and its standing lanes have no natural
         // order, and the order they happen to arrive in — the order a player typed them, or whatever the
@@ -88,19 +97,19 @@ public record World(
     public Sector sector(int x, int y) { return sectors.get(index(x, y)); }
     public Country country(int id) { return countries.get(id); }
 
-    public World withSectors(List<Sector> s) { return new World(width, height, wrapX, wrapY, s, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen, railLanes, relations, units, nextUnitId, planes, nextPlaneId); }
-    public World withCountries(List<Country> c) { return new World(width, height, wrapX, wrapY, sectors, c, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen, railLanes, relations, units, nextUnitId, planes, nextPlaneId); }
-    public World withPendingMoves(List<MoveOrder> m) { return new World(width, height, wrapX, wrapY, sectors, countries, m, updateNumber, pendingRail, ships, nextShipId, contacts, seen, railLanes, relations, units, nextUnitId, planes, nextPlaneId); }
-    public World withPendingRail(List<RailOrder> r) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, r, ships, nextShipId, contacts, seen, railLanes, relations, units, nextUnitId, planes, nextPlaneId); }
-    public World withUpdateNumber(long n) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, n, pendingRail, ships, nextShipId, contacts, seen, railLanes, relations, units, nextUnitId, planes, nextPlaneId); }
+    public World withSectors(List<Sector> s) { return new World(width, height, wrapX, wrapY, s, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen, railLanes, relations, units, nextUnitId, planes, nextPlaneId, market, nextLotId); }
+    public World withCountries(List<Country> c) { return new World(width, height, wrapX, wrapY, sectors, c, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen, railLanes, relations, units, nextUnitId, planes, nextPlaneId, market, nextLotId); }
+    public World withPendingMoves(List<MoveOrder> m) { return new World(width, height, wrapX, wrapY, sectors, countries, m, updateNumber, pendingRail, ships, nextShipId, contacts, seen, railLanes, relations, units, nextUnitId, planes, nextPlaneId, market, nextLotId); }
+    public World withPendingRail(List<RailOrder> r) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, r, ships, nextShipId, contacts, seen, railLanes, relations, units, nextUnitId, planes, nextPlaneId, market, nextLotId); }
+    public World withUpdateNumber(long n) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, n, pendingRail, ships, nextShipId, contacts, seen, railLanes, relations, units, nextUnitId, planes, nextPlaneId, market, nextLotId); }
 
-    public World withShips(List<Ship> sh) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, sh, nextShipId, contacts, seen, railLanes, relations, units, nextUnitId, planes, nextPlaneId); }
-    public World withShips(List<Ship> sh, long next) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, sh, next, contacts, seen, railLanes, relations, units, nextUnitId, planes, nextPlaneId); }
+    public World withShips(List<Ship> sh) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, sh, nextShipId, contacts, seen, railLanes, relations, units, nextUnitId, planes, nextPlaneId, market, nextLotId); }
+    public World withShips(List<Ship> sh, long next) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, sh, next, contacts, seen, railLanes, relations, units, nextUnitId, planes, nextPlaneId, market, nextLotId); }
     public Ship ship(long id) { for (Ship sh : ships) if (sh.id() == id) return sh; return null; }
     public World withShip(Ship sh) { List<Ship> copy = new ArrayList<>(ships); for (int i = 0; i < copy.size(); i++) if (copy.get(i).id() == sh.id()) { copy.set(i, sh); return withShips(copy); } copy.add(sh); return withShips(copy); }
-    public World withContacts(List<Contact> cs) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, cs, seen, railLanes, relations, units, nextUnitId, planes, nextPlaneId); }
-    public World withSeen(List<SeenSector> ss) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, ss, railLanes, relations, units, nextUnitId, planes, nextPlaneId); }
-    public World withRailLanes(List<RailLane> ls) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen, ls, relations, units, nextUnitId, planes, nextPlaneId); }
+    public World withContacts(List<Contact> cs) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, cs, seen, railLanes, relations, units, nextUnitId, planes, nextPlaneId, market, nextLotId); }
+    public World withSeen(List<SeenSector> ss) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, ss, railLanes, relations, units, nextUnitId, planes, nextPlaneId, market, nextLotId); }
+    public World withRailLanes(List<RailLane> ls) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen, ls, relations, units, nextUnitId, planes, nextPlaneId, market, nextLotId); }
     /** {@code owner}'s standing rail runs (issue #70). */
     public List<RailLane> railLanesOf(int owner) { List<RailLane> out = new ArrayList<>(); for (RailLane l : railLanes) if (l.owner() == owner) out.add(l); return out; }
     /** What {@code owner} remembers of sectors it can no longer see (issue #64). */
@@ -108,7 +117,7 @@ public record World(
     /** The sightings {@code owner} currently holds. */
     public List<Contact> contactsOf(int owner) { List<Contact> out = new ArrayList<>(); for (Contact c : contacts) if (c.owner() == owner) out.add(c); return out; }
 
-    public World withRelations(List<Relation> rs) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen, railLanes, rs, units, nextUnitId, planes, nextPlaneId); }
+    public World withRelations(List<Relation> rs) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen, railLanes, rs, units, nextUnitId, planes, nextPlaneId, market, nextLotId); }
 
     /** The pair's relation, or null when they have never had one — which means peace (issue #137). */
     public Relation relation(int x, int y) {
@@ -122,13 +131,18 @@ public record World(
         return r != null && r.atWar();
     }
 
-    public World withUnits(List<LandUnit> u, long next) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen, railLanes, relations, u, next, planes, nextPlaneId); }
+    public World withUnits(List<LandUnit> u, long next) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen, railLanes, relations, u, next, planes, nextPlaneId, market, nextLotId); }
     public World withUnit(LandUnit u) { List<LandUnit> copy = new ArrayList<>(units); for (int i = 0; i < copy.size(); i++) if (copy.get(i).id() == u.id()) { copy.set(i, u); return withUnits(copy, nextUnitId); } copy.add(u); return withUnits(copy, Math.max(nextUnitId, u.id() + 1)); }
     public World withoutUnit(long id) { List<LandUnit> copy = new ArrayList<>(units); copy.removeIf(x -> x.id() == id); return withUnits(copy, nextUnitId); }
-    public World withPlanes(List<Plane> p, long next) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen, railLanes, relations, units, nextUnitId, p, next); }
+    public World withPlanes(List<Plane> p, long next) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen, railLanes, relations, units, nextUnitId, p, next, market, nextLotId); }
     public World withPlane(Plane p) { List<Plane> copy = new ArrayList<>(planes); for (int i = 0; i < copy.size(); i++) if (copy.get(i).id() == p.id()) { copy.set(i, p); return withPlanes(copy, nextPlaneId); } copy.add(p); return withPlanes(copy, Math.max(nextPlaneId, p.id() + 1)); }
     public World withoutPlane(long id) { List<Plane> copy = new ArrayList<>(planes); copy.removeIf(x -> x.id() == id); return withPlanes(copy, nextPlaneId); }
     public Plane plane(long id) { for (Plane p : planes) if (p.id() == id) return p; return null; }
+
+    public World withMarket(List<MarketLot> m, long next) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen, railLanes, relations, units, nextUnitId, planes, nextPlaneId, m, next); }
+    public World withLot(MarketLot l) { List<MarketLot> copy = new ArrayList<>(market); for (int i = 0; i < copy.size(); i++) if (copy.get(i).id() == l.id()) { copy.set(i, l); return withMarket(copy, nextLotId); } copy.add(l); return withMarket(copy, Math.max(nextLotId, l.id() + 1)); }
+    public World withoutLot(long id) { List<MarketLot> copy = new ArrayList<>(market); copy.removeIf(x -> x.id() == id); return withMarket(copy, nextLotId); }
+    public MarketLot lot(long id) { for (MarketLot l : market) if (l.id() == id) return l; return null; }
 
     public LandUnit unit(long id) { for (LandUnit u : units) if (u.id() == id) return u; return null; }
     public World withoutShip(long id) { List<Ship> copy = new ArrayList<>(ships); copy.removeIf(x -> x.id() == id); return withShips(copy); }

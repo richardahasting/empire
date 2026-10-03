@@ -44,7 +44,26 @@ public record CountryView(
         /** Your land units (issue #247). */
         List<UnitView> units,
         /** Your planes (issue #262). */
-        List<PlaneView> planes) {
+        List<PlaneView> planes,
+        /** Every lot on the commodity market (issue #141): the market is public, as the original's was. */
+        List<LotView> market) {
+
+    /** Before the market. */
+    public CountryView(int countryId, String name, long updateNumber, Coord capital, boolean wrapX, boolean wrapY, int width, int height, double cash, double btu,
+                       Levels levels, HandicapCfg handicap, boolean inSanctuary, boolean bankrupt, List<String> commodityIds, List<SectorView> sectors,
+                       List<String> otherCountryNames, List<String> atWarWith, List<ShipView> ships, List<ContactView> contacts, List<RailLaneView> railLanes,
+                       List<TrainView> trains, List<UnitView> units, List<PlaneView> planes) {
+        this(countryId, name, updateNumber, capital, wrapX, wrapY, width, height, cash, btu, levels, handicap, inSanctuary, bankrupt, commodityIds, sectors,
+             otherCountryNames, atWarWith, ships, contacts, railLanes, trains, units, planes, List.of());
+    }
+
+    /**
+     * A lot on the market (issue #141; KNOWN mark.c): what, how much, the price a unit (the high bid once there is one),
+     * who is selling and who is winning it, and how many updates until it sells. Where it came from and where it goes
+     * are only for the country they belong to, as the original showed the sector only to its owner.
+     */
+    public record LotView(long id, String seller, String commodity, double amount, double price, String bidder, long updatesLeft,
+                          boolean yours, Coord fromRelative, boolean yourBid, Coord destRelative) {}
 
     /** A plane of yours (issue #262): where it sits, its condition, what it can carry and how far it strikes. */
     public record PlaneView(long id, String cls, String name, Coord at, Coord relative, double efficiency, double tech,
@@ -282,7 +301,18 @@ public record CountryView(
             if (r.atWar() && r.involves(countryId)) atWar.add(w.country(r.other(countryId)).name());
 
         return new CountryView(countryId, c.name(), w.updateNumber(), c.capital(), w.wrapX(), w.wrapY(), w.width(), w.height(), c.cash(), c.btu(), c.levels(), c.handicap(),
-                c.inSanctuary(), c.bankrupt(), ids, views, others, atWar, ships, contacts, railLanes, trains, units(w, cfg, com, c), planes(w, cfg, c));
+                c.inSanctuary(), c.bankrupt(), ids, views, others, atWar, ships, contacts, railLanes, trains, units(w, cfg, com, c), planes(w, cfg, c), market(w, com, c));
+    }
+
+    private static List<LotView> market(World w, Commodities com, Country c) {
+        List<LotView> out = new ArrayList<>();
+        for (var l : w.market()) {
+            boolean mine = l.owner() == c.id(), myBid = l.bidder() == c.id();
+            out.add(new LotView(l.id(), w.country(l.owner()).name(), com.id(l.commodity()), l.amount(), l.price(),
+                    l.bid() ? w.country(l.bidder()).name() : null, Math.max(0, l.settles() - w.updateNumber()),
+                    mine, mine ? relative(w, c.capital(), l.from()) : null, myBid, myBid ? relative(w, c.capital(), l.dest()) : null));
+        }
+        return out;
     }
 
     private static List<PlaneView> planes(World w, GameConfig cfg, Country c) {

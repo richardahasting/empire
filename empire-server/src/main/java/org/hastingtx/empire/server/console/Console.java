@@ -135,6 +135,19 @@ public class Console {
                     yield cmd(run, new Command.Attack(abs(v, t[1]), parties, units));
                 }
                 case "army", "units" -> new Reply(army(v), true, null, null);
+                case "market", "mark" -> { most(t, 2, "market [COMMODITY | all]"); yield new Reply(market(v, t.length > 1 ? t[1].toLowerCase(Locale.ROOT) : null), true, null, null); }
+                case "sell" -> {
+                    String usage = "sell COMMODITY SECTOR N PRICE   (N negative: all but that many; PRICE a unit)";
+                    need(t, 5, usage); most(t, 5, usage);
+                    double n = Double.parseDouble(t[3]), price = Double.parseDouble(t[4].replace("$", ""));
+                    yield cmd(run, new Command.Sell(abs(v, t[2]), t[1], n, price));
+                }
+                case "buy" -> {
+                    String usage = "buy LOT PRICE SECTOR   (PRICE a unit; SECTOR a harbour or warehouse of yours)";
+                    need(t, 4, usage); most(t, 4, usage);
+                    yield cmd(run, new Command.Buy(Long.parseLong(t[1].replace("#", "")), Double.parseDouble(t[2].replace("$", "")), abs(v, t[3])));
+                }
+                case "reset" -> { String usage = "reset LOT PRICE   (lower; 0 takes the lot back)"; need(t, 3, usage); most(t, 3, usage); yield cmd(run, new Command.ResetLot(Long.parseLong(t[1].replace("#", "")), Double.parseDouble(t[2].replace("$", "")))); }
                 case "air", "planes" -> new Reply(air(v), true, null, null);
                 case "march", "mar" -> { need(t, 3, "march UNIT x,y"); most(t, 3, "march UNIT x,y"); yield cmd(run, new Command.March(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
                 case "bomb" -> {
@@ -247,7 +260,7 @@ public class Console {
 
     static final Set<String> PREVIEWABLE = Set.of("designate", "threshold", "demobilize", "enlist", "distribute", "move", "explore",
             "build_road", "build_rail", "rail_ship", "rail_lane", "build_ship", "build_unit", "build_plane", "load", "unload", "lload", "lunload",
-            "lane", "fish", "mine", "supply", "scrap");
+            "lane", "fish", "mine", "supply", "scrap", "sell", "buy", "reset_lot");
 
     /**
      * What an order would do, run against the world as it stands and thrown away (issues #272, #273): the
@@ -591,6 +604,28 @@ public class Console {
             sb.append(String.format("#%-4d %-16s %-8s %3.0f%% %5.0f %4.0f%% %6.0f %-9s  %s%n", p.id(), p.cls(), rel(p.relative()), p.efficiency(),
                     p.load(), p.accuracy(), Math.floor(p.reach()), p.intercept() ? "fighter" : p.escort() ? "escort" : "", p.note() == null ? "" : p.note()));
         return sb.append("strike: hexes there and back again. fighter: rises against raids at war, and escorts. bomb PLANE x,y [strategic] [escort E,E] · recon PLANE x,y [escort E,E]").toString();
+    }
+
+    /**
+     * The market (issue #141; KNOWN mark.c): with nothing named, the cheapest lot of each commodity; with a commodity,
+     * every lot of it; with {@code all}, every lot. Your own lots and bids show their sectors.
+     */
+    static String market(CountryView v, String which) {
+        List<CountryView.LotView> lots = v.market() == null ? List.of() : v.market();
+        if (lots.isEmpty()) return "the market is empty — sell COMMODITY SECTOR N PRICE puts a lot up from a harbour or warehouse";
+        List<CountryView.LotView> show = new ArrayList<>();
+        if (which == null) {
+            Map<String, CountryView.LotView> cheapest = new TreeMap<>();
+            for (var l : lots) cheapest.merge(l.commodity(), l, (a, b) -> b.price() < a.price() ? b : a);
+            show.addAll(cheapest.values());
+        } else for (var l : lots) if (which.equals("all") || l.commodity().equals(which)) show.add(l);
+        if (show.isEmpty()) return "no " + which + " on the market";
+        StringBuilder sb = new StringBuilder(String.format("%-4s %-6s %10s %10s %-14s %-14s %5s  %s%n", "lot", "what", "amount", "price", "seller", "high bid", "sells", "yours"));
+        for (var l : show)
+            sb.append(String.format("%-4d %-6s %10.0f %10.2f %-14s %-14s %5s  %s%n", l.id(), l.commodity(), l.amount(), l.price(), l.seller(), l.bidder() == null ? "-" : l.bidder(),
+                    l.bidder() == null ? "-" : "in " + l.updatesLeft(), l.yours() ? "from " + rel(l.fromRelative()) : l.yourBid() ? "your bid, to " + rel(l.destRelative()) : ""));
+        return sb.append(which == null ? "the cheapest of each; market COMMODITY or market all for every lot. " : "")
+                 .append("buy LOT PRICE SECTOR bids a unit's price; a lot sells to its high bidder when its time is up").toString();
     }
 
     /** Sectors with unrest (issue #72): disloyal, not all at work, occupied, or with guerrillas; and the happiness they want. */

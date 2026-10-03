@@ -65,6 +65,9 @@ class WorldRepositoryRoundTripTest {
         List<org.hastingtx.empire.engine.model.Ship> fleet = new java.util.ArrayList<>(played.ships());
         fleet.add(marked);
         played = played.withShips(fleet, marked.id() + 1);
+        // the market (issue #141): a lot with a bid and one without, its own table
+        played = played.withLot(new org.hastingtx.empire.engine.model.MarketLot(played.nextLotId(), 0, com.index("iron"), 400, 2.5, 1, cap, other, played.updateNumber(), played.updateNumber() + 4))
+                       .withLot(new org.hastingtx.empire.engine.model.MarketLot(played.nextLotId() + 1, 1, com.index("food"), 50, 1.25, org.hastingtx.empire.engine.model.MarketLot.NOBODY, other, null, played.updateNumber(), played.updateNumber() + 4));
 
         gameId = games.create("roundtrip-test", "teaching", new ConfigLoader().toYaml(l.raw()), l.hash(), 11, played.width(), played.height(), played.wrapX(), played.wrapY(), null);
         worlds.saveAll(gameId, played, com);
@@ -75,6 +78,8 @@ class WorldRepositoryRoundTripTest {
         assertThat(loaded.railLanes()).isEqualTo(played.railLanes());
         assertThat(loaded.contacts()).isEqualTo(played.contacts());
         assertThat(loaded.ships()).isEqualTo(played.ships());
+        assertThat(loaded.market()).isEqualTo(played.market());
+        assertThat(loaded.nextLotId()).isEqualTo(played.nextLotId());
         for (int i = 0; i < played.sectors().size(); i++) assertThat(loaded.sectors().get(i).deliver()).as("deliver orders at %d", i).isEqualTo(played.sectors().get(i).deliver());
 
         // diff save: one more update, only changed rows written, still identical
@@ -82,6 +87,7 @@ class WorldRepositoryRoundTripTest {
         worlds.saveDiff(gameId, loaded, next, com);
         World loaded2 = worlds.load(games.find(gameId).orElseThrow(), cfg);
         assertThat(ApplyStep.hash(loaded2)).isEqualTo(ApplyStep.hash(next));
+        assertThat(loaded2.market()).isEqualTo(next.market());
         long held = loaded2.sectors().stream().mapToLong(s -> s.held().size()).sum();
         assertThat(held).isEqualTo(next.sectors().stream().mapToLong(Sector::heldCount).sum());
     }

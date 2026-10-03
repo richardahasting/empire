@@ -131,6 +131,8 @@ public final class Ledger {
      */
     public double toShip(int from, int c, double qty) { int q = (int) taken(qty); stock[from * nCom + c] -= q; return q; }
     public double fromShip(int to, int c, double qty) { int q = (int) taken(qty); stock[to * nCom + c] += q; return q; }
+    /** Goods bought on the market arrive (issue #141): moved, not made — the lot held them until now. */
+    public double fromMarket(int to, int c, double qty) { return fromShip(to, c, qty); }
 
     /** A ship makes something at sea (fishing). Tallied as produced; the hold is not a sector. */
     public double produceAtSea(int c, double qty) { int q = (int) whole(qty); produced[c] += q; return q; }

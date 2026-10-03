@@ -35,6 +35,9 @@ public final class CommandExecutor {
             case Command.Threshold t -> threshold(w, c, t);
             case Command.Demobilize d -> demobilize(w, c, d);
             case Command.Enlist en -> enlist(w, c, en);
+            case Command.Sell sl -> Market.sell(cfg, com, w, c, sl);
+            case Command.Buy by -> { org.hastingtx.empire.engine.update.Ctx rc = new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0); yield Market.buy(cfg, com, w, c, by, (to, ci) -> roomFor(rc, to, ci)); }
+            case Command.ResetLot rl -> Market.reset(cfg, com, w, c, rl);
             case Command.Distribute d -> distribute(w, c, d);
             case Command.Deliver d -> deliver(w, c, d);
             case Command.BuildShip b -> buildShip(w, c, b);

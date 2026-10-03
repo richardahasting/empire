@@ -10,7 +10,8 @@ public sealed interface Command permits
         Command.BreakSanctuary, Command.Designate, Command.Threshold, Command.Distribute,
         Command.Move, Command.Explore, Command.BuildRoad, Command.BuildRail, Command.RailShip, Command.Deliver,
         Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission, Command.Land, Command.Demobilize, Command.Enlist, Command.Attack, Command.Anti, Command.BuildUnit, Command.March, Command.LoadUnit, Command.Board, Command.Sabotage, Command.Incite, Command.UnitFire, Command.Work, Command.BuildPlane, Command.Bomb, Command.Recon,
-        Command.RailLane, Command.Telegram, Command.Announce, Command.DeclareWar, Command.OfferPeace {
+        Command.RailLane, Command.Telegram, Command.Announce, Command.DeclareWar, Command.OfferPeace,
+        Command.Sell, Command.Buy, Command.ResetLot {
 
     String verb();
 
@@ -91,6 +92,18 @@ public sealed interface Command permits
 
     /** A land unit goes aboard a ship, or ashore from her ({@code ship} 0) — issue #252; KNOWN load.c, lnd_land. */
     record Board(long unit, long ship) implements Command { public String verb() { return ship == 0 ? "ashore" : "board"; } }
+
+    /**
+     * Put goods on the market (issue #141; KNOWN sell.c): {@code qty} of them, or with a negative {@code qty} all but
+     * that many, from a harbour or warehouse of yours, at {@code price} a unit.
+     */
+    record Sell(Coord sector, String commodity, double qty, double price) implements Command { public String verb() { return "sell"; } }
+
+    /** Bid {@code price} a unit for a lot (issue #141; KNOWN buy.c); the goods go to {@code dest} if it sells to you. */
+    record Buy(long lot, double price, Coord dest) implements Command { public String verb() { return "buy"; } }
+
+    /** Lower the price of a lot nobody has bid on, or take it back with a price of 0 or less (issue #141; KNOWN rese.c). */
+    record ResetLot(long lot, double price) implements Command { public String verb() { return "reset_lot"; } }
 
     /** A plane is laid down on an airfield of yours (issue #262). */
     record BuildPlane(Coord at, String cls) implements Command { public String verb() { return "build_plane"; } }

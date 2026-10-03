@@ -19,7 +19,9 @@ public record EconomyCfg(
         /** Loyalty, work and guerrillas (issue #72). Null in a game whose rules predate them: no unrest. */
         UnrestCfg unrest,
         /** The enlist command and the enlistment centre (issue #276). Null in a game whose rules predate it: no enlist. */
-        EnlistCfg enlist) {
+        EnlistCfg enlist,
+        /** The commodity market (issue #141). Null in a game whose rules predate it, or with options.market off: no market. */
+        MarketCfg market) {
 
     public double poorGroundBelowOrDefault() { return poorGroundBelow == null ? 30 : poorGroundBelow; }
 

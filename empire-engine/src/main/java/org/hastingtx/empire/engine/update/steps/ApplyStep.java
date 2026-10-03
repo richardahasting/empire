@@ -66,7 +66,7 @@ public final class ApplyStep {
             countries.add(new Country(c.id(), c.name(), c.capital(), c.cash() + led.cash[c.id()], c.btu() + led.btu[c.id()], lv,
                     c.handicap(), c.inSanctuary(), led.bankruptNext[c.id()], led.plagueLeft[c.id()]));
         }
-        World out = new World(snap.width(), snap.height(), snap.wrapX(), snap.wrapY(), next, countries, List.of(), snap.updateNumber() + 1, List.of(), ctx.ships, snap.nextShipId(), ctx.contacts, ctx.seen, snap.railLanes(), snap.relations(), ctx.units, snap.nextUnitId(), ctx.planes, snap.nextPlaneId());   // lanes and relations are standing: they survive the update
+        World out = new World(snap.width(), snap.height(), snap.wrapX(), snap.wrapY(), next, countries, List.of(), snap.updateNumber() + 1, List.of(), ctx.ships, snap.nextShipId(), ctx.contacts, ctx.seen, snap.railLanes(), snap.relations(), ctx.units, snap.nextUnitId(), ctx.planes, snap.nextPlaneId(), ctx.market, snap.nextLotId());   // lanes and relations are standing: they survive the update
         checkConservation(ctx, out, rebuilt, nRebuilt);
         // the last line of a sector's story: what it wanted and did not get
         for (var e : led.shortages.entrySet()) {
@@ -132,6 +132,9 @@ public final class ApplyStep {
         // what land units carry is still in the world (issue #247)
         for (var u : ctx.snap.units()) for (int c = 0; c < nCom; c++) before[c] += (long) u.stock().get(c);
         for (var u : out.units()) for (int c = 0; c < nCom; c++) after[c] += (long) u.stock().get(c);
+        // goods on the market are out of their sector and not yet in anyone else's (issue #141): still in the world
+        for (var l : ctx.snap.market()) before[l.commodity()] += (long) l.amount();
+        for (var l : out.market()) after[l.commodity()] += (long) l.amount();
         // Fuel in a tank is still fuel (issue #65): it left a sector but it has not left the world, and
         // it only stops being counted when it is burned, which is tallied as destroyed.
         int fuelIdx = ctx.cfg.units().ships() != null && ctx.cfg.units().ships().fuel() ? ctx.com.index(ctx.cfg.units().ships().fuelId()) : -1;
