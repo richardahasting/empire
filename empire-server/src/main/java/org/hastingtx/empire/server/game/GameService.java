@@ -248,6 +248,54 @@ public class GameService {
         } finally { old.lock.unlock(); }
     }
 
+    /** What a unit-rules refresh did, or with {@code dryRun} would do (issue #310): every rule block it adds, by path. */
+    public record UnitRulesRefresh(boolean applied, List<String> added, Summary game) {}
+
+    /**
+     * Bring a running game's unit rules up to date (issue #310): {@code units} whole from the preset as shipped — ships,
+     * land units, planes, missiles, mines, nukes — and every rule block the game lacks anywhere else (a new
+     * {@code economy.market}, say), without changing a value it already has. A full reload would also take the economy as
+     * shipped; for game 82 that is ~32,000 people and Richard's hand edits. With {@code dryRun} nothing is written: it
+     * says what would be added, so a block a deity took out on purpose can be seen before it comes back. Deity only.
+     */
+    public UnitRulesRefresh refreshUnitRules(long gameId, Account a, boolean dryRun) {
+        if (a == null || !a.admin()) throw new SecurityException("deity only");
+        Game old = get(gameId);
+        old.lock.lock();
+        try {
+            GameRow row = games.find(gameId).orElseThrow();
+            Map<String, Object> mine = loader.loadYaml(row.configYaml()).raw();
+            Map<String, Object> shipped = loader.loadPreset(old.preset).raw();
+            if (shipped.get("units") == null) throw new IllegalStateException("the " + old.preset + " preset has no unit rules to take");
+            List<String> added = new ArrayList<>();
+            Map<String, Object> rest = new java.util.LinkedHashMap<>(shipped);
+            rest.remove("units");
+            addMissing(mine, rest, "", added);
+            mine.put("units", shipped.get("units"));
+            added.add(0, "units (all of it, from the preset)");
+            String yaml = loader.toYaml(mine);
+            ConfigLoader.Loaded l = loader.loadYaml(yaml);            // binds, or throws before anything is written
+            if (dryRun) return new UnitRulesRefresh(false, added, summary(old, a));
+            games.setConfig(gameId, yaml, l.hash());
+            GameRow after = games.find(gameId).orElseThrow();
+            Game g = new Game(after, l.config(), worlds.load(after, l.config()));
+            loaded.put(gameId, g);
+            log.info("game {} '{}': unit rules reloaded from preset {}, and added {} (config {})", gameId, row.name(), old.preset, added, l.hash().substring(0, 12));
+            return new UnitRulesRefresh(true, added, summary(g, a));
+        } finally { old.lock.unlock(); }
+    }
+
+    /** Puts into {@code mine} every key of {@code shipped} it lacks, recursing into maps both have; never overwrites. */
+    @SuppressWarnings("unchecked")
+    static void addMissing(Map<String, Object> mine, Map<String, Object> shipped, String path, List<String> added) {
+        for (var e : shipped.entrySet()) {
+            Object have = mine.get(e.getKey());
+            if (!mine.containsKey(e.getKey())) { mine.put(e.getKey(), e.getValue()); added.add(path + e.getKey()); }
+            else if (have instanceof Map<?, ?> hm && e.getValue() instanceof Map<?, ?> sm)
+                addMissing((Map<String, Object>) hm, (Map<String, Object>) sm, path + e.getKey() + ".", added);
+        }
+    }
+
     /** Give an existing game's sea its fishing grounds (issue #56): ocean fertility from the generator, deterministic from the game seed. Land is untouched. */
     public Summary seedSeaFertility(long gameId, Account a) {
         Game g = get(gameId);
