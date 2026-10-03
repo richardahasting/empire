@@ -43,8 +43,8 @@ public final class CommandExecutor {
             case Command.SetPrice sp -> Market.setPrice(cfg, com, w, c, sp);
             case Command.Trade tr -> Market.tradeBid(cfg, com, w, c, tr);
             case Command.AirMission am -> Air.mission(cfg, w, c, am);
-            case Command.Fly fl -> Air.fly(cfg, com, w, c, fl);
-            case Command.Drop dr -> Air.drop(cfg, com, w, c, dr);
+            case Command.Fly fl -> { org.hastingtx.empire.engine.update.Ctx rc = new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0); yield Air.fly(cfg, com, w, c, fl, (to, ci) -> roomFor(rc, to, ci)); }
+            case Command.Drop dr -> { org.hastingtx.empire.engine.update.Ctx rc = new org.hastingtx.empire.engine.update.Ctx(w, cfg, com, 0); yield Air.drop(cfg, com, w, c, dr, (to, ci) -> roomFor(rc, to, ci)); }
             case Command.Paradrop pd -> Air.paradrop(cfg, com, w, c, pd);
             case Command.Distribute d -> distribute(w, c, d);
             case Command.Deliver d -> deliver(w, c, d);

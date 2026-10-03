@@ -143,6 +143,22 @@ class TransportTest {
     }
 
     @Test
+    void aPlaneCannotBeBothInTheSortieAndItsEscort() {
+        World w = plane(plane(world(false, 0), 1, 0, "fighter_2", FIELD), 2, 0, "fighter_2", FIELD);
+        assertThat(EX.execute(w, 0, new Command.Fly(List.of(1L, 2L), FIELD2, null, List.of(2L))).error()).contains("named twice");
+    }
+
+    @Test
+    void noMoreIsCarriedThanTheFieldCanTake() {
+        World w = plane(world(false, 0), 1, 0, "jet_transport", FIELD);
+        double cap = CFG.economy().defaultCapacity();
+        World full = w.withSector(w.sector(FIELD2).withStock(w.sector(FIELD2).stock().with(FOOD, cap - 3)));
+        World r = ok(full, 0, new Command.Fly(List.of(1L), FIELD2, "food", List.of()));
+        assertThat(r.sector(FIELD2).stock().get(FOOD)).as("three more, and nothing for the update to cut away").isLessThanOrEqualTo(cap);
+        assertThat(r.sector(FIELD).stock().get(FOOD)).isEqualTo(1000 - 3);
+    }
+
+    @Test
     void civiliansFlyOnlyBetweenTheirOwnPeoplesLand() {
         World w = plane(world(false, 0), 1, 0, "transport", FIELD);
         World occupied = w.withSector(w.sector(FIELD).withUnrest(0, 100, 1, 0, Sector.NOBODY));

@@ -163,7 +163,7 @@ final class Air {
      * transports carry their load twice over ({@code fly_load_multiple}); escorts fly along and land with them. The
      * fighters of anyone at war rise on the way, and what a plane shot down or turned back carried is lost.
      */
-    static CommandResult fly(GameConfig cfg, Commodities com, World w, Country c, Command.Fly f) {
+    static CommandResult fly(GameConfig cfg, Commodities com, World w, Country c, Command.Fly f, Market.Room room) {
         UnitsCfg.PlanesCfg pc = cfg.units().planes();
         Lift l = lift(cfg, com, w, c, f.planes(), f.to(), 1, List.of(), "fly");
         if (l.fail() != null) return CommandResult.fail(w, l.fail());
@@ -180,13 +180,15 @@ final class Air {
             ci = com.index(f.commodity());
             String no = civilianRule(com, ci, l.field(), to, c.id());
             if (no != null) return CommandResult.fail(w, no);
-            load = loads(cfg, com, l.planes(), ci, tc.flyLoadMultiple(), Math.floor(l.field().stock().get(ci)));
+            // no more than the field can take: what the update would cut away is lost (issue #103)
+            load = loads(cfg, com, l.planes(), ci, tc.flyLoadMultiple(), Math.floor(Math.min(l.field().stock().get(ci), room.roomFor(to, ci))));
             double total = load.values().stream().mapToDouble(Double::doubleValue).sum();
-            if (total < 1) return CommandResult.fail(w, "nothing to carry: " + (l.field().stock().get(ci) < 1 ? l.field().at() + " has no " + f.commodity() : "none of them is a cargo plane"));
+            if (total < 1) return CommandResult.fail(w, "nothing to carry: " + (l.field().stock().get(ci) < 1 ? l.field().at() + " has no " + f.commodity()
+                    : room.roomFor(to, ci) < 1 ? f.to() + " has no room for more " + f.commodity() : "none of them is a cargo plane"));
             Sector fl = next.sector(l.field().at());
             next = next.withSector(fl.withStock(fl.stock().plus(ci, -total)));
         }
-        Escorts es = escorts(cfg, com, next, c, f.escorts(), l.planes().get(0), f.to(), 1);
+        Escorts es = escorts(cfg, com, next, c, f.escorts(), l.planes(), f.to(), 1);
         if (es.fail() != null) return CommandResult.fail(w, es.fail());
         UnrestStep.R r = new UnrestStep.R(Rng.stream("fly:" + f.planes() + ">" + f.to() + ":" + w.updateNumber(), cfg.world() == null ? 0 : cfg.world().seed()));
         Raid raid = encounter(cfg, com, r, es.world(), c, l.planes(), es.planes(), f.to());
@@ -194,10 +196,10 @@ final class Air {
         double delivered = 0;
         for (long id : raid.through()) {
             Plane p = next.plane(id);
-            next = next.withPlane(p.withAt(f.to()).withNote("flew to " + f.to()));
+            next = next.withPlane(p.withAt(f.to()).withMission(null, null, 0).withNote("flew to " + f.to()));   // a mission was set from the old field
             delivered += load.getOrDefault(id, 0.0);
         }
-        for (Plane e : es.planes()) { Plane p = next.plane(e.id()); if (p != null && p.efficiency() >= pc.minEfficiency() && !raid.lost()) next = next.withPlane(p.withAt(f.to())); }
+        if (!raid.lost()) for (long id : raid.escortsThrough()) { Plane p = next.plane(id); if (p != null) next = next.withPlane(p.withAt(f.to()).withMission(null, null, 0)); }
         if (delivered > 0) { Sector d = next.sector(f.to()); next = next.withSector(d.withStock(d.stock().plus(ci, delivered))); }
         double carried = load.values().stream().mapToDouble(Double::doubleValue).sum();
         String what = carried > 0 ? "; " + q(delivered) + " of " + q(carried) + " " + f.commodity() + " arrived" : "";
@@ -205,7 +207,7 @@ final class Air {
     }
 
     /** KNOWN drop.c: transports drop their load (once over) on a sector of yours and fly home; nothing lands. */
-    static CommandResult drop(GameConfig cfg, Commodities com, World w, Country c, Command.Drop d) {
+    static CommandResult drop(GameConfig cfg, Commodities com, World w, Country c, Command.Drop d, Market.Room room) {
         UnitsCfg.PlanesCfg pc = cfg.units().planes();
         Lift l = lift(cfg, com, w, c, d.planes(), d.at(), 2, List.of("cargo"), "drop supplies");
         if (l.fail() != null) return CommandResult.fail(w, l.fail());
@@ -215,13 +217,13 @@ final class Air {
         int ci = com.index(d.commodity());
         String no = civilianRule(com, ci, l.field(), to, c.id());
         if (no != null) return CommandResult.fail(w, no);
-        Map<Long, Double> load = loads(cfg, com, l.planes(), ci, pc.transport().dropLoadMultiple(), Math.floor(l.field().stock().get(ci)));
+        Map<Long, Double> load = loads(cfg, com, l.planes(), ci, pc.transport().dropLoadMultiple(), Math.floor(Math.min(l.field().stock().get(ci), room.roomFor(to, ci))));
         double total = load.values().stream().mapToDouble(Double::doubleValue).sum();
-        if (total < 1) return CommandResult.fail(w, l.field().at() + " has no " + d.commodity() + " to drop");
+        if (total < 1) return CommandResult.fail(w, l.field().stock().get(ci) < 1 ? l.field().at() + " has no " + d.commodity() + " to drop" : d.at() + " has no room for more " + d.commodity());
         World next = l.world();
         Sector fl = next.sector(l.field().at());
         next = next.withSector(fl.withStock(fl.stock().plus(ci, -total)));
-        Escorts es = escorts(cfg, com, next, c, d.escorts(), l.planes().get(0), d.at(), 2);
+        Escorts es = escorts(cfg, com, next, c, d.escorts(), l.planes(), d.at(), 2);
         if (es.fail() != null) return CommandResult.fail(w, es.fail());
         UnrestStep.R r = new UnrestStep.R(Rng.stream("drop:" + d.planes() + ">" + d.at() + ":" + w.updateNumber(), cfg.world() == null ? 0 : cfg.world().seed()));
         Raid raid = encounter(cfg, com, r, es.world(), c, l.planes(), es.planes(), d.at());
@@ -245,7 +247,7 @@ final class Air {
         Sector target = w.sector(pd.at());
         if (target.owner() == c.id()) return CommandResult.fail(w, pd.at() + " is yours; paratroops go where you are not");
         if (tc.noParadropTerrain().contains(target.terrain().name().toLowerCase(java.util.Locale.ROOT))) return CommandResult.fail(w, "paratroops cannot land on " + target.terrain().name().toLowerCase(java.util.Locale.ROOT));
-        if (target.owned() && tc.noParadropDesignations().contains(target.designation())) return CommandResult.fail(w, "paratroops cannot take a " + target.designation());
+        if (tc.noParadropDesignations().contains(target.designation())) return CommandResult.fail(w, "paratroops cannot take a " + target.designation());
         if (target.owned()) { String no = Assault.refused(cfg, w, c, target, "paradrop on"); if (no != null) return CommandResult.fail(w, no); }
         Map<Long, Double> load = loads(cfg, com, l.planes(), com.mil, tc.dropLoadMultiple(), Math.floor(l.field().stock().get(com.mil)));
         double total = load.values().stream().mapToDouble(Double::doubleValue).sum();
@@ -253,7 +255,7 @@ final class Air {
         World next = l.world();
         Sector fl = next.sector(l.field().at());
         next = next.withSector(fl.withStock(fl.stock().plus(com.mil, -total)));
-        Escorts es = escorts(cfg, com, next, c, pd.escorts(), l.planes().get(0), pd.at(), 2);
+        Escorts es = escorts(cfg, com, next, c, pd.escorts(), l.planes(), pd.at(), 2);
         if (es.fail() != null) return CommandResult.fail(w, es.fail());
         UnrestStep.R r = new UnrestStep.R(Rng.stream("para:" + pd.planes() + ">" + pd.at() + ":" + w.updateNumber(), cfg.world() == null ? 0 : cfg.world().seed()));
         Raid raid = encounter(cfg, com, r, es.world(), c, l.planes(), es.planes(), pd.at());
@@ -446,11 +448,13 @@ final class Air {
      * back, and each taking its own petrol off its own field. A bad escort refuses the whole sortie, before anything flies.
      */
     private static Escorts escorts(GameConfig cfg, Commodities com, World w, Country c, List<Long> ids, Plane lead, Coord target) {
-        return escorts(cfg, com, w, c, ids, lead, target, 2);
+        return escorts(cfg, com, w, c, ids, List.of(lead), target, 2);
     }
 
     /** {@code mult}: 2 for a sortie that comes home, 1 for one that lands where it goes (KNOWN rangemult). */
-    private static Escorts escorts(GameConfig cfg, Commodities com, World w, Country c, List<Long> ids, Plane lead, Coord target, int mult) {
+    private static Escorts escorts(GameConfig cfg, Commodities com, World w, Country c, List<Long> ids, List<Plane> leads, Coord target, int mult) {
+        Plane lead = leads.get(0);
+        Set<Long> flying = new HashSet<>(leads.stream().map(Plane::id).toList());
         if (ids.isEmpty()) return new Escorts(null, w, List.of());
         UnitsCfg.PlanesCfg pc = cfg.units().planes();
         UnitsCfg.AirCombatCfg ac = pc.airCombat();
@@ -462,7 +466,7 @@ final class Air {
         for (long id : ids) {
             Plane e = w.plane(id);
             if (e == null || e.owner() != c.id()) return new Escorts("no plane #" + id + " of yours to fly escort", w, List.of());
-            if (id == lead.id() || !seen.add(id)) return new Escorts("plane #" + id + " is named twice", w, List.of());
+            if (flying.contains(id) || !seen.add(id)) return new Escorts("plane #" + id + " is named twice", w, List.of());
             UnitsCfg.PlaneClassCfg cls = pc.planeClass(e.cls());
             if (cls == null || !(cls.has("intercept") || cls.has("escort"))) return new Escorts("plane #" + id + " cannot fly escort; fighters and escort planes can", w, List.of());
             if (e.efficiency() < ac.minEfficiency()) return new Escorts("plane #" + id + " is at " + q(e.efficiency()) + "%; an escort needs " + q(ac.minEfficiency()) + "%", w, List.of());
@@ -482,7 +486,7 @@ final class Air {
      * What the flight out did to the raid: {@code through} the lead planes that got through, in order — the rest were shot
      * down or turned back. {@code lost} when none did.
      */
-    private record Raid(World world, List<Long> through, String story) {
+    private record Raid(World world, List<Long> through, List<Long> escortsThrough, String story) {
         boolean lost() { return through.isEmpty(); }
     }
 
@@ -503,7 +507,7 @@ final class Air {
         UnitsCfg.PlanesCfg pc = cfg.units().planes();
         UnitsCfg.AirCombatCfg ac = pc.airCombat();
         List<Long> mine = new ArrayList<>(leads.stream().map(Plane::id).toList());
-        if (ac == null) return new Raid(w, mine, "");
+        if (ac == null) return new Raid(w, mine, escorts.stream().map(Plane::id).toList(), "");
         int pet = com.index("pet");
         Map<Long, Plane> now = new HashMap<>();
         for (Plane l : leads) now.put(l.id(), l);
@@ -562,7 +566,7 @@ final class Air {
             Plane after = now.get(l.id());
             story.add(after.efficiency() < pc.minEfficiency() ? "plane #" + l.id() + " was shot down on the way" : "plane #" + l.id() + " turned back at " + q(after.efficiency()) + "%");
         }
-        return new Raid(w, mine, String.join("; ", story));
+        return new Raid(w, mine, esc, String.join("; ", story));
     }
 
     /**
