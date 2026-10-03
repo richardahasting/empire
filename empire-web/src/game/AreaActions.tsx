@@ -3,6 +3,7 @@ import type { CommandRequest, Coord, CountryView, Rules } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { nearestWarehouse } from "@/game/bearing";
 
 interface Props {
   view: CountryView; rules: Rules; busy: boolean;
@@ -39,6 +40,19 @@ export function AreaActions({ view, rules, busy, area, onCommand, onClear, onPic
   const [garrison, setGarrison] = useState("20");
   const mil = sectors.reduce((n, s) => n + Math.floor(s.stock["mil"] ?? 0), 0);
   const all = { sectors: area };
+  // issue #316: each sector to its own nearest warehouse — one order per warehouse, over the sectors nearest it
+  const hasWarehouse = view.sectors.some(s => s.full && s.designation === "warehouse");
+  const toNearestWarehouses = async () => {
+    const groups = new Map<string, { at: Coord; sectors: Coord[] }>();
+    for (const s of sectors) {
+      const w = nearestWarehouse(view, s.at);
+      if (!w) continue;
+      const k = `${w.sector.at.x},${w.sector.at.y}`;
+      if (!groups.has(k)) groups.set(k, { at: w.sector.at, sectors: [] });
+      groups.get(k)!.sectors.push(s.at);
+    }
+    for (const g of groups.values()) await onCommand({ verb: "distribute", x2: g.at.x, y2: g.at.y, sectors: g.sectors });
+  };
   const cost = (verb: string) => (rules.btuCosts?.[verb] ?? rules.btuCosts?.default ?? 1) * area.length;
 
   return (
@@ -63,6 +77,7 @@ export function AreaActions({ view, rules, busy, area, onCommand, onClear, onPic
       <div className="grid gap-1 text-xs">Distribution centre
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="secondary" disabled={busy} onClick={() => void onCommand({ verb: "distribute", x2: view.capital.x, y2: view.capital.y, ...all })}>→ capital</Button>
+          <Button size="sm" variant="secondary" disabled={busy || !hasWarehouse} title="each sector to its own nearest warehouse" onClick={() => void toNearestWarehouses()}>→ nearest warehouse</Button>
           <Button size="sm" variant="secondary" disabled={busy} onClick={onPickCentre}>Pick on map…</Button>
           <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: "distribute", clear: true, ...all })}>Clear centre</Button>
         </div>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { deliveryTarget, surplusLine } from "./bearing";
+import { deliveryTarget, nearestWarehouse, surplusLine } from "./bearing";
 import { estimate, type CommandRequest, type Coord, type CountryView, type Estimate, type Macro, type Rules, type SectorView, type ShipView } from "@/api/client";
 import { BuildShipDialog } from "@/game/Fleet";
 import { BuildUnitDialog } from "@/game/Army";
@@ -108,6 +108,12 @@ export function SectorMenu({ gameId, view, rules, sector: s, onCommand, busy, ch
               <ContextMenuItem onSelect={() => onStartPick({ verb: "distribute", from: s, commodity: "", qty: 0 })}>Send surplus to… (pick the centre on the map)</ContextMenuItem>
               <ContextMenuItem disabled={busy || (s.distCenter?.x === view.capital.x && s.distCenter?.y === view.capital.y)}
                 onSelect={() => void onCommand({ verb: "distribute", x: s.at.x, y: s.at.y, x2: view.capital.x, y2: view.capital.y })}>Supply from the capital (set centre)</ContextMenuItem>
+              {(() => {   // issue #316: the nearest warehouse, beside the capital
+                const w = nearestWarehouse(view, s.at);
+                return <ContextMenuItem disabled={busy || !w || (s.distCenter?.x === w.sector.at.x && s.distCenter?.y === w.sector.at.y)}
+                  onSelect={() => { if (w) void onCommand({ verb: "distribute", x: s.at.x, y: s.at.y, x2: w.sector.at.x, y2: w.sector.at.y }); }}>
+                  {w ? `Supply from the nearest warehouse, ${w.sector.relative.x},${w.sector.relative.y} (${w.distance} away; set centre)` : "Supply from the nearest warehouse (you have none)"}</ContextMenuItem>;
+              })()}
               {s.distCenter && <ContextMenuItem destructive disabled={busy} onSelect={() => void onCommand({ verb: "distribute", x: s.at.x, y: s.at.y, clear: true })}>Stop automatic supply (clear centre)</ContextMenuItem>}
               <ContextMenuSeparator />
               <ContextMenuLabel>Macros{macros.length ? " — click to run here" : ""}</ContextMenuLabel>
