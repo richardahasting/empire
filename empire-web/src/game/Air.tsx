@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { CommandRequest, CountryView, PlaneView, Rules, SectorView } from "@/api/client";
+import type { CommandRequest, CountryView, NukeClass, NukeView, PlaneView, Rules, SectorView } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -22,12 +22,18 @@ function absolute(view: CountryView, dx: number, dy: number): { x: number; y: nu
  * country at war with you rise against it on the way, and the escorts it takes fight them first (issue #71).
  */
 export function Air({ view, busy, onCommand }: { view: CountryView; busy: boolean; onCommand: (c: CommandRequest) => Promise<void> }) {
-  const [dialog, setDialog] = useState<{ kind: "bomb" | "recon" | "defend" | "fly" | "drop" | "paradrop" | "launch"; plane: PlaneView } | null>(null);
+  const [dialog, setDialog] = useState<{ kind: "bomb" | "recon" | "defend" | "fly" | "drop" | "paradrop" | "launch" | "arm"; plane: PlaneView } | null>(null);
+  const nukes = view.nukes ?? [];
+  const storedWith = (p: PlaneView) => nukes.filter(n => n.plane === 0 && n.at.x === p.at.x && n.at.y === p.at.y && n.weight <= p.load);
   const planes = view.planes ?? [];
   const overhead = view.overhead ?? [];
-  if (planes.length === 0 && overhead.length === 0) return <p className="text-xs text-muted-foreground">No planes. Designate an airfield, then right-click it and choose “Build plane…”.</p>;
+  if (planes.length === 0 && overhead.length === 0 && nukes.length === 0) return <p className="text-xs text-muted-foreground">No planes. Designate an airfield, then right-click it and choose “Build plane…”.</p>;
   return (
     <div className="space-y-2 text-xs">
+      {nukes.length > 0 && <div className="rounded-md border border-border p-2">
+        <div className="font-medium">Warheads</div>
+        {nukes.map(n => <div key={n.id}>#{n.id} {n.name} at {rel(n.relative)} · blast {n.blast}, {n.damage}% at ground zero · weighs {n.weight} · {n.plane ? `armed on plane #${n.plane}, ${n.airburst ? "airburst" : "groundburst"}` : "stored"}</div>)}
+      </div>}
       {overhead.length > 0 && <div className="rounded-md border border-border p-2">
         <div className="font-medium">Satellites overhead</div>
         {overhead.map((o, i) => <div key={i}>{o.ownerName}’s {o.name} over {rel(o.relative)}</div>)}
@@ -49,6 +55,11 @@ export function Air({ view, busy, onCommand }: { view: CountryView; busy: boolea
           {p.missile && <div>{p.rises ? "A missile that rises by itself against what comes at you — never launched."
             : p.satellite ? "An anti-sat: launched once at an enemy satellite over a sector you see, and spent; it also rises against one put up over you."
             : "A missile: launched once, and spent."}</div>}
+          {p.nuke !== 0 && <div className="text-destructive">Warhead #{p.nuke} aboard: it goes off where this {p.missile ? "missile comes down" : "plane bombs"}.</div>}
+          {p.nukeCarrier && (p.nuke !== 0 || storedWith(p).length > 0) && <div className="mt-1 flex flex-wrap gap-1">
+            {p.nuke === 0 && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "arm", plane: p })}>Arm…</Button>}
+            {p.nuke !== 0 && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: "disarm", plane: p.id })}>Disarm</Button>}
+          </div>}
           {p.satellite && !p.missile && <div>{p.orbit
             ? `${p.orbit === "geosync" ? "Geostationary" : "In orbit"} over ${rel(p.relative)}${p.ready ? "." : " — it reports from the next update."}`
             : "A satellite: launched into orbit over a sector, where it stays."}</div>}
@@ -71,6 +82,7 @@ export function Air({ view, busy, onCommand }: { view: CountryView; busy: boolea
           </div>}
         </div>
       ))}
+      {dialog?.kind === "arm" && <ArmDialog plane={dialog.plane} choices={storedWith(dialog.plane)} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {dialog?.kind === "launch" && <LaunchDialog plane={dialog.plane} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {dialog?.kind === "defend" && <DefendDialog plane={dialog.plane} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {dialog && (dialog.kind === "fly" || dialog.kind === "drop" || dialog.kind === "paradrop") && <TransportDialog kind={dialog.kind} plane={dialog.plane} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
@@ -288,6 +300,60 @@ function LaunchDialog({ plane, view, busy, onClose, onCommand }: { plane: PlaneV
             if (at) await onCommand({ verb: "launch", plane: plane.id, x: at.x, y: at.y, type: orbiter && geo ? "geo" : undefined });
             onClose();
           }}>Launch</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Arm a plane with a warhead stored where it is (issue #71; the original's arm): it goes off where the plane bombs or the missile lands. */
+function ArmDialog({ plane, choices, busy, onClose, onCommand }:
+  { plane: PlaneView; choices: NukeView[]; busy: boolean; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void> }) {
+  const [nuke, setNuke] = useState(choices[0]?.id ?? 0);
+  const [air, setAir] = useState(false);
+  return (
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Arm {plane.name} #{plane.id}</DialogTitle>
+          <DialogDescription>A warhead stored where it is, no heavier than it carries. It goes off where this {plane.missile ? "missile comes down" : "plane bombs"}: a groundburst hits hardest at the centre, an airburst further out.</DialogDescription></DialogHeader>
+        <div className="grid gap-3 text-sm">
+          <label className="grid gap-1">Warhead
+            <Select value={String(nuke)} onChange={e => setNuke(Number(e.target.value))}>
+              {choices.map(n => <option key={n.id} value={n.id}>#{n.id} {n.name} · blast {n.blast} · weighs {n.weight}</option>)}
+            </Select>
+          </label>
+          <label className="flex items-center gap-2"><Checkbox checked={air} onChange={() => setAir(a => !a)} />Airburst</label>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="danger" disabled={busy || !nuke} onClick={async () => { await onCommand({ verb: "arm", plane: plane.id, amount: nuke, type: air ? "airburst" : undefined }); onClose(); }}>Arm it</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Build a warhead in a nuclear plant (issue #71; the original's build nuke): whole, from the plant's materials and your cash. */
+export function BuildNukeDialog({ view, rules, plant, busy, onClose, onCommand }:
+  { view: CountryView; rules: Rules; plant: SectorView; busy: boolean; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void> }) {
+  const classes = rules.nukes?.classes ?? [];
+  const canBuild = (c: NukeClass) => view.levels.tech >= c.techRequired;
+  const [cls, setCls] = useState(classes.find(canBuild)?.id ?? classes[0]?.id ?? "");
+  const c = classes.find(x => x.id === cls);
+  return (
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Build a warhead at {rel(plant.relative)}</DialogTitle>
+          <DialogDescription>Built whole, at once, from the plant's materials and your cash; the plant must be at {rules.nukes?.plantMinEfficiency ?? 60}% or better. Arm it on a bomber or a missile that can carry its weight.</DialogDescription></DialogHeader>
+        <label className="grid gap-1 text-sm">Class
+          <Select value={cls} onChange={e => setCls(e.target.value)}>
+            {classes.map(x => <option key={x.id} value={x.id} disabled={!canBuild(x)}>{x.name}{canBuild(x) ? "" : ` (tech ${x.techRequired})`}</option>)}
+          </Select>
+        </label>
+        {c && <p className="text-xs text-muted-foreground">blast {c.blast} · {c.damage}% at ground zero · weighs {c.weight}{c.flags.includes("neutron") ? " · neutron" : ""} · {Object.entries(c.build).map(([k, v]) => k === "cash" ? `$${v}` : `${v} ${k}`).join(", ")}</p>}
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="danger" disabled={busy || !c || !canBuild(c)} onClick={async () => { await onCommand({ verb: "build_nuke", x: plant.at.x, y: plant.at.y, type: cls }); onClose(); }}>Build it</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

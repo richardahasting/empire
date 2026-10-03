@@ -221,6 +221,29 @@ airfield like any plane; one goes up **once** and stays up.
   **satellites overhead**: other countries' satellites over what you can see.
 - A satellite up there is never flown, bombed from, captured, or fitted out; it costs its upkeep.
 
+## Nuclear warheads
+
+Warheads are the original's (`nuke.config`, `build`, `arm`, `disarm`, and what a detonation does).
+
+- **Build** one in a **nuclear plant** of yours at 60% or better: right-click the plant, *Build
+  warhead…*, or `build x,y fission_10kt`. It is built **whole, at once**, from the plant's lcm, hcm,
+  oil and radioactive material and your cash. Thirteen classes, from the 10kt fission (tech 280)
+  to the 5mt fusion (tech 370); the neutron ones do little damage.
+- **Arm** it on a plane in the same sector: `arm PLANE NUKE [airburst]`. A bomber, a tactical plane
+  or a cargo plane can carry one if its load is at least the warhead's weight; so can the attack
+  missiles (V2 to Minuteman), not the Harpoon. A warhead goes wherever its plane goes, and is lost
+  with it. `disarm PLANE` puts it back on the ground.
+- **Set it off** by bombing (`bomb PLANE x,y`: it goes instead of bombs, and the plane flies home)
+  or by launching the missile (`launch MISSILE x,y`: a nuclear missile always hits, though ABMs may
+  still bring it down on the way).
+- **What it does:** a **groundburst** reaches two-thirds of the warhead's blast radius and does
+  its damage ÷ (distance + 1); an **airburst** reaches the full blast radius but does three-quarters
+  of its damage at the centre, 20 less for each sector out. Every sector in reach loses that share
+  of everything (a sanctuary shrugs it off); over 100% a land sector is left a **radioactive
+  wasteland** that nobody owns. Planes on the ground, land units, ships (a submarine at sea only if
+  hit squarely) and other warheads in reach are caught too.
+- A stored warhead is **captured** with its sector.
+
 ## What is not here yet
 
-Nuclear warheads.
+Fallout: the radiation a detonation leaves, which spreads, kills and decays.

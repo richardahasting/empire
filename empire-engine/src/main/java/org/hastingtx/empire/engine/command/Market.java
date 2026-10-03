@@ -253,6 +253,8 @@ final class Market {
             case Command.Lay x -> ships.add(new long[] {x.ship()});
             case Command.Launch x -> planes.add(new long[] {x.missile()});
             case Command.Satellite x -> planes.add(new long[] {x.plane()});
+            case Command.Arm x -> planes.add(new long[] {x.plane()});
+            case Command.Disarm x -> planes.add(new long[] {x.plane()});
             case Command.LandMine x -> units.add(new long[] {x.unit()});
             default -> { }
         }

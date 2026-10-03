@@ -50,7 +50,18 @@ public record CountryView(
         /** Every ship, plane and unit for sale (issue #141), public as the original's trade report was. */
         List<TradeView> trades,
         /** Other countries' satellites over what you can see (issue #71). */
-        List<OverheadView> overhead) {
+        List<OverheadView> overhead,
+        /** Your nuclear warheads (issue #71). */
+        List<NukeView> nukes) {
+
+    /** Before nukes. */
+    public CountryView(int countryId, String name, long updateNumber, Coord capital, boolean wrapX, boolean wrapY, int width, int height, double cash, double btu,
+                       Levels levels, HandicapCfg handicap, boolean inSanctuary, boolean bankrupt, List<String> commodityIds, List<SectorView> sectors,
+                       List<String> otherCountryNames, List<String> atWarWith, List<ShipView> ships, List<ContactView> contacts, List<RailLaneView> railLanes,
+                       List<TrainView> trains, List<UnitView> units, List<PlaneView> planes, List<LotView> market, List<TradeView> trades, List<OverheadView> overhead) {
+        this(countryId, name, updateNumber, capital, wrapX, wrapY, width, height, cash, btu, levels, handicap, inSanctuary, bankrupt, commodityIds, sectors,
+             otherCountryNames, atWarWith, ships, contacts, railLanes, trains, units, planes, market, trades, overhead, List.of());
+    }
 
     /** Before satellites. */
     public CountryView(int countryId, String name, long updateNumber, Coord capital, boolean wrapX, boolean wrapY, int width, int height, double cash, double btu,
@@ -58,7 +69,7 @@ public record CountryView(
                        List<String> otherCountryNames, List<String> atWarWith, List<ShipView> ships, List<ContactView> contacts, List<RailLaneView> railLanes,
                        List<TrainView> trains, List<UnitView> units, List<PlaneView> planes, List<LotView> market, List<TradeView> trades) {
         this(countryId, name, updateNumber, capital, wrapX, wrapY, width, height, cash, btu, levels, handicap, inSanctuary, bankrupt, commodityIds, sectors,
-             otherCountryNames, atWarWith, ships, contacts, railLanes, trains, units, planes, market, trades, List.of());
+             otherCountryNames, atWarWith, ships, contacts, railLanes, trains, units, planes, market, trades, List.of(), List.of());
     }
 
     /** Before object trade. */
@@ -109,7 +120,12 @@ public record CountryView(
                             /** A missile (issue #71): launched once; "rises" for a SAM or an ABM, which are never launched; "marine" for anti-ship. */
                             boolean missile, boolean rises, boolean marine,
                             /** A satellite (issue #71): put up into orbit, or with "missile" an anti-sat; its orbit ("orbit", "geosync") once up, else null; whether it reports yet. */
-                            boolean satellite, String orbit, boolean ready) {}
+                            boolean satellite, String orbit, boolean ready,
+                            /** Nuclear (issue #71): the warhead armed on it, 0 for none; whether it can carry one at all. */
+                            long nuke, boolean nukeCarrier) {}
+
+    /** A warhead of yours (issue #71): where it is, the plane it is armed on (0: stored), how it is set to go off. */
+    public record NukeView(long id, String cls, String name, Coord at, Coord relative, long plane, boolean airburst, double weight, int blast, double damage) {}
 
     /**
      * Someone else's satellite over a sector you can see (issue #71; KNOWN move_sat's "satellite spotted over"): whose,
@@ -359,7 +375,7 @@ public record CountryView(
 
         return new CountryView(countryId, c.name(), w.updateNumber(), c.capital(), w.wrapX(), w.wrapY(), w.width(), w.height(), c.cash(), c.btu(), c.levels(), c.handicap(),
                 c.inSanctuary(), c.bankrupt(), ids, views, others, atWar, ships, contacts, railLanes, trains, units(w, cfg, com, c), planes(w, cfg, c), market(w, com, c), trades(w, com, c),
-                overhead(w, cfg, c, visible, absolute));
+                overhead(w, cfg, c, visible, absolute), nukes(w, cfg, c));
     }
 
     private static List<TradeView> trades(World w, Commodities com, Country c) {
@@ -408,7 +424,23 @@ public record CountryView(
                     p.onAirDefence() ? relative(w, c.capital(), p.opPoint()) : null, p.onAirDefence() ? p.radius() : 0,
                     cls.has("cargo"), cls.has("para"), p.ship(), cls.has("light") || cls.has("helo") || cls.has("xlight"),
                     cls.has("missile"), cls.has("missile") && (cls.has("intercept") || cls.has("sdi")), cls.has("marine"),
-                    cls.has("satellite"), p.orbit(), p.orbiting() && w.updateNumber() > p.launched()));
+                    cls.has("satellite"), p.orbit(), p.orbiting() && w.updateNumber() > p.launched(),
+                    w.nukeOn(p.id()) == null ? 0 : w.nukeOn(p.id()).id(),
+                    cfg.units().nukes() != null && (cls.has("bomber") || cls.has("tactical") || cls.has("cargo")) && !cls.has("marine")));
+        }
+        return out;
+    }
+
+    private static List<NukeView> nukes(World w, GameConfig cfg, Country c) {
+        var nc = cfg.units().nukes();
+        if (nc == null || w.nukes().isEmpty()) return List.of();
+        List<NukeView> out = new ArrayList<>();
+        for (var n : w.nukes()) {
+            if (w.nukeOwner(n) != c.id()) continue;
+            var k = nc.nukeClass(n.cls());
+            Coord at = w.nukeAt(n);
+            out.add(new NukeView(n.id(), n.cls(), k == null ? n.cls() : k.name(), at, relative(w, c.capital(), at), n.plane(), n.airburst(),
+                    k == null ? 0 : k.weight(), k == null ? 0 : k.blast(), k == null ? 0 : k.damage()));
         }
         return out;
     }

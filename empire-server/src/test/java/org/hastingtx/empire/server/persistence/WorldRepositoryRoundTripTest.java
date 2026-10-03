@@ -72,6 +72,9 @@ class WorldRepositoryRoundTripTest {
         // a satellite in orbit (issue #71): orbit, theta and the update it went up are their own columns
         played = played.withPlane(new org.hastingtx.empire.engine.model.Plane(played.nextPlaneId(), 0, "spysat", other, 100, 320, 0, "")
                 .inOrbit(other, false, 7).orbited(other, 0.35));
+        // warheads (issue #71): one stored, one armed on the first plane above; their own table
+        played = played.withNuke(new org.hastingtx.empire.engine.model.Nuke(1, 0, "fission_10kt", cap, 300, 2, 0, false));
+        played = played.withNuke(new org.hastingtx.empire.engine.model.Nuke(2, 0, "fusion_5kt", cap, 320, 3, played.planes().get(0).id(), true));
         // mines (issue #71): a column on the sector
         played = played.withSector(played.sector(other).withMines(37));
         // a ship for sale with a bid on it (issue #141): its own table
@@ -92,6 +95,8 @@ class WorldRepositoryRoundTripTest {
         assertThat(loaded.market()).isEqualTo(played.market());
         assertThat(loaded.trades()).isEqualTo(played.trades());
         assertThat(loaded.planes()).isEqualTo(played.planes());
+        assertThat(loaded.nukes()).isEqualTo(played.nukes()).hasSize(2);
+        assertThat(loaded.nextNukeId()).isEqualTo(played.nextNukeId());
         assertThat(loaded.sector(other).mines()).isEqualTo(37);
         assertThat(loaded.nextTradeId()).isEqualTo(played.nextTradeId());
         assertThat(loaded.nextLotId()).isEqualTo(played.nextLotId());

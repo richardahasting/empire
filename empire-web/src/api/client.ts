@@ -91,6 +91,8 @@ export interface PlaneView {
   missile: boolean; rises: boolean; marine: boolean;
   /** a satellite (issue #71), or with missile an anti-sat; its orbit once up ("orbit" | "geosync"), and whether it reports yet */
   satellite: boolean; orbit: string | null; ready: boolean;
+  /** the warhead armed on it (issue #71), 0 for none; whether it can carry one at all */
+  nuke: number; nukeCarrier: boolean;
 }
 export interface PlaneClass { id: string; name: string; glyph: string; techRequired: number; build: Record<string, number>; bwork: number; accuracy: number; load: number; attack: number; defense: number; range: number; fuel: number; flags: string[] }
 export interface PlanesRules { startEfficiency: number; minEfficiency: number; abortBelow: number; classes: PlaneClass[] }
@@ -134,6 +136,8 @@ export interface CountryView {
   trades?: TradeView[];
   /** other countries' satellites over what you can see (issue #71) */
   overhead?: OverheadView[];
+  /** your nuclear warheads (issue #71) */
+  nukes?: NukeView[];
   /** Countries you are at war with, by name (issue #137). */
   atWarWith?: string[];
   /** Enemy ships your sensors have found (issue #75); what you can aim at (issue #68). */
@@ -198,7 +202,7 @@ export interface ShipClass { id: string; name: string; glyph: string; role: stri
   /** How many light land units she carries (issue #252); absent or 0 for a ship that carries none. */
   landUnits?: number | null }
 export interface ShipsRules { startEfficiency: number; dockPointsPerUpdate: number; harborMinEfficiency: number; classes: ShipClass[] }
-export interface Rules { sectorTypes: SectorType[]; commodities: Commodity[]; etusPerUpdate: number; btuCosts: Record<string, number>; road?: RoadRules; defaultCapacity?: number; rail?: RailRules; productionMinEfficiency?: number; massThresholdMultiplierByType?: Record<string, number>; ships?: ShipsRules | null; work?: WorkRules; curves?: Record<string, Curve>; maxPopCurve?: { type: string; base?: number | null; perResearchPoint?: number | null; cap?: number | null } | null; land?: LandRules | null; planes?: PlanesRules | null; market?: MarketRules | null }
+export interface Rules { sectorTypes: SectorType[]; commodities: Commodity[]; etusPerUpdate: number; btuCosts: Record<string, number>; road?: RoadRules; defaultCapacity?: number; rail?: RailRules; productionMinEfficiency?: number; massThresholdMultiplierByType?: Record<string, number>; ships?: ShipsRules | null; work?: WorkRules; curves?: Record<string, Curve>; maxPopCurve?: { type: string; base?: number | null; perResearchPoint?: number | null; cap?: number | null } | null; land?: LandRules | null; planes?: PlanesRules | null; market?: MarketRules | null; nukes?: NukesRules | null }
 /** The commodity market's rules (issue #141); null in a game without one. */
 export interface MarketRules { sectorTypes: string[]; minEfficiency: number; maxPrice: number; minRaise: number; buyTax: number; delayUpdates: number; snipeUpdates: number; unsellable: string[]; tradeTax?: number | null; tradeDelayUpdates?: number | null }
 /** A lot on the market (issue #141). from/dest are only yours: your lot's sector, your bid's destination. */
@@ -208,6 +212,11 @@ export interface LotView { id: number; seller: string; commodity: string; amount
 export interface Outcome { accepted: boolean; error?: string; btuSpent: number; view: CountryView; info?: string | null }
 export interface ConsoleReply { output: string; accepted: boolean; error?: string; view?: CountryView }
 /** Someone else's satellite over a sector you see (issue #71): what an anti-sat is aimed by. */
+/** A warhead of yours (issue #71): where it is, the plane it is armed on (0: stored), how it goes off. */
+export interface NukeView { id: number; cls: string; name: string; at: Coord; relative: Coord; plane: number; airburst: boolean; weight: number; blast: number; damage: number; }
+export interface NukeClass { id: string; name: string; techRequired: number; build: Record<string, number>; bwork: number; blast: number; damage: number; weight: number; flags: string[] }
+export interface NukesRules { plantMinEfficiency: number; classes: NukeClass[] }
+
 export interface OverheadView { ownerName: string; cls: string; name: string; at: Coord; relative: Coord; }
 
 export interface CommandRequest {

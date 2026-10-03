@@ -460,7 +460,7 @@ final class Air {
         if (field.stock().get(pet) < cls.fuel()) return new Sortie(CommandResult.fail(w, field.name() + " has "
                 + q(field.stock().get(pet)) + " petrol; the sortie takes " + q(cls.fuel())), null, null, null, null, 0);
         double bombs = 0;
-        if (bombing) {
+        if (bombing && w.nukeOn(p.id()) == null) {   // a warhead aboard is its load: no bombs (issue #71)
             if (cls.loadAt(p.tech()) < 1) return new Sortie(CommandResult.fail(w, article(cls.name()) + " carries no bombs"), null, null, null, null, 0);
             bombs = Math.min(cls.loadAt(p.tech()), Math.floor(field.stock().get(com.index("shell"))));
             if (bombs < 1) return new Sortie(CommandResult.fail(w, field.name() + " has no shells to bomb with"), null, null, null, null, 0);
@@ -506,6 +506,16 @@ final class Air {
         if (flak.shotDown()) return new CommandResult(next, null, 0, join(air, flak.story()) + " — plane #" + p.id() + " was shot down over " + b.at());
         p = flak.plane();
         if (flak.aborted()) return new CommandResult(next, null, 0, join(air, flak.story()) + " — plane #" + p.id() + " turned back at " + q(p.efficiency()) + "%");
+
+        // a warhead aboard goes off over the target instead of bombs (issue #71; KNOWN strat_bomb, detonate)
+        Nuke warhead = next.nukeOn(p.id());
+        if (warhead != null) {
+            Nukes.Blast blast = Nukes.detonate(cfg, com, next, warhead, target.at());
+            Plane home = blast.world().plane(p.id());
+            next = home == null ? blast.world() : blast.world().withPlane(home.withNote("dropped a warhead on " + target.at()));
+            String before = join(air, flak.story());
+            return new CommandResult(next, null, 0, (before.isEmpty() ? "" : before + " — ") + "plane #" + p.id() + " dropped warhead #" + warhead.id() + ": " + blast.story());
+        }
 
         boolean pinpoint = b.pinpoint();
         boolean tactical = cls.has("tactical");

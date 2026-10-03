@@ -12,7 +12,7 @@ public sealed interface Command permits
         Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission, Command.Land, Command.Demobilize, Command.Enlist, Command.Attack, Command.Anti, Command.BuildUnit, Command.March, Command.LoadUnit, Command.Board, Command.Sabotage, Command.Incite, Command.UnitFire, Command.Work, Command.BuildPlane, Command.Bomb, Command.Recon,
         Command.RailLane, Command.Telegram, Command.Announce, Command.DeclareWar, Command.OfferPeace,
         Command.Sell, Command.Buy, Command.ResetLot, Command.SetPrice, Command.Trade, Command.AirMission,
-        Command.Fly, Command.Drop, Command.Paradrop, Command.Lay, Command.LandMine, Command.SweepAir, Command.Launch, Command.Satellite {
+        Command.Fly, Command.Drop, Command.Paradrop, Command.Lay, Command.LandMine, Command.SweepAir, Command.Launch, Command.Satellite, Command.BuildNuke, Command.Arm, Command.Disarm {
 
     String verb();
 
@@ -164,6 +164,12 @@ public sealed interface Command permits
         public Launch(long missile, Coord at, long ship) { this(missile, at, ship, false); }
         public String verb() { return "launch"; }
     }
+    /** A nuclear warhead built whole in a nuclear plant (issue #71; KNOWN build_nuke). */
+    record BuildNuke(Coord at, String cls) implements Command { public String verb() { return "build_nuke"; } }
+    /** A warhead onto a plane in its sector, set to airburst or not (KNOWN arm.c); {@code nuke} 0 re-sets the one aboard. */
+    record Arm(long plane, long nuke, boolean airburst) implements Command { public String verb() { return "arm"; } }
+    /** The warhead off a plane, into its sector (KNOWN c_disarm). */
+    record Disarm(long plane) implements Command { public String verb() { return "disarm"; } }
     /** What a satellite in orbit sees (issue #71; KNOWN sate.c). */
     record Satellite(long plane) implements Command { public String verb() { return "satellite"; } }
 
