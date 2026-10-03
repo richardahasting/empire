@@ -75,6 +75,75 @@ class TendersTest {
         assertThat(w.ship(2).stock().get(LCM)).as("with lcm from the tender's hold").isLessThan(150);
     }
 
+    // ---- issue #266 / #267: game 82, where eleven full tenders sat in harbour while ships called ----
+
+    private static World dryHarbour(World w) {
+        return TestWorlds.own(w, CFG, HARBOR, "harbor", 100, 127, Map.of("civ", 800.0, "food", 300.0, "lcm", 2000.0), Map.of());
+    }
+
+    @Test
+    void anEmptyTenderInADryHarbourLeavesTheCallToOneThatCanHelp() {
+        Coord farHarbour = Hex.stepRaw(CAP, 3, 2);
+        World w = TestWorlds.own(dryHarbour(world()), CFG, farHarbour, "harbor", 100, 127, Map.of("civ", 800.0, "food", 300.0, "lcm", 2000.0, "pet", 5000.0), Map.of());
+        w = add(w, "cargo_ship", OUT, 0, 100);                             // #1, dry at sea, east
+        w = add(w, "tender", HARBOR, 150, 100);                            // #2, next door, nothing in her hold, nothing to restock from
+        w = stocked(add(w, "tender", farHarbour, 0, 100), 3);              // #3, the far side, full of petrol
+        World n = Update.run(w, CFG, 70).next();
+        assertThat(n.ship(2).rescuing()).as("an empty tender in a dry harbour does not take the call").isFalse();
+        assertThat(n.ship(3).rescuing()).as("the one that can help does").isTrue();
+        assertThat(n.ship(3).ward()).isEqualTo(1);
+    }
+
+    @Test
+    void aTenderSentFromHarbourTakesOnPetrolBeforeSheGoes() {
+        World w = add(world(), "cargo_ship", OUT, 0, 100);                 // #1
+        w = add(w, "tender", HARBOR, 150, 100);                            // #2, empty hold, in a harbour with petrol
+        double tank = CFG.units().ships().shipClass("cargo_ship").tankOr0();
+        w = Update.run(w, CFG, 80).next();
+        assertThat(w.ship(2).rescuing()).isTrue();
+        assertThat(w.ship(2).stock().get(PET)).as("restocked on the way out, not after a wasted trip").isGreaterThan(0);
+        for (int i = 0; i < 6 && w.ship(1).fuel() < tank - 1e-9; i++) w = Update.run(w, CFG, 81 + i).next();
+        assertThat(w.ship(1).fuel()).as("and filled the ship's tank on the first trip").isGreaterThanOrEqualTo(tank - 1e-9);
+    }
+
+    @Test
+    void aShipInAHarbourLostUnderHerIsFuelledFromAlongside() {
+        // Rick's miners at 11,7: the harbour they lay in went to the partisans, and no sea route ends on land
+        Coord lost = Hex.stepRaw(CAP, 3, 2);
+        World w = TestWorlds.own(world(), CFG, lost, "harbor", 100, 127, Map.of("civ", 10.0), Map.of());
+        w = w.withSector(w.sector(lost).withOwner(Sector.NOBODY));
+        w = add(w, "cargo_ship", lost, 0, 100);                            // #1, dry, in a harbour that is no longer hers
+        w = stocked(add(w, "tender", HARBOR, 0, 100), 2);                  // #2
+        double tank = CFG.units().ships().shipClass("cargo_ship").tankOr0();
+        boolean answered = false;
+        for (int i = 0; i < 12 && w.ship(1).fuel() < tank - 1e-9; i++) {
+            w = Update.run(w, CFG, 90 + i).next();
+            answered |= w.ship(2).rescuing();
+        }
+        assertThat(answered).as("the call is heard though her hex cannot be sailed into").isTrue();
+        assertThat(w.ship(1).fuel()).as("and she is fuelled from the sea beside her").isGreaterThanOrEqualTo(tank - 1e-9);
+    }
+
+    @Test
+    void aTenderOnACallDoesNotWaitInADryHarbourForPetrolThatIsNotComing() {
+        World w = add(dryHarbour(world()), "cargo_ship", OUT, 0, 100);     // #1
+        w = add(w, "tender", HARBOR, 100, 100);                            // #2: tank 100 of 150, the harbour dry
+        w = w.withShip(w.ship(2).withStock(w.ship(2).stock().with(PET, 400)));
+        w = Update.run(w, CFG, 100).next();
+        w = Update.run(w, CFG, 101).next();
+        assertThat(w.ship(2).rescuing()).isTrue();
+        assertThat(w.ship(2).at()).as("she went, with what she had").isNotEqualTo(HARBOR);
+    }
+
+    @Test
+    void aHandSailSaysSoInTheShipsNote() {
+        World w = stocked(add(world(), "tender", HARBOR, 0, 100), 1);
+        w = w.withShip(w.ship(1).withNote("in harbour").withMobility(10));
+        var r = new org.hastingtx.empire.engine.command.CommandExecutor(CFG).execute(w, 0, new org.hastingtx.empire.engine.command.Command.Sail(1, Hex.stepRaw(CAP, 0, 3)));
+        assertThat(r.error()).as(r.error()).isNull();
+        assertThat(r.world().ship(1).note()).as("not still 'in harbour' (issue #267)").startsWith("sailed 1 hex to");
+    }
+
     @Test
     void theNearerOfTwoTendersAnswers() {
         Coord farHarbour = Hex.stepRaw(CAP, 3, 2);
