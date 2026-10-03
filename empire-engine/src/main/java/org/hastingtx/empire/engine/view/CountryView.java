@@ -249,7 +249,7 @@ public record CountryView(
                     sh.lane().cargo().stream().map(com::id).toList(), sh.lane().outbound());
             int hexes = cfg.units().ships() == null ? 0 : cfg.units().ships().range(cfg.units().ships().shipClass(sh.cls()), sh.tech(), sh.efficiency());
             ships.add(new ShipView(sh.id(), sh.cls(), sh.name(), sh.at(), relative(w, c.capital(), sh.at()), sh.efficiency(), st, sh.load(), hold,
-                    sh.dest(), sh.dest() == null ? null : relative(w, c.capital(), sh.dest()), lane, sh.note(), docked, sh.tech(), hexes, sh.mission(), sh.home() == null ? null : relative(w, c.capital(), sh.home()),
+                    sh.dest(), sh.dest() == null ? null : relative(w, c.capital(), sh.dest()), lane, relativise(w, c.capital(), sh.note()), docked, sh.tech(), hexes, sh.mission(), sh.home() == null ? null : relative(w, c.capital(), sh.home()),
                     sh.fuel(), cfg.units().ships() != null && cfg.units().ships().fuel() ? cfg.units().ships().shipClass(sh.cls()).tankOr0() : 0,
                     sh.crew(), cfg.units().ships() != null && cfg.units().ships().crews() ? cfg.units().ships().shipClass(sh.cls()).crewOr0() : 0,
                     sh.route().stream().map(p -> relative(w, c.capital(), p)).toList(), sh.ward(),
@@ -292,7 +292,7 @@ public record CountryView(
             var cls = air.planeClass(p.cls());
             if (cls == null) continue;
             out.add(new PlaneView(p.id(), p.cls(), cls.name(), p.at(), relative(w, c.capital(), p.at()), p.efficiency(), p.tech(),
-                    cls.loadAt(p.tech()), cls.accuracyAt(p.tech()), cls.reachAt(p.tech()), p.note(),
+                    cls.loadAt(p.tech()), cls.accuracyAt(p.tech()), cls.reachAt(p.tech()), relativise(w, c.capital(), p.note()),
                     cls.has("bomber"), cls.has("tactical"), cls.has("spy")));
         }
         return out;
@@ -310,7 +310,7 @@ public record CountryView(
             for (int i = 0; i < com.size(); i++) if (u.stock().get(i) > 0) st.put(com.id(i), u.stock().get(i));
             double men = u.stock().get(com.mil);
             out.add(new UnitView(u.id(), u.cls(), cls.name(), u.at(), relative(w, c.capital(), u.at()), u.efficiency(), st, cls.carries(), u.mobility(), u.tech(),
-                    men * cls.attackAt(u.tech()) * u.efficiency() / 100.0, men * cls.defenseAt(u.tech()) * u.efficiency() / 100.0, u.note(), u.ship(), cls.has("light"), cls.has("spy"),
+                    men * cls.attackAt(u.tech()) * u.efficiency() / 100.0, men * cls.defenseAt(u.tech()) * u.efficiency() / 100.0, relativise(w, c.capital(), u.note()), u.ship(), cls.has("light"), cls.has("spy"),
                     Math.min(cls.gunsOr0(), Math.floor(u.stock().get(com.index("gun")))), cls.rangeAt(u.tech()), cls.has("engineer")));
         }
         return out;
@@ -330,6 +330,25 @@ public record CountryView(
     static ContactView reveal(World w, GameConfig cfg, Coord capital, Contact ct, String band, long age) {
         String ownerName = w.country(ct.targetOwner()).name();
         return new ContactView(ct.at(), relative(w, capital, ct.at()), band, age, ct.confidence(), ct.cls(), ownerName);
+    }
+
+    private static final java.util.regex.Pattern ABS = java.util.regex.Pattern.compile("(?<![\\d.,-])(\\d+),(\\d+)(?![\\d.])");
+
+    /**
+     * Engine messages name sectors by absolute coordinates; players only ever see offsets from their capital. A
+     * ship's note too (issue #271): "holding at 63,56" was copied into {@code sail}, which reads x,y as relative.
+     */
+    public static String relativise(World w, Coord capital, String msg) {
+        if (msg == null) return null;
+        java.util.regex.Matcher m = ABS.matcher(msg);
+        StringBuilder sb = new StringBuilder();
+        while (m.find()) {
+            Coord abs = new Coord(Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)));
+            Coord r = w.inBounds(abs) ? relative(w, capital, abs) : abs;
+            m.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(r.x() + "," + r.y()));
+        }
+        m.appendTail(sb);
+        return sb.toString();
     }
 
     /** Player-facing coordinates: offset from the capital, shortest way round when wrapped. */

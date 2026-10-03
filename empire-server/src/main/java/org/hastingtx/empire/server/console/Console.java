@@ -449,7 +449,16 @@ public class Console {
         try { rx = Integer.parseInt(p[0].trim()); ry = Integer.parseInt(p[1].trim()); } catch (NumberFormatException e) { throw new IllegalArgumentException("coordinates look like x,y — got '" + s + "'"); }
         for (SectorView sv : v.sectors()) if (sv.relative().x() == rx && sv.relative().y() == ry) return sv.at();
         // not in view: extrapolate from the capital (the executor will reject if out of bounds or unowned)
-        return new Coord(v.capital().x() + rx, v.capital().y() + ry);
+        int x = v.capital().x() + rx, y = v.capital().y() + ry;
+        // off an edge that does not wrap: most likely absolute coordinates, copied from somewhere that printed them
+        // (issue #271: "sail 136 63,56" said "out of bounds: 126,113") — say how coordinates work, and what was meant
+        if ((!v.wrapX() && (x < 0 || x >= v.width())) || (!v.wrapY() && (y < 0 || y >= v.height()))) {
+            int ax = rx - v.capital().x(), ay = ry - v.capital().y();
+            boolean onMap = rx >= 0 && rx < v.width() && ry >= 0 && ry < v.height();
+            throw new IllegalArgumentException(s + " is off the map: coordinates are counted from your capital, which is 0,0"
+                    + (onMap ? " — if " + s + " was a map position, it is " + ax + "," + ay + " from your capital" : ""));
+        }
+        return new Coord(x, y);
     }
 
     static String map(CountryView v, GameConfig cfg) {
