@@ -12,7 +12,7 @@ public sealed interface Command permits
         Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission, Command.Land, Command.Demobilize, Command.Enlist, Command.Attack, Command.Anti, Command.BuildUnit, Command.March, Command.LoadUnit, Command.Board, Command.Sabotage, Command.Incite, Command.UnitFire, Command.Work, Command.BuildPlane, Command.Bomb, Command.Recon,
         Command.RailLane, Command.Telegram, Command.Announce, Command.DeclareWar, Command.OfferPeace,
         Command.Sell, Command.Buy, Command.ResetLot, Command.SetPrice, Command.Trade, Command.AirMission,
-        Command.Fly, Command.Drop, Command.Paradrop, Command.Lay, Command.LandMine, Command.SweepAir, Command.Launch {
+        Command.Fly, Command.Drop, Command.Paradrop, Command.Lay, Command.LandMine, Command.SweepAir, Command.Launch, Command.Satellite {
 
     String verb();
 
@@ -159,7 +159,13 @@ public sealed interface Command permits
     }
 
     /** A missile launched at a sector, or an anti-ship missile at {@code ship} (issue #71; KNOWN laun.c). */
-    record Launch(long missile, Coord at, long ship) implements Command { public String verb() { return "launch"; } }
+    /** {@code geo}: a satellite put up geostationary (issue #71; KNOWN launch_sat "Geostationary orbit?"). */
+    record Launch(long missile, Coord at, long ship, boolean geo) implements Command {
+        public Launch(long missile, Coord at, long ship) { this(missile, at, ship, false); }
+        public String verb() { return "launch"; }
+    }
+    /** What a satellite in orbit sees (issue #71; KNOWN sate.c). */
+    record Satellite(long plane) implements Command { public String verb() { return "satellite"; } }
 
     /** A plane is laid down on an airfield of yours (issue #262). */
     record BuildPlane(Coord at, String cls) implements Command { public String verb() { return "build_plane"; } }

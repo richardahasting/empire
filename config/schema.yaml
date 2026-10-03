@@ -1118,10 +1118,11 @@ units:
       abm_efficiency: 100             # KNOWN msl_sel: an ABM fires only at 100%
       abms_per_missile: 2             # KNOWN msl_abm_intercept: at most two rise, the target's owner's first
       sam_min_cost: 1000              # KNOWN sam_intercept: a SAM bothers only with a plane costing $1000 or more
-      # KNOWN msl_launch: blows up on the pad with chance (pad_fail_base + (100 − eff)/100) × (1 − (tech + pad_fail_tech)/(tech + pad_fail_tech_scale))
+      # KNOWN tfact.c techfact: (tech_factor_base + tech)/(tech_factor_scale + tech)
+      tech_factor_base: 50
+      tech_factor_scale: 200
+      # KNOWN msl_launch: blows up on the pad with chance (pad_fail_base + (100 − eff)/100) × (1 − techfact)
       pad_fail_base: 0.05
-      pad_fail_tech: 50
-      pad_fail_tech_scale: 200
       # KNOWN plnsub.c pln_hitchance: eff × (1 − hit_tech_penalty × tfact) × (1 − acc/100) − hardness, tfact =
       # (tech − req)/(tech − req/hit_tech_divisor); under hit_floor it becomes hit_floor_base + hit_floor_scale/(hit_floor_offset − hc)
       hit_tech_penalty: 0.1
@@ -1134,6 +1135,26 @@ units:
       # GUESS: our ship classes carry no visibility; her sight stands in (the bigger she is, the further she sees and is seen)
       hard_target_base: 20
       hard_target_speed_divisor: 2
+      # Satellites (KNOWN laun.c launch_sat): the booster fails with chance sat_pad_fail_base + (100 − eff)/100; it goes a
+      # sector astray with chance 1 − i/(i + off_course_scale), i = tech + eff; usable from the update after it went up
+      # (GUESS: the original waits for its mobility to refill). sate.c: it sees report_range × techfact × eff/100 hexes.
+      sat_pad_fail_base: 0.07
+      off_course_scale: 50
+      report_range: 20
+      # KNOWN satmap.c satdisp_sect: a spy satellite's sector report rounds stock to report_round, or report_round_image
+      # with imaging, and efficiency to half that
+      report_round: 50
+      report_round_image: 5
+      report_eff_round_divisor: 2
+      # KNOWN satmap.c: a spy satellite sees each land unit under it with chance eff / unit_spot_divisor
+      unit_spot_divisor: 20
+      # KNOWN move_sat.c: an orbit advances orbit_step of a turn an update; over a whole turn it laps the world orbit_laps
+      # times east and swings orbit_waves times north and south, orbit_amplitude of the world's height each way. Geostationary
+      # ones stay put.
+      orbit_step: 0.05
+      orbit_laps: 2
+      orbit_waves: 3
+      orbit_amplitude: 0.25
     capture_loss_base: 29             # KNOWN takeover.c takeover_plane: a plane on a sector taken loses 29 + roll(100);
     capture_loss_roll: 100            #   below the minimum its crew blows it up, otherwise it is captured
     # Air transport (issue #71): fly, drop, paradrop — KNOWN commands/{fly,drop,para}.c, plnsub.c pln_equip.
@@ -1170,6 +1191,13 @@ units:
       - { id: irbm,             name: Titan,            glyph: '5', tech_required: 260, build: { lcm: 20, hcm: 20, cash: 1500 }, bwork: 80, accuracy: 60, load: 8,  attack: 0.0, defense: 10.0, range: 15, fuel: 0, flags: [tactical, vtol, missile] }
       - { id: icbm,             name: Minuteman,        glyph: '6', tech_required: 310, build: { lcm: 20, hcm: 20, cash: 3000 }, bwork: 80, accuracy: 60, load: 10, attack: 0.0, defense: 15.0, range: 41, fuel: 0, flags: [tactical, vtol, missile] }
       - { id: slbm,             name: Trident,          glyph: '7', tech_required: 280, build: { lcm: 20, hcm: 20, cash: 2000 }, bwork: 80, accuracy: 60, load: 8,  attack: 0.0, defense: 6.0,  range: 23, fuel: 0, flags: [tactical, vtol, missile, light] }
+      # Satellites (KNOWN plane.config lst, ss, asat; laun.c launch_sat, launch_as; sate.c; satmap.c; move_sat.c): launched
+      # into orbit over a sector and kept there, reporting by `satellite`. "image" draws every sector (a landsat without it
+      # sees only sea and mountains); "spy" reports the foreign sectors, ships and units under it. An anti-sat ("missile",
+      # "satellite") shoots one down and rises against one put up over its owner.
+      - { id: landsat,          name: landsat,          glyph: L, tech_required: 245, build: { lcm: 20, hcm: 20, cash: 2000 }, bwork: 80, accuracy: 0,  load: 0,  attack: 0.0, defense: 3.0,  range: 41, fuel: 9, flags: [satellite] }
+      - { id: spysat,           name: KH-7 spysat,      glyph: Y, tech_required: 305, build: { lcm: 20, hcm: 20, cash: 4000 }, bwork: 80, accuracy: 0,  load: 0,  attack: 0.0, defense: 3.0,  range: 61, fuel: 9, flags: [spy, image, satellite] }
+      - { id: asat,             name: anti-sat,         glyph: '9', tech_required: 305, build: { lcm: 20, hcm: 20, cash: 2000 }, bwork: 80, accuracy: 50, load: 0,  attack: 0.0, defense: 7.0,  range: 13, fuel: 0, flags: [vtol, missile, satellite] }
       - { id: abm,              name: Patriot ABM,      glyph: '8', tech_required: 270, build: { lcm: 16, hcm: 8,  cash: 1500 }, bwork: 52, accuracy: 50, load: 0,  attack: 0.0, defense: 31.0, range: 12, fuel: 0, flags: [vtol, missile, sdi] }
       # A carrier's strike plane (KNOWN plane.config np): light, so it flies from a carrier, and a light bomber and cargo plane
       - { id: naval_plane,      name: naval plane,      glyph: N, tech_required: 135, build: { lcm: 20, hcm: 10, cash: 1800 }, bwork: 60, accuracy: 70, load: 3, attack: 0.0, defense: 4.0, range: 28, fuel: 2, flags: [tactical, cargo, light, mine, sweep] }

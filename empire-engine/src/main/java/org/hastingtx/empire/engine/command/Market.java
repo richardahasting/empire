@@ -167,6 +167,7 @@ final class Market {
                 return CommandResult.fail(w, "you do not control " + it.at() + ", where " + it.label() + " is");
             if (it.civ() >= 1) return CommandResult.fail(w, it.label() + " has civilians aboard; people are not for sale");
             if (it.aboard() != 0) return CommandResult.fail(w, it.label() + " is aboard ship #" + it.aboard() + "; put it ashore first");
+            if (kind.equals(TradeLot.PLANE) && w.plane(id).orbiting()) return CommandResult.fail(w, it.label() + " is in orbit; it cannot be sold");   // issue #71: nowhere to hand it over
             // a lot left from a former owner (captured since) is dead: clear it, so one item never has two lots
             for (TradeLot old : List.copyOf(w.trades())) if (old.kind().equals(kind) && old.item() == id && old.owner() != c.id()) w = w.withoutTrade(old.id());
             TradeLot was = w.onTheBlock(kind, id);
@@ -251,6 +252,7 @@ final class Market {
             case Command.SweepAir x -> { for (long p : x.planes()) planes.add(new long[] {p}); for (long e : x.escorts()) planes.add(new long[] {e}); }
             case Command.Lay x -> ships.add(new long[] {x.ship()});
             case Command.Launch x -> planes.add(new long[] {x.missile()});
+            case Command.Satellite x -> planes.add(new long[] {x.plane()});
             case Command.LandMine x -> units.add(new long[] {x.unit()});
             default -> { }
         }

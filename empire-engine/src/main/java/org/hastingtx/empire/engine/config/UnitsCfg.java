@@ -70,9 +70,15 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
 
     /** KNOWN laun.c and mslsub.c: who may be launched, and what rises against a missile or a costly plane. */
     public record MissilesCfg(double minEfficiency, double abmEfficiency, int abmsPerMissile, double samMinCost,
-                              double padFailBase, double padFailTech, double padFailTechScale,
+                              double techFactorBase, double techFactorScale, double padFailBase,
                               double hitTechPenalty, double hitTechDivisor, double hitFloor, double hitFloorBase, double hitFloorScale, double hitFloorOffset,
-                              double hardTargetBase, double hardTargetSpeedDivisor) {}
+                              double hardTargetBase, double hardTargetSpeedDivisor,
+                              /** Satellites (issue #71; KNOWN launch_sat, sate.c, move_sat.c). */
+                              double satPadFailBase, double offCourseScale, double reportRange, double reportRound, double reportRoundImage, double reportEffRoundDivisor, double unitSpotDivisor,
+                              double orbitStep, double orbitLaps, double orbitWaves, double orbitAmplitude) {
+        /** KNOWN tfact.c techfact(tech, 1). */
+        public double techFactor(double tech) { return (techFactorBase + tech) / (techFactorScale + tech); }
+    }
 
     /** KNOWN commands/{fly,drop,para}.c, plnsub.c pln_equip and attsub.c. */
     public record TransportCfg(double landingMinEfficiency, double flyLoadMultiple, double dropLoadMultiple, List<String> noParadropTerrain,

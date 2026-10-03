@@ -179,7 +179,7 @@ final class Assault {
         if (air != null && air.captureLossBase() != null && air.captureLossRoll() != null) {
             var rng = new org.hastingtx.empire.engine.update.steps.UnrestStep.R(Rng.stream("takeover-plane:" + at + ":" + world[0].updateNumber(), cfg.world() == null ? 0 : cfg.world().seed()));
             for (Plane p : new ArrayList<>(world[0].planes())) {
-                if (p.owner() != loser || p.aboard() || !p.at().equals(at)) continue;
+                if (p.owner() != loser || p.aboard() || p.orbiting() || !p.at().equals(at)) continue;   // a satellite overhead is not on the ground
                 double eff = p.efficiency() - (air.captureLossBase() + rng.roll(air.captureLossRoll()));
                 if (eff < air.minEfficiency()) {
                     world[0] = world[0].withoutPlane(p.id());

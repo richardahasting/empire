@@ -8,6 +8,14 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 
 const rel = (c: { x: number; y: number }) => `${c.x},${c.y}`;
 
+/** A sector relative to your capital, absolute — wrapping as the world does; undefined off the edge of one that does not. */
+function absolute(view: CountryView, dx: number, dy: number): { x: number; y: number } | undefined {
+  let x = view.capital.x + dx, y = view.capital.y + dy;
+  if (view.wrapX) x = ((x % view.width) + view.width) % view.width; else if (x < 0 || x >= view.width) return undefined;
+  if (view.wrapY) y = ((y % view.height) + view.height) % view.height; else if (y < 0 || y >= view.height) return undefined;
+  return { x, y };
+}
+
 /**
  * Your planes (issue #262): where each sits, its condition, what it carries and how far it strikes; and its sorties.
  * A sortie takes petrol and bombs off the field it flies from, and whatever it flies against shoots back. Fighters of a
@@ -16,9 +24,14 @@ const rel = (c: { x: number; y: number }) => `${c.x},${c.y}`;
 export function Air({ view, busy, onCommand }: { view: CountryView; busy: boolean; onCommand: (c: CommandRequest) => Promise<void> }) {
   const [dialog, setDialog] = useState<{ kind: "bomb" | "recon" | "defend" | "fly" | "drop" | "paradrop" | "launch"; plane: PlaneView } | null>(null);
   const planes = view.planes ?? [];
-  if (planes.length === 0) return <p className="text-xs text-muted-foreground">No planes. Designate an airfield, then right-click it and choose “Build plane…”.</p>;
+  const overhead = view.overhead ?? [];
+  if (planes.length === 0 && overhead.length === 0) return <p className="text-xs text-muted-foreground">No planes. Designate an airfield, then right-click it and choose “Build plane…”.</p>;
   return (
     <div className="space-y-2 text-xs">
+      {overhead.length > 0 && <div className="rounded-md border border-border p-2">
+        <div className="font-medium">Satellites overhead</div>
+        {overhead.map((o, i) => <div key={i}>{o.ownerName}’s {o.name} over {rel(o.relative)}</div>)}
+      </div>}
       {planes.map(p => (
         <div key={p.id} className="rounded-md border border-border p-2">
           <div className="flex flex-wrap items-baseline gap-x-2">
@@ -33,13 +46,21 @@ export function Air({ view, busy, onCommand }: { view: CountryView; busy: boolea
           {p.opRelative && <div>Air defence within {p.radius} of {rel(p.opRelative)}: at war it rises over any sector there.</div>}
           {p.note && <div className="text-muted-foreground">{p.note}</div>}
           {p.efficiency < 80 && <div className="text-destructive">Shot up: it may turn back before it gets there. Leave it on the field to be fitted out.</div>}
-          {p.missile && <div>{p.rises ? "A missile that rises by itself against what comes at you — never launched." : "A missile: launched once, and spent."}</div>}
+          {p.missile && <div>{p.rises ? "A missile that rises by itself against what comes at you — never launched."
+            : p.satellite ? "An anti-sat: launched once at an enemy satellite over a sector you see, and spent; it also rises against one put up over you."
+            : "A missile: launched once, and spent."}</div>}
+          {p.satellite && !p.missile && <div>{p.orbit
+            ? `${p.orbit === "geosync" ? "Geostationary" : "In orbit"} over ${rel(p.relative)}${p.ready ? "." : " — it reports from the next update."}`
+            : "A satellite: launched into orbit over a sector, where it stays."}</div>}
+          {p.satellite && !p.missile && <div className="mt-1">{p.orbit
+            ? <Button size="sm" variant="secondary" disabled={busy || !p.ready} onClick={() => void onCommand({ verb: "satellite", plane: p.id })}>Report</Button>
+            : <Button size="sm" variant="secondary" disabled={busy} onClick={() => setDialog({ kind: "launch", plane: p })}>Launch…</Button>}</div>}
           {p.missile && <div className="mt-1 flex flex-wrap gap-1">
             {!p.rises && <Button size="sm" variant="secondary" disabled={busy} onClick={() => setDialog({ kind: "launch", plane: p })}>Launch…</Button>}
             {p.intercept && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "defend", plane: p })}>Air defence…</Button>}
             {p.opRelative && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: "air_defence", plane: p.id, clear: true })}>Off air defence</Button>}
           </div>}
-          {!p.missile && <div className="mt-1 flex flex-wrap gap-1">
+          {!p.missile && !p.satellite && <div className="mt-1 flex flex-wrap gap-1">
             {p.load > 0 && <Button size="sm" variant="secondary" disabled={busy} onClick={() => setDialog({ kind: "bomb", plane: p })}>Bomb…</Button>}
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "recon", plane: p })}>Reconnoitre…</Button>
             {p.intercept && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "defend", plane: p })}>Air defence…</Button>}
@@ -63,7 +84,7 @@ function SortieDialog({ kind, plane, view, busy, onClose, onCommand }:
   const [to, setTo] = useState("");
   const [raid, setRaid] = useState(plane.tactical ? "pinpoint" : "strategic");
   const [escorts, setEscorts] = useState<number[]>([]);
-  const canEscort = (view.planes ?? []).filter(p => p.id !== plane.id && !p.missile && (p.intercept || p.escort));
+  const canEscort = (view.planes ?? []).filter(p => p.id !== plane.id && !p.missile && !p.satellite && (p.intercept || p.escort));
   const toggle = (id: number) => setEscorts(e => e.includes(id) ? e.filter(x => x !== id) : [...e, id]);
   const [tx, ty] = to.split(",").map(s => Number(s.trim()));
   const target = Number.isFinite(tx) && Number.isFinite(ty) ? view.sectors.find(s => s.relative.x === tx && s.relative.y === ty) : undefined;
@@ -181,7 +202,7 @@ function DefendDialog({ plane, view, busy, onClose, onCommand }: { plane: PlaneV
 function TransportDialog({ kind, plane, view, busy, onClose, onCommand }:
   { kind: "fly" | "drop" | "paradrop"; plane: PlaneView; view: CountryView; busy: boolean; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void> }) {
   const field = view.sectors.find(s => s.at.x === plane.at.x && s.at.y === plane.at.y);
-  const mates = (view.planes ?? []).filter(p => p.id !== plane.id && !p.missile && p.at.x === plane.at.x && p.at.y === plane.at.y && (kind === "fly" || (kind === "drop" ? p.cargo : p.para)));
+  const mates = (view.planes ?? []).filter(p => p.id !== plane.id && !p.missile && !p.satellite && p.at.x === plane.at.x && p.at.y === plane.at.y && (kind === "fly" || (kind === "drop" ? p.cargo : p.para)));
   const [with_, setWith] = useState<number[]>([]);
   const [to, setTo] = useState("");
   const [what, setWhat] = useState("");
@@ -238,21 +259,33 @@ function TransportDialog({ kind, plane, view, busy, onClose, onCommand }:
 /** Launch a missile (issue #71; the original's launch): once, one way, and it is spent; an anti-ship missile goes at a ship. */
 function LaunchDialog({ plane, view, busy, onClose, onCommand }: { plane: PlaneView; view: CountryView; busy: boolean; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void> }) {
   const [to, setTo] = useState("");
+  const [geo, setGeo] = useState(false);
   const [tx, ty] = to.split(",").map(s => Number(s.trim()));
   const target = Number.isFinite(tx) && Number.isFinite(ty) ? view.sectors.find(s => s.relative.x === tx && s.relative.y === ty) : undefined;
-  const ok = !!target && (plane.marine ? target.owner !== view.countryId : target.owner >= 0 && target.owner !== view.countryId);
+  const orbiter = plane.satellite && !plane.missile, antiSat = plane.satellite && plane.missile;
+  // a satellite may go up over land you have never seen: that is what it is for
+  const over = orbiter && Number.isInteger(tx) && Number.isInteger(ty) ? absolute(view, tx, ty) : undefined;
+  const ok = orbiter ? !!over : !!target && (antiSat
+    ? (view.overhead ?? []).some(o => o.relative.x === tx && o.relative.y === ty)
+    : plane.marine ? target.owner !== view.countryId : target.owner >= 0 && target.owner !== view.countryId);
+  const what = orbiter ? `Into orbit over (x,y), up to ${Math.floor(plane.reach * 2)} hexes away`
+    : antiSat ? "At the enemy satellite over (x,y)" : plane.marine ? "At an enemy ship you see (x,y)" : "At (x,y)";
   return (
     <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent>
         <DialogHeader><DialogTitle>Launch {plane.name} #{plane.id}</DialogTitle>
-          <DialogDescription>Once, and it is spent. It flies {Math.floor(plane.reach * 2)} hexes, one way; no fighter or flak can touch it, though it may fail on the pad and the enemy's ABMs may meet it. At war only.</DialogDescription></DialogHeader>
+          <DialogDescription>{orbiter
+            ? "Once, into orbit, where it stays and reports from the next update. The booster may fail on the pad, it may go a sector astray, and the anti-sats of a country at war with you may meet it."
+            : `Once, and it is spent. It flies ${Math.floor(plane.reach * 2)} hexes, one way; no fighter or flak can touch it, though it may fail on the pad${antiSat ? "" : " and the enemy's ABMs may meet it"}. At war only.`}</DialogDescription></DialogHeader>
         <div className="grid gap-3 text-sm">
-          <label className="grid gap-1">{plane.marine ? "At an enemy ship you see (x,y)" : "At (x,y)"}<Input value={to} onChange={e => setTo(e.target.value)} autoFocus /></label>
+          <label className="grid gap-1">{what}<Input value={to} onChange={e => setTo(e.target.value)} autoFocus /></label>
+          {orbiter && <label className="flex items-center gap-2"><Checkbox checked={geo} onChange={() => setGeo(g => !g)} />Geostationary: hang over that one sector rather than circle the world</label>}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button variant="danger" disabled={busy || !ok} onClick={async () => {
-            if (target) await onCommand({ verb: "launch", plane: plane.id, x: target.at.x, y: target.at.y });
+            const at = orbiter ? over : target?.at;
+            if (at) await onCommand({ verb: "launch", plane: plane.id, x: at.x, y: at.y, type: orbiter && geo ? "geo" : undefined });
             onClose();
           }}>Launch</Button>
         </DialogFooter>
