@@ -1192,6 +1192,7 @@ public class GameService {
             case Command.Recon rc -> rc.at();
             case Command.Incite in -> null;
             case Command.Demobilize d -> d.sector();
+            case Command.Enlist en -> en.sector();
             case Command.Telegram t -> null;
             case Command.Announce a -> null;
             case Command.DeclareWar d -> null;

@@ -54,6 +54,11 @@ public class Console {
                     double n = t[2].equalsIgnoreCase("all") ? 0 : Double.parseDouble(keep ? t[3] : t[2]);
                     yield many(gameId, a, v, cfg, t[1], at -> new Command.Demobilize(at, n, keep));
                 }
+                case "enl", "enlist" -> {
+                    need(t, 3, "enlist SECTOR N | enlist SECTOR -N (up to N in each)");
+                    double n = Double.parseDouble(t[2]);
+                    yield many(gameId, a, v, cfg, t[1], at -> new Command.Enlist(at, Math.abs(n), n < 0));   // KNOWN enli.c: a negative number is a quota
+                }
                 case "dist", "distribute" -> { need(t, 3, "dist SECTOR cx,cy|none"); Coord ctr = t[2].equalsIgnoreCase("none") ? null : abs(v, t[2]); yield many(gameId, a, v, cfg, t[1], at -> new Command.Distribute(at, ctr)); }
                 case "ships", "fleet" -> new Reply(fleet(v, cfg), true, null, null);
                 case "contacts", "radar" -> new Reply(contacts(v), true, null, null);
