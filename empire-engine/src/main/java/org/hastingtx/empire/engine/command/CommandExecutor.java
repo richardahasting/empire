@@ -49,6 +49,7 @@ public final class CommandExecutor {
             case Command.Lay ly -> Mines.lay(cfg, com, w, c, ly);
             case Command.LandMine lm -> Mines.landmine(cfg, com, w, c, lm);
             case Command.SweepAir sw -> Air.sweep(cfg, com, w, c, sw);
+            case Command.Launch la -> Missiles.launch(cfg, com, w, c, la);
             case Command.Distribute d -> distribute(w, c, d);
             case Command.Deliver d -> deliver(w, c, d);
             case Command.BuildShip b -> buildShip(w, c, b);

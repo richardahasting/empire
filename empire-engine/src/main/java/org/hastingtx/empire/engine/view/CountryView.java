@@ -94,7 +94,9 @@ public record CountryView(
                             /** A transport (issue #71): carries cargo; drops paratroops. */
                             boolean cargo, boolean para,
                             /** The carrier it is aboard (issue #71), 0 when ashore; and whether it may sit on one. */
-                            long aboard, boolean light) {}
+                            long aboard, boolean light,
+                            /** A missile (issue #71): launched once; "rises" for a SAM or an ABM, which are never launched; "marine" for anti-ship. */
+                            boolean missile, boolean rises, boolean marine) {}
 
     /**
      * A land unit of yours (issue #247): where, how fit, what it carries, its own mobility, what it is worth in a fight
@@ -384,7 +386,8 @@ public record CountryView(
                     cls.loadAt(p.tech()), cls.accuracyAt(p.tech()), cls.reachAt(p.tech()), relativise(w, c.capital(), p.note()),
                     cls.has("bomber"), cls.has("tactical"), cls.has("spy"), cls.has("intercept"), cls.has("escort"), cls.attackAt(p.tech()), cls.defenseAt(p.tech()),
                     p.onAirDefence() ? relative(w, c.capital(), p.opPoint()) : null, p.onAirDefence() ? p.radius() : 0,
-                    cls.has("cargo"), cls.has("para"), p.ship(), cls.has("light") || cls.has("helo") || cls.has("xlight")));
+                    cls.has("cargo"), cls.has("para"), p.ship(), cls.has("light") || cls.has("helo") || cls.has("xlight"),
+                    cls.has("missile"), cls.has("missile") && (cls.has("intercept") || cls.has("sdi")), cls.has("marine")));
         }
         return out;
     }

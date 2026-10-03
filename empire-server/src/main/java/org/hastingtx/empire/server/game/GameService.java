@@ -1228,6 +1228,7 @@ public class GameService {
             case Command.Lay ly -> null;
             case Command.LandMine lm -> null;
             case Command.SweepAir sw -> sw.at();
+            case Command.Launch la -> la.at();
             case Command.Telegram t -> null;
             case Command.Announce a -> null;
             case Command.DeclareWar d -> null;

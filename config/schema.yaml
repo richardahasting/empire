@@ -1112,6 +1112,28 @@ units:
       intensity_add: 1
       odds_floor: 0.05                # KNOWN ac_dog: the attacker always has a 5% chance a round
     carrier_min_efficiency: 50        # KNOWN include/ship.h SHP_AIROPS_EFF: a carrier under 50% works no aircraft
+    # KNOWN laun.c, mslsub.c: launch and interception
+    missiles:
+      min_efficiency: 40              # KNOWN laun.c:96: a missile under 40% is not launched
+      abm_efficiency: 100             # KNOWN msl_sel: an ABM fires only at 100%
+      abms_per_missile: 2             # KNOWN msl_abm_intercept: at most two rise, the target's owner's first
+      sam_min_cost: 1000              # KNOWN sam_intercept: a SAM bothers only with a plane costing $1000 or more
+      # KNOWN msl_launch: blows up on the pad with chance (pad_fail_base + (100 − eff)/100) × (1 − (tech + pad_fail_tech)/(tech + pad_fail_tech_scale))
+      pad_fail_base: 0.05
+      pad_fail_tech: 50
+      pad_fail_tech_scale: 200
+      # KNOWN plnsub.c pln_hitchance: eff × (1 − hit_tech_penalty × tfact) × (1 − acc/100) − hardness, tfact =
+      # (tech − req)/(tech − req/hit_tech_divisor); under hit_floor it becomes hit_floor_base + hit_floor_scale/(hit_floor_offset − hc)
+      hit_tech_penalty: 0.1
+      hit_tech_divisor: 2
+      hit_floor: 20
+      hit_floor_base: 5
+      hit_floor_scale: 300
+      hit_floor_offset: 40
+      # KNOWN shpsub.c shp_hardtarget: eff/100 × (hard_target_base + speed/hard_target_speed_divisor, at sea only − visibility).
+      # GUESS: our ship classes carry no visibility; her sight stands in (the bigger she is, the further she sees and is seen)
+      hard_target_base: 20
+      hard_target_speed_divisor: 2
     capture_loss_base: 29             # KNOWN takeover.c takeover_plane: a plane on a sector taken loses 29 + roll(100);
     capture_loss_roll: 100            #   below the minimum its crew blows it up, otherwise it is captured
     # Air transport (issue #71): fly, drop, paradrop — KNOWN commands/{fly,drop,para}.c, plnsub.c pln_equip.
@@ -1138,6 +1160,17 @@ units:
       # least stealthy plane — no flak, no fighters there — and each side of a dogfight gains stealth / 25
       - { id: stealth_fighter,  name: stealth fighter,  glyph: S, tech_required: 325, build: { lcm: 15, hcm: 5, cash: 3000 }, bwork: 45, accuracy: 45, load: 3, attack: 19.0, defense: 19.0, range: 20, fuel: 4, stealth: 80, flags: [tactical, intercept, light] }
       - { id: stealth_bomber,   name: stealth bomber,   glyph: W, tech_required: 325, build: { lcm: 15, hcm: 5, cash: 4000 }, bwork: 45, accuracy: 25, load: 8, attack: 0.0,  defense: 15.0, range: 28, fuel: 5, stealth: 80, flags: [bomber, tactical] }
+      # Missiles (KNOWN plane.config mi, sam, ssm, srbm, irbm, icbm, slbm, abm; laun.c, mslsub.c): launched once and spent.
+      # VTOL, so any sector of yours holds and launches them; light ones go aboard a carrier. "marine": an anti-ship missile;
+      # "intercept" (a SAM) rises against costly raid planes; "sdi" (an ABM) shoots down missiles aimed at a sector.
+      - { id: harpoon,          name: Harpoon,          glyph: '1', tech_required: 160, build: { lcm: 8,  hcm: 2,  cash: 300 },  bwork: 32, accuracy: 50, load: 6,  attack: 0.0, defense: 5.0,  range: 6,  fuel: 0, flags: [tactical, vtol, missile, light, marine] }
+      - { id: sam,              name: Sea Sparrow SAM,  glyph: '2', tech_required: 180, build: { lcm: 3,  hcm: 1,  cash: 200 },  bwork: 25, accuracy: 0,  load: 0,  attack: 0.0, defense: 18.0, range: 2,  fuel: 0, flags: [intercept, vtol, missile, light, xlight] }
+      - { id: ssm,              name: V2,               glyph: '3', tech_required: 145, build: { lcm: 15, hcm: 15, cash: 800 },  bwork: 65, accuracy: 60, load: 3,  attack: 0.0, defense: 3.0,  range: 4,  fuel: 0, flags: [tactical, vtol, missile] }
+      - { id: srbm,             name: Atlas,            glyph: '4', tech_required: 200, build: { lcm: 20, hcm: 20, cash: 1000 }, bwork: 80, accuracy: 60, load: 6,  attack: 0.0, defense: 5.0,  range: 9,  fuel: 0, flags: [tactical, vtol, missile] }
+      - { id: irbm,             name: Titan,            glyph: '5', tech_required: 260, build: { lcm: 20, hcm: 20, cash: 1500 }, bwork: 80, accuracy: 60, load: 8,  attack: 0.0, defense: 10.0, range: 15, fuel: 0, flags: [tactical, vtol, missile] }
+      - { id: icbm,             name: Minuteman,        glyph: '6', tech_required: 310, build: { lcm: 20, hcm: 20, cash: 3000 }, bwork: 80, accuracy: 60, load: 10, attack: 0.0, defense: 15.0, range: 41, fuel: 0, flags: [tactical, vtol, missile] }
+      - { id: slbm,             name: Trident,          glyph: '7', tech_required: 280, build: { lcm: 20, hcm: 20, cash: 2000 }, bwork: 80, accuracy: 60, load: 8,  attack: 0.0, defense: 6.0,  range: 23, fuel: 0, flags: [tactical, vtol, missile, light] }
+      - { id: abm,              name: Patriot ABM,      glyph: '8', tech_required: 270, build: { lcm: 16, hcm: 8,  cash: 1500 }, bwork: 52, accuracy: 50, load: 0,  attack: 0.0, defense: 31.0, range: 12, fuel: 0, flags: [vtol, missile, sdi] }
       # A carrier's strike plane (KNOWN plane.config np): light, so it flies from a carrier, and a light bomber and cargo plane
       - { id: naval_plane,      name: naval plane,      glyph: N, tech_required: 135, build: { lcm: 20, hcm: 10, cash: 1800 }, bwork: 60, accuracy: 70, load: 3, attack: 0.0, defense: 4.0, range: 28, fuel: 2, flags: [tactical, cargo, light, mine, sweep] }
       - { id: escort,           name: escort fighter,   glyph: E, tech_required: 90,  build: { lcm: 9,  hcm: 3, cash: 700 },  bwork: 35, accuracy: 60, load: 1, attack: 5.0,  defense: 5.0,  range: 15, fuel: 2, flags: [tactical, escort] }

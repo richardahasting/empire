@@ -186,6 +186,14 @@ public class Console {
                     need(t, 3, usage);
                     yield cmd(run, new Command.Paradrop(ids(t[1]), abs(v, t[2]), escorts(t, 3, usage)));
                 }
+                case "launch" -> {
+                    String usage = "launch MISSILE x,y | launch MISSILE ship N   (once, and it is spent; an anti-ship missile at a ship)";
+                    need(t, 3, usage);
+                    long id = Long.parseLong(t[1].replace("#", ""));
+                    if (t[2].equalsIgnoreCase("ship")) { need(t, 4, usage); most(t, 4, usage); yield cmd(run, new Command.Launch(id, null, Long.parseLong(t[3].replace("#", "")))); }
+                    most(t, 3, usage);
+                    yield cmd(run, new Command.Launch(id, abs(v, t[2]), 0));
+                }
                 case "lay" -> { String usage = "lay SHIP N   (a minelayer at sea lays N mines from her shells)"; need(t, 3, usage); most(t, 3, usage); yield cmd(run, new Command.Lay(Long.parseLong(t[1].replace("#", "")), Double.parseDouble(t[2]))); }
                 case "lmine" -> { String usage = "lmine UNIT N   (an engineer lays N land mines in its sector: a shell and a mobility point each)"; need(t, 3, usage); most(t, 3, usage); yield cmd(run, new Command.LandMine(Long.parseLong(t[1].replace("#", "")), Double.parseDouble(t[2]))); }
                 case "sweep" -> {

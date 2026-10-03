@@ -87,6 +87,8 @@ export interface PlaneView {
   cargo: boolean; para: boolean;
   /** the carrier it is aboard (issue #71), 0 ashore; light: it may sit on one */
   aboard: number; light: boolean;
+  /** a missile (issue #71): launched once; rises: a SAM or ABM, never launched; marine: anti-ship */
+  missile: boolean; rises: boolean; marine: boolean;
 }
 export interface PlaneClass { id: string; name: string; glyph: string; techRequired: number; build: Record<string, number>; bwork: number; accuracy: number; load: number; attack: number; defense: number; range: number; fuel: number; flags: string[] }
 export interface PlanesRules { startEfficiency: number; minEfficiency: number; abortBelow: number; classes: PlaneClass[] }

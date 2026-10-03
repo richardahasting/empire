@@ -45,7 +45,9 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
                             /** KNOWN SHP_AIROPS_EFF: a carrier under this efficiency cannot work aircraft. Null: no carriers. */
                             Double carrierMinEfficiency,
                             /** KNOWN takeover.c takeover_plane: what a plane on a taken sector loses. Null: planes are not taken. */
-                            Integer captureLossBase, Integer captureLossRoll) {
+                            Integer captureLossBase, Integer captureLossRoll,
+                            /** Missiles (issue #71; KNOWN laun.c, mslsub.c). Null in rules that predate them: none launch. */
+                            MissilesCfg missiles) {
         public PlaneClassCfg planeClass(String id) {
             for (PlaneClassCfg c : classes) if (c.id().equals(id)) return c;
             return null;
@@ -65,6 +67,12 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
     /** KNOWN aircombat.c ac_encounter / ac_dog and plnsub.c pln_sel: who rises, who may escort, and how a dogfight runs. */
     public record AirCombatCfg(double minEfficiency, double fieldMinEfficiency, int escortReach, int extraInterceptors,
                                int intensityDice, int intensityDie, int intensityAdd, double oddsFloor) {}
+
+    /** KNOWN laun.c and mslsub.c: who may be launched, and what rises against a missile or a costly plane. */
+    public record MissilesCfg(double minEfficiency, double abmEfficiency, int abmsPerMissile, double samMinCost,
+                              double padFailBase, double padFailTech, double padFailTechScale,
+                              double hitTechPenalty, double hitTechDivisor, double hitFloor, double hitFloorBase, double hitFloorScale, double hitFloorOffset,
+                              double hardTargetBase, double hardTargetSpeedDivisor) {}
 
     /** KNOWN commands/{fly,drop,para}.c, plnsub.c pln_equip and attsub.c. */
     public record TransportCfg(double landingMinEfficiency, double flyLoadMultiple, double dropLoadMultiple, List<String> noParadropTerrain,
