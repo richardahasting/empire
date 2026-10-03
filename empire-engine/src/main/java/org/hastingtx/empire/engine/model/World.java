@@ -108,7 +108,7 @@ public record World(
     /** The sightings {@code owner} currently holds. */
     public List<Contact> contactsOf(int owner) { List<Contact> out = new ArrayList<>(); for (Contact c : contacts) if (c.owner() == owner) out.add(c); return out; }
 
-    public World withRelations(List<Relation> rs) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen, railLanes, rs, units, nextUnitId); }
+    public World withRelations(List<Relation> rs) { return new World(width, height, wrapX, wrapY, sectors, countries, pendingMoves, updateNumber, pendingRail, ships, nextShipId, contacts, seen, railLanes, rs, units, nextUnitId, planes, nextPlaneId); }
 
     /** The pair's relation, or null when they have never had one — which means peace (issue #137). */
     public Relation relation(int x, int y) {
