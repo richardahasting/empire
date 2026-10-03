@@ -1,4 +1,4 @@
-import type { Coord, CountryView } from "@/api/client";
+import type { Coord, CountryView, SectorView } from "@/api/client";
 
 // The engine's six directions, in its index order (Hex.DIRS): cube vectors for odd-r offset coordinates.
 const DIRS: [string, [number, number]][] = [["e", [1, 0]], ["ne", [1, -1]], ["nw", [0, -1]], ["w", [-1, 0]], ["sw", [-1, 1]], ["se", [0, 1]]];
@@ -56,4 +56,31 @@ export function surplusLine(view: CountryView, at: Coord, centre: Coord | null):
 /** "→ w (-11,-4)": the neighbour a delivery order sends to. */
 export function deliveryTarget(view: CountryView, at: Coord, dir: string): string {
   return `→ ${dir} ${rel(relativeOf(view, neighbour(view, at, dir)))}`;
+}
+
+/** Hex distance between two absolute sectors, the short way round a wrapping map (heights are even, so row parity holds). */
+export function hexDistance(view: CountryView, a: Coord, b: Coord): number {
+  let best = Infinity;
+  const [aq, ar] = toCube(a);
+  for (const kx of view.wrapX ? [-1, 0, 1] : [0]) for (const ky of view.wrapY ? [-1, 0, 1] : [0]) {
+    const [bq, br] = toCube({ x: b.x + kx * view.width, y: b.y + ky * view.height });
+    const dq = bq - aq, dr = br - ar;
+    best = Math.min(best, (Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2);
+  }
+  return best;
+}
+
+/**
+ * The warehouse of yours nearest {@code from} — not {@code from} itself — by hex distance, ties to the lower (y, x);
+ * null when you have none (issue #316: offered beside the capital as a distribution centre).
+ */
+export function nearestWarehouse(view: CountryView, from: Coord): { sector: SectorView; distance: number } | null {
+  let best: { sector: SectorView; distance: number } | null = null;
+  for (const s of view.sectors) {
+    if (!s.full || s.designation !== "warehouse" || (s.at.x === from.x && s.at.y === from.y)) continue;
+    const d = hexDistance(view, from, s.at);
+    if (!best || d < best.distance || (d === best.distance && (s.at.y < best.sector.at.y || (s.at.y === best.sector.at.y && s.at.x < best.sector.at.x))))
+      best = { sector: s, distance: d };
+  }
+  return best;
 }
