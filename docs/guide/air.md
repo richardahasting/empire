@@ -24,6 +24,10 @@ petrol, and its bombs, off the field each time it goes (issue #262, the original
 so a bomber that flies 16 reaches 8 hexes out. A plane built above its class's tech is a
 little better at everything and flies a little further.
 
+**On the map** planes on a field are a small triangle at the upper right of the hex — the class
+letter for one, the count for several. A satellite of yours in orbit is a ring at the top of the
+hex it is over; someone else's that you can see is a dashed ring.
+
 ## Sorties
 
 - **`bomb PLANE x,y`** (or **Bomb…** in the Air force panel) flies a **pinpoint** raid;

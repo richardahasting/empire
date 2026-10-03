@@ -22,6 +22,9 @@ anywhere else of yours, except a fortress).
 
 A unit raised above its class's tech is a little stronger and faster.
 
+**On the map** a unit ashore is a small square with its class letter at the lower left of its
+hex; several in one hex sit side by side. One aboard a ship is under her marker.
+
 ## Soldiers and supplies
 
 A unit is empty when it is raised. **`lload UNIT mil N`** takes soldiers from the sector it
