@@ -74,7 +74,7 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
                               double hitTechPenalty, double hitTechDivisor, double hitFloor, double hitFloorBase, double hitFloorScale, double hitFloorOffset,
                               double hardTargetBase, double hardTargetSpeedDivisor,
                               /** Satellites (issue #71; KNOWN launch_sat, sate.c, move_sat.c). */
-                              double satPadFailBase, double offCourseScale, double reportRange, double reportRound, double reportRoundImage,
+                              double satPadFailBase, double offCourseScale, double reportRange, double reportRound, double reportRoundImage, double reportEffRoundDivisor, double unitSpotDivisor,
                               double orbitStep, double orbitLaps, double orbitWaves, double orbitAmplitude) {
         /** KNOWN tfact.c techfact(tech, 1). */
         public double techFactor(double tech) { return (techFactorBase + tech) / (techFactorScale + tech); }

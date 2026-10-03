@@ -98,7 +98,7 @@ public final class MarketStep implements Step {
                     for (int k = 0; k < ctx.planes.size(); k++)   // and the seller's planes on her deck (KNOWN unit_give_away)
                         if (ctx.planes.get(k).ship() == s.id() && ctx.planes.get(k).owner() == lot.owner()) ctx.planes.set(k, ctx.planes.get(k).withOwner(lot.bidder()));
                 }
-                case TradeLot.PLANE -> ctx.planes.set(at, ctx.planes.get(at).withOwner(lot.bidder()).withAt(lot.dest()).withNote("bought from " + seller));
+                case TradeLot.PLANE -> ctx.planes.set(at, ctx.planes.get(at).withOwner(lot.bidder()).withAt(lot.dest()).withNote("bought from " + seller));   // never one in orbit: set refuses it
                 default -> ctx.units.set(at, ctx.units.get(at).withOwner(lot.bidder()).withAt(lot.dest()).withMobility(0).withNote("bought from " + seller));
             }
             ctx.led().event("trade_sale", lot.owner(), null, "lot T" + lot.id() + " sold: your " + what + " to " + buyer + " for " + money(lot.price()) + " (you keep " + money(lot.price() * mc.tradeTax()) + ")", lot.price());

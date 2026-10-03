@@ -138,7 +138,7 @@ class SatelliteTest {
         assertThat(EX.execute(w, 0, new Command.Launch(1, THEIRS, 0)).error()).isEqualTo("no enemy satellite in sight over " + THEIRS);
         World peace = plane(world(false), 1, 0, "asat", FIELD).withPlane(new Plane(5, 1, "spysat", near, 100, 320, 0, "").inOrbit(near, true, 0));
         assertThat(EX.execute(peace, 0, new Command.Launch(1, near, 0)).error()).as("at peace").contains("no enemy satellite");
-        assertThat(CountryView.of(w, CFG, 0).overhead()).extracting(CountryView.OverheadView::id).containsExactly(5L);
+        assertThat(CountryView.of(w, CFG, 0).overhead()).extracting(CountryView.OverheadView::at).containsExactly(near);
         int down = 0;
         for (int u = 0; u < 20; u++) {
             CommandResult r = EX.execute(w.withUpdateNumber(u), 0, new Command.Launch(1, near, 0));
@@ -167,5 +167,8 @@ class SatelliteTest {
         World n = Update.run(w, CFG, 3).next();
         assertThat(n.plane(5).efficiency()).as("no field fits it out up there").isEqualTo(90);
         assertThat(n.plane(5).orbiting()).isTrue();
+        // nor sold: there is nowhere to hand it over
+        World mine = world(false).withPlane(new Plane(5, 0, "landsat", THEIRS, 100, 320, 0, "").inOrbit(THEIRS, true, 0));
+        assertThat(EX.execute(mine, 0, new Command.SetPrice("plane", List.of(5L), 5000)).error()).contains("is in orbit; it cannot be sold");
     }
 }

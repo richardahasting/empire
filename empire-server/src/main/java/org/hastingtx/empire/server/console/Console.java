@@ -664,13 +664,19 @@ public class Console {
 
     /** Your planes (issue #262): where each sits, its condition, what it carries and how far it strikes. */
     static String air(CountryView v) {
-        if (v.planes().isEmpty()) return "no planes — designate an airfield and build one there (build x,y bomber)";
+        StringBuilder over = new StringBuilder();
+        for (var o : v.overhead() == null ? List.<CountryView.OverheadView>of() : v.overhead())
+            over.append(over.isEmpty() ? "satellites overhead: " : "; ").append(o.ownerName()).append("'s ").append(o.name()).append(" over ").append(rel(o.relative()));
+        if (!over.isEmpty()) over.append(String.format("%n"));
+        if (v.planes().isEmpty()) return over + "no planes — designate an airfield and build one there (build x,y bomber)";
         StringBuilder sb = new StringBuilder(String.format("%-5s %-16s %-8s %4s %5s %5s %6s %-9s  %s%n", "plane", "class", "at", "eff", "bombs", "acc", "strike", "air", "last"));
         for (var p : v.planes())
             sb.append(String.format("#%-4d %-16s %-8s %3.0f%% %5.0f %4.0f%% %6.0f %-9s  %s%n", p.id(), p.cls(), rel(p.relative()), p.efficiency(),
                     p.load(), p.accuracy(), Math.floor(p.reach()), p.intercept() ? "fighter" : p.escort() ? "escort" : "",
-                    (p.aboard() != 0 ? "aboard ship #" + p.aboard() + "; " : "") + (p.opRelative() == null ? "" : "air defence within " + p.radius() + " of " + rel(p.opRelative()) + "; ") + (p.note() == null ? "" : p.note())));
-        return sb.append("strike: hexes there and back again. fighter: rises against raids at war, and escorts. bomb PLANE x,y [strategic] [escort E,E] · recon PLANE x,y [escort E,E] · mission PLANE air x,y [RADIUS] · fly / drop / paradrop PLANES x,y …").toString();
+                    (p.orbit() != null ? (p.orbit().equals("geosync") ? "geostationary" : "in orbit") + (p.ready() ? "; " : ", reports next update; ") : "")
+                    + (p.aboard() != 0 ? "aboard ship #" + p.aboard() + "; " : "") + (p.opRelative() == null ? "" : "air defence within " + p.radius() + " of " + rel(p.opRelative()) + "; ") + (p.note() == null ? "" : p.note())));
+        sb.insert(0, over);
+        return sb.append("strike: hexes there and back again. fighter: rises against raids at war, and escorts. bomb PLANE x,y [strategic] [escort E,E] · recon PLANE x,y [escort E,E] · mission PLANE air x,y [RADIUS] · fly / drop / paradrop PLANES x,y … · launch PLANE x,y · satellite PLANE").toString();
     }
 
     /**

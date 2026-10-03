@@ -1145,6 +1145,9 @@ units:
       # with imaging, and efficiency to half that
       report_round: 50
       report_round_image: 5
+      report_eff_round_divisor: 2
+      # KNOWN satmap.c: a spy satellite sees each land unit under it with chance eff / unit_spot_divisor
+      unit_spot_divisor: 20
       # KNOWN move_sat.c: an orbit advances orbit_step of a turn an update; over a whole turn it laps the world orbit_laps
       # times east and swings orbit_waves times north and south, orbit_amplitude of the world's height each way. Geostationary
       # ones stay put.

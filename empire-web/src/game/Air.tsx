@@ -8,6 +8,14 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 
 const rel = (c: { x: number; y: number }) => `${c.x},${c.y}`;
 
+/** A sector relative to your capital, absolute — wrapping as the world does; undefined off the edge of one that does not. */
+function absolute(view: CountryView, dx: number, dy: number): { x: number; y: number } | undefined {
+  let x = view.capital.x + dx, y = view.capital.y + dy;
+  if (view.wrapX) x = ((x % view.width) + view.width) % view.width; else if (x < 0 || x >= view.width) return undefined;
+  if (view.wrapY) y = ((y % view.height) + view.height) % view.height; else if (y < 0 || y >= view.height) return undefined;
+  return { x, y };
+}
+
 /**
  * Your planes (issue #262): where each sits, its condition, what it carries and how far it strikes; and its sorties.
  * A sortie takes petrol and bombs off the field it flies from, and whatever it flies against shoots back. Fighters of a
@@ -22,7 +30,7 @@ export function Air({ view, busy, onCommand }: { view: CountryView; busy: boolea
     <div className="space-y-2 text-xs">
       {overhead.length > 0 && <div className="rounded-md border border-border p-2">
         <div className="font-medium">Satellites overhead</div>
-        {overhead.map(o => <div key={o.id}>{o.ownerName}’s {o.name} #{o.id} over {rel(o.relative)}</div>)}
+        {overhead.map((o, i) => <div key={i}>{o.ownerName}’s {o.name} over {rel(o.relative)}</div>)}
       </div>}
       {planes.map(p => (
         <div key={p.id} className="rounded-md border border-border p-2">
@@ -255,8 +263,10 @@ function LaunchDialog({ plane, view, busy, onClose, onCommand }: { plane: PlaneV
   const [tx, ty] = to.split(",").map(s => Number(s.trim()));
   const target = Number.isFinite(tx) && Number.isFinite(ty) ? view.sectors.find(s => s.relative.x === tx && s.relative.y === ty) : undefined;
   const orbiter = plane.satellite && !plane.missile, antiSat = plane.satellite && plane.missile;
-  const ok = !!target && (orbiter ? true
-    : antiSat ? (view.overhead ?? []).some(o => o.relative.x === tx && o.relative.y === ty)
+  // a satellite may go up over land you have never seen: that is what it is for
+  const over = orbiter && Number.isInteger(tx) && Number.isInteger(ty) ? absolute(view, tx, ty) : undefined;
+  const ok = orbiter ? !!over : !!target && (antiSat
+    ? (view.overhead ?? []).some(o => o.relative.x === tx && o.relative.y === ty)
     : plane.marine ? target.owner !== view.countryId : target.owner >= 0 && target.owner !== view.countryId);
   const what = orbiter ? `Into orbit over (x,y), up to ${Math.floor(plane.reach * 2)} hexes away`
     : antiSat ? "At the enemy satellite over (x,y)" : plane.marine ? "At an enemy ship you see (x,y)" : "At (x,y)";
@@ -274,7 +284,8 @@ function LaunchDialog({ plane, view, busy, onClose, onCommand }: { plane: PlaneV
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button variant="danger" disabled={busy || !ok} onClick={async () => {
-            if (target) await onCommand({ verb: "launch", plane: plane.id, x: target.at.x, y: target.at.y, type: orbiter && geo ? "geo" : undefined });
+            const at = orbiter ? over : target?.at;
+            if (at) await onCommand({ verb: "launch", plane: plane.id, x: at.x, y: at.y, type: orbiter && geo ? "geo" : undefined });
             onClose();
           }}>Launch</Button>
         </DialogFooter>

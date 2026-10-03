@@ -113,9 +113,9 @@ public record CountryView(
 
     /**
      * Someone else's satellite over a sector you can see (issue #71; KNOWN move_sat's "satellite spotted over"): whose,
-     * what, and where — what an anti-sat is aimed by.
+     * what, and where — what an anti-sat is aimed by. No number: as a contact has none, nothing here is aimed by one.
      */
-    public record OverheadView(long id, String ownerName, String cls, String name, Coord at, Coord relative) {}
+    public record OverheadView(String ownerName, String cls, String name, Coord at, Coord relative) {}
 
     /**
      * A land unit of yours (issue #247): where, how fit, what it carries, its own mobility, what it is worth in a fight
@@ -420,7 +420,7 @@ public record CountryView(
         for (var p : w.planes()) {
             if (!p.orbiting() || p.owner() == c.id() || !visible.contains(p.at())) continue;
             var cls = air.planeClass(p.cls());
-            out.add(new OverheadView(p.id(), w.country(p.owner()).name(), p.cls(), cls == null ? p.cls() : cls.name(), p.at(), absolute ? p.at() : relative(w, c.capital(), p.at())));
+            out.add(new OverheadView(w.country(p.owner()).name(), p.cls(), cls == null ? p.cls() : cls.name(), p.at(), absolute ? p.at() : relative(w, c.capital(), p.at())));
         }
         return out;
     }

@@ -134,7 +134,7 @@ final class Satellites {
             if (noise[crackle]) continue;
             Sector t = w.sector(at);
             if (spy && t.owned() && t.owner() != c.id())
-                sectors.add(w.country(t.owner()).name() + "'s " + t.designation().replace('_', ' ') + " at " + at + " " + q(by(t.efficiency(), round / 2)) + "%"
+                sectors.add(w.country(t.owner()).name() + "'s " + t.designation().replace('_', ' ') + " at " + at + " " + q(by(t.efficiency(), round / mc.reportEffRoundDivisor())) + "%"
                         + stock(com, t.stock(), round));
             // GUESS: sea and mountain, as they are; the original's map shows only their mnemonic
             if (image || !t.isLand() || t.terrain() == Terrain.MOUNTAIN)
@@ -172,7 +172,7 @@ final class Satellites {
             for (LandUnit u : w.units()) {
                 if (u.owner() == c.id() || !under.contains(u.at())) continue;
                 var ucls = lc.landClass(u.cls());
-                if (ucls == null || ucls.has("spy") || !r.chance(u.efficiency() / 20)) continue;
+                if (ucls == null || ucls.has("spy") || !r.chance(u.efficiency() / mc.unitSpotDivisor())) continue;
                 crackle = (crackle + 1) % 100;
                 if (noise[crackle]) continue;
                 units.add(w.country(u.owner()).name() + "'s " + ucls.name() + " #" + u.id() + " at " + u.at() + " " + q(Math.floor(u.efficiency())) + "%");

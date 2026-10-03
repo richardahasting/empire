@@ -122,14 +122,14 @@ final class Air {
     /** Where a plane may sit on a carrier (KNOWN carrier_planes, inc_shp_nplane): a helicopter, an extra-light or a light plane. */
     private static boolean carrierPlane(UnitsCfg.PlaneClassCfg cls) { return cls.has("light") || cls.has("helo") || cls.has("xlight"); }
 
-    /**
-     * Null when a plane may take off from its base (KNOWN pln_airbase_ok); otherwise why not. An airfield of its owner's at
-     * {@code field_min_efficiency}; or its owner's carrier at {@code carrier_min_efficiency}, of a class that works that
-     * kind of plane.
-     */
     /** "missile" or "satellite" for a class that is launched rather than flown (issue #71), else null. */
     static String rocket(UnitsCfg.PlaneClassCfg cls) { return cls.has("missile") ? "missile" : cls.has("satellite") ? "satellite" : null; }
 
+    /**
+     * Null when a plane may take off from its base (KNOWN pln_airbase_ok); otherwise why not. An airfield of its owner's at
+     * {@code field_min_efficiency}; or its owner's carrier at {@code carrier_min_efficiency}, of a class that works that
+     * kind of plane. Never a satellite in orbit.
+     */
     static String grounded(GameConfig cfg, World w, Plane p, int owner) {
         if (p.orbiting()) return "plane #" + p.id() + " is in orbit";   // issue #71: a satellite up there flies from nowhere
         UnitsCfg.PlanesCfg pc = cfg.units().planes();

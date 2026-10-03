@@ -208,7 +208,7 @@ export interface LotView { id: number; seller: string; commodity: string; amount
 export interface Outcome { accepted: boolean; error?: string; btuSpent: number; view: CountryView; info?: string | null }
 export interface ConsoleReply { output: string; accepted: boolean; error?: string; view?: CountryView }
 /** Someone else's satellite over a sector you see (issue #71): what an anti-sat is aimed by. */
-export interface OverheadView { id: number; ownerName: string; cls: string; name: string; at: Coord; relative: Coord; }
+export interface OverheadView { ownerName: string; cls: string; name: string; at: Coord; relative: Coord; }
 
 export interface CommandRequest {
   verb: string; x?: number; y?: number; x2?: number; y2?: number; type?: string; commodity?: string; amount?: number; clear?: boolean;
