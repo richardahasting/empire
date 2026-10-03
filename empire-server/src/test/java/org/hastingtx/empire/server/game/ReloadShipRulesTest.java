@@ -69,4 +69,37 @@ class ReloadShipRulesTest {
 
         assertThatThrownBy(() -> games.refreshShipRules(g.id, account(false))).isInstanceOf(SecurityException.class);
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void unitRulesComeWholeAndMissingBlocksAreAddedButNothingIsChanged() {
+        // issue #310: an old game — no missiles, no nukes, no market — whose economy was tuned by hand
+        GameService.Game g = games.createWithSeats("teaching", "unit-rules-" + System.nanoTime(), 2, 11L, null, WorldOverrides.NONE);
+        made.add(g.id);
+        ConfigLoader loader = new ConfigLoader();
+        Map<String, Object> raw = loader.loadYaml(repo.find(g.id).orElseThrow().configYaml()).raw();
+        Map<String, Object> units = (Map<String, Object>) raw.get("units");
+        ((Map<String, Object>) units.get("planes")).remove("missiles");
+        units.remove("nukes");
+        Map<String, Object> economy = (Map<String, Object>) raw.get("economy");
+        boolean hadMarket = economy.remove("market") != null;
+        Map<String, Object> pop = (Map<String, Object>) economy.get("population");
+        pop.put("max_pop_research_curve", Map.of("type", "res_pop"));        // the hand edit that must survive
+        String old = loader.toYaml(raw);
+        repo.setConfig(g.id, old, loader.loadYaml(old).hash());
+
+        GameService.UnitRulesRefresh dry = games.refreshUnitRules(g.id, account(true), true);
+        assertThat(dry.applied()).isFalse();
+        if (hadMarket) assertThat(dry.added()).contains("economy.market");
+        assertThat(repo.find(g.id).orElseThrow().configYaml()).as("a dry run writes nothing").isEqualTo(old);
+
+        GameService.UnitRulesRefresh done = games.refreshUnitRules(g.id, account(true), false);
+        assertThat(done.applied()).isTrue();
+        var cfg = games.get(g.id).cfg;
+        assertThat(cfg.units().planes().missiles()).as("missiles came in").isNotNull();
+        assertThat(cfg.units().nukes()).as("and nukes").isNotNull();
+        if (hadMarket) assertThat(cfg.economy().market()).as("a block it lacked was added").isNotNull();
+        assertThat(cfg.economy().population().maxPopResearchCurve().type()).as("a value it had was left alone").isEqualTo("res_pop");
+        assertThatThrownBy(() -> games.refreshUnitRules(g.id, account(false), true)).isInstanceOf(SecurityException.class);
+    }
 }

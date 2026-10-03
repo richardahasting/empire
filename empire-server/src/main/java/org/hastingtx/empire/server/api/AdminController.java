@@ -86,6 +86,15 @@ public class AdminController {
         return games.refreshShipRules(id, admin(req));
     }
 
+    /**
+     * Take the unit rules from the preset as shipped now, and add any rule block the game lacks; every setting it has
+     * stays (issue #310). {@code dryRun=true} only lists what would be added.
+     */
+    @PostMapping("/games/{id}/config/refresh-units")
+    public GameService.UnitRulesRefresh refreshUnitRules(@PathVariable long id, @RequestParam(defaultValue = "false") boolean dryRun, HttpServletRequest req) {
+        return games.refreshUnitRules(id, admin(req), dryRun);
+    }
+
     /** Seed nodule fields for an existing game (issue #112). */
     @PostMapping("/games/{id}/sea-minerals")
     public GameService.Summary seaMinerals(@PathVariable long id, HttpServletRequest req) {
