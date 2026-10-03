@@ -190,7 +190,7 @@ a carrier. Build them on an airfield like any plane.
   out of sight, a submarine and a number that is no ship all get the same answer. It may miss — a fast,
   small ship is harder to hit — and a hit does its damage to her hull, divided by her armour;
   it can sink her. An **aa cruiser** or **aegis cruiser** of theirs within a hex of her fires two shells
-  from her hold at it first, each with a chance by her anti-missile guns, condition and tech
+  from her hold at it first, each with a chance by the anti-missile guns she has aboard, her condition and tech
   (an aegis cruiser at tech 400 brings down about four in ten Harpoons).
 - **SAMs** rise like fighters (over their own land, or anywhere in their air-defence area), but
   only against raid planes that **cost $1,000 or more**, one SAM a plane, before the fighters.

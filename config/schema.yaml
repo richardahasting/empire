@@ -1149,8 +1149,8 @@ units:
       # KNOWN satmap.c: a spy satellite sees each land unit under it with chance eff / unit_spot_divisor
       unit_spot_divisor: 20
       # KNOWN shpsub.c shp_missile_defense: each anti-missile ship of a country at war with the launcher within
-      # ship_defense_range of a ship a missile is coming at, at ship_defense_min_efficiency or better, crewed, fires
-      # ship_defense_shells from her hold, and hits with (anti_missile × eff × tech/(tech + ship_defense_tech_scale) ×
+      # ship_defense_range of a ship a missile is coming at, at ship_defense_min_efficiency or better, crewed, with a gun
+      # aboard, fires ship_defense_shells from her hold, and hits with (guns × eff × tech/(tech + ship_defense_tech_scale) ×
       # ship_defense_factor − the missile's defence)%. The first hit destroys the missile.
       ship_defense_range: 1
       ship_defense_min_efficiency: 60
@@ -1314,7 +1314,7 @@ units:
           carries: [pet, shell, gun, food], planes: 20, choppers: 20, xlight: 4 }   # KNOWN ship.config cal: 20 planes, 20 helicopters, 4 extra-light; petrol and shells for them
       # KNOWN ship.config ms: lays and sweeps mines, 100 shells
       # KNOWN ship.config aac, agc (M_ANTIMISSILE): cruisers whose anti-missile systems fire at a missile coming at a ship
-      # within ship_defense_range of them. anti_missile: the guns the system brings (KNOWN gli). The rest as the fleet
+      # within ship_defense_range of them. anti_missile: the most guns the system brings (KNOWN gli), no more than she has aboard. The rest as the fleet
       # above, scaled from the original's against its destroyer: GUESS.
       - { id: aa_cruiser,              name: aa cruiser,              glyph: e, role: warship, tech_required: 75, build: { lcm: 150, hcm: 200, gun: 20, shell: 100, oil: 80, cash: 12000 }, hold: 250, speed: 4, sight: 3, tank: 300, fuel_per_hex: 10, crew: 100, guns: 8, range: 1, armor: 80, magazine: 100, anti_missile: 8 }
       - { id: aegis_cruiser,           name: aegis cruiser,           glyph: x, role: warship, tech_required: 150, build: { lcm: 150, hcm: 250, gun: 30, shell: 150, oil: 100, cash: 30000 }, hold: 300, speed: 4, sight: 4, tank: 400, fuel_per_hex: 12, crew: 200, guns: 16, range: 1, armor: 80, magazine: 200, anti_missile: 16 }

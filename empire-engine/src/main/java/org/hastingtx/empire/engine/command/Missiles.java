@@ -160,7 +160,7 @@ final class Missiles {
     /**
      * KNOWN shpsub.c shp_missile_defense: each anti-missile ship of a country at war with you within {@code
      * ship_defense_range} of {@code at}, in order — at {@code ship_defense_min_efficiency} or better, crewed, not for sale,
-     * with {@code ship_defense_shells} in her hold, which she fires — hits with (anti_missile × eff × tech factor ×
+     * with a gun and {@code ship_defense_shells} in her hold, which she fires — hits with (guns × eff × tech factor ×
      * {@code ship_defense_factor} − the missile's defence)%. The first hit destroys it. You learn whose fire it was, not
      * which ship.
      */
@@ -168,7 +168,7 @@ final class Missiles {
         var sc = cfg.units().ships();
         var mc = cfg.units().planes().missiles();
         if (sc == null) return new Intercepted(w, false, "");
-        int shell = com.index("shell");
+        int shell = com.index("shell"), gun = com.index("gun");
         List<String> story = new ArrayList<>();
         World now = w;
         List<Ship> near = w.ships().stream().filter(s -> Hex.distance(now, s.at(), at) <= mc.shipDefenseRange()).sorted(Comparator.comparingLong(Ship::id)).toList();
@@ -176,10 +176,12 @@ final class Missiles {
             UnitsCfg.ShipClassCfg k = sc.shipClass(s.cls());
             if (k == null || k.antiMissileOr0() <= 0 || s.owner() == c.id() || !w.atWar(c.id(), s.owner())) continue;
             if (s.efficiency() < mc.shipDefenseMinEfficiency() || (sc.crews() && s.crew() <= 0)) continue;
-            if (s.stock().get(shell) < mc.shipDefenseShells() || w.onTheBlock(TradeLot.SHIP, s.id()) != null) continue;
+            // KNOWN shp_usable_guns: her system brings no more guns than she has aboard
+            double guns = Math.min(k.antiMissileOr0(), Math.floor(s.stock().get(gun)));
+            if (guns < 1 || s.stock().get(shell) < mc.shipDefenseShells() || w.onTheBlock(TradeLot.SHIP, s.id()) != null) continue;
             w = w.withShip(s.withStock(s.stock().plus(shell, -mc.shipDefenseShells())));
             double teff = s.tech() / (s.tech() + mc.shipDefenseTechScale());
-            double hc = Math.max(0, Math.min(100, Math.floor(k.antiMissileOr0() * s.efficiency() / 100 * teff * mc.shipDefenseFactor()) - defence));
+            double hc = Math.max(0, Math.min(100, Math.floor(guns * s.efficiency() / 100 * teff * mc.shipDefenseFactor()) - defence));
             if (r.chance(hc / 100)) { story.add(w.country(s.owner()).name() + "'s anti-missile fire destroyed it"); return new Intercepted(w, true, String.join("; ", story)); }
             story.add(w.country(s.owner()).name() + "'s anti-missile fire missed it");
         }

@@ -111,7 +111,7 @@ class MissileTest {
         Coord sea = Hex.stepRaw(FIELD, 1, 1), beside = Hex.stepRaw(sea, 0, 1);
         World w = plane(world(true), 1, 0, "harpoon", FIELD)
                 .withShip(new Ship(9, 1, "destroyer", "", sea, 100, Stocks.zero(COM.size()), null, null, 0, "", 100, null, null, dc.tankOr0(), dc.crewOr0()))
-                .withShip(new Ship(10, 1, "aegis_cruiser", "", beside, 100, Stocks.of(COM.fromMap(Map.of("shell", 100.0))), null, null, 0, "", 400, null, null, ac.tankOr0(), ac.crewOr0()));
+                .withShip(new Ship(10, 1, "aegis_cruiser", "", beside, 100, Stocks.of(COM.fromMap(Map.of("shell", 100.0, "gun", 30.0))), null, null, 0, "", 400, null, null, ac.tankOr0(), ac.crewOr0()));
         int downed = 0;
         for (int u = 0; u < 20; u++) {
             CommandResult r = EX.execute(w.withUpdateNumber(u), 0, new Command.Launch(1, sea, 0));
@@ -122,9 +122,13 @@ class MissileTest {
             if (r.info().contains("destroyed it")) { downed++; assertThat(r.world().ship(9).efficiency()).isEqualTo(100); }
         }
         assertThat(downed).isGreaterThan(0);
-        // without shells she cannot
-        World dry = w.withShip(w.ship(10).withStock(Stocks.zero(COM.size())));
-        for (int u = 0; u < 5; u++) assertThat(EX.execute(dry.withUpdateNumber(u), 0, new Command.Launch(1, sea, 0)).info()).doesNotContain("anti-missile");
+        // without shells she cannot, nor without guns (KNOWN shp_usable_guns)
+        World dry = w.withShip(w.ship(10).withStock(Stocks.of(COM.fromMap(Map.of("gun", 30.0)))));
+        World unarmed = w.withShip(w.ship(10).withStock(Stocks.of(COM.fromMap(Map.of("shell", 100.0)))));
+        for (int u = 0; u < 5; u++) {
+            assertThat(EX.execute(dry.withUpdateNumber(u), 0, new Command.Launch(1, sea, 0)).info()).doesNotContain("anti-missile");
+            assertThat(EX.execute(unarmed.withUpdateNumber(u), 0, new Command.Launch(1, sea, 0)).info()).doesNotContain("anti-missile");
+        }
     }
 
     @Test
