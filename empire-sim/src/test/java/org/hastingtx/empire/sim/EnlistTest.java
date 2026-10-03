@@ -92,7 +92,7 @@ class EnlistTest {
         assertThat(EX.execute(world(0, 0), 0, new Command.Enlist(AT, 10, false)).error()).contains("no civilians");
         assertThat(EX.execute(world(400, 0), 0, new Command.Enlist(AT, 0, false)).error()).contains("at least 1");
         for (double bad : new double[] {Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY})
-            assertThat(EX.execute(world(400, 0), 0, new Command.Enlist(AT, bad, true)).error()).as("`enlist x,y NaN` parses; it must not poison the stock").contains("at least 1");
+            assertThat(EX.execute(world(400, 0), 0, new Command.Enlist(AT, bad, true)).error()).as("`enlist x,y NaN` parses; it must not poison the stock").contains("qty must be a number");
         assertThat(EX.execute(world(400, 0), 0, new Command.Enlist(new Coord(20, 20), 10, false)).error()).contains("do not own");
     }
 
