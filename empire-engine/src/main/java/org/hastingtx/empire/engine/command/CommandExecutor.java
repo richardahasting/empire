@@ -22,6 +22,8 @@ public final class CommandExecutor {
 
     public CommandResult execute(World w, int countryId, Command cmd) {
         if (countryId < 0 || countryId >= w.countries().size()) return CommandResult.fail(w, "no such country");
+        String notANumber = nonFinite(cmd);
+        if (notANumber != null) return CommandResult.fail(w, notANumber + " must be a number");
         Country c = w.country(countryId);
         double cost = cfg.economy().btu().cost(cmd.verb());
         if (c.btu() < cost) return CommandResult.fail(w, "not enough BTUs: need " + cost + ", have " + fmt(c.btu()));
@@ -1066,6 +1068,26 @@ public final class CommandExecutor {
     private boolean coastal(World w, Sector s) {
         for (Coord n : Hex.neighbours(w, s.at())) if (!w.sector(n).terrain().isLand()) return true;
         return false;
+    }
+
+    /**
+     * The name of the first NaN or infinite number in a command, or null (issue #278). The console parses numbers
+     * with {@code Double.parseDouble}, which takes "NaN" and "Infinity", and NaN fails every comparison: a guard
+     * written {@code qty <= 0} lets it through into the world. Checked once here, for every verb, including
+     * numbers nested in records and lists (an attack's parties) and every verb added later.
+     */
+    static String nonFinite(Object o) {
+        if (o instanceof Double d) return Double.isFinite(d) ? null : "";
+        if (o instanceof Iterable<?> it) { for (Object e : it) { String bad = nonFinite(e); if (bad != null) return bad; } return null; }
+        if (!(o instanceof Record r)) return null;
+        for (java.lang.reflect.RecordComponent rc : r.getClass().getRecordComponents()) {
+            Object v;
+            try { v = rc.getAccessor().invoke(r); }
+            catch (ReflectiveOperationException e) { throw new IllegalStateException("cannot read " + rc.getName() + " of " + r.getClass().getSimpleName(), e); }
+            String bad = nonFinite(v);
+            if (bad != null) return bad.isEmpty() ? rc.getName() : rc.getName() + "." + bad;
+        }
+        return null;
     }
 
     private static Sector owned(World w, Country c, Coord at) {
