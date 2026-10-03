@@ -203,7 +203,7 @@ public final class CommandExecutor {
     private CommandResult demobilize(World w, Country c, Command.Demobilize d) {
         Sector s = owned(w, c, d.sector());
         if (s == null) return CommandResult.fail(w, "you do not own " + d.sector());
-        if (d.qty() < 0) return CommandResult.fail(w, "the number must be 0 or more");
+        if (!(d.qty() >= 0) || Double.isInfinite(d.qty())) return CommandResult.fail(w, "the number must be 0 or more");   // NaN fails every comparison: test the good case
         double have = Math.floor(s.stock().get(com.mil));
         double leave = d.keep() ? Math.max(0, have - Math.floor(d.qty())) : Math.min(have, Math.floor(d.qty()));
         if (have < 1) return CommandResult.fail(w, "no military at " + d.sector());
@@ -228,7 +228,7 @@ public final class CommandExecutor {
         if (ec == null) return CommandResult.fail(w, "this game's rules have no enlistment");
         Sector s = owned(w, c, e.sector());
         if (s == null) return CommandResult.fail(w, "you do not own " + e.sector());
-        if (e.qty() < 1) return CommandResult.fail(w, "the number must be at least 1");
+        if (!(e.qty() >= 1) || Double.isInfinite(e.qty())) return CommandResult.fail(w, "the number must be at least 1");   // NaN fails every comparison: test the good case
         if (s.occupied()) return CommandResult.fail(w, "the people of " + e.sector() + " are not yours yet; conquered civilians will not serve");
         if (s.loyalty() > ec.refuseAboveLoyalty()) return CommandResult.fail(w, "civilians refuse to report in " + e.sector() + " (disloyalty " + s.loyalty() + "; they answer at " + ec.refuseAboveLoyalty() + " or less)");
         double civ = Math.floor(s.stock().get(com.civ)), mil = Math.floor(s.stock().get(com.mil));
