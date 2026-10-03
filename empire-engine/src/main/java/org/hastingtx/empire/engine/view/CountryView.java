@@ -332,7 +332,9 @@ public record CountryView(
         return new ContactView(ct.at(), relative(w, capital, ct.at()), band, age, ct.confidence(), ct.cls(), ownerName);
     }
 
-    private static final java.util.regex.Pattern ABS = java.util.regex.Pattern.compile("(?<![\\d.,-])(\\d+),(\\d+)(?![\\d.])");
+    // at most nine digits a side: notes carry names players chose (a ship's, a country's), and "99999999999,1" must not
+    // overflow parseInt and take the whole view down with it — no world is that wide anyway
+    private static final java.util.regex.Pattern ABS = java.util.regex.Pattern.compile("(?<![\\d.,-])(\\d{1,9}),(\\d{1,9})(?![\\d.])");
 
     /**
      * Engine messages name sectors by absolute coordinates; players only ever see offsets from their capital. A
