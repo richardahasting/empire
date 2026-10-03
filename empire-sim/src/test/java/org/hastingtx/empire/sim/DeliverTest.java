@@ -100,6 +100,23 @@ class DeliverTest {
     }
 
     @Test
+    void anOrderBelowTheSectorsOwnThresholdIsRefused() {
+        // issue #274: "deliver food 6,-3 e 1500" at a sector whose threshold asks its centre for 2000 — the centre fills
+        // it, the delivery drains it, and the sector between starves. Refused, with both fixes named.
+        Coord a = Hex.stepRaw(CAP, 0, 1), b = Hex.stepRaw(CAP, 0, 2);
+        World w = own(own(base(), a, 500), b, 0);
+        Sector s = w.sector(a);
+        double[] th = s.thresholds().clone(); th[IRON] = 200;
+        w = w.withSector(s.withThresholds(th));
+        CommandExecutor ex = new CommandExecutor(CFG);
+        CommandResult below = ex.execute(w, 0, new Command.Deliver(a, "iron", 0, 150));
+        assertThat(below.error()).contains("would ship out what").contains("threshold (200.0)").contains("deliver above 200.0 or more").contains("thresh");
+        assertThat(below.world().sector(a).deliver().has(IRON)).isFalse();
+        assertThat(ex.execute(w, 0, new Command.Deliver(a, "iron", 0, 200)).error()).as("at the threshold the two agree").isNull();
+        assertThat(ex.execute(w, 0, new Command.Deliver(a, "iron", 0, 900)).error()).isNull();
+    }
+
+    @Test
     void commandValidatesSetsAndClears() {
         Coord a = Hex.stepRaw(CAP, 0, 1);
         Coord b = Hex.stepRaw(a, 1, 1);

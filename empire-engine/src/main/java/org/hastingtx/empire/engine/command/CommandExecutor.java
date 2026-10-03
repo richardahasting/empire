@@ -266,6 +266,13 @@ public final class CommandExecutor {
         // nothing is written, and the reason names the hex so the player can look at it.
         if (!t.terrain().isLand()) return CommandResult.fail(w, to + " is sea; nothing can be delivered there (deliver … check to look before you order)");
         if (t.owner() != c.id()) return CommandResult.fail(w, "you do not own " + to + "; explore it first, or deliver … check to see what lies " + Hex.dirName(d.dir()));
+        // Below the sector's own distribution threshold the two orders fight (issue #274): the centre sends up to the
+        // threshold, and the delivery pushes on everything above its own, lower line — a pipe that drains what it is
+        // fed and starves the sector in between. It used to be written with a warning; now it is refused, with both fixes.
+        if (s.hasThreshold(ci) && d.threshold() < s.threshold(ci))
+            return CommandResult.fail(w, "a delivery of " + d.commodity() + " above " + fmt(d.threshold()) + " would ship out what " + d.sector() + "'s own threshold ("
+                    + fmt(s.threshold(ci)) + ") asks its centre to send — deliver above " + fmt(s.threshold(ci)) + " or more, or lower the threshold first (thresh "
+                    + d.sector() + " " + d.commodity() + " " + fmt(d.threshold()) + ")");
         // One order per commodity per sector. Replacing one used to be silent, and probing a
         // direction quietly destroyed a working chain (issue #148). It still replaces — but says so.
         String replaced = s.deliver().has(ci) && (s.deliver().dir(ci) != d.dir() || s.deliver().threshold(ci) != d.threshold())
@@ -286,8 +293,6 @@ public final class CommandExecutor {
         StringBuilder sb = new StringBuilder();
         if (threshold < eats)
             sb.append(" — WARNING: the people here eat about ").append(Math.round(eats)).append(" food an update and this keeps only ").append(fmt(threshold)).append("; they will starve once the stock is gone");
-        if (s.hasThreshold(ci) && s.stock().get(ci) < s.threshold(ci))
-            sb.append(sb.isEmpty() ? " — WARNING: " : "; also ").append("this sector is under its own food threshold (").append(Math.round(s.stock().get(ci))).append(" of ").append(Math.round(s.threshold(ci))).append(") and is still asking its centre for more");
         return sb.toString();
     }
 

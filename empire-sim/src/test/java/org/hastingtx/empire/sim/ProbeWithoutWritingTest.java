@@ -87,14 +87,17 @@ class ProbeWithoutWritingTest {
         }
         assertThat(d2).as("two owned neighbours of a grown capital").isGreaterThanOrEqualTo(0);
 
-        World w1 = run(w, new Command.Deliver(cap, "food", d1, 100)).world();
-        CommandResult r = run(w1, new Command.Deliver(cap, "food", d2, 250));
-        assertThat(r.ok()).isTrue();
-        assertThat(r.info()).contains("REPLACES").contains("above 100").contains(Hex.dirName(d1));
-        assertThat(r.world().sector(cap).deliver().dir(COM.index("food"))).isEqualTo(d2);
+        // above the capital's own food threshold, or the order is refused outright (issue #274)
+        int food = COM.index("food");
+        double keep = w.sector(cap).hasThreshold(food) ? w.sector(cap).threshold(food) : 0;
+        World w1 = run(w, new Command.Deliver(cap, "food", d1, keep + 100)).world();
+        CommandResult r = run(w1, new Command.Deliver(cap, "food", d2, keep + 250));
+        assertThat(r.ok()).as(r.error()).isTrue();
+        assertThat(r.info()).contains("REPLACES").contains("above " + (keep + 100)).contains(Hex.dirName(d1));
+        assertThat(r.world().sector(cap).deliver().dir(food)).isEqualTo(d2);
 
         // the same order again is not a replacement
-        CommandResult same = run(r.world(), new Command.Deliver(cap, "food", d2, 250));
+        CommandResult same = run(r.world(), new Command.Deliver(cap, "food", d2, keep + 250));
         assertThat(same.info()).doesNotContain("REPLACES");
     }
 

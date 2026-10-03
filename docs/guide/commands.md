@@ -30,6 +30,7 @@ enlist SECTOR N              call N civilians up as military, now (enlist SECTOR
 deliver COMMODITY SECTOR DIR N   standing order: above N, push it one hex DIR (e ne nw w sw se) every update; DIR none clears
 deliver COMMODITY SECTOR DIR N check   the same, described but not made: what lies that way, and whether it would deliver
   food out of a sector that keeps less than its own people eat in an update WARNS (a self-starving pipe)
+  and below the sector's own threshold for it is REFUSED: the centre would fill it and the order drain it
 adjacent SECTOR              what lies each way — yours, unowned, sea, or somebody's — without claiming or ordering anything
 ORDER ... check              a dry run of des, thresh, dist, demob, enlist, move, expl, road, rail, railship, raillane,
                              build, load, unload, lload, lunload, lane, fish, mine, supply, scrap: what it would answer,
