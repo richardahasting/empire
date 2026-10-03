@@ -99,6 +99,7 @@ class MarketTest {
         assertThat(kept.market().get(0).amount()).isEqualTo(750);
         assertThat(EX.execute(w, 0, new Command.Sell(OURS, "iron", -1000, 1)).error()).contains("nothing to sell");
         assertThat(EX.execute(w, 0, new Command.Sell(OURS, "iron", -0.5, 1)).error()).as("not 'all of it'").contains("whole number");
+        assertThat(EX.execute(w, 0, new Command.Sell(OURS, "iron", Double.NaN, 1)).error()).as("NaN is refused before the market sees it (#278)").contains("must be a number");
     }
 
     @Test
@@ -146,6 +147,19 @@ class MarketTest {
         assertThat(w.sector(THEIRS).stock().get(IRON)).isZero();
         assertThat(r.events()).anySatisfy(e -> assertThat(e.message()).contains("fell through"));
         assertThat(r.events()).filteredOn(e -> e.country() == 0).allSatisfy(e -> assertThat(e.message()).as("the seller is not told where the buyer's warehouse is").doesNotContain(THEIRS.x() + "," + THEIRS.y()).doesNotContain("$"));
+    }
+
+    @Test
+    void soldiersAreBoughtWithoutAStorageCap() {
+        // military have no storage cap, here as in apply: a big lot of them must not fail at settlement for want of room
+        World w = world();
+        w = w.withSector(w.sector(OURS).withStock(w.sector(OURS).stock().plus(COM.mil, 130000)));
+        w = ok(w, 0, new Command.Sell(OURS, "mil", 120000, 0.01));
+        long id = w.market().get(0).id();
+        w = ok(w, 1, new Command.Buy(id, 0.06, THEIRS));
+        w = updates(w, DELAY);
+        assertThat(w.market()).isEmpty();
+        assertThat(w.sector(THEIRS).stock().get(COM.mil)).isGreaterThanOrEqualTo(120000);
     }
 
     @Test

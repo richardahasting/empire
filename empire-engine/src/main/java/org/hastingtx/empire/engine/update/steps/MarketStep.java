@@ -37,8 +37,7 @@ public final class MarketStep implements Step {
             Sector to = ctx.sector(di);
             if (why == null && (to.owner() != lot.bidder() || !mc.sectorTypes().contains(to.designation()) || to.efficiency() < mc.minEfficiency()))
                 why = lot.dest() + " is no longer a working " + String.join(" or ", mc.sectorTypes()) + " of the buyer's";
-            if (why == null && Math.floor(ctx.capacity(to, lot.commodity())) - (to.stock().get(lot.commodity()) + ctx.led().st(di, lot.commodity())) < lot.amount())
-                why = lot.dest() + " has no room for " + what;
+            if (why == null && room(ctx, di, to, lot.commodity()) < lot.amount()) why = lot.dest() + " has no room for " + what;
             if (why != null) {
                 left.add(lot.withoutBid());
                 // the seller hears only that the buyer's side failed: where the buyer meant the goods to go, and what they
@@ -56,6 +55,17 @@ public final class MarketStep implements Step {
         }
         ctx.market.clear();
         ctx.market.addAll(left);
+    }
+
+    /**
+     * Room for more of a commodity, as buy measured it and as apply truncates: goods by capacity, civilians and workers
+     * by the population cap they share, military by nothing.
+     */
+    private static double room(Ctx ctx, int i, Sector to, int c) {
+        if (!ctx.com.isPerson(c)) return Math.floor(ctx.capacity(to, c)) - (to.stock().get(c) + ctx.led().st(i, c));
+        if (c == ctx.com.civ || c == ctx.com.uw)
+            return Math.floor(ctx.maxPopulation(to)) - (to.stock().get(ctx.com.civ) + ctx.led().st(i, ctx.com.civ) + to.stock().get(ctx.com.uw) + ctx.led().st(i, ctx.com.uw));
+        return Double.POSITIVE_INFINITY;
     }
 
     private static String money(double v) { return String.format(java.util.Locale.ROOT, "$%.2f", v); }
