@@ -81,6 +81,8 @@ export interface PlaneView {
   intercept: boolean; escort: boolean; attack: number; defense: number;
   /** air defence (issue #71): the op point it guards, relative, and the radius; null and 0 when on no mission */
   opRelative: Coord | null; radius: number;
+  /** a transport (issue #71): carries cargo; drops paratroops */
+  cargo: boolean; para: boolean;
 }
 export interface PlaneClass { id: string; name: string; glyph: string; techRequired: number; build: Record<string, number>; bwork: number; accuracy: number; load: number; attack: number; defense: number; range: number; fuel: number; flags: string[] }
 export interface PlanesRules { startEfficiency: number; minEfficiency: number; abortBelow: number; classes: PlaneClass[] }
@@ -207,6 +209,8 @@ export interface CommandRequest {
   unit?: number; units?: number[];
   /** The market (issue #141): a lot's number, and a price a unit. */
   lot?: number; price?: number;
+  /** Planes flying together: fly, drop, paradrop (issue #71); escorts go in units. */
+  planes?: number[];
   /** Many sectors instead of x,y: "*" (all mine), "*:TYPE" (one designation), "x1:x2,y1:y2" (a rectangle, relative). Standing orders only. */
   scope?: string;
   /** deliver: e ne nw w sw se (or "none" to clear). */

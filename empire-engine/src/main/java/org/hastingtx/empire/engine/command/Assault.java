@@ -137,7 +137,7 @@ final class Assault {
             int civ = (int) st.get(com.civ);
             var rng = new org.hastingtx.empire.engine.update.steps.UnrestStep.R(Rng.stream("takeover:" + at + ":" + world[0].updateNumber() + ":" + attacker, cfg.world() == null ? 0 : cfg.world().seed()));
             int n = (uc.pivot() - s.loyalty()) + (rng.roll(uc.roll()) - uc.offset());
-            if (n > 0 && s.owner() == s.oldOwner()) {
+            if (n > 0 && loser >= 0 && s.owner() == s.oldOwner()) {
                 int rise = civ * n / uc.perCiv() + uc.base();
                 if (rise * 2 > civ) rise = civ / 2;
                 rise = (int) (rise / unrest.hapFact(world[0].country(attacker).levels().happiness(), world[0].country(loser).levels().happiness()));
@@ -177,6 +177,32 @@ final class Assault {
         if (!partisans.isEmpty()) out = (out.isEmpty() ? "" : out + "; ") + partisans + " against you";
         if (!unitsTaken.isEmpty()) out = (out.isEmpty() ? "" : out + "; ") + unitsTaken;
         return out;
+    }
+
+    /**
+     * From the air (issue #71; KNOWN para.c paradrop, attsub.c): {@code troops} paratroops land and fight at the plane
+     * side's offence efficiency, with no support behind them; the defender's guns fire as for any attack. Survivors
+     * take the sector; a lost drop leaves nobody. A sector nobody holds is taken by whoever lands.
+     */
+    static CommandResult paradrop(GameConfig cfg, Commodities com, World w, Country c, Coord at, double troops, double strength, String before) {
+        Sector target = w.sector(at);
+        String key = "paradrop:" + at;
+        double defenceSupport = 1.0;
+        Army.Support theirs = null;
+        if (target.owned()) {
+            theirs = Army.support(cfg, com, w, target.owner(), at, key + ":def");
+            w = theirs.world();
+            defenceSupport = theirs.multiplier();
+            target = w.sector(at);
+        }
+        Fight f = fight(cfg, com, w, target, troops, strength, defenceSupport, key);
+        String story = (before.isEmpty() ? "" : before + " — ") + f.story("paradrop", at, troops)
+                + (theirs == null || theirs.story().isEmpty() ? "" : "; their " + theirs.story());
+        if (!f.won()) return new CommandResult(f.next(), null, 0, story + " — all of them lost; they lost " + q(f.defendersLost()));
+        World[] next = {f.next()};
+        String spoiled = capture(cfg, com, next, c.id(), at, f.survivors(), 0);
+        return new CommandResult(next[0], null, 0, story + " — taken: " + q(f.survivors()) + " paratroops hold it; they lost " + q(f.defendersLost())
+                + (spoiled.isEmpty() ? "" : "; lost in the fighting: " + spoiled));
     }
 
     /** From the sea: everyone aboard an assault ship next to enemy coast (issue #206). */

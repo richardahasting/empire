@@ -1222,6 +1222,9 @@ public class GameService {
             case Command.SetPrice sp -> null;
             case Command.Trade tr -> tr.dest();
             case Command.AirMission am -> am.op();
+            case Command.Fly fl -> fl.to();
+            case Command.Drop dr -> dr.at();
+            case Command.Paradrop pd -> pd.at();
             case Command.Telegram t -> null;
             case Command.Announce a -> null;
             case Command.DeclareWar d -> null;

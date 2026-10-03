@@ -1095,6 +1095,14 @@ units:
       intensity_die: 20
       intensity_add: 1
       odds_floor: 0.05                # KNOWN ac_dog: the attacker always has a 5% chance a round
+    # Air transport (issue #71): fly, drop, paradrop — KNOWN commands/{fly,drop,para}.c, plnsub.c pln_equip.
+    transport:
+      landing_min_efficiency: 60      # KNOWN pln_where_to_land: an airfield under 60% takes only VTOL (none here yet)
+      fly_load_multiple: 2.0          # KNOWN pln_equip 't': a transport flying to land carries twice its load
+      drop_load_multiple: 1.0         # KNOWN pln_equip 'd' and 'a': once, unless VTOL (none here yet)
+      no_paradrop_terrain: [mountain, ocean]                     # KNOWN attsub.c:489-497
+      no_paradrop_designations: [capital, fortress, wasteland]   # KNOWN attsub.c:489-497
+      paradrop_strength: 1.0          # KNOWN attsub.c:1101-1118: a plane side's offence efficiency is 1.0
     classes:
       # build is per 100% (plane.config); a plane is laid down at start_efficiency of it. range is the round
       # trip, so a sortie reaches half of it. fuel is petrol for one sortie; load is bombs (shells).
@@ -1108,6 +1116,9 @@ units:
       - { id: jet_fighter_1,    name: jet fighter,      glyph: J, tech_required: 125, build: { lcm: 12, hcm: 4, cash: 1000 }, bwork: 40, accuracy: 45, load: 1, attack: 14.0, defense: 14.0, range: 11, fuel: 3, flags: [tactical, intercept] }
       - { id: jet_fighter_2,    name: VTOL jet fighter, glyph: H, tech_required: 195, build: { lcm: 12, hcm: 4, cash: 1400 }, bwork: 40, accuracy: 30, load: 1, attack: 17.0, defense: 17.0, range: 14, fuel: 3, flags: [tactical, intercept] }
       - { id: escort,           name: escort fighter,   glyph: E, tech_required: 90,  build: { lcm: 9,  hcm: 3, cash: 700 },  bwork: 35, accuracy: 60, load: 1, attack: 5.0,  defense: 5.0,  range: 15, fuel: 2, flags: [tactical, escort] }
+      # Transports (KNOWN plane.config tr, jt): cargo planes that also drop paratroops
+      - { id: transport,        name: transport,        glyph: t, tech_required: 85,  build: { lcm: 14, hcm: 5, cash: 1000 }, bwork: 44, accuracy: 0,  load: 7,  attack: 0.0,  defense: 2.0,  range: 15, fuel: 3, flags: [cargo, para] }
+      - { id: jet_transport,    name: jet transport,    glyph: z, tech_required: 160, build: { lcm: 18, hcm: 5, cash: 1500 }, bwork: 48, accuracy: 0,  load: 16, attack: 0.0,  defense: 9.0,  range: 35, fuel: 4, flags: [cargo, para] }
       - { id: jet_escort,       name: jet escort,       glyph: X, tech_required: 160, build: { lcm: 14, hcm: 8, cash: 1400 }, bwork: 50, accuracy: 60, load: 1, attack: 10.0, defense: 10.0, range: 25, fuel: 3, flags: [tactical, escort] }
 
   # SHIPS — NEW (Richard 2026-09-09, issue #56). A data table gated on tech; every number a GUESS to tune

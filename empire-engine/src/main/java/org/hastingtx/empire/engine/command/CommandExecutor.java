@@ -43,6 +43,9 @@ public final class CommandExecutor {
             case Command.SetPrice sp -> Market.setPrice(cfg, com, w, c, sp);
             case Command.Trade tr -> Market.tradeBid(cfg, com, w, c, tr);
             case Command.AirMission am -> Air.mission(cfg, w, c, am);
+            case Command.Fly fl -> Air.fly(cfg, com, w, c, fl);
+            case Command.Drop dr -> Air.drop(cfg, com, w, c, dr);
+            case Command.Paradrop pd -> Air.paradrop(cfg, com, w, c, pd);
             case Command.Distribute d -> distribute(w, c, d);
             case Command.Deliver d -> deliver(w, c, d);
             case Command.BuildShip b -> buildShip(w, c, b);
