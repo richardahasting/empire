@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Coord, CountryView, FlowOut, Rules, SectorView } from "@/api/client";
 import { hexCenter, hexPath, neighbourAbs, pick, type Layout } from "./hex";
+import { neighbour } from "@/game/bearing";
 import { palette } from "./palette";
 
 export type Layer = "ownership" | "designation" | "efficiency" | "mobility" | "stock" | "roads" | "rail";
@@ -282,6 +283,9 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
       for (const o of view.overhead ?? []) ring(o.at, p.contact("firm"), true, 0.18);
     }
     if (flows && flows.length) drawFlows(ctx, flows, flowT ?? 1, p, l, toDisplay);
+    // the selected sector's distribution (issue #314): its centre and its deliver orders, coloured by commodity
+    const sel = selected ? byCoord.get(`${selected.x},${selected.y}`) : undefined;
+    if (sel && sel.full && l.size >= 4) drawDistribution(ctx, sel, view, p, l, toDisplay);
     if (highlightPath && highlightPath.length > 1) {
       ctx.strokeStyle = p.accent; ctx.lineWidth = Math.max(2, l.size * 0.18); ctx.lineCap = "round"; ctx.lineJoin = "round";
       ctx.beginPath();
@@ -399,6 +403,77 @@ function drawRoadGauge(ctx: CanvasRenderingContext2D, cx: number, cy: number, si
   ctx.globalAlpha = 0.35; ctx.fillStyle = p.muted; ctx.fillRect(x0, y, half * 2, h);
   ctx.globalAlpha = 1; ctx.fillStyle = p.text; ctx.fillRect(x0, y, px(level), h);
   if (target > level) { ctx.globalAlpha = 0.8; ctx.strokeStyle = p.text; ctx.lineWidth = 1; ctx.strokeRect(x0 + px(level) + 0.5, y + 0.5, Math.max(1, px(target) - px(level) - 1), Math.max(1, h - 1)); }
+  ctx.restore();
+}
+
+/**
+ * A selected sector's distribution (issue #314), drawn in the flows' style.
+ * - Each commodity with a threshold is a curve to the distribution centre, in that commodity's colour. Several fan apart.
+ *   The arrow points the way goods will go: out when stock is over the threshold, in when short of it, none when level.
+ *   The centre's hex is outlined, and a centre with no thresholds is a muted dashed line (nothing flows).
+ * - Deliver orders are shorter arrows to the neighbour they ship to.
+ * - If the selected sector is a centre itself, faint lines come in from every sector that uses it.
+ */
+function drawDistribution(ctx: CanvasRenderingContext2D, s: SectorView, view: CountryView, p: ReturnType<typeof palette>, l: Layout, toDisplay: (c: Coord) => Coord) {
+  const centreOf = (c: Coord) => { const d = toDisplay(c); const { cx, cy } = hexCenter(d.x, d.y, l); return { x: cx, y: cy }; };
+  const a = centreOf(s.at);
+  const width = Math.max(1.5, l.size * 0.14);
+  ctx.save(); ctx.lineCap = "round"; ctx.lineJoin = "round";
+
+  // sectors that use this one as their centre: faint, beneath everything else
+  ctx.globalAlpha = 0.35; ctx.strokeStyle = p.muted; ctx.lineWidth = 1;
+  for (const o of view.sectors) {
+    if (!o.full || !o.distCenter || o.distCenter.x !== s.at.x || o.distCenter.y !== s.at.y || (o.at.x === s.at.x && o.at.y === s.at.y)) continue;
+    const b = centreOf(o.at);
+    ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(a.x, a.y); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  // a curve from one hex centre to another, bowed sideways by bend, with an arrowhead at the far end when asked
+  const curve = (from: { x: number; y: number }, to: { x: number; y: number }, bend: number, colour: string, head: boolean, dashed: boolean) => {
+    const mx = (from.x + to.x) / 2, my = (from.y + to.y) / 2, dx = to.x - from.x, dy = to.y - from.y, len = Math.hypot(dx, dy) || 1;
+    const cx = mx - dy / len * bend, cy = my + dx / len * bend;
+    ctx.strokeStyle = colour; ctx.fillStyle = colour; ctx.lineWidth = width;
+    if (dashed) ctx.setLineDash([width * 2, width * 2]);
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.quadraticCurveTo(cx, cy, to.x, to.y); ctx.stroke(); ctx.setLineDash([]);
+    // dots along it, as the flows' particles sit along a route
+    for (const u of [0.3, 0.5, 0.7]) {
+      const x = (1 - u) * (1 - u) * from.x + 2 * (1 - u) * u * cx + u * u * to.x, y = (1 - u) * (1 - u) * from.y + 2 * (1 - u) * u * cy + u * u * to.y;
+      ctx.beginPath(); ctx.arc(x, y, width * 0.75, 0, Math.PI * 2); ctx.fill();
+    }
+    if (head) {   // pointing along the curve's last stretch, stopped short of the hex centre
+      const ang = Math.atan2(to.y - cy, to.x - cx), tip = { x: to.x - Math.cos(ang) * l.size * 0.45, y: to.y - Math.sin(ang) * l.size * 0.45 }, h = Math.max(5, width * 3);
+      ctx.beginPath(); ctx.moveTo(tip.x, tip.y);
+      ctx.lineTo(tip.x - h * Math.cos(ang - 0.45), tip.y - h * Math.sin(ang - 0.45));
+      ctx.lineTo(tip.x - h * Math.cos(ang + 0.45), tip.y - h * Math.sin(ang + 0.45)); ctx.closePath(); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  };
+
+  // to the distribution centre, a strand for each commodity with a threshold
+  const centre = s.distCenter && !(s.distCenter.x === s.at.x && s.distCenter.y === s.at.y) ? s.distCenter : null;
+  if (centre) {
+    const b = centreOf(centre);
+    hexPath(ctx, b.x, b.y, l.size - 1.5); ctx.strokeStyle = p.accent; ctx.lineWidth = 2; ctx.setLineDash([4, 3]); ctx.stroke(); ctx.setLineDash([]);
+    const kinds = view.commodityIds.filter(c => s.thresholds[c] !== undefined);
+    if (kinds.length === 0) curve(a, b, 0, p.muted, false, true);
+    const spread = Math.max(width * 2.2, l.size * 0.22);
+    kinds.forEach((c, k) => {
+      const have = s.stock[c] ?? 0, keep = s.thresholds[c];
+      const bend = (k - (kinds.length - 1) / 2) * spread;
+      if (have > keep) curve(a, b, bend, p.commodity(c), true, false);          // surplus out to the centre
+      else if (have < keep) curve(b, a, -bend, p.commodity(c), true, false);    // drawn in from the centre
+      else curve(a, b, bend, p.commodity(c), false, false);                      // level: nothing moves this update
+    });
+  }
+
+  // deliver orders: one hex in a direction, each its own colour
+  const orders = view.commodityIds.filter(c => s.deliveries[c]);
+  orders.forEach((c, k) => {
+    const to = centreOf(neighbour(view, s.at, s.deliveries[c].dir));
+    curve(a, to, (k - (orders.length - 1) / 2) * width * 2.5, p.commodity(c), true, false);
+  });
   ctx.restore();
 }
 
