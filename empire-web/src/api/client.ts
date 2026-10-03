@@ -83,6 +83,8 @@ export interface PlaneView {
   opRelative: Coord | null; radius: number;
   /** a transport (issue #71): carries cargo; drops paratroops */
   cargo: boolean; para: boolean;
+  /** the carrier it is aboard (issue #71), 0 ashore; light: it may sit on one */
+  aboard: number; light: boolean;
 }
 export interface PlaneClass { id: string; name: string; glyph: string; techRequired: number; build: Record<string, number>; bwork: number; accuracy: number; load: number; attack: number; defense: number; range: number; fuel: number; flags: string[] }
 export interface PlanesRules { startEfficiency: number; minEfficiency: number; abortBelow: number; classes: PlaneClass[] }

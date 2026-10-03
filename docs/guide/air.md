@@ -129,7 +129,25 @@ it carries `load ÷ the commodity's weight` of it — guns weigh 10, gold bars 5
   zone fires at each transport. **What a plane that is shot down or turns back carried is
   lost** — it left the field when the plane took off.
 
+## Carriers
+
+An **aircraft carrier** is a floating airfield (the original's `cal`): she takes **20** light
+planes (and 20 helicopters, 4 extra-light, when there are such classes). **Light** planes are
+the fighter, jet fighter, VTOL jet fighter and the **naval plane** (tech 135; three bombs,
+range 28, a light cargo plane) — bombers, transports and recon planes are too big.
+
+- **`fly PLANES x,y`** onto a carrier of yours at x,y lands them aboard, if she has the room
+  and is at **50%** or better (a carrier under 50% works no aircraft). They carry nothing onto
+  her. Fly them to an airfield to bring them ashore.
+- Aboard, a plane **flies from her**: its range is measured from wherever she is, and its
+  petrol, bombs and cargo come from **her hold** — load her with petrol and shells (her class
+  carries petrol, shells, guns and food). Carrier fighters rise against raids and fly air
+  defence like any others.
+- **She takes them with her**: when she sails, they go too; when she is sunk, they go down
+  with her; when she is sold, the seller's planes aboard are sold with her. She cannot be
+  scrapped with planes aboard, and a plane aboard cannot be put up for sale on its own.
+
 ## What is not here yet
 
-Stealth and missile interceptors, carriers as floating airfields, mines from the
+Stealth and missile interceptors, mines from the
 air, and then missiles and satellites.

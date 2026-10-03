@@ -121,8 +121,10 @@ public final class CombatStep implements Step {
                 if (u.ship() != s.id()) continue;
                 for (int c = 0; c < ctx.com.size(); c++) if (u.stock().get(c) > 0) ctx.led().destroyed[c] += (long) u.stock().get(c);
                 ctx.units.remove(u);
-                note(ctx, s.id(), "unit #" + u.id() + " went down with her");
+                ctx.led().event("went_down", u.owner(), s.at(), "unit #" + u.id() + " went down with ship #" + s.id(), 0);   // she is gone: no note of hers to carry it
             }
+            // and the planes on her deck (issue #71; KNOWN pln_put1 on a sunk carrier)
+            for (var p : new java.util.ArrayList<>(ctx.planes)) if (p.ship() == s.id()) { ctx.planes.remove(p); ctx.led().event("went_down", p.owner(), s.at(), "plane #" + p.id() + " went down with ship #" + s.id(), 0); }
         }
     }
 

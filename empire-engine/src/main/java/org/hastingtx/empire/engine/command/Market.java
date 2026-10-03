@@ -139,7 +139,7 @@ final class Market {
     private static Item item(Commodities com, World w, String kind, long id) {
         return switch (kind) {
             case TradeLot.SHIP -> { Ship s = w.ship(id); yield s == null ? null : new Item(s.owner(), s.at(), "ship #" + id + " (" + s.cls().replace('_', ' ') + ")", s.stock().get(com.civ), 0); }
-            case TradeLot.PLANE -> { Plane p = w.plane(id); yield p == null ? null : new Item(p.owner(), p.at(), "plane #" + id + " (" + p.cls().replace('_', ' ') + ")", 0, 0); }
+            case TradeLot.PLANE -> { Plane p = w.plane(id); yield p == null ? null : new Item(p.owner(), p.at(), "plane #" + id + " (" + p.cls().replace('_', ' ') + ")", 0, p.ship()); }
             default -> { LandUnit u = w.unit(id); yield u == null ? null : new Item(u.owner(), u.at(), "unit #" + id + " (" + u.cls().replace('_', ' ') + ")", u.stock().get(com.civ), u.ship()); }
         };
     }

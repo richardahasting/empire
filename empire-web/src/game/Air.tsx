@@ -29,6 +29,7 @@ export function Air({ view, busy, onCommand }: { view: CountryView; busy: boolea
               {p.intercept ? " · fighter: rises against raids, can escort" : p.escort ? " · escort" : ""}{p.intercept || p.escort ? ` · attack ${p.attack.toFixed(1)}, defence ${p.defense.toFixed(1)}` : ""}
             </span>
           </div>
+          {p.aboard !== 0 && <div>Aboard ship #{p.aboard}: it flies from her, on her petrol and shells.</div>}
           {p.opRelative && <div>Air defence within {p.radius} of {rel(p.opRelative)}: at war it rises over any sector there.</div>}
           {p.note && <div className="text-muted-foreground">{p.note}</div>}
           {p.efficiency < 80 && <div className="text-destructive">Shot up: it may turn back before it gets there. Leave it on the field to be fitted out.</div>}
@@ -181,14 +182,15 @@ function TransportDialog({ kind, plane, view, busy, onClose, onCommand }:
   const [tx, ty] = to.split(",").map(s => Number(s.trim()));
   const target = Number.isFinite(tx) && Number.isFinite(ty) ? view.sectors.find(s => s.relative.x === tx && s.relative.y === ty) : undefined;
   const mine = !!target && target.owner === view.countryId;
-  const ok = !!target && (kind === "paradrop" ? !mine && target.terrain !== "ocean" : mine) && (kind !== "drop" || !!what);
+  const carrierThere = kind === "fly" && !!target && plane.light && view.ships.some(s => s.at.x === target.at.x && s.at.y === target.at.y);
+  const ok = !!target && (kind === "paradrop" ? !mine && target.terrain !== "ocean" : mine || carrierThere) && (kind !== "drop" || !!what);
   const title = kind === "fly" ? "Fly" : kind === "drop" ? "Drop supplies" : "Paradrop";
   return (
     <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent>
         <DialogHeader><DialogTitle>{title} from {rel(plane.relative)}</DialogTitle>
           <DialogDescription>
-            {kind === "fly" ? "One way, to an airfield of yours; they stay there. Transports carry twice their load." : kind === "drop" ? "Onto land of yours; the planes fly home." : "The field's soldiers, onto a sector not yours (not mountains, a capital, a fortress or a wasteland); they fight for it."}
+            {kind === "fly" ? "One way, to an airfield of yours or onto a carrier of yours there (light planes only); they stay there. Transports carry twice their load." : kind === "drop" ? "Onto land of yours; the planes fly home." : "The field's soldiers, onto a sector not yours (not mountains, a capital, a fortress or a wasteland); they fight for it."}
             {" "}At war, enemy fighters rise on the way, and what a plane that is shot down or turns back carried is lost.
           </DialogDescription></DialogHeader>
         <div className="grid gap-3 text-sm">

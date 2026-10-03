@@ -779,6 +779,7 @@ public final class CommandExecutor {
         Sector h = w.sector(ship.at());
         if (!harborOf(w, c, h)) return CommandResult.fail(w, "ship #" + s.ship() + " must be in one of your harbours to be scrapped");
         for (var u : w.units()) if (u.ship() == ship.id()) return CommandResult.fail(w, "unit #" + u.id() + " is aboard her; put it ashore first (ashore " + u.id() + ")");
+        for (var p : w.planes()) if (p.ship() == ship.id()) return CommandResult.fail(w, "plane #" + p.id() + " is aboard her; fly it to an airfield first");
         Stocks st = h.stock();
         for (int ci = 0; ci < com.size(); ci++) st = st.plus(ci, ship.stock().get(ci));   // the hold goes ashore (capacity applies at the update)
         // and so do the crew and the fuel in her tank (issues #65, #66): breaking a hull up does not
