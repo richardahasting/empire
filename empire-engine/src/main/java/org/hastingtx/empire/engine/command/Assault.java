@@ -190,6 +190,7 @@ final class Assault {
                 }
             }
         }
+        // warheads stored there are not taken (KNOWN takeover.c: only those armed on a captured plane go with it)
         String out = spoiled.toString();
         if (!partisans.isEmpty()) out = (out.isEmpty() ? "" : out + "; ") + partisans + " against you";
         if (!unitsTaken.isEmpty()) out = (out.isEmpty() ? "" : out + "; ") + unitsTaken;

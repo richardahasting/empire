@@ -79,6 +79,7 @@ drop PLANES x,y COMMODITY    transports drop their load on a sector of yours and
 launch MISSILE x,y           a missile at an enemy sector, at war (launch MISSILE ship N for an anti-ship missile); spent
 launch SATELLITE x,y [geo]   a satellite into orbit over x,y (geo: geostationary); an anti-sat at the enemy satellite over x,y
 satellite N                  what a satellite of yours in orbit sees: onto your chart and contacts, and a spysat's report
+arm PLANE NUKE [airburst]    a warhead onto a bomber or missile in its sector; disarm PLANE takes it off; nukes lists yours
 lay SHIP N                   a destroyer, submarine or minesweeper at sea lays N sea mines from her shells
 lmine UNIT N                 an engineer lays N land mines in its sector (a shell and a mobility point each)
 sweep PLANES x,y             naval planes sweep sea mines on the way to x,y and back

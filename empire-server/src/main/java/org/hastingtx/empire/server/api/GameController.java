@@ -104,7 +104,9 @@ public class GameController {
                         /** Plane classes and rules (issue #262); null in a world without them. */
                         org.hastingtx.empire.engine.config.UnitsCfg.PlanesCfg planes,
                         /** The commodity market (issue #141); null in a game without one. */
-                        org.hastingtx.empire.engine.config.MarketCfg market) {}
+                        org.hastingtx.empire.engine.config.MarketCfg market,
+                        /** Nuclear warhead classes and rules (issue #71); null in a world without them. */
+                        org.hastingtx.empire.engine.config.UnitsCfg.NukesCfg nukes) {}
 
     @GetMapping("/{id}/rules")
     public Rules rules(@PathVariable long id) {
@@ -113,7 +115,7 @@ public class GameController {
         return new Rules(cfg.economy().sectorTypes(), cfg.commodities(), cfg.etus(), cfg.economy().btu().costByCommand(), cfg.infrastructure().road(), cfg.economy().defaultCapacity(),
                 cfg.infrastructure().rail(), minEff == null ? 0 : minEff, cfg.distribution().massThresholdMultiplierByType() == null ? Map.of() : cfg.distribution().massThresholdMultiplierByType(), cfg.units().ships(),
                 cfg.economy().work(), cfg.economy().curves() == null ? Map.of() : cfg.economy().curves(), cfg.economy().population().maxPopResearchCurve(), cfg.units().land(), cfg.units().planes(),
-                cfg.options() != null && cfg.options().market() ? cfg.economy().market() : null);
+                cfg.options() != null && cfg.options().market() ? cfg.economy().market() : null, cfg.units().nukes());
     }
 
     /**
@@ -189,6 +191,9 @@ public class GameController {
                 case "paradrop" -> new Command.Paradrop(planes == null ? List.of() : planes, at, units == null ? List.of() : units);
                 case "launch" -> new Command.Launch(needPlane(), at, ship == null ? 0 : ship, "geo".equalsIgnoreCase(type));   // ship: an anti-ship missile's target; type "geo": a satellite geostationary
                 case "satellite" -> new Command.Satellite(needPlane());
+                case "build_nuke" -> new Command.BuildNuke(at(x, y), type);
+                case "arm" -> new Command.Arm(needPlane(), amount == null ? 0 : amount.longValue(), "airburst".equalsIgnoreCase(type));   // amount: the warhead's number
+                case "disarm" -> new Command.Disarm(needPlane());
                 case "lay" -> new Command.Lay(needShip(), amount == null ? 0 : amount);
                 case "lmine" -> new Command.LandMine(unit == null ? 0 : unit, amount == null ? 0 : amount);
                 case "sweep" -> new Command.SweepAir(planes == null ? List.of() : planes, at, units == null ? List.of() : units);

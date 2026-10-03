@@ -10,16 +10,33 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
                        /** Planes (issue #262, #71 slice 3a). Null in a game whose rules predate them: none can be built. */
                        PlanesCfg planes,
                        /** Mines, sea and land (issue #71). Null in a game whose rules predate them: nobody lays any. */
-                       MinesCfg mines) {
+                       MinesCfg mines,
+                       /** Nuclear warheads (issue #71). Null in a game whose rules predate them: none are built. */
+                       NukesCfg nukes) {
+    /** Before nukes. */
+    public UnitsCfg(boolean enabled, String table, ShipsCfg ships, LandCfg land, PlanesCfg planes, MinesCfg mines) { this(enabled, table, ships, land, planes, mines, null); }
 
     /** The ships-only shape, for fixtures and callers that predate land units. */
-    public UnitsCfg(boolean enabled, String table, ShipsCfg ships) { this(enabled, table, ships, null, null, null); }
+    public UnitsCfg(boolean enabled, String table, ShipsCfg ships) { this(enabled, table, ships, null, null, null, null); }
 
     /** Before planes. */
-    public UnitsCfg(boolean enabled, String table, ShipsCfg ships, LandCfg land) { this(enabled, table, ships, land, null, null); }
+    public UnitsCfg(boolean enabled, String table, ShipsCfg ships, LandCfg land) { this(enabled, table, ships, land, null, null, null); }
 
     /** Before mines. */
-    public UnitsCfg(boolean enabled, String table, ShipsCfg ships, LandCfg land, PlanesCfg planes) { this(enabled, table, ships, land, planes, null); }
+    public UnitsCfg(boolean enabled, String table, ShipsCfg ships, LandCfg land, PlanesCfg planes) { this(enabled, table, ships, land, planes, null, null); }
+
+    /** KNOWN nuke.config and subs/detonate.c, damage.c (issue #71): see {@code units.nukes}. */
+    public record NukesCfg(double plantMinEfficiency, double groundburstRadius, double airburstReach, double airburstCentre,
+                           double airburstFalloff, double minDamage, double wastelandAbove, List<NukeClassCfg> classes) {
+        public NukeClassCfg nukeClass(String id) {
+            if (classes != null) for (NukeClassCfg c : classes) if (c.id().equals(id)) return c;
+            return null;
+        }
+    }
+    public record NukeClassCfg(String id, String name, double techRequired, Map<String, Double> build, double bwork,
+                               int blast, double damage, double weight, List<String> flags) {
+        public boolean has(String flag) { return flags != null && flags.contains(flag); }
+    }
 
     /**
      * KNOWN include/damage.h, shpsub.c, lndsub.c, mine.c, attsub.c (issue #71): a ship entering a mined sea hex strikes

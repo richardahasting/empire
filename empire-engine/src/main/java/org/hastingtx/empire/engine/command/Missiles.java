@@ -118,7 +118,8 @@ final class Missiles {
         int dist = Hex.distance(w, base.at(), at);
         if (dist > cls.rangeAt(p.tech())) return CommandResult.fail(w, at + " is " + dist + " hexes off; a " + cls.name() + " flies " + q(Math.floor(cls.rangeAt(p.tech()))));
         int shell = com.index("shell");
-        double warhead = Math.floor(cls.loadAt(p.tech()));
+        Nuke nuke = w.nukeOn(p.id());   // issue #71: a nuclear warhead is its load, in place of shells
+        double warhead = nuke != null ? 0 : Math.floor(cls.loadAt(p.tech()));
         if (base.stock().get(shell) < warhead) return CommandResult.fail(w, base.name() + " has " + q(base.stock().get(shell)) + " shells; the warhead takes " + q(warhead));
 
         // spent from here on: the warhead off its base, the missile gone
@@ -131,6 +132,10 @@ final class Missiles {
             Intercepted abm = rise(cfg, r, next, c, "sdi", "ABM", cls.defenseAt(p.tech()), at, w.sector(at).owner());
             next = abm.world();
             if (abm.hit()) return new CommandResult(next, null, 0, name + " launched at " + at + "; " + abm.story());
+            if (nuke != null) {   // KNOWN msl_hit: a nuclear missile always hits, and detonates
+                Nukes.Blast blast = Nukes.detonate(cfg, com, next, nuke, at, c.id());
+                return new CommandResult(blast.world(), null, 0, name + " launched at " + at + (abm.story().isEmpty() ? "" : "; " + abm.story()) + ": " + blast.story());
+            }
             int dam = damage(cfg, r, cls, p, false);
             next = next.withSector(Spy.damage(cfg, com, r, next.sector(at), dam));
             return new CommandResult(next, null, 0, name + " launched at " + at + (abm.story().isEmpty() ? "" : "; " + abm.story())

@@ -75,6 +75,8 @@ public class Console {
                     if (cfg.units().land() != null && cfg.units().land().hasClass(t[2])) yield cmd(run, new Command.BuildUnit(abs(v, t[1]), t[2]));
                     // a plane class builds a plane on an airfield (issue #262)
                     if (cfg.units().planes() != null && cfg.units().planes().planeClass(t[2]) != null) yield cmd(run, new Command.BuildPlane(abs(v, t[1]), t[2]));
+                    // a warhead class builds a warhead in a nuclear plant (issue #71)
+                    if (cfg.units().nukes() != null && cfg.units().nukes().nukeClass(t[2]) != null) yield cmd(run, new Command.BuildNuke(abs(v, t[1]), t[2]));
                     yield cmd(run, new Command.BuildShip(abs(v, t[1]), t[2], t.length > 3 ? String.join(" ", Arrays.copyOfRange(t, 3, t.length)) : null));
                 }
                 case "sail" -> { need(t, 3, "sail SHIP x,y | sail SHIP hold"); most(t, 3, "sail SHIP x,y | sail SHIP hold"); yield cmd(run, new Command.Sail(Long.parseLong(t[1].replace("#", "")), t[2].equalsIgnoreCase("hold") ? null : abs(v, t[2]))); }
@@ -162,6 +164,14 @@ public class Console {
                 }
                 case "reset" -> { String usage = "reset LOT PRICE   (lower; 0 takes the lot back)"; need(t, 3, usage); most(t, 3, usage); yield cmd(run, new Command.ResetLot(Long.parseLong(t[1].replace("#", "")), Double.parseDouble(t[2].replace("$", "")))); }
                 case "air", "planes" -> new Reply(air(v), true, null, null);
+                case "nukes", "nuke" -> new Reply(nukes(v), true, null, null);
+                case "arm" -> {
+                    String usage = "arm PLANE NUKE [airburst]   (a warhead in the plane's sector onto it; arm PLANE 0 airburst re-sets the one aboard)";
+                    need(t, 3, usage); most(t, 4, usage);
+                    if (t.length == 4 && !t[3].toLowerCase(Locale.ROOT).startsWith("air")) throw new IllegalArgumentException("usage: " + usage);
+                    yield cmd(run, new Command.Arm(Long.parseLong(t[1].replace("#", "")), Long.parseLong(t[2].replace("#", "")), t.length == 4));
+                }
+                case "disarm" -> { String usage = "disarm PLANE   (its warhead off, into its sector)"; need(t, 2, usage); most(t, 2, usage); yield cmd(run, new Command.Disarm(Long.parseLong(t[1].replace("#", "")))); }
                 case "march", "mar" -> { need(t, 3, "march UNIT x,y"); most(t, 3, "march UNIT x,y"); yield cmd(run, new Command.March(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
                 case "bomb" -> {
                     String usage = "bomb PLANE x,y [strategic] [escort E,E...]";
@@ -663,6 +673,16 @@ public class Console {
     }
 
     /** Your planes (issue #262): where each sits, its condition, what it carries and how far it strikes. */
+    /** Your warheads (issue #71): where each is and what it is armed on. */
+    static String nukes(CountryView v) {
+        if (v.nukes() == null || v.nukes().isEmpty()) return "no warheads — build one in a nuclear plant (build x,y fission_10kt)";
+        StringBuilder sb = new StringBuilder(String.format("%-5s %-14s %-8s %6s %5s %6s  %s%n", "nuke", "class", "at", "weight", "blast", "damage", "armed"));
+        for (var n : v.nukes())
+            sb.append(String.format("#%-4d %-14s %-8s %6.0f %5d %6.0f  %s%n", n.id(), n.name(), rel(n.relative()), n.weight(), n.blast(), n.damage(),
+                    n.plane() == 0 ? "stored" : "on plane #" + n.plane() + (n.airburst() ? ", airburst" : ", groundburst")));
+        return sb.append("arm PLANE NUKE [airburst] · disarm PLANE · then bomb or launch it as usual").toString();
+    }
+
     static String air(CountryView v) {
         StringBuilder over = new StringBuilder();
         for (var o : v.overhead() == null ? List.<CountryView.OverheadView>of() : v.overhead())
@@ -674,7 +694,7 @@ public class Console {
             sb.append(String.format("#%-4d %-16s %-8s %3.0f%% %5.0f %4.0f%% %6.0f %-9s  %s%n", p.id(), p.cls(), rel(p.relative()), p.efficiency(),
                     p.load(), p.accuracy(), Math.floor(p.reach()), p.intercept() ? "fighter" : p.escort() ? "escort" : "",
                     (p.orbit() != null ? (p.orbit().equals("geosync") ? "geostationary" : "in orbit") + (p.ready() ? "; " : ", reports next update; ") : "")
-                    + (p.aboard() != 0 ? "aboard ship #" + p.aboard() + "; " : "") + (p.opRelative() == null ? "" : "air defence within " + p.radius() + " of " + rel(p.opRelative()) + "; ") + (p.note() == null ? "" : p.note())));
+                    + (p.nuke() != 0 ? "warhead #" + p.nuke() + " aboard; " : "") + (p.aboard() != 0 ? "aboard ship #" + p.aboard() + "; " : "") + (p.opRelative() == null ? "" : "air defence within " + p.radius() + " of " + rel(p.opRelative()) + "; ") + (p.note() == null ? "" : p.note())));
         sb.insert(0, over);
         return sb.append("strike: hexes there and back again. fighter: rises against raids at war, and escorts. bomb PLANE x,y [strategic] [escort E,E] · recon PLANE x,y [escort E,E] · mission PLANE air x,y [RADIUS] · fly / drop / paradrop PLANES x,y … · launch PLANE x,y · satellite PLANE").toString();
     }

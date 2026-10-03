@@ -1216,6 +1216,36 @@ units:
       - { id: jet_transport,    name: jet transport,    glyph: z, tech_required: 160, build: { lcm: 18, hcm: 5, cash: 1500 }, bwork: 48, accuracy: 0,  load: 16, attack: 0.0,  defense: 9.0,  range: 35, fuel: 4, flags: [cargo, para] }
       - { id: jet_escort,       name: jet escort,       glyph: X, tech_required: 160, build: { lcm: 14, hcm: 8, cash: 1400 }, bwork: 50, accuracy: 60, load: 1, attack: 10.0, defense: 10.0, range: 25, fuel: 3, flags: [tactical, escort] }
 
+  # NUKES — KNOWN nuke.config, buil.c build_nuke, arm.c, subs/detonate.c, subs/damage.c nukedamage (issue #71).
+  # Built whole in a nuclear plant at plant_min_efficiency or better, from its materials and cash; armed on a bomber,
+  # tactical or cargo plane (not an anti-ship missile) whose load is at least its weight, in the same sector; set off
+  # where that plane bombs or that missile lands. blast: its radius in sectors; damage: at ground zero.
+  nukes:
+    plant_min_efficiency: 60
+    # nukedamage: a groundburst does damage/(range + 1) out to groundburst_radius × blast (rounded down); an airburst
+    # reaches airburst_reach × blast and does damage × airburst_centre − airburst_falloff × range; under min_damage, none
+    groundburst_radius: 0.6667
+    airburst_reach: 1.5
+    airburst_centre: 0.75
+    airburst_falloff: 20
+    min_damage: 5
+    # over wasteland_above, a land sector is left a radioactive wasteland that nobody owns
+    wasteland_above: 100
+    classes:
+      - { id: fission_10kt,   name: 10kt fission,   tech_required: 280, build: { lcm: 50, hcm: 50, oil: 25, rad: 70, cash: 10000 }, bwork: 49, blast: 3, damage: 70, weight: 4, flags: [] }
+      - { id: fission_15kt,   name: 15kt fission,   tech_required: 290, build: { lcm: 50, hcm: 50, oil: 25, rad: 80, cash: 15000 }, bwork: 51, blast: 3, damage: 90, weight: 5, flags: [] }
+      - { id: fission_50kt,   name: 50kt fission,   tech_required: 300, build: { lcm: 60, hcm: 60, oil: 30, rad: 90, cash: 25000 }, bwork: 60, blast: 3, damage: 100, weight: 6, flags: [] }
+      - { id: fission_100kt,  name: 100kt fission,  tech_required: 310, build: { lcm: 75, hcm: 75, oil: 40, rad: 120, cash: 30000 }, bwork: 77, blast: 4, damage: 125, weight: 8, flags: [] }
+      - { id: fusion_5kt,     name: 5kt fusion,     tech_required: 315, build: { lcm: 15, hcm: 15, oil: 15, rad: 30, cash: 12500 }, bwork: 18, blast: 2, damage: 80, weight: 1, flags: [] }
+      - { id: fusion_75kt,    name: 75kt fusion,    tech_required: 320, build: { lcm: 40, hcm: 40, oil: 35, rad: 50, cash: 20000 }, bwork: 41, blast: 3, damage: 90, weight: 3, flags: [] }
+      - { id: fusion_250kt,   name: 250kt fusion,   tech_required: 330, build: { lcm: 50, hcm: 50, oil: 45, rad: 60, cash: 25000 }, bwork: 51, blast: 4, damage: 110, weight: 4, flags: [] }
+      - { id: fusion_500kt,   name: 500kt fusion,   tech_required: 340, build: { lcm: 60, hcm: 60, oil: 50, rad: 80, cash: 35000 }, bwork: 62, blast: 5, damage: 120, weight: 5, flags: [] }
+      - { id: fusion_1mt,     name: 1mt fusion,     tech_required: 350, build: { lcm: 75, hcm: 75, oil: 50, rad: 110, cash: 40000 }, bwork: 77, blast: 6, damage: 150, weight: 5, flags: [] }
+      - { id: neutron_60kt,   name: 60kt neutron,   tech_required: 355, build: { lcm: 60, hcm: 60, oil: 30, rad: 100, cash: 30000 }, bwork: 62, blast: 3, damage: 30, weight: 2, flags: [neutron] }
+      - { id: fusion_3mt,     name: 3mt fusion,     tech_required: 360, build: { lcm: 100, hcm: 100, oil: 75, rad: 130, cash: 45000 }, bwork: 101, blast: 7, damage: 170, weight: 6, flags: [] }
+      - { id: fusion_5mt,     name: 5mt fusion,     tech_required: 370, build: { lcm: 120, hcm: 120, oil: 100, rad: 150, cash: 50000 }, bwork: 122, blast: 8, damage: 190, weight: 8, flags: [] }
+      - { id: neutron_120kt,  name: 120kt neutron,  tech_required: 375, build: { lcm: 75, hcm: 75, oil: 40, rad: 120, cash: 36000 }, bwork: 77, blast: 5, damage: 50, weight: 3, flags: [neutron] }
+
   # SHIPS — NEW (Richard 2026-09-09, issue #56). A data table gated on tech; every number a GUESS to tune
   # except where marked. Harbours build them from their own lcm/hcm and cash; a hull leaves the yard at
   # start_efficiency and fits out while docked. Speed is sea hexes per update at 100%, × efficiency.
