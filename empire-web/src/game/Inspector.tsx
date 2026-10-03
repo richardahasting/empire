@@ -80,7 +80,7 @@ export function Inspector({ sector: s, view, rules, onCommand, busy, history, hi
         <tbody>
           {view.commodityIds.map(c => (
             <tr key={c} className={(s.stock[c] ?? 0) === 0 && s.thresholds[c] === undefined && !s.held[c] && !s.deliveries[c] ? "text-muted-foreground/60" : ""}>
-              <td>{(s.thresholds[c] !== undefined && s.distCenter || s.deliveries[c]) && <span className="mr-1 inline-block size-2 rounded-full align-middle" style={{ background: pal.commodity(c) }} title="its colour on the map" />}{c}</td><td className="text-right tabular-nums">{fmt(s.stock[c])}</td>
+              <td>{(s.thresholds[c] !== undefined && s.distCenter && !(s.distCenter.x === s.at.x && s.distCenter.y === s.at.y) || s.deliveries[c]) && <span className="mr-1 inline-block size-2 rounded-full align-middle" style={{ background: pal.commodity(c) }} title="its colour on the map" />}{c}</td><td className="text-right tabular-nums">{fmt(s.stock[c])}</td>
               <td className="text-right tabular-nums">{s.thresholds[c] !== undefined ? fmt(s.thresholds[c]) : "—"}</td>
               <td className="text-right tabular-nums" title={s.deliveries[c] ? `above ${fmt(s.deliveries[c].threshold)}, one hex ${s.deliveries[c].dir} every update` : undefined}>{s.deliveries[c] ? `${deliveryTarget(view, s.at, s.deliveries[c].dir)} >${fmt(s.deliveries[c].threshold)}` : ""}</td>
               <td className="text-right tabular-nums">{s.held[c] ? fmt(s.held[c]) : ""}</td>
