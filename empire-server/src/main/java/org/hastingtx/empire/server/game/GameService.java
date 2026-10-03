@@ -1229,6 +1229,32 @@ public class GameService {
     public LogRepository.UpdateEntry lastUpdate(long gameId) { return logs.lastUpdate(gameId); }
 
     /**
+     * The last update's notes for one country's own sectors, keyed and worded from its capital. {@code all} is the
+     * update's notes as saved: absolute "x,y" to lines. Only your own sectors' stories.
+     */
+    public static Map<String, List<String>> myNotes(World w, int country, Map<String, List<String>> all) {
+        Map<String, List<String>> notes = new java.util.LinkedHashMap<>();
+        Coord cap = w.country(country).capital();
+        for (var n : all.entrySet()) {
+            String[] xy = n.getKey().split(",");
+            Coord at = new Coord(Integer.parseInt(xy[0]), Integer.parseInt(xy[1]));
+            if (!w.inBounds(at) || w.sector(at).owner() != country) continue;
+            Coord rel = CountryView.relative(w, cap, at);
+            notes.put(rel.x() + "," + rel.y(), n.getValue().stream().map(line -> relativise(w, cap, line)).toList());
+        }
+        return notes;
+    }
+
+    /** {@link #myNotes} from the last update, for whoever is asking; empty before the first update. */
+    public Map<String, List<String>> lastNotes(long gameId, Account a, org.hastingtx.empire.server.persistence.Json json) {
+        LogRepository.UpdateEntry e = logs.lastUpdate(gameId);
+        if (e == null || e.notesJson() == null) return Map.of();
+        Game g = get(gameId);
+        @SuppressWarnings("unchecked") Map<String, List<String>> all = json.read(e.notesJson(), Map.class);
+        return myNotes(g.world, myCountry(gameId, a), all);
+    }
+
+    /**
      * One of your ships' logbooks, newest update first, coordinates relative to your capital (issue #67).
      * Only a ship that is yours now: the book goes with the hull.
      */

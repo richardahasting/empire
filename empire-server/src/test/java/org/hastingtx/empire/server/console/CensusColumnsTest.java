@@ -40,6 +40,31 @@ class CensusColumnsTest {
         assertThat(Console.census(v, CFG)).contains("radar: ").contains("sees " + reach + " hexes");
     }
 
+    /**
+     * Issue #275: a city at 0% with 5,500 civilians and 100,000 iron had nothing on the census page to say why. The
+     * last update knew — short of lcm — and so does the unrest view; the census says both.
+     */
+    @Test
+    void censusSaysWhatHoldsASectorBack() {
+        var cap = W.country(0).capital();
+        org.hastingtx.empire.engine.model.Coord at = null, calm = null;
+        for (var n : org.hastingtx.empire.engine.geo.Hex.neighbours(W, cap)) {
+            if (n.equals(cap) || !W.sector(n).isLand()) continue;
+            if (at == null) at = n; else if (calm == null) calm = n;
+        }
+        World w = W.withSector(W.sector(at).withOwner(0).withDesignation("city", 0).withUnrest(70, 40, org.hastingtx.empire.engine.model.Sector.NOBODY, 5, 0))
+                   .withSector(W.sector(calm).withOwner(0).withDesignation("city", 0));
+        CountryView v = CountryView.of(w, CFG, 0);
+        var r = CountryView.relative(w, cap, at);
+        String key = r.x() + "," + r.y();
+        String c = Console.census(v, CFG, java.util.Map.of(key, List.of("people ate 164 food", "shortage: 2500 civ, 4100 lcm")));
+        assertThat(c).contains("held back: " + key + " cit 0%: short of 2500 civ, 4100 lcm")
+                .contains("disloyal (loyalty 70, above ").contains("40% at work").contains("5 guerrillas");
+        var q = CountryView.relative(w, cap, calm);
+        assertThat(c).as("0% with no reason known is not listed").doesNotContain(q.x() + "," + q.y() + " cit 0%");
+        assertThat(Console.census(V, CFG)).as("nothing held back, no line").doesNotContain("held back:");
+    }
+
     @Test
     void censusResShowsTheGroundAndWhatItIsPoorFor() {
         String c = Console.censusResources(V, CFG);
