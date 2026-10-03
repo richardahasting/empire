@@ -173,8 +173,8 @@ public class GameController {
                 case "unit_fire" -> new Command.UnitFire(needUnit(), at(x, y));
                 case "work" -> new Command.Work(needUnit(), amount == null ? 0 : amount);
                 case "build_plane" -> new Command.BuildPlane(at(x, y), type);
-                case "bomb" -> new Command.Bomb(needPlane(), at(x, y), !"strategic".equalsIgnoreCase(type));
-                case "recon" -> new Command.Recon(needPlane(), at(x, y));
+                case "bomb" -> new Command.Bomb(needPlane(), at(x, y), !"strategic".equalsIgnoreCase(type), units == null ? List.of() : units);   // units: escorts (#71)
+                case "recon" -> new Command.Recon(needPlane(), at(x, y), units == null ? List.of() : units);
                 case "sabotage" -> new Command.Sabotage(needUnit());
                 case "incite" -> new Command.Incite(needUnit());
                 case "board" -> new Command.Board(needUnit(), needShip());

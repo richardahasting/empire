@@ -21,7 +21,9 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
      * airfield, flies a sortie that takes petrol and bombs off the field, and is shot at by whatever it flies over.
      */
     public record PlanesCfg(double startEfficiency, double minEfficiency, double abortBelow, double growScale,
-                            double maintenancePerEtuPerCost, FlakCfg flak, BombingCfg bombing, List<PlaneClassCfg> classes) {
+                            double maintenancePerEtuPerCost, FlakCfg flak, BombingCfg bombing, List<PlaneClassCfg> classes,
+                            /** Fighters, interception and escorts (issue #71). Null in rules that predate them: nobody intercepts. */
+                            AirCombatCfg airCombat) {
         public PlaneClassCfg planeClass(String id) {
             for (PlaneClassCfg c : classes) if (c.id().equals(id)) return c;
             return null;
@@ -38,6 +40,10 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
         }
     }
 
+    /** KNOWN aircombat.c ac_encounter / ac_dog and plnsub.c pln_sel: who rises, who may escort, and how a dogfight runs. */
+    public record AirCombatCfg(double minEfficiency, double fieldMinEfficiency, int escortReach, int extraInterceptors,
+                               int intensityDice, int intensityDie, int intensityAdd, double oddsFloor) {}
+
     /** KNOWN plnsub.c pln_damage. */
     public record BombingCfg(int bombRoll, int blam, int blamChance, int hit, int miss, double effectiveMultiple, int strategicAimBase) {}
 
@@ -52,6 +58,7 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
         }
         public double accuracyAt(double tech) { return Math.min(100, better(accuracy, tech, techRequired, 2.1)); }
         public double defenseAt(double tech) { return better(defense, tech, techRequired, 4); }
+        public double attackAt(double tech) { return better(attack, tech, techRequired, 4); }
         public double loadAt(double tech) { return Math.floor(better(load, tech, techRequired, 2.1)); }
         public double rangeAt(double tech) { return better(range, tech, techRequired, 2.1); }
         /** How far it may strike: the range is the round trip (KNOWN pl_range, "total distance, not radius"). */

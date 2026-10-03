@@ -1059,12 +1059,31 @@ units:
       miss: 1
       effective_multiple: 2.0
       strategic_aim_base: 30          # KNOWN: strategic aim is 30 + (100 - accuracy) for a tactical bomber
+    # Air to air (issue #71, slice 3b). KNOWN aircombat.c: fighters of a country at war with the raider rise from
+    # their airfields in every sector of theirs the raid flies over; escorts fight them first, then the bombers do.
+    air_combat:
+      min_efficiency: 40              # KNOWN aircombat.c:771, plnsub.c pln_sel: below 40% it neither intercepts nor escorts
+      field_min_efficiency: 40        # KNOWN pln_airbase_ok: an airfield under 40% cannot launch
+      escort_reach: 4                 # KNOWN plnsub.c:590: escorts within 4 sectors of the field the raid flies from
+      extra_interceptors: 1           # KNOWN aircombat.c:349: up to (bombers + escorts) + 1 rise (the loop's break is late)
+      intensity_dice: 4               # KNOWN aircombat.c:479: intensity = roll(20) + roll(20) + roll(20) + roll(20) + 1 exchanges
+      intensity_die: 20
+      intensity_add: 1
+      odds_floor: 0.05                # KNOWN ac_dog: the attacker always has a 5% chance a round
     classes:
       # build is per 100% (plane.config); a plane is laid down at start_efficiency of it. range is the round
       # trip, so a sortie reaches half of it. fuel is petrol for one sortie; load is bombs (shells).
       - { id: bomber,           name: bomber,           glyph: B, tech_required: 90,  build: { lcm: 30, hcm: 25, cash: 3000 }, bwork: 80, accuracy: 40, load: 8, attack: 0.0, defense: 1.0, range: 16, fuel: 3, flags: [bomber] }
       - { id: tactical_bomber,  name: tactical bomber,  glyph: T, tech_required: 110, build: { lcm: 25, hcm: 20, cash: 2800 }, bwork: 70, accuracy: 70, load: 4, attack: 1.0, defense: 2.0, range: 12, fuel: 2, flags: [tactical] }
       - { id: recon,            name: reconnaissance,   glyph: R, tech_required: 70,  build: { lcm: 15, hcm: 10, cash: 1800 }, bwork: 50, accuracy: 50, load: 0, attack: 0.0, defense: 3.0, range: 20, fuel: 2, flags: [spy] }
+      # Fighters and escorts (issue #71, slice 3b): KNOWN plane.config rows f1, f2, jf1, jf2, es, jes (lcm/hcm/tech/cost,
+      # acc/load/att/def/range/fuel). "intercept" rises against raids and may escort; "escort" may only escort.
+      - { id: fighter_1,        name: biplane fighter,  glyph: f, tech_required: 50,  build: { lcm: 8,  hcm: 2, cash: 400 },  bwork: 32, accuracy: 90, load: 1, attack: 1.0,  defense: 1.0,  range: 4,  fuel: 1, flags: [tactical, intercept] }
+      - { id: fighter_2,        name: fighter,          glyph: F, tech_required: 80,  build: { lcm: 8,  hcm: 2, cash: 400 },  bwork: 32, accuracy: 80, load: 1, attack: 4.0,  defense: 4.0,  range: 8,  fuel: 1, flags: [tactical, intercept] }
+      - { id: jet_fighter_1,    name: jet fighter,      glyph: J, tech_required: 125, build: { lcm: 12, hcm: 4, cash: 1000 }, bwork: 40, accuracy: 45, load: 1, attack: 14.0, defense: 14.0, range: 11, fuel: 3, flags: [tactical, intercept] }
+      - { id: jet_fighter_2,    name: VTOL jet fighter, glyph: H, tech_required: 195, build: { lcm: 12, hcm: 4, cash: 1400 }, bwork: 40, accuracy: 30, load: 1, attack: 17.0, defense: 17.0, range: 14, fuel: 3, flags: [tactical, intercept] }
+      - { id: escort,           name: escort fighter,   glyph: E, tech_required: 90,  build: { lcm: 9,  hcm: 3, cash: 700 },  bwork: 35, accuracy: 60, load: 1, attack: 5.0,  defense: 5.0,  range: 15, fuel: 2, flags: [tactical, escort] }
+      - { id: jet_escort,       name: jet escort,       glyph: X, tech_required: 160, build: { lcm: 14, hcm: 8, cash: 1400 }, bwork: 50, accuracy: 60, load: 1, attack: 10.0, defense: 10.0, range: 25, fuel: 3, flags: [tactical, escort] }
 
   # SHIPS — NEW (Richard 2026-09-09, issue #56). A data table gated on tech; every number a GUESS to tune
   # except where marked. Harbours build them from their own lcm/hcm and cash; a hull leaves the yard at
