@@ -71,6 +71,7 @@ build HQ CLASS               raise a land unit (cavalry, infantry, artillery, en
 march UNIT x,y               march a unit through your own land on its own mobility
 lload / lunload UNIT COMMODITY N   a unit takes on, or puts down, soldiers and supplies in its sector
 build x,y PLANECLASS         lay down a plane on an airfield of yours
+build x,y NUKECLASS          build a nuclear warhead whole in a nuclear plant (fission_10kt … fusion_5mt, neutron_60kt …)
 bomb PLANE x,y [strategic] [escort E,E]   a bombing sortie; strategic wrecks the sector, pinpoint what is in it;
                              fighters within 4 hexes of its field may escort it
 recon PLANE x,y [escort E,E]   a reconnaissance sortie: it puts the sector on your chart

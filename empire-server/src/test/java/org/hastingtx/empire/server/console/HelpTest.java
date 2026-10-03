@@ -26,7 +26,10 @@ class HelpTest {
         // the commands a player can type, as the console dispatches them
         String[] commands = {"map", "census", "break", "des", "thresh", "dist", "deliver", "macro", "ships",
                 "contacts", "build", "sail", "load", "unload", "lane", "fish", "mine", "supply", "history", "fire", "land", "patrol", "search", "escort", "blockade", "interdict", "scrap", "move", "expl",
-                "road", "rail", "railship", "raillane", "adjacent", "food", "census res"};
+                "road", "rail", "railship", "raillane", "adjacent", "food", "census res",
+                // the land and air war (issue #71)
+                "march", "attack", "board", "ashore", "ufire", "sabotage", "incite", "air", "bomb", "recon", "mission", "fly", "drop",
+                "paradrop", "sweep", "lay", "lmine", "launch", "satellite", "arm", "disarm", "nukes", "NUKECLASS"};
         for (String c : commands)
             assertTrue(Console.HELP.contains(c), "'" + c + "' is dispatched by the console but not in the reference");
     }
