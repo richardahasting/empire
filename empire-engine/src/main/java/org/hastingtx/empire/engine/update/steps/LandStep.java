@@ -1,6 +1,7 @@
 package org.hastingtx.empire.engine.update.steps;
 
 import org.hastingtx.empire.engine.config.UnitsCfg;
+import org.hastingtx.empire.engine.geo.Orbit;
 import org.hastingtx.empire.engine.model.Country;
 import org.hastingtx.empire.engine.model.LandUnit;
 import org.hastingtx.empire.engine.model.Sector;
@@ -130,12 +131,14 @@ public final class LandStep implements Step {
                 ctx.led().cash[p.owner()] -= upkeep;
                 int i = ctx.idx(p.at());
                 Sector field = ctx.sector(i);
-                boolean onOurField = field.owner() == p.owner() && ctx.type(field).hasFlag("builds_planes");
+                boolean onOurField = !p.orbiting() && field.owner() == p.owner() && ctx.type(field).hasFlag("builds_planes");
                 if (onOurField && p.efficiency() < 100) {
                     double gain = Math.min(100 - p.efficiency(), pc.growScale() * ctx.etus * field.efficiency() / 100.0);
                     if (gain > 0) { p = p.withEfficiency(p.efficiency() + gain); note = "fitted out +" + Ledger.q(gain) + "%"; }
                 }
             }
+            // KNOWN prod_plane, move_sat: a satellite not geostationary goes on round its orbit
+            if (org.hastingtx.empire.engine.model.Plane.ORBIT.equals(p.orbit()) && pc.missiles() != null) p = Orbit.next(pc.missiles(), ctx.snap, p);
             ctx.planes.set(k, p.withNote(note));
         }
     }

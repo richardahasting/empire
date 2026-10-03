@@ -40,7 +40,7 @@ final class Missiles {
 
     /** KNOWN msl_launch: it blows up on the pad, less often the fitter and higher-tech it is ({@code planes.missiles.pad_fail_*}). */
     static boolean blowsUp(UnitsCfg.MissilesCfg mc, UnrestStep.R r, Plane p) {
-        return r.chance((mc.padFailBase() + (100 - p.efficiency()) / 100) * (1 - (mc.padFailTech() + p.tech()) / (mc.padFailTechScale() + p.tech())));
+        return r.chance((mc.padFailBase() + (100 - p.efficiency()) / 100) * (1 - mc.techFactor(p.tech())));
     }
 
     /**
@@ -79,6 +79,7 @@ final class Missiles {
         Plane p = w.plane(l.missile());
         if (p == null || p.owner() != c.id()) return CommandResult.fail(w, "no missile #" + l.missile() + " of yours");
         UnitsCfg.PlaneClassCfg cls = pc.planeClass(p.cls());
+        if (cls != null && cls.has("satellite")) return cls.has("missile") ? Satellites.antiSat(cfg, w, c, p, cls, l) : Satellites.launch(cfg, com, w, c, p, cls, l);
         if (cls == null || !cls.has("missile")) return CommandResult.fail(w, "plane #" + p.id() + " is not a missile; it flies sorties");
         if (cls.has("intercept") || cls.has("sdi")) return CommandResult.fail(w, "a " + cls.name() + " is not launched: it rises against what comes at you");
         if (p.efficiency() < mc.minEfficiency()) return CommandResult.fail(w, "missile #" + p.id() + " is at " + q(p.efficiency()) + "%; it launches at " + q(mc.minEfficiency()) + "% or better");
@@ -127,7 +128,7 @@ final class Missiles {
         if (blowsUp(mc, r, p)) return new CommandResult(next, null, 0, name + " blew up on launch");
         if (targetShip == null) {
             // ABMs rise against a missile aimed at a sector (KNOWN msl_abm_intercept)
-            Intercepted abm = abms(cfg, r, next, c, p, cls, at, w.sector(at).owner());
+            Intercepted abm = rise(cfg, r, next, c, "sdi", "ABM", cls.defenseAt(p.tech()), at, w.sector(at).owner());
             next = abm.world();
             if (abm.hit()) return new CommandResult(next, null, 0, name + " launched at " + at + "; " + abm.story());
             int dam = damage(cfg, r, cls, p, false);
@@ -150,21 +151,22 @@ final class Missiles {
         return new CommandResult(next, null, 0, name + " hit ship #" + targetShip.id() + ": " + q(hull) + "% of her hull");
     }
 
-    private record Intercepted(World world, boolean hit, String story) {}
+    record Intercepted(World world, boolean hit, String story) {}
 
     /**
-     * KNOWN msl_sel / msl_abm_intercept: at most {@code abms_per_missile} ABMs of countries at war with you rise — the
-     * target's owner's first — each at 100%, on a base it may fly from, within its range of the target, not for sale.
-     * Each may blow up on its own pad; one that flies hits with pln_hitchance against the missile's defence. Every one is
+     * KNOWN msl_sel / msl_intercept: at most {@code abms_per_missile} missiles with {@code flag} — "sdi", ABMs against a
+     * missile; "satellite", anti-sats against a satellite going up (msl_asat_intercept) — of countries at war with you
+     * rise, the target's owner's first, each at 100%, on a base it may fly from, within its range of the target, not for
+     * sale. Each may blow up on its own pad; one that flies hits with pln_hitchance against {@code defence}. Every one is
      * spent.
      */
-    private static Intercepted abms(GameConfig cfg, UnrestStep.R r, World w, Country c, Plane missile, UnitsCfg.PlaneClassCfg mcls, Coord at, int targetOwner) {
+    static Intercepted rise(GameConfig cfg, UnrestStep.R r, World w, Country c, String flag, String label, double defence, Coord at, int targetOwner) {
         UnitsCfg.PlanesCfg pc = cfg.units().planes();
         var mc = pc.missiles();
         List<Plane> abms = new ArrayList<>();
         for (Plane a : w.planes()) {
             UnitsCfg.PlaneClassCfg ac = pc.planeClass(a.cls());
-            if (ac == null || !ac.has("sdi") || !ac.has("missile") || a.owner() == c.id() || !w.atWar(c.id(), a.owner())) continue;
+            if (ac == null || !ac.has(flag) || !ac.has("missile") || a.owner() == c.id() || !w.atWar(c.id(), a.owner())) continue;
             if (a.efficiency() < mc.abmEfficiency() || Air.grounded(cfg, w, a, a.owner()) != null) continue;
             if (w.onTheBlock(TradeLot.PLANE, a.id()) != null) continue;
             Air.Base b = Air.base(w, a);
@@ -176,12 +178,12 @@ final class Missiles {
         for (Plane a : abms.subList(0, Math.min(mc.abmsPerMissile(), abms.size()))) {
             UnitsCfg.PlaneClassCfg ac = pc.planeClass(a.cls());
             w = w.withoutPlane(a.id());
-            if (blowsUp(mc, r, a)) { story.add("an ABM of " + w.country(a.owner()).name() + " blew up on launch"); continue; }
-            if (r.chance(hitChance(mc, ac, a, mcls.defenseAt(missile.tech())))) {
-                story.add("an ABM of " + w.country(a.owner()).name() + " shot it down");
+            if (blowsUp(mc, r, a)) { story.add("an " + label + " of " + w.country(a.owner()).name() + " blew up on launch"); continue; }
+            if (r.chance(hitChance(mc, ac, a, defence))) {
+                story.add("an " + label + " of " + w.country(a.owner()).name() + " shot it down");
                 return new Intercepted(w, true, String.join("; ", story));
             }
-            story.add("an ABM of " + w.country(a.owner()).name() + " missed it");
+            story.add("an " + label + " of " + w.country(a.owner()).name() + " missed it");
         }
         return new Intercepted(w, false, String.join("; ", story));
     }

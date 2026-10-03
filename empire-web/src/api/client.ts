@@ -89,6 +89,8 @@ export interface PlaneView {
   aboard: number; light: boolean;
   /** a missile (issue #71): launched once; rises: a SAM or ABM, never launched; marine: anti-ship */
   missile: boolean; rises: boolean; marine: boolean;
+  /** a satellite (issue #71), or with missile an anti-sat; its orbit once up ("orbit" | "geosync"), and whether it reports yet */
+  satellite: boolean; orbit: string | null; ready: boolean;
 }
 export interface PlaneClass { id: string; name: string; glyph: string; techRequired: number; build: Record<string, number>; bwork: number; accuracy: number; load: number; attack: number; defense: number; range: number; fuel: number; flags: string[] }
 export interface PlanesRules { startEfficiency: number; minEfficiency: number; abortBelow: number; classes: PlaneClass[] }
@@ -130,6 +132,8 @@ export interface CountryView {
   planes?: PlaneView[];
   market?: LotView[];
   trades?: TradeView[];
+  /** other countries' satellites over what you can see (issue #71) */
+  overhead?: OverheadView[];
   /** Countries you are at war with, by name (issue #137). */
   atWarWith?: string[];
   /** Enemy ships your sensors have found (issue #75); what you can aim at (issue #68). */
@@ -203,6 +207,9 @@ export interface TradeView { id: number; seller: string; kind: "ship" | "plane" 
 export interface LotView { id: number; seller: string; commodity: string; amount: number; price: number; bidder: string | null; updatesLeft: number; yours: boolean; fromRelative: Coord | null; yourBid: boolean; destRelative: Coord | null }
 export interface Outcome { accepted: boolean; error?: string; btuSpent: number; view: CountryView; info?: string | null }
 export interface ConsoleReply { output: string; accepted: boolean; error?: string; view?: CountryView }
+/** Someone else's satellite over a sector you see (issue #71): what an anti-sat is aimed by. */
+export interface OverheadView { id: number; ownerName: string; cls: string; name: string; at: Coord; relative: Coord; }
+
 export interface CommandRequest {
   verb: string; x?: number; y?: number; x2?: number; y2?: number; type?: string; commodity?: string; amount?: number; clear?: boolean;
   /** A patrol's waypoints or a station, absolute (issue #68); the ship an escort stays with. */

@@ -194,6 +194,31 @@ a carrier. Build them on an airfield like any plane.
   only against raid planes that **cost $1,000 or more**, one SAM a plane, before the fighters.
   They fight as a dogfight would and are spent every time. **ABMs** and SAMs are never launched.
 
+## Satellites
+
+Satellites are the original's (`launch` into orbit, `satellite`, and the anti-sat). Build them on an
+airfield like any plane; one goes up **once** and stays up.
+
+| class | tech | range | sees |
+|---|---|---|---|
+| landsat | 245 | 41 | the sea and the mountains under it |
+| KH-7 spysat | 305 | 61 | every sector under it, and the foreign sectors, ships (submarines too) and units there |
+| anti-sat | 305 | 13 | — a missile that shoots satellites down |
+
+- **`launch SATELLITE x,y`** puts it up over a sector within its range of its airfield, on the
+  field's petrol. Add **`geo`** for a geostationary orbit: it hangs over that sector. Otherwise it
+  **circles the world**, moving each update: round one turn of its orbit (20 updates) it laps the
+  world east twice and swings north and south three times. The booster may blow up on the pad, it
+  may go a sector astray, and **anti-sats** of a country at war with you may rise against it there.
+- **`satellite N`** asks it what it sees, from the update after it went up: as far as 20 × its tech
+  factor × its efficiency (about 14 hexes at tech 300). What it sees goes on your chart; ships go
+  on your contacts. Below 100% some of the picture is lost to noise. A spysat's report rounds stock
+  to the nearest 5.
+- **`launch ANTISAT x,y`** at an enemy satellite over a sector you can see, at war, within its
+  range: it may blow up on the pad and it may miss; it is spent either way. The Air panel lists
+  **satellites overhead**: other countries' satellites over what you can see.
+- A satellite up there is never flown, bombed from, captured, or fitted out; it costs its upkeep.
+
 ## What is not here yet
 
-Satellites and anti-satellite missiles; ships' anti-missile guns; nuclear warheads.
+Ships' anti-missile guns; nuclear warheads.

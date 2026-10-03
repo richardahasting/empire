@@ -48,7 +48,18 @@ public record CountryView(
         /** Every lot on the commodity market (issue #141): the market is public, as the original's was. */
         List<LotView> market,
         /** Every ship, plane and unit for sale (issue #141), public as the original's trade report was. */
-        List<TradeView> trades) {
+        List<TradeView> trades,
+        /** Other countries' satellites over what you can see (issue #71). */
+        List<OverheadView> overhead) {
+
+    /** Before satellites. */
+    public CountryView(int countryId, String name, long updateNumber, Coord capital, boolean wrapX, boolean wrapY, int width, int height, double cash, double btu,
+                       Levels levels, HandicapCfg handicap, boolean inSanctuary, boolean bankrupt, List<String> commodityIds, List<SectorView> sectors,
+                       List<String> otherCountryNames, List<String> atWarWith, List<ShipView> ships, List<ContactView> contacts, List<RailLaneView> railLanes,
+                       List<TrainView> trains, List<UnitView> units, List<PlaneView> planes, List<LotView> market, List<TradeView> trades) {
+        this(countryId, name, updateNumber, capital, wrapX, wrapY, width, height, cash, btu, levels, handicap, inSanctuary, bankrupt, commodityIds, sectors,
+             otherCountryNames, atWarWith, ships, contacts, railLanes, trains, units, planes, market, trades, List.of());
+    }
 
     /** Before object trade. */
     public CountryView(int countryId, String name, long updateNumber, Coord capital, boolean wrapX, boolean wrapY, int width, int height, double cash, double btu,
@@ -96,7 +107,15 @@ public record CountryView(
                             /** The carrier it is aboard (issue #71), 0 when ashore; and whether it may sit on one. */
                             long aboard, boolean light,
                             /** A missile (issue #71): launched once; "rises" for a SAM or an ABM, which are never launched; "marine" for anti-ship. */
-                            boolean missile, boolean rises, boolean marine) {}
+                            boolean missile, boolean rises, boolean marine,
+                            /** A satellite (issue #71): put up into orbit, or with "missile" an anti-sat; its orbit ("orbit", "geosync") once up, else null; whether it reports yet. */
+                            boolean satellite, String orbit, boolean ready) {}
+
+    /**
+     * Someone else's satellite over a sector you can see (issue #71; KNOWN move_sat's "satellite spotted over"): whose,
+     * what, and where — what an anti-sat is aimed by.
+     */
+    public record OverheadView(long id, String ownerName, String cls, String name, Coord at, Coord relative) {}
 
     /**
      * A land unit of yours (issue #247): where, how fit, what it carries, its own mobility, what it is worth in a fight
@@ -339,7 +358,8 @@ public record CountryView(
             if (r.atWar() && r.involves(countryId)) atWar.add(w.country(r.other(countryId)).name());
 
         return new CountryView(countryId, c.name(), w.updateNumber(), c.capital(), w.wrapX(), w.wrapY(), w.width(), w.height(), c.cash(), c.btu(), c.levels(), c.handicap(),
-                c.inSanctuary(), c.bankrupt(), ids, views, others, atWar, ships, contacts, railLanes, trains, units(w, cfg, com, c), planes(w, cfg, c), market(w, com, c), trades(w, com, c));
+                c.inSanctuary(), c.bankrupt(), ids, views, others, atWar, ships, contacts, railLanes, trains, units(w, cfg, com, c), planes(w, cfg, c), market(w, com, c), trades(w, com, c),
+                overhead(w, cfg, c, visible, absolute));
     }
 
     private static List<TradeView> trades(World w, Commodities com, Country c) {
@@ -387,7 +407,20 @@ public record CountryView(
                     cls.has("bomber"), cls.has("tactical"), cls.has("spy"), cls.has("intercept"), cls.has("escort"), cls.attackAt(p.tech()), cls.defenseAt(p.tech()),
                     p.onAirDefence() ? relative(w, c.capital(), p.opPoint()) : null, p.onAirDefence() ? p.radius() : 0,
                     cls.has("cargo"), cls.has("para"), p.ship(), cls.has("light") || cls.has("helo") || cls.has("xlight"),
-                    cls.has("missile"), cls.has("missile") && (cls.has("intercept") || cls.has("sdi")), cls.has("marine")));
+                    cls.has("missile"), cls.has("missile") && (cls.has("intercept") || cls.has("sdi")), cls.has("marine"),
+                    cls.has("satellite"), p.orbit(), p.orbiting() && w.updateNumber() > p.launched()));
+        }
+        return out;
+    }
+
+    private static List<OverheadView> overhead(World w, GameConfig cfg, Country c, Set<Coord> visible, boolean absolute) {
+        var air = cfg.units().planes();
+        if (air == null) return List.of();
+        List<OverheadView> out = new ArrayList<>();
+        for (var p : w.planes()) {
+            if (!p.orbiting() || p.owner() == c.id() || !visible.contains(p.at())) continue;
+            var cls = air.planeClass(p.cls());
+            out.add(new OverheadView(p.id(), w.country(p.owner()).name(), p.cls(), cls == null ? p.cls() : cls.name(), p.at(), absolute ? p.at() : relative(w, c.capital(), p.at())));
         }
         return out;
     }

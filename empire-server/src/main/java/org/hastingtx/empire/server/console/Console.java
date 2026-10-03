@@ -187,13 +187,15 @@ public class Console {
                     yield cmd(run, new Command.Paradrop(ids(t[1]), abs(v, t[2]), escorts(t, 3, usage)));
                 }
                 case "launch" -> {
-                    String usage = "launch MISSILE x,y | launch MISSILE ship N   (once, and it is spent; an anti-ship missile at a ship)";
+                    String usage = "launch MISSILE x,y | launch MISSILE ship N | launch SATELLITE x,y [geo]   (a missile once, and it is spent; a satellite into orbit)";
                     need(t, 3, usage);
                     long id = Long.parseLong(t[1].replace("#", ""));
                     if (t[2].equalsIgnoreCase("ship")) { need(t, 4, usage); most(t, 4, usage); yield cmd(run, new Command.Launch(id, null, Long.parseLong(t[3].replace("#", "")))); }
-                    most(t, 3, usage);
-                    yield cmd(run, new Command.Launch(id, abs(v, t[2]), 0));
+                    most(t, 4, usage);
+                    if (t.length == 4 && !t[3].toLowerCase(Locale.ROOT).startsWith("geo")) throw new IllegalArgumentException("usage: " + usage);
+                    yield cmd(run, new Command.Launch(id, abs(v, t[2]), 0, t.length == 4));
                 }
+                case "satellite" -> { String usage = "satellite N   (what a satellite of yours in orbit sees)"; need(t, 2, usage); most(t, 2, usage); yield cmd(run, new Command.Satellite(Long.parseLong(t[1].replace("#", "")))); }
                 case "lay" -> { String usage = "lay SHIP N   (a minelayer at sea lays N mines from her shells)"; need(t, 3, usage); most(t, 3, usage); yield cmd(run, new Command.Lay(Long.parseLong(t[1].replace("#", "")), Double.parseDouble(t[2]))); }
                 case "lmine" -> { String usage = "lmine UNIT N   (an engineer lays N land mines in its sector: a shell and a mobility point each)"; need(t, 3, usage); most(t, 3, usage); yield cmd(run, new Command.LandMine(Long.parseLong(t[1].replace("#", "")), Double.parseDouble(t[2]))); }
                 case "sweep" -> {

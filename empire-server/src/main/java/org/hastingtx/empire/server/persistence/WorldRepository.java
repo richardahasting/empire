@@ -211,8 +211,8 @@ public class WorldRepository {
         List<Object[]> rows = new ArrayList<>();
         for (var p : w.planes())
             rows.add(new Object[] {gameId, p.id(), p.owner(), p.cls(), p.at().x(), p.at().y(), p.efficiency(), p.tech(), p.built(), p.note() == null ? "" : p.note(),
-                    p.mission(), p.opPoint() == null ? null : p.opPoint().x(), p.opPoint() == null ? null : p.opPoint().y(), p.radius(), p.ship()});
-        jdbc.batchUpdate("INSERT INTO plane (game_id, id, owner, class, x, y, efficiency, tech, built, note, mission, op_x, op_y, radius, ship_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows);
+                    p.mission(), p.opPoint() == null ? null : p.opPoint().x(), p.opPoint() == null ? null : p.opPoint().y(), p.radius(), p.ship(), p.orbit(), p.theta(), p.launched()});
+        jdbc.batchUpdate("INSERT INTO plane (game_id, id, owner, class, x, y, efficiency, tech, built, note, mission, op_x, op_y, radius, ship_id, orbit, theta, launched) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows);
     }
 
     /** The market's open lots (issue #141): few, so all of them are rewritten whenever any changed. */
@@ -395,7 +395,8 @@ public class WorldRepository {
         List<org.hastingtx.empire.engine.model.Plane> planes = jdbc.query("SELECT * FROM plane WHERE game_id = ? ORDER BY id", (rs, i) -> new org.hastingtx.empire.engine.model.Plane(
                 rs.getLong("id"), rs.getInt("owner"), rs.getString("class"), new Coord(rs.getInt("x"), rs.getInt("y")), rs.getDouble("efficiency"),
                 rs.getDouble("tech"), rs.getLong("built"), rs.getString("note"), rs.getString("mission"),
-                rs.getObject("op_x") == null ? null : new Coord(rs.getInt("op_x"), rs.getInt("op_y")), rs.getInt("radius"), rs.getLong("ship_id")), g.id());
+                rs.getObject("op_x") == null ? null : new Coord(rs.getInt("op_x"), rs.getInt("op_y")), rs.getInt("radius"), rs.getLong("ship_id"),
+                rs.getString("orbit"), rs.getDouble("theta"), rs.getLong("launched")), g.id());
         Long nextPlane = jdbc.queryForObject("SELECT next_plane_id FROM game WHERE id = ?", Long.class, g.id());
         List<org.hastingtx.empire.engine.model.MarketLot> market = jdbc.query("SELECT * FROM market_lot WHERE game_id = ? ORDER BY id", (rs, i) -> {
             Integer dx = (Integer) rs.getObject("dest_x"), dy = (Integer) rs.getObject("dest_y");

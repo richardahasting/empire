@@ -127,7 +127,11 @@ final class Air {
      * {@code field_min_efficiency}; or its owner's carrier at {@code carrier_min_efficiency}, of a class that works that
      * kind of plane.
      */
+    /** "missile" or "satellite" for a class that is launched rather than flown (issue #71), else null. */
+    static String rocket(UnitsCfg.PlaneClassCfg cls) { return cls.has("missile") ? "missile" : cls.has("satellite") ? "satellite" : null; }
+
     static String grounded(GameConfig cfg, World w, Plane p, int owner) {
+        if (p.orbiting()) return "plane #" + p.id() + " is in orbit";   // issue #71: a satellite up there flies from nowhere
         UnitsCfg.PlanesCfg pc = cfg.units().planes();
         double fieldMin = pc.airCombat() == null ? 0 : pc.airCombat().fieldMinEfficiency();
         Base b = base(w, p);
@@ -199,7 +203,7 @@ final class Air {
             if (!seen.add(id)) return new Lift("plane #" + id + " is named twice", w, List.of(), null);
             UnitsCfg.PlaneClassCfg cls = pc.planeClass(p.cls());
             if (cls == null) return new Lift("plane #" + id + " has no class in these rules", w, List.of(), null);
-            if (cls.has("missile")) return new Lift("plane #" + id + " is a missile: it is launched, not flown (launch " + id + " x,y)", w, List.of(), null);   // KNOWN pln_sel nowant P_M
+            if (rocket(cls) != null) return new Lift("plane #" + id + " is a " + rocket(cls) + ": it is launched, not flown (launch " + id + " x,y)", w, List.of(), null);   // KNOWN pln_sel nowant P_M|P_O
             for (String f : flags) if (!cls.has(f)) return new Lift(article(cls.name()) + " cannot " + verb + "; " + (f.equals("para") ? "it takes a transport that drops paratroops" : "it takes a cargo plane"), w, List.of(), null);
             if (p.efficiency() < minEff) return new Lift("plane #" + id + " is at " + q(p.efficiency()) + "%; it flies at " + q(minEff) + "% or better", w, List.of(), null);
             String grounded = grounded(cfg, w, p, c.id());
@@ -442,7 +446,7 @@ final class Air {
         if (p == null || p.owner() != c.id()) return new Sortie(CommandResult.fail(w, "no plane #" + id + " of yours"), null, null, null, null, 0);
         UnitsCfg.PlaneClassCfg cls = pc.planeClass(p.cls());
         if (cls == null) return new Sortie(CommandResult.fail(w, "plane #" + id + " has no class in these rules"), null, null, null, null, 0);
-        if (cls.has("missile")) return new Sortie(CommandResult.fail(w, "plane #" + id + " is a missile: it is launched, not flown (launch " + id + " x,y)"), null, null, null, null, 0);
+        if (rocket(cls) != null) return new Sortie(CommandResult.fail(w, "plane #" + id + " is a " + rocket(cls) + ": it is launched, not flown (launch " + id + " x,y)"), null, null, null, null, 0);
         if (p.efficiency() < pc.minEfficiency()) return new Sortie(CommandResult.fail(w, "plane #" + id + " is wreckage at " + q(p.efficiency()) + "%"), null, null, null, null, 0);
         if (at == null || !w.inBounds(at)) return new Sortie(CommandResult.fail(w, "fly where?"), null, null, null, null, 0);
         String grounded = grounded(cfg, w, p, c.id());
