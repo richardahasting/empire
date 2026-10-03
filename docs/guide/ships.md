@@ -43,7 +43,9 @@ improve ships already built.
 | frigate | 45 | — | 5 | 15 guns, range 3, armour 30; hunts submarines |
 | submarine | 50 | — | 4 | 5 torpedoes that hit twice as hard, range 2; hard to see |
 | battleship | 60 | — | 4 | 40 guns, range 5, armour 80 |
-| carrier | 70 | — | 4 | 20 guns, range 3, armour 50 (planes come with #71) |
+| carrier | 70 | — | 4 | 20 guns, range 3, armour 50; 20 light planes, 20 helicopters, 4 extra-light |
+| aa_cruiser | 75 | — | 4 | 8 guns, range 1, armour 80; **anti-missile**: fires at a missile coming at a ship within a hex |
+| aegis_cruiser | 150 | — | 4 | 16 guns, range 1, armour 80; a stronger anti-missile system |
 
 A warship's build cost includes guns and shells. **They go aboard as her
 armament** — she leaves the yard ready to fight.

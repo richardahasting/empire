@@ -139,16 +139,53 @@ final class Missiles {
         // at a ship (KNOWN laun.c, shp_hardtarget): harder the faster she can turn away at sea, easier the more of her to see
         var sc = cfg.units().ships();
         var tcls = sc.shipClass(targetShip.cls());
+        // anti-missile ships of hers near her fire first (KNOWN msl_launch, shp_missile_defense)
+        Intercepted guns = shipDefense(cfg, com, r, next, c, cls.defenseAt(p.tech()), targetShip.at());
+        next = guns.world();
+        targetShip = next.ship(targetShip.id());
+        if (guns.hit()) return new CommandResult(next, null, 0, name + " launched at ship #" + targetShip.id() + "; " + guns.story());
+        String fended = guns.story().isEmpty() ? "" : "; " + guns.story();
         double speed = next.sector(targetShip.at()).terrain() == Terrain.OCEAN ? tcls.speed() / mc.hardTargetSpeedDivisor() : 0;
         double hard = targetShip.efficiency() / 100 * (mc.hardTargetBase() + speed - sc.sightOf(tcls));
-        if (!r.chance(hitChance(mc, cls, p, hard))) return new CommandResult(next, null, 0, name + " launched at ship #" + targetShip.id() + ": a splash, and a miss");
+        if (!r.chance(hitChance(mc, cls, p, hard))) return new CommandResult(next, null, 0, name + " launched at ship #" + targetShip.id() + fended + ": a splash, and a miss");
         int dam = damage(cfg, r, cls, p, true);
         double hull = dam / (1 + tcls.armorOr0() / 100);
         Ship hit = targetShip.withEfficiency(targetShip.efficiency() - hull);
         if (sc.combat() != null && hit.efficiency() <= sc.combat().sinkAt())
-            return new CommandResult(Engagement.sink(cfg, sc, com, next.withShip(hit), hit, c.id()), null, 0, name + " hit ship #" + targetShip.id() + " — and she went down");
+            return new CommandResult(Engagement.sink(cfg, sc, com, next.withShip(hit), hit, c.id()), null, 0, name + " launched at ship #" + targetShip.id() + fended + "; it hit her — and she went down");
         next = next.withShip(hit.withNote("hit by a missile: " + q(hull) + "% of her hull"));
-        return new CommandResult(next, null, 0, name + " hit ship #" + targetShip.id() + ": " + q(hull) + "% of her hull");
+        return new CommandResult(next, null, 0, name + " launched at ship #" + targetShip.id() + fended + "; it hit her: " + q(hull) + "% of her hull");
+    }
+
+    /**
+     * KNOWN shpsub.c shp_missile_defense: each anti-missile ship of a country at war with you within {@code
+     * ship_defense_range} of {@code at}, in order — at {@code ship_defense_min_efficiency} or better, crewed, not for sale,
+     * with a gun and {@code ship_defense_shells} in her hold, which she fires — hits with (guns × eff × tech factor ×
+     * {@code ship_defense_factor} − the missile's defence)%. The first hit destroys it. You learn whose fire it was, not
+     * which ship.
+     */
+    static Intercepted shipDefense(GameConfig cfg, Commodities com, UnrestStep.R r, World w, Country c, double defence, Coord at) {
+        var sc = cfg.units().ships();
+        var mc = cfg.units().planes().missiles();
+        if (sc == null) return new Intercepted(w, false, "");
+        int shell = com.index("shell"), gun = com.index("gun");
+        List<String> story = new ArrayList<>();
+        World now = w;
+        List<Ship> near = w.ships().stream().filter(s -> Hex.distance(now, s.at(), at) <= mc.shipDefenseRange()).sorted(Comparator.comparingLong(Ship::id)).toList();
+        for (Ship s : near) {
+            UnitsCfg.ShipClassCfg k = sc.shipClass(s.cls());
+            if (k == null || k.antiMissileOr0() <= 0 || s.owner() == c.id() || !w.atWar(c.id(), s.owner())) continue;
+            if (s.efficiency() < mc.shipDefenseMinEfficiency() || (sc.crews() && s.crew() <= 0)) continue;
+            // KNOWN shp_usable_guns: her system brings no more guns than she has aboard
+            double guns = Math.min(k.antiMissileOr0(), Math.floor(s.stock().get(gun)));
+            if (guns < 1 || s.stock().get(shell) < mc.shipDefenseShells() || w.onTheBlock(TradeLot.SHIP, s.id()) != null) continue;
+            w = w.withShip(s.withStock(s.stock().plus(shell, -mc.shipDefenseShells())));
+            double teff = s.tech() / (s.tech() + mc.shipDefenseTechScale());
+            double hc = Math.max(0, Math.min(100, Math.floor(guns * s.efficiency() / 100 * teff * mc.shipDefenseFactor()) - defence));
+            if (r.chance(hc / 100)) { story.add(w.country(s.owner()).name() + "'s anti-missile fire destroyed it"); return new Intercepted(w, true, String.join("; ", story)); }
+            story.add(w.country(s.owner()).name() + "'s anti-missile fire missed it");
+        }
+        return new Intercepted(w, false, String.join("; ", story));
     }
 
     record Intercepted(World world, boolean hit, String story) {}
