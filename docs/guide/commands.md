@@ -29,6 +29,10 @@ deliver COMMODITY SECTOR DIR N   standing order: above N, push it one hex DIR (e
 deliver COMMODITY SECTOR DIR N check   the same, described but not made: what lies that way, and whether it would deliver
   food out of a sector that keeps less than its own people eat in an update WARNS (a self-starving pipe)
 adjacent SECTOR              what lies each way — yours, unowned, sea, or somebody's — without claiming or ordering anything
+ORDER ... check              a dry run of des, thresh, dist, demob, enlist, move, expl, road, rail, railship, raillane,
+                             build, load, unload, lload, lunload, lane, fish, mine, supply, scrap: what it would answer,
+                             cost and change — nothing is done or charged. Fights, sailing and marching cannot be checked
+                             (they are refused, not carried out). Words a command does not read are refused, never ignored
 declare war COUNTRY          go to war; they are at war with you whether they like it or not
 peace COUNTRY                offer peace, or accept theirs — it takes both of you
 telegram COUNTRY "..."       a private message to one country; they see who it is from

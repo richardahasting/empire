@@ -1125,32 +1125,68 @@ public class GameService {
         if (!"running".equals(g.status)) throw new IllegalArgumentException("game is " + g.status);
         g.lock.lock();
         try {
-            World before = g.world, cur = before;
+            World before = g.world;
+            Batch b = batch(g, country, before, cmds, source, note);
+            if (b.applied() > 0) { worlds.saveDiff(gameId, before, b.after(), g.com); g.world = b.after(); postMilestones(g, before, b.after()); }
+            return new Outcome(b.applied() > 0, b.applied() > 0 ? null : b.msg(), b.btu(), CountryView.of(g.world, g.cfg, country), b.applied() > 0 ? b.msg() : null);
+        } finally { g.lock.unlock(); }
+    }
+
+    private record Batch(World after, int applied, double btu, String msg) {}
+
+    /** Run commands in order on an evolving copy of {@code before}; logged per command when {@code source} is set. Nothing is saved. */
+    private Batch batch(Game g, int country, World before, List<Command> cmds, String source, String note) {
+        World cur = before;
+        Coord cap = before.country(country).capital();
+        int applied = 0, outOfBtu = 0; double btu = 0;
+        List<String> skipped = new ArrayList<>(), notes = new ArrayList<>();
+        for (int i = 0; i < cmds.size(); i++) {
+            Command cmd = cmds.get(i);
+            CommandResult r = g.exec.execute(cur, country, cmd);
+            if (source != null) logs.command(g.id, country, before.updateNumber(), source, cmd.verb(), cmd, r.ok(), r.error(), r.btuSpent());
+            if (r.ok()) { cur = r.world(); applied++; btu += r.btuSpent(); if (r.info() != null) notes.add(relativise(before, cap, sectorOf(cmd) + ": " + r.info())); continue; }
+            if (r.error().startsWith("not enough BTUs")) { outOfBtu = cmds.size() - i; break; }
+            skipped.add(relativise(before, cap, sectorOf(cmd) + ": " + r.error()));
+        }
+        StringBuilder sb = new StringBuilder("applied " + applied + " of " + cmds.size() + (cmds.size() == 1 ? " command" : " commands"));
+        if (!skipped.isEmpty()) {
+            sb.append("; skipped ").append(skipped.size()).append(" — ").append(String.join("; ", skipped.subList(0, Math.min(4, skipped.size()))));
+            if (skipped.size() > 4) sb.append("; …");
+        }
+        if (!notes.isEmpty()) {
+            sb.append("; ").append(notes.size()).append(" adjusted — ").append(String.join("; ", notes.subList(0, Math.min(3, notes.size()))));
+            if (notes.size() > 3) sb.append("; …");
+        }
+        if (outOfBtu > 0) sb.append("; out of BTUs with ").append(outOfBtu).append(" still to do");
+        if (note != null && applied > 0) sb.append(" (").append(note).append(")");
+        return new Batch(cur, applied, btu, sb.toString());
+    }
+
+    /**
+     * Commands run but not kept: a dry run (issues #272, #273). The executor answers exactly as it would, against the
+     * world as it stands, and the result is thrown away — nothing is saved, logged or charged, and nobody is told. The
+     * view returned is the world as it WOULD be, for the caller to compare; it is never the player's current state.
+     * Only for verbs without dice — callers must not preview a fight, whose rolls are seeded from the world and would
+     * come out the same when it was run for real.
+     */
+    public record Preview(Outcome outcome, CountryView before) {}
+
+    public Preview preview(long gameId, Account a, List<Command> cmds, String note) {
+        if (cmds.isEmpty()) throw new IllegalArgumentException("nothing to do");
+        Game g = get(gameId);
+        int country = myCountry(gameId, a);
+        if (!"running".equals(g.status)) throw new IllegalArgumentException("game is " + g.status);
+        g.lock.lock();
+        try {
+            World before = g.world;
             Coord cap = before.country(country).capital();
-            int applied = 0, outOfBtu = 0; double btu = 0;
-            List<String> skipped = new ArrayList<>(), notes = new ArrayList<>();
-            for (int i = 0; i < cmds.size(); i++) {
-                Command cmd = cmds.get(i);
-                CommandResult r = g.exec.execute(cur, country, cmd);
-                logs.command(gameId, country, before.updateNumber(), source, cmd.verb(), cmd, r.ok(), r.error(), r.btuSpent());
-                if (r.ok()) { cur = r.world(); applied++; btu += r.btuSpent(); if (r.info() != null) notes.add(relativise(before, cap, sectorOf(cmd) + ": " + r.info())); continue; }
-                if (r.error().startsWith("not enough BTUs")) { outOfBtu = cmds.size() - i; break; }
-                skipped.add(relativise(before, cap, sectorOf(cmd) + ": " + r.error()));
+            CountryView was = CountryView.of(before, g.cfg, country);   // taken under the lock, so an update between cannot pass for the order's work
+            if (cmds.size() == 1 && note == null) {
+                CommandResult r = g.exec.execute(before, country, cmds.get(0));
+                return new Preview(new Outcome(r.ok(), relativise(before, cap, r.error()), r.btuSpent(), CountryView.of(r.world(), g.cfg, country), relativise(before, cap, r.info())), was);
             }
-            if (applied > 0) { worlds.saveDiff(gameId, before, cur, g.com); g.world = cur; postMilestones(g, before, cur); }
-            StringBuilder sb = new StringBuilder("applied " + applied + " of " + cmds.size() + (cmds.size() == 1 ? " command" : " commands"));
-            if (!skipped.isEmpty()) {
-                sb.append("; skipped ").append(skipped.size()).append(" — ").append(String.join("; ", skipped.subList(0, Math.min(4, skipped.size()))));
-                if (skipped.size() > 4) sb.append("; …");
-            }
-            if (!notes.isEmpty()) {
-                sb.append("; ").append(notes.size()).append(" adjusted — ").append(String.join("; ", notes.subList(0, Math.min(3, notes.size()))));
-                if (notes.size() > 3) sb.append("; …");
-            }
-            if (outOfBtu > 0) sb.append("; out of BTUs with ").append(outOfBtu).append(" still to do");
-            if (note != null && applied > 0) sb.append(" (").append(note).append(")");
-            String msg = sb.toString();
-            return new Outcome(applied > 0, applied > 0 ? null : msg, btu, CountryView.of(g.world, g.cfg, country), applied > 0 ? msg : null);
+            Batch b = batch(g, country, before, cmds, null, note);
+            return new Preview(new Outcome(b.applied() > 0, b.applied() > 0 ? null : b.msg(), b.btu(), CountryView.of(b.after(), g.cfg, country), b.applied() > 0 ? b.msg() : null), was);
         } finally { g.lock.unlock(); }
     }
 

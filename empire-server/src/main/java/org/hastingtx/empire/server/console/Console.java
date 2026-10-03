@@ -26,94 +26,100 @@ public class Console {
     public record Reply(String output, boolean accepted, String error, CountryView view) {}
 
     public Reply run(long gameId, Account a, String line) {
-        String[] t = line.trim().split("\\s+");
-        if (t.length == 0 || t[0].isEmpty()) return new Reply("", true, null, null);
+        String[] words = line.trim().split("\\s+");
+        if (words.length == 0 || words[0].isEmpty()) return new Reply("", true, null, null);
         CountryView v = games.view(gameId, a);
         GameConfig cfg = games.get(gameId).cfg;
-        String verb = t[0].toLowerCase(Locale.ROOT);
+        String verb = words[0].toLowerCase(Locale.ROOT);
+        // a trailing "check" asks what an order would do, without doing it (issues #272, #273); deliver has its own
+        // probe, and in a message or a country's name the word is just a word
+        boolean check = words.length > 1 && words[words.length - 1].equalsIgnoreCase("check") && !NOT_CHECKED.contains(verb);
+        String[] t = check ? Arrays.copyOf(words, words.length - 1) : words;
+        Run run = new Run(gameId, a, v, check);
         try {
             return switch (verb) {
                 case "help", "?" -> new Reply(HELP, true, null, null);
                 case "map" -> new Reply(map(v, cfg), true, null, null);
                 case "census", "cen" -> new Reply(t.length > 1 && t[1].toLowerCase(Locale.ROOT).startsWith("res") ? censusResources(v, cfg) : census(v, cfg), true, null, null);
                 case "food" -> new Reply(food(games.foodReport(gameId, a)), true, null, null);
-                case "break" -> cmd(gameId, a, new Command.BreakSanctuary());
-                case "des", "designate" -> { need(t, 3, "des SECTOR type"); yield many(gameId, a, v, cfg, t[1], at -> new Command.Designate(at, t[2])); }
+                case "break" -> { most(t, 1, "break"); yield cmd(run, new Command.BreakSanctuary()); }
+                case "des", "designate" -> { need(t, 3, "des SECTOR type"); most(t, 3, "des SECTOR type"); yield many(run, cfg, t[1], at -> new Command.Designate(at, t[2])); }
                 case "thresh", "threshold" -> {
-                    need(t, 4, "thresh SECTOR commodity amount");
+                    need(t, 4, "thresh SECTOR commodity amount"); most(t, 4, "thresh SECTOR commodity amount");
                     double n = Double.parseDouble(t[3]);
                     boolean mixed = SectorSelector.isMixed(t[1]);
                     List<Coord> targets = SectorSelector.expand(v, cfg, t[1]);
                     // the ack says what each kind of sector actually got, not just that something was applied (issue #146)
-                    yield many(gameId, a, v, cfg, t[1], at -> new Command.Threshold(at, t[2], mixed ? SectorSelector.massThreshold(v, cfg, at, t[2], n) : n), mixed ? SectorSelector.effectiveNote(v, cfg, targets, t[2], n) : null);
+                    yield many(run, cfg, t[1], at -> new Command.Threshold(at, t[2], mixed ? SectorSelector.massThreshold(v, cfg, at, t[2], n) : n), mixed ? SectorSelector.effectiveNote(v, cfg, targets, t[2], n) : null);
                 }
                 case "demob", "demobilize", "demobilise" -> {
                     need(t, 3, "demob SECTOR N | demob SECTOR all | demob SECTOR keep N");
                     boolean keep = t[2].equalsIgnoreCase("keep") || t[2].equalsIgnoreCase("all");
                     if (t[2].equalsIgnoreCase("keep")) need(t, 4, "demob SECTOR keep N");
+                    most(t, keep && !t[2].equalsIgnoreCase("all") ? 4 : 3, "demob SECTOR N | demob SECTOR all | demob SECTOR keep N");
                     double n = t[2].equalsIgnoreCase("all") ? 0 : Double.parseDouble(keep ? t[3] : t[2]);
-                    yield many(gameId, a, v, cfg, t[1], at -> new Command.Demobilize(at, n, keep));
+                    yield many(run, cfg, t[1], at -> new Command.Demobilize(at, n, keep));
                 }
                 case "enl", "enlist" -> {
-                    need(t, 3, "enlist SECTOR N | enlist SECTOR -N (up to N in each)");
+                    need(t, 3, "enlist SECTOR N | enlist SECTOR -N (up to N in each)"); most(t, 3, "enlist SECTOR N | enlist SECTOR -N (up to N in each)");
                     double n = Double.parseDouble(t[2]);
-                    yield many(gameId, a, v, cfg, t[1], at -> new Command.Enlist(at, Math.abs(n), n < 0));   // KNOWN enli.c: a negative number is a quota
+                    yield many(run, cfg, t[1], at -> new Command.Enlist(at, Math.abs(n), n < 0));   // KNOWN enli.c: a negative number is a quota
                 }
-                case "dist", "distribute" -> { need(t, 3, "dist SECTOR cx,cy|none"); Coord ctr = t[2].equalsIgnoreCase("none") ? null : abs(v, t[2]); yield many(gameId, a, v, cfg, t[1], at -> new Command.Distribute(at, ctr)); }
+                case "dist", "distribute" -> { need(t, 3, "dist SECTOR cx,cy|none"); most(t, 3, "dist SECTOR cx,cy|none"); Coord ctr = t[2].equalsIgnoreCase("none") ? null : abs(v, t[2]); yield many(run, cfg, t[1], at -> new Command.Distribute(at, ctr)); }
                 case "ships", "fleet" -> new Reply(fleet(v, cfg), true, null, null);
                 case "contacts", "radar" -> new Reply(contacts(v), true, null, null);
                 case "build" -> {
                     need(t, 3, "build HARBOUR SHIPCLASS [name] | build HEADQUARTERS UNITCLASS");
                     // a land unit class builds a unit in a headquarters (issue #247); anything else is a ship
-                    if (cfg.units().land() != null && cfg.units().land().hasClass(t[2])) yield cmd(gameId, a, new Command.BuildUnit(abs(v, t[1]), t[2]));
+                    if (cfg.units().land() != null && cfg.units().land().hasClass(t[2])) yield cmd(run, new Command.BuildUnit(abs(v, t[1]), t[2]));
                     // a plane class builds a plane on an airfield (issue #262)
-                    if (cfg.units().planes() != null && cfg.units().planes().planeClass(t[2]) != null) yield cmd(gameId, a, new Command.BuildPlane(abs(v, t[1]), t[2]));
-                    yield cmd(gameId, a, new Command.BuildShip(abs(v, t[1]), t[2], t.length > 3 ? String.join(" ", Arrays.copyOfRange(t, 3, t.length)) : null));
+                    if (cfg.units().planes() != null && cfg.units().planes().planeClass(t[2]) != null) yield cmd(run, new Command.BuildPlane(abs(v, t[1]), t[2]));
+                    yield cmd(run, new Command.BuildShip(abs(v, t[1]), t[2], t.length > 3 ? String.join(" ", Arrays.copyOfRange(t, 3, t.length)) : null));
                 }
-                case "sail" -> { need(t, 3, "sail SHIP x,y | sail SHIP hold"); yield cmd(gameId, a, new Command.Sail(Long.parseLong(t[1].replace("#", "")), t[2].equalsIgnoreCase("hold") ? null : abs(v, t[2]))); }
-                case "load" -> { need(t, 4, "load SHIP COMMODITY N"); yield cmd(gameId, a, new Command.Load(Long.parseLong(t[1].replace("#", "")), t[2], Double.parseDouble(t[3]))); }
-                case "unload" -> { need(t, 4, "unload SHIP COMMODITY N"); yield cmd(gameId, a, new Command.Unload(Long.parseLong(t[1].replace("#", "")), t[2], Double.parseDouble(t[3]))); }
+                case "sail" -> { need(t, 3, "sail SHIP x,y | sail SHIP hold"); most(t, 3, "sail SHIP x,y | sail SHIP hold"); yield cmd(run, new Command.Sail(Long.parseLong(t[1].replace("#", "")), t[2].equalsIgnoreCase("hold") ? null : abs(v, t[2]))); }
+                case "load" -> { need(t, 4, "load SHIP COMMODITY N"); most(t, 4, "load SHIP COMMODITY N"); yield cmd(run, new Command.Load(Long.parseLong(t[1].replace("#", "")), t[2], Double.parseDouble(t[3]))); }
+                case "unload" -> { need(t, 4, "unload SHIP COMMODITY N"); most(t, 4, "unload SHIP COMMODITY N"); yield cmd(run, new Command.Unload(Long.parseLong(t[1].replace("#", "")), t[2], Double.parseDouble(t[3]))); }
                 case "lane" -> {
                     need(t, 3, "lane SHIP x,y x2,y2 [COMMODITY ...] | lane SHIP none");
                     long id = Long.parseLong(t[1].replace("#", ""));
-                    if (t[2].equalsIgnoreCase("none")) yield cmd(gameId, a, new Command.Lane(id, null, null, List.of()));
+                    if (t[2].equalsIgnoreCase("none")) yield cmd(run, new Command.Lane(id, null, null, List.of()));
                     need(t, 4, "lane SHIP x,y x2,y2 [COMMODITY ...]");
-                    yield cmd(gameId, a, new Command.Lane(id, abs(v, t[2]), abs(v, t[3]), t.length > 4 ? List.of(Arrays.copyOfRange(t, 4, t.length)) : List.of()));
+                    yield cmd(run, new Command.Lane(id, abs(v, t[2]), abs(v, t[3]), t.length > 4 ? List.of(Arrays.copyOfRange(t, 4, t.length)) : List.of()));
                 }
                 case "declare" -> {
                     need(t, 3, "declare war COUNTRY");
                     if (!t[1].equalsIgnoreCase("war")) yield new Reply("declare war COUNTRY", false, null, null);
                     int on = games.countryNamed(gameId, rest(line, 2));
                     if (on < 0) yield new Reply("no country called " + rest(line, 2) + " in this game", false, null, null);
-                    yield cmd(gameId, a, new Command.DeclareWar(on));
+                    yield cmd(run, new Command.DeclareWar(on));
                 }
                 case "peace" -> {
                     need(t, 2, "peace COUNTRY");
                     int with = games.countryNamed(gameId, rest(line, 1));
                     if (with < 0) yield new Reply("no country called " + rest(line, 1) + " in this game", false, null, null);
-                    yield cmd(gameId, a, new Command.OfferPeace(with));
+                    yield cmd(run, new Command.OfferPeace(with));
                 }
                 case "tel", "telegram" -> {
                     need(t, 3, "telegram COUNTRY \"what you want to say\"");
                     int to = games.countryNamed(gameId, t[1]);
                     if (to < 0) yield new Reply("no country called " + t[1] + " in this game", false, null, null);
-                    yield cmd(gameId, a, new Command.Telegram(to, rest(line, 2)));
+                    yield cmd(run, new Command.Telegram(to, rest(line, 2)));
                 }
                 case "announce" -> {
                     need(t, 2, "announce \"what you want everyone to hear\"");
-                    yield cmd(gameId, a, new Command.Announce(rest(line, 1)));
+                    yield cmd(run, new Command.Announce(rest(line, 1)));
                 }
-                case "fish" -> { need(t, 2, "fish SHIP [x,y] | fish SHIP off"); long id = Long.parseLong(t[1].replace("#", "")); boolean off = t.length > 2 && t[2].equalsIgnoreCase("off"); yield cmd(gameId, a, new Command.Fish(id, !off && t.length > 2 ? abs(v, t[2]) : null, off)); }
+                case "fish" -> { need(t, 2, "fish SHIP [x,y] | fish SHIP off"); most(t, 3, "fish SHIP [x,y] | fish SHIP off"); long id = Long.parseLong(t[1].replace("#", "")); boolean off = t.length > 2 && t[2].equalsIgnoreCase("off"); yield cmd(run, new Command.Fish(id, !off && t.length > 2 ? abs(v, t[2]) : null, off)); }
                 case "patrol", "blockade", "interdict", "search", "escort" -> {
                     need(t, 2, verb + " SHIP ... | " + verb + " SHIP off");
                     long id = Long.parseLong(t[1].replace("#", ""));
-                    if (t.length > 2 && t[2].equalsIgnoreCase("off")) yield cmd(gameId, a, new Command.Mission(id, verb, List.of(), 0, true));
-                    if (verb.equals("escort")) { need(t, 3, "escort SHIP OTHER_SHIP"); yield cmd(gameId, a, new Command.Mission(id, verb, List.of(), Long.parseLong(t[2].replace("#", "")), false)); }
+                    if (t.length > 2 && t[2].equalsIgnoreCase("off")) yield cmd(run, new Command.Mission(id, verb, List.of(), 0, true));
+                    if (verb.equals("escort")) { need(t, 3, "escort SHIP OTHER_SHIP"); yield cmd(run, new Command.Mission(id, verb, List.of(), Long.parseLong(t[2].replace("#", "")), false)); }
                     List<Coord> pts = new ArrayList<>();
                     for (int i = 2; i < t.length; i++) pts.add(abs(v, t[i]));
-                    yield cmd(gameId, a, new Command.Mission(id, verb, pts, 0, false));
+                    yield cmd(run, new Command.Mission(id, verb, pts, 0, false));
                 }
-                case "anti" -> { need(t, 2, "anti SECTOR"); yield many(gameId, a, v, cfg, t[1], Command.Anti::new); }
+                case "anti" -> { need(t, 2, "anti SECTOR"); most(t, 2, "anti SECTOR"); yield many(run, cfg, t[1], Command.Anti::new); }
                 case "unrest" -> new Reply(unrest(v), true, null, null);
                 case "attack", "att" -> {
                     String usage = "attack x,y [N from x2,y2 ...] [unit U ...]";
@@ -125,27 +131,27 @@ public class Console {
                         else if (k + 2 < t.length && t[k + 1].equalsIgnoreCase("from")) { parties.add(new Command.Attack.Party(abs(v, t[k + 2]), Double.parseDouble(t[k]))); k += 3; }
                         else throw new IllegalArgumentException("usage: " + usage);
                     }
-                    yield cmd(gameId, a, new Command.Attack(abs(v, t[1]), parties, units));
+                    yield cmd(run, new Command.Attack(abs(v, t[1]), parties, units));
                 }
                 case "army", "units" -> new Reply(army(v), true, null, null);
                 case "air", "planes" -> new Reply(air(v), true, null, null);
-                case "march", "mar" -> { need(t, 3, "march UNIT x,y"); yield cmd(gameId, a, new Command.March(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
-                case "bomb" -> { need(t, 3, "bomb PLANE x,y [strategic]"); yield cmd(gameId, a, new Command.Bomb(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]), t.length < 4 || !t[3].toLowerCase().startsWith("s"))); }
-                case "recon" -> { need(t, 3, "recon PLANE x,y"); yield cmd(gameId, a, new Command.Recon(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
-                case "work" -> { need(t, 2, "work UNIT [mobility]"); yield cmd(gameId, a, new Command.Work(Long.parseLong(t[1].replace("#", "")), t.length > 2 ? Double.parseDouble(t[2]) : 0)); }
-                case "ufire" -> { need(t, 3, "ufire UNIT x,y"); yield cmd(gameId, a, new Command.UnitFire(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
-                case "sabotage" -> { need(t, 2, "sabotage UNIT"); yield cmd(gameId, a, new Command.Sabotage(Long.parseLong(t[1].replace("#", "")))); }
-                case "incite" -> { need(t, 2, "incite UNIT"); yield cmd(gameId, a, new Command.Incite(Long.parseLong(t[1].replace("#", "")))); }
-                case "board" -> { need(t, 3, "board UNIT SHIP"); yield cmd(gameId, a, new Command.Board(Long.parseLong(t[1].replace("#", "")), Long.parseLong(t[2].replace("#", "")))); }
-                case "ashore" -> { need(t, 2, "ashore UNIT"); yield cmd(gameId, a, new Command.Board(Long.parseLong(t[1].replace("#", "")), 0)); }
-                case "lload", "lunload" -> { need(t, 4, verb + " UNIT COMMODITY N"); yield cmd(gameId, a, new Command.LoadUnit(Long.parseLong(t[1].replace("#", "")), t[2], Double.parseDouble(t[3]), verb.equals("lunload"))); }
-                case "land" -> { need(t, 3, "land SHIP x,y"); yield cmd(gameId, a, new Command.Land(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
-                case "fire" -> { need(t, 3, "fire SHIP x,y [CLASS]"); yield cmd(gameId, a, new Command.Fire(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]), t.length > 3 ? t[3] : null)); }
-                case "supply" -> { need(t, 2, "supply SHIP [x,y] | supply SHIP off"); long id = Long.parseLong(t[1].replace("#", "")); boolean off = t.length > 2 && t[2].equalsIgnoreCase("off"); yield cmd(gameId, a, new Command.Supply(id, !off && t.length > 2 ? abs(v, t[2]) : null, off)); }
+                case "march", "mar" -> { need(t, 3, "march UNIT x,y"); most(t, 3, "march UNIT x,y"); yield cmd(run, new Command.March(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
+                case "bomb" -> { need(t, 3, "bomb PLANE x,y [strategic]"); most(t, 4, "bomb PLANE x,y [strategic]"); yield cmd(run, new Command.Bomb(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]), t.length < 4 || !t[3].toLowerCase().startsWith("s"))); }
+                case "recon" -> { need(t, 3, "recon PLANE x,y"); most(t, 3, "recon PLANE x,y"); yield cmd(run, new Command.Recon(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
+                case "work" -> { need(t, 2, "work UNIT [mobility]"); most(t, 3, "work UNIT [mobility]"); yield cmd(run, new Command.Work(Long.parseLong(t[1].replace("#", "")), t.length > 2 ? Double.parseDouble(t[2]) : 0)); }
+                case "ufire" -> { need(t, 3, "ufire UNIT x,y"); most(t, 3, "ufire UNIT x,y"); yield cmd(run, new Command.UnitFire(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
+                case "sabotage" -> { need(t, 2, "sabotage UNIT"); most(t, 2, "sabotage UNIT"); yield cmd(run, new Command.Sabotage(Long.parseLong(t[1].replace("#", "")))); }
+                case "incite" -> { need(t, 2, "incite UNIT"); most(t, 2, "incite UNIT"); yield cmd(run, new Command.Incite(Long.parseLong(t[1].replace("#", "")))); }
+                case "board" -> { need(t, 3, "board UNIT SHIP"); most(t, 3, "board UNIT SHIP"); yield cmd(run, new Command.Board(Long.parseLong(t[1].replace("#", "")), Long.parseLong(t[2].replace("#", "")))); }
+                case "ashore" -> { need(t, 2, "ashore UNIT"); most(t, 2, "ashore UNIT"); yield cmd(run, new Command.Board(Long.parseLong(t[1].replace("#", "")), 0)); }
+                case "lload", "lunload" -> { need(t, 4, verb + " UNIT COMMODITY N"); most(t, 4, verb + " UNIT COMMODITY N"); yield cmd(run, new Command.LoadUnit(Long.parseLong(t[1].replace("#", "")), t[2], Double.parseDouble(t[3]), verb.equals("lunload"))); }
+                case "land" -> { need(t, 3, "land SHIP x,y"); most(t, 3, "land SHIP x,y"); yield cmd(run, new Command.Land(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
+                case "fire" -> { need(t, 3, "fire SHIP x,y [CLASS]"); most(t, 4, "fire SHIP x,y [CLASS]"); yield cmd(run, new Command.Fire(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]), t.length > 3 ? t[3] : null)); }
+                case "supply" -> { need(t, 2, "supply SHIP [x,y] | supply SHIP off"); most(t, 3, "supply SHIP [x,y] | supply SHIP off"); long id = Long.parseLong(t[1].replace("#", "")); boolean off = t.length > 2 && t[2].equalsIgnoreCase("off"); yield cmd(run, new Command.Supply(id, !off && t.length > 2 ? abs(v, t[2]) : null, off)); }
                 case "manifest", "man" -> new Reply(t.length > 1 ? manifest(v, Long.parseLong(t[1].replace("#", ""))) : manifests(v), true, null, null);
-                case "history", "log" -> { need(t, 2, "history SHIP [UPDATES]"); yield new Reply(history(Long.parseLong(t[1].replace("#", "")), games.shipHistory(gameId, a, Long.parseLong(t[1].replace("#", "")), t.length > 2 ? Integer.parseInt(t[2]) : 5)), true, null, null); }
-                case "mine" -> { need(t, 2, "mine SHIP [x,y] | mine SHIP off"); long id = Long.parseLong(t[1].replace("#", "")); boolean off = t.length > 2 && t[2].equalsIgnoreCase("off"); yield cmd(gameId, a, new Command.Mine(id, !off && t.length > 2 ? abs(v, t[2]) : null, off)); }
-                case "scrap" -> { need(t, 2, "scrap SHIP"); yield cmd(gameId, a, new Command.Scrap(Long.parseLong(t[1].replace("#", "")))); }
+                case "history", "log" -> { need(t, 2, "history SHIP [UPDATES]"); most(t, 3, "history SHIP [UPDATES]"); yield new Reply(history(Long.parseLong(t[1].replace("#", "")), games.shipHistory(gameId, a, Long.parseLong(t[1].replace("#", "")), t.length > 2 ? Integer.parseInt(t[2]) : 5)), true, null, null); }
+                case "mine" -> { need(t, 2, "mine SHIP [x,y] | mine SHIP off"); most(t, 3, "mine SHIP [x,y] | mine SHIP off"); long id = Long.parseLong(t[1].replace("#", "")); boolean off = t.length > 2 && t[2].equalsIgnoreCase("off"); yield cmd(run, new Command.Mine(id, !off && t.length > 2 ? abs(v, t[2]) : null, off)); }
+                case "scrap" -> { need(t, 2, "scrap SHIP"); most(t, 2, "scrap SHIP"); yield cmd(run, new Command.Scrap(Long.parseLong(t[1].replace("#", "")))); }
                 case "macro", "macros" -> {
                     var mine = macros.list(a.id());
                     if (t.length >= 3 && t[1].equalsIgnoreCase("run")) {
@@ -155,7 +161,8 @@ public class Console {
                         boolean mixed = SectorSelector.isMixed(t[3]);
                         List<Command> cmds = new ArrayList<>();
                         for (Coord at : SectorSelector.expand(v, cfg, t[3])) cmds.addAll(org.hastingtx.empire.server.macro.Macros.expand(m.steps(), v, cfg, at, mixed));
-                        yield reply(games.commandAll(gameId, a, cmds, "console", "macro " + slot + " '" + m.name() + "'"));
+                        String note = "macro " + slot + " '" + m.name() + "'";
+                        yield check ? preview(run, cmds, note) : reply(games.commandAll(gameId, a, cmds, "console", note));
                     }
                     if (mine.isEmpty()) yield new Reply("no macros yet — record one from a sector's right-click menu", true, null, null);
                     StringBuilder sb = new StringBuilder();
@@ -167,33 +174,33 @@ public class Console {
                     // a dry run (playtest game 82, issue #155): the only way to learn what lay in a
                     // direction used to be to write a standing order there and read the reply
                     if (t[t.length - 1].equalsIgnoreCase("check")) {
-                        need(t, 5, "deliver COMMODITY SECTOR DIR [N] check");
+                        need(t, 5, "deliver COMMODITY SECTOR DIR [N] check"); most(t, 6, "deliver COMMODITY SECTOR DIR [N] check");
                         int pd = org.hastingtx.empire.engine.geo.Hex.parseDir(t[3]);
                         if (pd < 0) throw new IllegalArgumentException("direction is e, ne, nw, w, sw, se — got '" + t[3] + "'");
                         yield new Reply(probeDeliver(v, abs(v, t[2]), pd, t[1]), true, null, null);
                     }
                     boolean clear = t[3].equalsIgnoreCase("none") || t[3].equalsIgnoreCase("off");
-                    if (!clear) need(t, 5, "deliver COMMODITY SECTOR DIR N");
+                    if (!clear) need(t, 5, "deliver COMMODITY SECTOR DIR N"); most(t, 5, "deliver COMMODITY SECTOR DIR N");
                     int dir = clear ? -1 : org.hastingtx.empire.engine.geo.Hex.parseDir(t[3]);
                     if (!clear && dir < 0) throw new IllegalArgumentException("direction is e, ne, nw, w, sw, se (or the original's j u y g b n) — got '" + t[3] + "'");
                     double thr = clear ? 0 : Double.parseDouble(t[4]);
-                    yield many(gameId, a, v, cfg, t[2], at -> new Command.Deliver(at, t[1], clear ? null : dir, thr));
+                    yield many(run, cfg, t[2], at -> new Command.Deliver(at, t[1], clear ? null : dir, thr));
                 }
-                case "move" -> { need(t, 5, "move commodity from_x,y to_x,y qty"); yield cmd(gameId, a, new Command.Move(abs(v, t[2]), abs(v, t[3]), t[1], Double.parseDouble(t[4]))); }
-                case "rail" -> { need(t, 3, "rail SECTOR LEVEL"); double lvl = Double.parseDouble(t[2]); yield many(gameId, a, v, cfg, t[1], at -> new Command.BuildRail(at, lvl)); }
-                case "railship", "train" -> { need(t, 5, "railship COMMODITY from_x,y to_x,y qty"); yield cmd(gameId, a, new Command.RailShip(abs(v, t[2]), abs(v, t[3]), t[1], Double.parseDouble(t[4]))); }
+                case "move" -> { need(t, 5, "move commodity from_x,y to_x,y qty"); most(t, 5, "move commodity from_x,y to_x,y qty"); yield cmd(run, new Command.Move(abs(v, t[2]), abs(v, t[3]), t[1], Double.parseDouble(t[4]))); }
+                case "rail" -> { need(t, 3, "rail SECTOR LEVEL"); most(t, 3, "rail SECTOR LEVEL"); double lvl = Double.parseDouble(t[2]); yield many(run, cfg, t[1], at -> new Command.BuildRail(at, lvl)); }
+                case "railship", "train" -> { need(t, 5, "railship COMMODITY from_x,y to_x,y qty"); most(t, 5, "railship COMMODITY from_x,y to_x,y qty"); yield cmd(run, new Command.RailShip(abs(v, t[2]), abs(v, t[3]), t[1], Double.parseDouble(t[4]))); }
                 case "raillane" -> {
                     need(t, 3, "raillane x,y x2,y2 [COMMODITY ...] | raillane x,y x2,y2 none");
                     Coord from = abs(v, t[1]), to = abs(v, t[2]);
                     boolean off = t.length > 3 && t[3].equalsIgnoreCase("none");
-                    yield cmd(gameId, a, new Command.RailLane(from, to, off || t.length <= 3 ? List.of() : List.of(Arrays.copyOfRange(t, 3, t.length)), off));
+                    yield cmd(run, new Command.RailLane(from, to, off || t.length <= 3 ? List.of() : List.of(Arrays.copyOfRange(t, 3, t.length)), off));
                 }
-                case "road" -> { need(t, 3, "road SECTOR LEVEL"); double lvl = Double.parseDouble(t[2]); yield many(gameId, a, v, cfg, t[1], at -> new Command.BuildRoad(at, lvl)); }
+                case "road" -> { need(t, 3, "road SECTOR LEVEL"); most(t, 3, "road SECTOR LEVEL"); double lvl = Double.parseDouble(t[2]); yield many(run, cfg, t[1], at -> new Command.BuildRoad(at, lvl)); }
                 case "adjacent", "adj" -> {
-                    need(t, 2, "adjacent SECTOR");
+                    need(t, 2, "adjacent SECTOR"); most(t, 2, "adjacent SECTOR");
                     yield new Reply(adjacent(v, abs(v, t[1])), true, null, null);
                 }
-                case "expl", "explore" -> { need(t, 4, "expl from_x,y to_x,y civs"); yield cmd(gameId, a, new Command.Explore(abs(v, t[1]), abs(v, t[2]), Double.parseDouble(t[3]))); }
+                case "expl", "explore" -> { need(t, 4, "expl from_x,y to_x,y civs"); most(t, 4, "expl from_x,y to_x,y civs"); yield cmd(run, new Command.Explore(abs(v, t[1]), abs(v, t[2]), Double.parseDouble(t[3]))); }
                 default -> new Reply("", false, "unknown command '" + verb + "' (try help)", null);
             };
         } catch (IllegalArgumentException e) {
@@ -210,14 +217,147 @@ public class Console {
         return body;
     }
 
-    private Reply cmd(long gameId, Account a, Command c) { return reply(games.command(gameId, a, c, "console")); }
+    /** Who is typing, what they see, and whether they only want to look (a trailing {@code check}). */
+    private record Run(long gameId, Account a, CountryView v, boolean check) {}
+
+    private Reply cmd(Run r, Command c) { return r.check() ? preview(r, List.of(c), null) : reply(games.command(r.gameId(), r.a(), c, "console")); }
 
     /** The same verb on one sector or many: SECTOR is x,y · * · *:TYPE · x1:x2,y1:y2 (see {@link SectorSelector}). */
-    private Reply many(long gameId, Account a, CountryView v, GameConfig cfg, String sel, java.util.function.Function<Coord, Command> f) { return many(gameId, a, v, cfg, sel, f, null); }
+    private Reply many(Run r, GameConfig cfg, String sel, java.util.function.Function<Coord, Command> f) { return many(r, cfg, sel, f, null); }
 
-    private Reply many(long gameId, Account a, CountryView v, GameConfig cfg, String sel, java.util.function.Function<Coord, Command> f, String note) {
-        List<Command> cmds = SectorSelector.expand(v, cfg, sel).stream().map(f).toList();
-        return cmds.size() == 1 ? cmd(gameId, a, cmds.get(0)) : reply(games.commandAll(gameId, a, cmds, "console", note));
+    private Reply many(Run r, GameConfig cfg, String sel, java.util.function.Function<Coord, Command> f, String note) {
+        List<Command> cmds = SectorSelector.expand(r.v(), cfg, sel).stream().map(f).toList();
+        if (cmds.size() == 1) return cmd(r, cmds.get(0));
+        return r.check() ? preview(r, cmds, note) : reply(games.commandAll(r.gameId(), r.a(), cmds, "console", note));
+    }
+
+    /**
+     * The orders a {@code check} may preview. None has dice in it: a fight's rolls are seeded from the world, so a
+     * previewed attack, shot, bombing or spy mission would show exactly how the real one comes out. Moving ships and
+     * units is left out too — a preview would scout for free.
+     */
+    private static final Set<String> NOT_CHECKED = Set.of("deliver", "del", "tel", "telegram", "announce", "declare", "peace");
+
+    static final Set<String> PREVIEWABLE = Set.of("designate", "threshold", "demobilize", "enlist", "distribute", "move", "explore",
+            "build_road", "build_rail", "rail_ship", "rail_lane", "build_ship", "build_unit", "build_plane", "load", "unload", "lload", "lunload",
+            "lane", "fish", "mine", "supply", "scrap");
+
+    /**
+     * What an order would do, run against the world as it stands and thrown away (issues #272, #273): the
+     * executor's own answer, what it would cost, and every sector, ship and unit of yours it would change.
+     * Nothing is saved, logged or charged. An order that cannot be previewed is refused — never carried out.
+     */
+    private Reply preview(Run r, List<Command> cmds, String note) {
+        for (Command c : cmds)
+            if (!PREVIEWABLE.contains(c.verb())) return new Reply("", false, "'check' cannot preview " + c.verb() + " — only orders with no chance in them; nothing was done", null);
+        GameService.Preview p = games.preview(r.gameId(), r.a(), cmds, note);
+        GameService.Outcome o = p.outcome();
+        StringBuilder out = new StringBuilder("CHECK — nothing was done and nothing was charged. ");
+        if (!o.accepted()) return new Reply(out.append("It would be REFUSED: ").append(o.error()).toString(), true, null, null);
+        // explore's answer reads the new land's fertility, which stays hidden until somebody settles it: a free
+        // preview would be a free survey, so a checked explore says only that it would go, and what it would move
+        boolean surveys = cmds.stream().anyMatch(c -> c instanceof Command.Explore);
+        out.append("It would be accepted (").append(o.btuSpent()).append(" BTU)");
+        if (o.info() != null && !surveys) out.append(": ").append(o.info());
+        String changed = changes(p.before(), o.view());
+        out.append(changed.isEmpty() ? "\n  (it would change nothing you can see)" : "\n" + changed);
+        return new Reply(out.toString(), true, null, null);
+    }
+
+    /** Every sector, ship and unit of yours that differs between two views of the same country, one line each. */
+    static String changes(CountryView before, CountryView after) {
+        List<String> lines = new ArrayList<>();
+        Map<Coord, SectorView> now = new HashMap<>();
+        for (SectorView s : after.sectors()) now.put(s.at(), s);
+        for (SectorView b : before.sectors()) {
+            SectorView n = now.get(b.at());
+            if (n == null || (b.owner() != before.countryId() && n.owner() != after.countryId())) continue;
+            List<String> d = new ArrayList<>();
+            boolean wasMine = b.owner() == before.countryId();
+            if (b.owner() != n.owner()) d.add(n.owner() == after.countryId() ? "becomes yours" : "is no longer yours");
+            if (!wasMine) {   // what a neighbour's view showed of it is not a baseline: only what would arrive
+                amounts(d, "", Map.of(), n.stock());
+                if (!d.isEmpty()) lines.add("  " + rel(b.relative()) + ": " + String.join("; ", d));
+                continue;
+            }
+            if (!Objects.equals(b.designation(), n.designation())) d.add(b.designation() + " → " + n.designation());
+            if (Math.round(b.efficiency()) != Math.round(n.efficiency())) d.add("efficiency " + Math.round(b.efficiency()) + " → " + Math.round(n.efficiency()));
+            if (b.roadTarget() != n.roadTarget()) d.add("road target " + fmtQ(b.roadTarget()) + " → " + fmtQ(n.roadTarget()));
+            if (b.railTarget() != n.railTarget()) d.add("rail target " + fmtQ(b.railTarget()) + " → " + fmtQ(n.railTarget()));
+            amounts(d, "", b.stock(), n.stock());
+            amounts(d, "threshold ", b.thresholds(), n.thresholds());
+            amounts(d, "in transit ", b.held(), n.held());
+            if (!Objects.equals(b.distCenter(), n.distCenter())) d.add("centre " + centre(before, b.distCenter()) + " → " + centre(before, n.distCenter()));
+            Set<String> orders = new TreeSet<>();
+            if (b.deliveries() != null) orders.addAll(b.deliveries().keySet());
+            if (n.deliveries() != null) orders.addAll(n.deliveries().keySet());
+            for (String c : orders) {
+                var was = b.deliveries() == null ? null : b.deliveries().get(c);
+                var is = n.deliveries() == null ? null : n.deliveries().get(c);
+                if (!Objects.equals(was, is)) d.add("deliver " + c + " " + delivery(was) + " → " + delivery(is));
+            }
+            if (!d.isEmpty()) lines.add("  " + rel(b.relative()) + ": " + String.join("; ", d));
+        }
+        Map<Long, CountryView.ShipView> ships = new HashMap<>();
+        for (var s : before.ships()) ships.put(s.id(), s);
+        for (var s : after.ships()) {
+            var b = ships.remove(s.id());
+            List<String> d = new ArrayList<>();
+            if (b == null) d.add("new " + s.cls() + " at " + rel(s.relative()));
+            else {
+                amounts(d, "", b.stock(), s.stock());
+                if (!Objects.equals(b.mission(), s.mission())) d.add("mission " + (b.mission() == null ? "none" : b.mission()) + " → " + (s.mission() == null ? "none" : s.mission()));
+                if (!Objects.equals(b.homeRelative(), s.homeRelative())) d.add("home " + where(b.homeRelative()) + " → " + where(s.homeRelative()));
+                if (!Objects.equals(b.routeRelative(), s.routeRelative())) d.add("route " + route(b.routeRelative()) + " → " + route(s.routeRelative()));
+                if (!Objects.equals(b.lane(), s.lane())) d.add("lane " + lane(b.lane()) + " → " + lane(s.lane()));
+                if (!Objects.equals(b.destRelative(), s.destRelative())) d.add("bound for " + where(b.destRelative()) + " → " + where(s.destRelative()));
+            }
+            if (!d.isEmpty()) lines.add("  ship #" + s.id() + ": " + String.join("; ", d));
+        }
+        for (var s : ships.values()) lines.add("  ship #" + s.id() + ": gone");
+        Map<Long, CountryView.UnitView> units = new HashMap<>();
+        for (var u : before.units()) units.put(u.id(), u);
+        for (var u : after.units()) {
+            var b = units.remove(u.id());
+            List<String> d = new ArrayList<>();
+            if (b == null) d.add("new " + u.cls() + " at " + rel(u.relative()));
+            else amounts(d, "", b.stock(), u.stock());
+            if (!d.isEmpty()) lines.add("  unit #" + u.id() + ": " + String.join("; ", d));
+        }
+        List<CountryView.RailLaneView> railWas = before.railLanes() == null ? List.of() : before.railLanes(), railIs = after.railLanes() == null ? List.of() : after.railLanes();
+        for (var l : railIs) if (!railWas.contains(l)) lines.add("  new rail lane " + rel(l.fromRelative()) + " → " + rel(l.toRelative()) + (l.cargo().isEmpty() ? " (to its thresholds)" : " carrying " + String.join(", ", l.cargo())));
+        for (var l : railWas) if (!railIs.contains(l)) lines.add("  rail lane " + rel(l.fromRelative()) + " → " + rel(l.toRelative()) + " stops");
+        List<CountryView.TrainView> trainsWas = before.trains() == null ? List.of() : before.trains(), trainsIs = after.trains() == null ? List.of() : after.trains();
+        for (var t : trainsIs) if (!trainsWas.contains(t)) lines.add("  a train of " + fmtQ(t.qty()) + " " + t.commodity() + " at " + rel(t.relative()) + ", bound for " + where(t.destRelative()));
+        int planes = after.planes().size() - before.planes().size();
+        if (planes > 0) lines.add("  " + planes + " new plane" + (planes == 1 ? "" : "s"));
+        if (lines.size() > 12) { int more = lines.size() - 12; lines = new ArrayList<>(lines.subList(0, 12)); lines.add("  … and " + more + " more"); }
+        return String.join("\n", lines);
+    }
+
+    private static void amounts(List<String> d, String label, Map<String, Double> was, Map<String, Double> is) {
+        Set<String> keys = new TreeSet<>();
+        if (was != null) keys.addAll(was.keySet());
+        if (is != null) keys.addAll(is.keySet());
+        for (String k : keys) {
+            Double a = was == null ? null : was.get(k), b = is == null ? null : is.get(k);
+            double x = a == null || a.isNaN() ? 0 : a, y = b == null || b.isNaN() ? 0 : b;
+            boolean setA = a != null && !a.isNaN(), setB = b != null && !b.isNaN();
+            if (Math.abs(x - y) < 1e-9 && setA == setB) continue;
+            if (label.isEmpty()) d.add(k + " " + fmtQ(x) + " → " + fmtQ(y));
+            else d.add(label + k + " " + (setA ? fmtQ(x) : "none") + " → " + (setB ? fmtQ(y) : "none"));
+        }
+    }
+
+    private static String where(Coord rel) { return rel == null ? "nowhere" : rel(rel); }
+    private static String route(List<Coord> pts) { return pts == null || pts.isEmpty() ? "none" : String.join(" → ", pts.stream().map(Console::rel).toList()); }
+    private static String lane(CountryView.LaneView l) { return l == null ? "none" : rel(l.fromRelative()) + " ⇄ " + rel(l.toRelative()) + (l.cargo().isEmpty() ? "" : " carrying " + String.join(", ", l.cargo())); }
+    private static String centre(CountryView v, Coord c) { return c == null ? "none" : rel(rel(v, c)); }
+    private static String delivery(CountryView.Delivery d) { return d == null ? "none" : d.dir() + " above " + fmtQ(d.threshold()); }
+
+    /** The words after the last one a verb reads are a mistake, not a comment (issue #272): refuse them rather than ignore them. */
+    private static void most(String[] t, int n, String usage) {
+        if (t.length > n) throw new IllegalArgumentException("usage: " + usage + " — did not expect '" + String.join(" ", Arrays.copyOfRange(t, n, t.length)) + "'");
     }
 
     private static Reply reply(GameService.Outcome o) {
