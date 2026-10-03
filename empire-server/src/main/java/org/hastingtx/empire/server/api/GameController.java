@@ -147,7 +147,7 @@ public class GameController {
                 case "deliver" -> {
                     boolean off = Boolean.TRUE.equals(clear) || direction == null || direction.isBlank() || direction.equalsIgnoreCase("none");
                     int d = off ? -1 : Hex.parseDir(direction);
-                    if (!off && d < 0) throw new IllegalArgumentException("direction is e, ne, nw, w, sw or se");
+                    if (!off && d < 0) throw new IllegalArgumentException(Hex.dirError(direction));
                     yield new Command.Deliver(need(at), commodity, off ? null : d, amount == null ? 0 : amount);
                 }
                 case "move" -> new Command.Move(need(at), at(x2, y2), commodity, amount == null ? 0 : amount);

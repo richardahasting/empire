@@ -126,5 +126,13 @@ class DeliverTest {
         assertThat(Hex.parseDir("u")).isEqualTo(1);
         assertThat(Hex.parseDir("g")).isEqualTo(3);
         assertThat(Hex.parseDir("x")).isEqualTo(-1);
+        // issue #265: "n" is the original's key for se, but typed as a compass point it means north, and "north"
+        // shortened to it — food went south-east into the sea. A hex has no due north or south; both are refused.
+        for (String pole : new String[] {"n", "N", "north", "North", "s", "south"})
+            assertThat(Hex.parseDir(pole)).as(pole).isEqualTo(-1);
+        assertThat(Hex.dirError("north")).contains("no due north: ne or nw");
+        assertThat(Hex.dirError("s")).contains("no due south: se or sw");
+        assertThat(Hex.dirError("x")).doesNotContain("due");
+        assertThat(Hex.parseDir("b")).as("the other original keys still work").isEqualTo(4);
     }
 }
