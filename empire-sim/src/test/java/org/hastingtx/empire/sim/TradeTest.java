@@ -143,6 +143,27 @@ class TradeTest {
     }
 
     @Test
+    void whatIsCapturedIsNoLongerFrozenForItsNewOwner() {
+        World w = ok(world(), 0, new Command.SetPrice("unit", List.of(1L), 2000));
+        World taken = w.withUnit(w.unit(1).withOwner(1));
+        assertThat(taken.onTheBlock(TradeLot.UNIT, 1)).as("their lot does not bind the captor").isNull();
+        assertThat(EX.execute(taken, 1, new Command.March(1, CAP)).error()).doesNotContain("for sale");
+    }
+
+    @Test
+    void aShipForSaleStopsNobody() {
+        var dc = CFG.units().ships().shipClass("destroyer");
+        Ship guard = new Ship(1, 0, "destroyer", "", HARBOUR, 100, Stocks.zero(COM.size()).with(COM.index("gun"), dc.gunsOr0()).with(COM.index("shell"), 20),
+                null, null, 0, "", 100, null, null, dc.tankOr0(), dc.crewOr0()).withOrders(Ship.BLOCKADE, HARBOUR, List.of(HARBOUR), 0);
+        World w = world().withShip(guard).withRelations(List.of(Relation.of(0, 1, Relation.WAR, 0, null)));
+        Ship mover = new Ship(9, 1, "cargo_ship", "", Hex.stepRaw(CAP, 0, 3), 100, Stocks.zero(COM.size()), null, null, 0, "", 50, null, null, 100, 10);
+        List<Coord> path = List.of(mover.at(), HARBOUR);
+        assertThat(org.hastingtx.empire.engine.combat.Blockade.limit(w, CFG, mover, path, 1, w.updateNumber()).by()).as("on station, she stops it").isNotNull();
+        w = ok(w, 0, new Command.SetPrice("ship", List.of(1L), 20000));
+        assertThat(org.hastingtx.empire.engine.combat.Blockade.limit(w, CFG, mover, path, 1, w.updateNumber()).by()).as("for sale, she does not").isNull();
+    }
+
+    @Test
     void aLotGoesWithWhatItSold() {
         World w = ok(world(), 0, new Command.SetPrice("ship", List.of(1L), 20000));
         w = updates(w.withoutShip(1), 1);

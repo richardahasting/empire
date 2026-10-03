@@ -93,7 +93,8 @@ public final class MarketStep implements Step {
                 case TradeLot.SHIP -> {
                     Ship s = ctx.ships.get(at);
                     ctx.ships.set(at, s.soldTo(lot.bidder()).withNote("bought from " + seller));
-                    for (int k = 0; k < ctx.units.size(); k++) if (ctx.units.get(k).ship() == s.id()) ctx.units.set(k, ctx.units.get(k).withOwner(lot.bidder()));   // aboard her, sold with her
+                    for (int k = 0; k < ctx.units.size(); k++)   // the seller's units aboard her are sold with her; anyone else's stay theirs
+                        if (ctx.units.get(k).ship() == s.id() && ctx.units.get(k).owner() == lot.owner()) ctx.units.set(k, ctx.units.get(k).withOwner(lot.bidder()));
                 }
                 case TradeLot.PLANE -> ctx.planes.set(at, ctx.planes.get(at).withOwner(lot.bidder()).withAt(lot.dest()).withNote("bought from " + seller));
                 default -> ctx.units.set(at, ctx.units.get(at).withOwner(lot.bidder()).withAt(lot.dest()).withMobility(0).withNote("bought from " + seller));

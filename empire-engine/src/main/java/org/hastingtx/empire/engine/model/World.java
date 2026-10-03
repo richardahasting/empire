@@ -157,8 +157,22 @@ public record World(
     public World withTrade(TradeLot l) { List<TradeLot> copy = new ArrayList<>(trades); for (int i = 0; i < copy.size(); i++) if (copy.get(i).id() == l.id()) { copy.set(i, l); return withTrades(copy, nextTradeId); } copy.add(l); return withTrades(copy, Math.max(nextTradeId, l.id() + 1)); }
     public World withoutTrade(long id) { List<TradeLot> copy = new ArrayList<>(trades); copy.removeIf(x -> x.id() == id); return withTrades(copy, nextTradeId); }
     public TradeLot trade(long id) { for (TradeLot l : trades) if (l.id() == id) return l; return null; }
-    /** The lot a ship, plane or unit is on, or null if it is not for sale (issue #141). */
-    public TradeLot onTheBlock(String kind, long item) { for (TradeLot l : trades) if (l.kind().equals(kind) && l.item() == item) return l; return null; }
+    /**
+     * The lot a ship, plane or unit is on, or null if it is not for sale (issue #141). Only while it is still its seller's:
+     * one captured or sunk since is no longer theirs to sell, and its new owner is not bound by their lot.
+     */
+    public TradeLot onTheBlock(String kind, long item) {
+        for (TradeLot l : trades) {
+            if (!l.kind().equals(kind) || l.item() != item) continue;
+            int owner = switch (kind) {
+                case TradeLot.SHIP -> { Ship s = ship(item); yield s == null ? -2 : s.owner(); }
+                case TradeLot.PLANE -> { Plane p = plane(item); yield p == null ? -2 : p.owner(); }
+                default -> { LandUnit u = unit(item); yield u == null ? -2 : u.owner(); }
+            };
+            return owner == l.owner() ? l : null;
+        }
+        return null;
+    }
 
     public LandUnit unit(long id) { for (LandUnit u : units) if (u.id() == id) return u; return null; }
     public World withoutShip(long id) { List<Ship> copy = new ArrayList<>(ships); copy.removeIf(x -> x.id() == id); return withShips(copy); }
