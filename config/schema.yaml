@@ -1118,6 +1118,22 @@ units:
       abm_efficiency: 100             # KNOWN msl_sel: an ABM fires only at 100%
       abms_per_missile: 2             # KNOWN msl_abm_intercept: at most two rise, the target's owner's first
       sam_min_cost: 1000              # KNOWN sam_intercept: a SAM bothers only with a plane costing $1000 or more
+      # KNOWN msl_launch: blows up on the pad with chance (pad_fail_base + (100 − eff)/100) × (1 − (tech + pad_fail_tech)/(tech + pad_fail_tech_scale))
+      pad_fail_base: 0.05
+      pad_fail_tech: 50
+      pad_fail_tech_scale: 200
+      # KNOWN plnsub.c pln_hitchance: eff × (1 − hit_tech_penalty × tfact) × (1 − acc/100) − hardness, tfact =
+      # (tech − req)/(tech − req/hit_tech_divisor); under hit_floor it becomes hit_floor_base + hit_floor_scale/(hit_floor_offset − hc)
+      hit_tech_penalty: 0.1
+      hit_tech_divisor: 2
+      hit_floor: 20
+      hit_floor_base: 5
+      hit_floor_scale: 300
+      hit_floor_offset: 40
+      # KNOWN shpsub.c shp_hardtarget: eff/100 × (hard_target_base + speed/hard_target_speed_divisor, at sea only − visibility).
+      # GUESS: our ship classes carry no visibility; her sight stands in (the bigger she is, the further she sees and is seen)
+      hard_target_base: 20
+      hard_target_speed_divisor: 2
     capture_loss_base: 29             # KNOWN takeover.c takeover_plane: a plane on a sector taken loses 29 + roll(100);
     capture_loss_roll: 100            #   below the minimum its crew blows it up, otherwise it is captured
     # Air transport (issue #71): fly, drop, paradrop — KNOWN commands/{fly,drop,para}.c, plnsub.c pln_equip.

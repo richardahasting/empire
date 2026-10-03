@@ -69,7 +69,10 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
                                int intensityDice, int intensityDie, int intensityAdd, double oddsFloor) {}
 
     /** KNOWN laun.c and mslsub.c: who may be launched, and what rises against a missile or a costly plane. */
-    public record MissilesCfg(double minEfficiency, double abmEfficiency, int abmsPerMissile, double samMinCost) {}
+    public record MissilesCfg(double minEfficiency, double abmEfficiency, int abmsPerMissile, double samMinCost,
+                              double padFailBase, double padFailTech, double padFailTechScale,
+                              double hitTechPenalty, double hitTechDivisor, double hitFloor, double hitFloorBase, double hitFloorScale, double hitFloorOffset,
+                              double hardTargetBase, double hardTargetSpeedDivisor) {}
 
     /** KNOWN commands/{fly,drop,para}.c, plnsub.c pln_equip and attsub.c. */
     public record TransportCfg(double landingMinEfficiency, double flyLoadMultiple, double dropLoadMultiple, List<String> noParadropTerrain,

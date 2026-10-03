@@ -85,9 +85,14 @@ class MissileTest {
     void anAntiShipMissileGoesAtAShip() {
         World w = plane(world(true), 1, 0, "harpoon", FIELD);
         var dc = CFG.units().ships().shipClass("destroyer");
-        Coord sea = Hex.stepRaw(CAP, 0, 5);
+        Coord sea = Hex.stepRaw(FIELD, 1, 1), far = Hex.stepRaw(CAP, 0, 6);   // one beside your airfield, one out of sight
+        World hidden = w.withShip(new Ship(9, 1, "destroyer", "", far, 100, Stocks.zero(COM.size()), null, null, 0, "", 100, null, null, dc.tankOr0(), dc.crewOr0()));
+        assertThat(EX.execute(hidden, 0, new Command.Launch(1, null, 9)).error()).as("no oracle").isEqualTo("no ship #9 in sight to fire on");
+        assertThat(EX.execute(hidden, 0, new Command.Launch(1, null, 77)).error()).isEqualTo("no ship #77 in sight to fire on");
+        assertThat(EX.execute(hidden, 0, new Command.Launch(1, far, 0)).error()).contains("not in sight");
         w = w.withShip(new Ship(9, 1, "destroyer", "", sea, 100, Stocks.zero(COM.size()), null, null, 0, "", 100, null, null, dc.tankOr0(), dc.crewOr0()));
-        assertThat(EX.execute(w, 0, new Command.Launch(1, THEIRS, 0)).error()).contains("is fired at a ship");
+        assertThat(EX.execute(w, 0, new Command.Launch(1, THEIRS, 0)).error()).contains("no enemy ship in sight");
+        assertThat(EX.execute(w, 0, new Command.Launch(1, sea, 0)).error()).as("a sector you see names her").isNull();
         int hits = 0;
         for (int u = 0; u < 20; u++) {
             CommandResult r = EX.execute(w.withUpdateNumber(u), 0, new Command.Launch(1, null, 9));
@@ -109,5 +114,7 @@ class MissileTest {
         assertThat(EX.execute(fighter, 0, new Command.Recon(1, Hex.stepRaw(CAP, 0, 4))).error()).isNull();
         assertThat(EX.execute(fighter, 0, new Command.Recon(1, Hex.stepRaw(CAP, 0, 4))).info()).doesNotContain("SAM");
         assertThat(cheap).isNotNull();
+        CommandResult guard = EX.execute(plane(world(true), 2, 0, "sam", FIELD), 0, new Command.AirMission(2, FIELD, 2, false));
+        assertThat(guard.error()).as("a SAM may be set on air defence").isNull();
     }
 }

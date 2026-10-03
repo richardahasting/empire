@@ -26,7 +26,7 @@ export function Air({ view, busy, onCommand }: { view: CountryView; busy: boolea
             <span className="font-medium">{p.name}</span>
             <span className="text-muted-foreground">
               at {rel(p.relative)} · {p.efficiency.toFixed(0)}% · {p.load > 0 ? `${p.load.toFixed(0)} bombs · ` : ""}accuracy {p.accuracy.toFixed(0)}% · strikes {Math.floor(p.reach)} hexes
-              {p.intercept ? " · fighter: rises against raids, can escort" : p.escort ? " · escort" : ""}{p.intercept || p.escort ? ` · attack ${p.attack.toFixed(1)}, defence ${p.defense.toFixed(1)}` : ""}
+              {p.missile ? "" : p.intercept ? " · fighter: rises against raids, can escort" : p.escort ? " · escort" : ""}{!p.missile && (p.intercept || p.escort) ? ` · attack ${p.attack.toFixed(1)}, defence ${p.defense.toFixed(1)}` : ""}
             </span>
           </div>
           {p.aboard !== 0 && <div>Aboard ship #{p.aboard}: it flies from her, on her petrol and shells.</div>}
@@ -34,7 +34,11 @@ export function Air({ view, busy, onCommand }: { view: CountryView; busy: boolea
           {p.note && <div className="text-muted-foreground">{p.note}</div>}
           {p.efficiency < 80 && <div className="text-destructive">Shot up: it may turn back before it gets there. Leave it on the field to be fitted out.</div>}
           {p.missile && <div>{p.rises ? "A missile that rises by itself against what comes at you — never launched." : "A missile: launched once, and spent."}</div>}
-          {p.missile && !p.rises && <div className="mt-1"><Button size="sm" variant="secondary" disabled={busy} onClick={() => setDialog({ kind: "launch", plane: p })}>Launch…</Button></div>}
+          {p.missile && <div className="mt-1 flex flex-wrap gap-1">
+            {!p.rises && <Button size="sm" variant="secondary" disabled={busy} onClick={() => setDialog({ kind: "launch", plane: p })}>Launch…</Button>}
+            {p.intercept && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "defend", plane: p })}>Air defence…</Button>}
+            {p.opRelative && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: "air_defence", plane: p.id, clear: true })}>Off air defence</Button>}
+          </div>}
           {!p.missile && <div className="mt-1 flex flex-wrap gap-1">
             {p.load > 0 && <Button size="sm" variant="secondary" disabled={busy} onClick={() => setDialog({ kind: "bomb", plane: p })}>Bomb…</Button>}
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "recon", plane: p })}>Reconnoitre…</Button>
@@ -59,7 +63,7 @@ function SortieDialog({ kind, plane, view, busy, onClose, onCommand }:
   const [to, setTo] = useState("");
   const [raid, setRaid] = useState(plane.tactical ? "pinpoint" : "strategic");
   const [escorts, setEscorts] = useState<number[]>([]);
-  const canEscort = (view.planes ?? []).filter(p => p.id !== plane.id && (p.intercept || p.escort));
+  const canEscort = (view.planes ?? []).filter(p => p.id !== plane.id && !p.missile && (p.intercept || p.escort));
   const toggle = (id: number) => setEscorts(e => e.includes(id) ? e.filter(x => x !== id) : [...e, id]);
   const [tx, ty] = to.split(",").map(s => Number(s.trim()));
   const target = Number.isFinite(tx) && Number.isFinite(ty) ? view.sectors.find(s => s.relative.x === tx && s.relative.y === ty) : undefined;
@@ -177,7 +181,7 @@ function DefendDialog({ plane, view, busy, onClose, onCommand }: { plane: PlaneV
 function TransportDialog({ kind, plane, view, busy, onClose, onCommand }:
   { kind: "fly" | "drop" | "paradrop"; plane: PlaneView; view: CountryView; busy: boolean; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void> }) {
   const field = view.sectors.find(s => s.at.x === plane.at.x && s.at.y === plane.at.y);
-  const mates = (view.planes ?? []).filter(p => p.id !== plane.id && p.at.x === plane.at.x && p.at.y === plane.at.y && (kind === "fly" || (kind === "drop" ? p.cargo : p.para)));
+  const mates = (view.planes ?? []).filter(p => p.id !== plane.id && !p.missile && p.at.x === plane.at.x && p.at.y === plane.at.y && (kind === "fly" || (kind === "drop" ? p.cargo : p.para)));
   const [with_, setWith] = useState<number[]>([]);
   const [to, setTo] = useState("");
   const [what, setWhat] = useState("");
@@ -234,25 +238,21 @@ function TransportDialog({ kind, plane, view, busy, onClose, onCommand }:
 /** Launch a missile (issue #71; the original's launch): once, one way, and it is spent; an anti-ship missile goes at a ship. */
 function LaunchDialog({ plane, view, busy, onClose, onCommand }: { plane: PlaneView; view: CountryView; busy: boolean; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void> }) {
   const [to, setTo] = useState("");
-  const [ship, setShip] = useState("");
   const [tx, ty] = to.split(",").map(s => Number(s.trim()));
   const target = Number.isFinite(tx) && Number.isFinite(ty) ? view.sectors.find(s => s.relative.x === tx && s.relative.y === ty) : undefined;
-  const ok = plane.marine ? ship !== "" && Number.isInteger(Number(ship)) : !!target && target.owner >= 0 && target.owner !== view.countryId;
+  const ok = !!target && (plane.marine ? target.owner !== view.countryId : target.owner >= 0 && target.owner !== view.countryId);
   return (
     <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent>
         <DialogHeader><DialogTitle>Launch {plane.name} #{plane.id}</DialogTitle>
           <DialogDescription>Once, and it is spent. It flies {Math.floor(plane.reach * 2)} hexes, one way; no fighter or flak can touch it, though it may fail on the pad and the enemy's ABMs may meet it. At war only.</DialogDescription></DialogHeader>
         <div className="grid gap-3 text-sm">
-          {plane.marine
-            ? <label className="grid gap-1">At ship number<Input value={ship} onChange={e => setShip(e.target.value)} inputMode="numeric" autoFocus /></label>
-            : <label className="grid gap-1">At (x,y)<Input value={to} onChange={e => setTo(e.target.value)} autoFocus /></label>}
+          <label className="grid gap-1">{plane.marine ? "At an enemy ship you see (x,y)" : "At (x,y)"}<Input value={to} onChange={e => setTo(e.target.value)} autoFocus /></label>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button variant="danger" disabled={busy || !ok} onClick={async () => {
-            if (plane.marine) await onCommand({ verb: "launch", plane: plane.id, ship: Number(ship) });
-            else if (target) await onCommand({ verb: "launch", plane: plane.id, x: target.at.x, y: target.at.y });
+            if (target) await onCommand({ verb: "launch", plane: plane.id, x: target.at.x, y: target.at.y });
             onClose();
           }}>Launch</Button>
         </DialogFooter>

@@ -7,6 +7,7 @@ import org.hastingtx.empire.engine.model.*;
 import org.hastingtx.empire.engine.update.Ledger;
 import org.hastingtx.empire.engine.update.Rng;
 import org.hastingtx.empire.engine.update.steps.UnrestStep;
+import org.hastingtx.empire.engine.view.Visibility;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -24,28 +25,22 @@ final class Missiles {
 
     private static String q(double v) { return Ledger.q(v); }
 
-    /** KNOWN plane.c: accuracy improves with tech above the class's, acc × (1 − √t / 50). */
-    private static double accuracy(UnitsCfg.PlaneClassCfg cls, Plane p) {
-        double t = Math.max(0, p.tech() - cls.techRequired());
-        return Math.max(0, cls.accuracy() * (1 - Math.sqrt(t) / 50));
-    }
-
     /**
-     * KNOWN plnsub.c pln_hitchance: efficiency × (1 − 0.1 tfact) × (1 − acc/100) − how hard the target is; under 20 it is
-     * 5 + 300/(40 − hc); at most 100. Returned as a chance, 0..1.
+     * KNOWN plnsub.c pln_hitchance: efficiency × (1 − penalty × tfact) × (1 − acc/100) − how hard the target is; low
+     * chances are lifted to a floor curve; at most 100. Returned as a chance, 0..1. The constants are {@code planes.missiles}.
      */
-    static double hitChance(UnitsCfg.PlaneClassCfg cls, Plane p, double hard) {
+    static double hitChance(UnitsCfg.MissilesCfg mc, UnitsCfg.PlaneClassCfg cls, Plane p, double hard) {
         double t = p.tech() - cls.techRequired();
-        double denom = p.tech() - cls.techRequired() / 2.0;
+        double denom = p.tech() - cls.techRequired() / mc.hitTechDivisor();
         double tfact = t <= 0 || denom <= 0 ? 0 : t / denom;
-        double hc = p.efficiency() * (1 - 0.1 * tfact) * (1 - accuracy(cls, p) / 100) - hard;
-        if (hc < 20) hc = 5 + 300 / (40 - hc);
+        double hc = p.efficiency() * (1 - mc.hitTechPenalty() * tfact) * (1 - cls.accuracyAt(p.tech()) / 100) - hard;
+        if (hc < mc.hitFloor()) hc = mc.hitFloorBase() + mc.hitFloorScale() / (mc.hitFloorOffset() - hc);
         return Math.max(0, Math.min(100, hc)) / 100;
     }
 
-    /** KNOWN msl_launch: it blows up on the pad with chance (0.05 + (100 − eff)/100) × (1 − (50 + tech)/(200 + tech)). */
-    static boolean blowsUp(UnrestStep.R r, Plane p) {
-        return r.chance((0.05 + (100 - p.efficiency()) / 100) * (1 - (50 + p.tech()) / (200 + p.tech())));
+    /** KNOWN msl_launch: it blows up on the pad, less often the fitter and higher-tech it is ({@code planes.missiles.pad_fail_*}). */
+    static boolean blowsUp(UnitsCfg.MissilesCfg mc, UnrestStep.R r, Plane p) {
+        return r.chance((mc.padFailBase() + (100 - p.efficiency()) / 100) * (1 - (mc.padFailTech() + p.tech()) / (mc.padFailTechScale() + p.tech())));
     }
 
     /**
@@ -59,7 +54,7 @@ final class Missiles {
         int load = (int) cls.loadAt(p.tech());
         if (load < 1) return 0;
         boolean pin = cls.has("marine");
-        double acc = accuracy(cls, p);
+        double acc = cls.accuracyAt(p.tech());
         double aim = ship ? 100 - acc : bc.strategicAimBase() + (pin ? acc : 100 - acc);
         int heads = Math.min(r.roll(load) + 1, load);
         double dam = 0;
@@ -93,11 +88,22 @@ final class Missiles {
         Ship targetShip = null;
         Coord at = l.at();
         if (cls.has("marine")) {
-            targetShip = l.ship() == 0 ? null : w.ship(l.ship());
-            if (targetShip == null) return CommandResult.fail(w, "a " + cls.name() + " is fired at a ship: launch " + p.id() + " ship N");
-            if (targetShip.owner() == c.id()) return CommandResult.fail(w, "ship #" + targetShip.id() + " is yours");
-            var tcls = cfg.units().ships().shipClass(targetShip.cls());
-            if (tcls.submarine()) return CommandResult.fail(w, "a " + cls.name() + " cannot find a submarine");   // KNOWN laun.c:210
+            // only at a ship you can see: one answer for no such ship, a submarine, and one out of sight (KNOWN laun.c:200-212
+            // "Bad ship number!"), so a launch is no oracle for where the enemy's fleet is
+            Set<Coord> seen = Visibility.of(w, cfg, c.id());
+            if (l.ship() != 0) {
+                Ship s = w.ship(l.ship());
+                if (s != null && s.owner() == c.id()) return CommandResult.fail(w, "ship #" + s.id() + " is yours");
+                targetShip = s != null && seen.contains(s.at()) && !cfg.units().ships().shipClass(s.cls()).submarine() ? s : null;
+                if (targetShip == null) return CommandResult.fail(w, "no ship #" + l.ship() + " in sight to fire on");
+            } else if (at != null && w.inBounds(at)) {
+                // NEW: foreign ships reach you as contacts, with no number, so a sector you see names the target too
+                Coord there = at;
+                if (!seen.contains(there)) return CommandResult.fail(w, there + " is not in sight");
+                targetShip = w.ships().stream().filter(s -> s.at().equals(there) && s.owner() != c.id() && w.atWar(c.id(), s.owner())
+                        && !cfg.units().ships().shipClass(s.cls()).submarine()).min(Comparator.comparingLong(Ship::id)).orElse(null);
+                if (targetShip == null) return CommandResult.fail(w, "no enemy ship in sight at " + there + " to fire on");
+            } else return CommandResult.fail(w, "a " + cls.name() + " is fired at a ship: launch " + p.id() + " x,y at one you see, or launch " + p.id() + " ship N");
             if (!w.atWar(c.id(), targetShip.owner())) return CommandResult.fail(w, "ship #" + targetShip.id() + " is " + w.country(targetShip.owner()).name() + "'s; you may fire on her only at war");
             at = targetShip.at();
         } else {
@@ -118,7 +124,7 @@ final class Missiles {
         World next = base.take(w, shell, warhead).withoutPlane(p.id());
         UnrestStep.R r = new UnrestStep.R(Rng.stream("launch:" + p.id() + ">" + at + ":" + w.updateNumber(), cfg.world() == null ? 0 : cfg.world().seed()));
         String name = cls.name() + " #" + p.id();
-        if (blowsUp(r, p)) return new CommandResult(next, null, 0, name + " blew up on launch");
+        if (blowsUp(mc, r, p)) return new CommandResult(next, null, 0, name + " blew up on launch");
         if (targetShip == null) {
             // ABMs rise against a missile aimed at a sector (KNOWN msl_abm_intercept)
             Intercepted abm = abms(cfg, r, next, c, p, cls, at, w.sector(at).owner());
@@ -129,11 +135,12 @@ final class Missiles {
             return new CommandResult(next, null, 0, name + " launched at " + at + (abm.story().isEmpty() ? "" : "; " + abm.story())
                     + ": it hit — " + dam + "% of everything " + w.country(w.sector(at).owner()).name() + " had there");
         }
-        // at a ship (KNOWN laun.c, shp_hardtarget): harder the faster she goes and the less there is of her to see
+        // at a ship (KNOWN laun.c, shp_hardtarget): harder the faster she can turn away at sea, easier the more of her to see
         var sc = cfg.units().ships();
         var tcls = sc.shipClass(targetShip.cls());
-        double hard = targetShip.efficiency() / 100 * (20 + tcls.speed() / 2 - sc.sightOf(tcls));
-        if (!r.chance(hitChance(cls, p, hard))) return new CommandResult(next, null, 0, name + " launched at ship #" + targetShip.id() + ": a splash, and a miss");
+        double speed = next.sector(targetShip.at()).terrain() == Terrain.OCEAN ? tcls.speed() / mc.hardTargetSpeedDivisor() : 0;
+        double hard = targetShip.efficiency() / 100 * (mc.hardTargetBase() + speed - sc.sightOf(tcls));
+        if (!r.chance(hitChance(mc, cls, p, hard))) return new CommandResult(next, null, 0, name + " launched at ship #" + targetShip.id() + ": a splash, and a miss");
         int dam = damage(cfg, r, cls, p, true);
         double hull = dam / (1 + tcls.armorOr0() / 100);
         Ship hit = targetShip.withEfficiency(targetShip.efficiency() - hull);
@@ -169,8 +176,8 @@ final class Missiles {
         for (Plane a : abms.subList(0, Math.min(mc.abmsPerMissile(), abms.size()))) {
             UnitsCfg.PlaneClassCfg ac = pc.planeClass(a.cls());
             w = w.withoutPlane(a.id());
-            if (blowsUp(r, a)) { story.add("an ABM of " + w.country(a.owner()).name() + " blew up on launch"); continue; }
-            if (r.chance(hitChance(ac, a, mcls.defenseAt(missile.tech())))) {
+            if (blowsUp(mc, r, a)) { story.add("an ABM of " + w.country(a.owner()).name() + " blew up on launch"); continue; }
+            if (r.chance(hitChance(mc, ac, a, mcls.defenseAt(missile.tech())))) {
                 story.add("an ABM of " + w.country(a.owner()).name() + " shot it down");
                 return new Intercepted(w, true, String.join("; ", story));
             }

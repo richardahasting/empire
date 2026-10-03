@@ -185,7 +185,9 @@ a carrier. Build them on an airfield like any plane.
   at war with you rise against it (the target's owner's first), each spent, each able to fail on
   its own pad; one that flies brings it down with a chance against the missile's defence. If it
   gets through it **always hits**: damage as a strategic raid, to everything in the sector.
-- **`launch HARPOON ship N`** at an enemy ship, at war (not a submarine). It may miss — a fast,
+- **`launch HARPOON x,y`** at an enemy ship you can see there (the lowest-numbered surface ship of a
+  country at war with you), or **`launch HARPOON ship N`** at one you can see by number; a ship
+  out of sight, a submarine and a number that is no ship all get the same answer. It may miss — a fast,
   small ship is harder to hit — and a hit does its damage to her hull, divided by her armour;
   it can sink her.
 - **SAMs** rise like fighters (over their own land, or anywhere in their air-defence area), but
