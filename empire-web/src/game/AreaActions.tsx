@@ -10,6 +10,8 @@ interface Props {
   /** The selected sectors, absolute; only ones this country holds. */
   area: Coord[];
   onCommand: (c: CommandRequest) => Promise<void>;
+  /** Several orders as one action, reported together (issue #316). */
+  onCommands: (cs: CommandRequest[]) => Promise<void>;
   onClear: () => void;
   /** Start picking a distribution centre on the map for every sector in the selection. */
   onPickCentre: () => void;
@@ -21,7 +23,7 @@ interface Props {
  * goes to the server as one mass command over the listed sectors, so each sector pays its own BTU and a
  * sector that refuses (wrong terrain, not enough tech) is reported rather than stopping the rest.
  */
-export function AreaActions({ view, rules, busy, area, onCommand, onClear, onPickCentre }: Props) {
+export function AreaActions({ view, rules, busy, area, onCommand, onCommands, onClear, onPickCentre }: Props) {
   const keys = useMemo(() => new Set(area.map(c => `${c.x},${c.y}`)), [area]);
   const sectors = useMemo(() => view.sectors.filter(s => keys.has(`${s.at.x},${s.at.y}`)), [view, keys]);
   const byType = useMemo(() => {
@@ -51,7 +53,7 @@ export function AreaActions({ view, rules, busy, area, onCommand, onClear, onPic
       if (!groups.has(k)) groups.set(k, { at: w.sector.at, sectors: [] });
       groups.get(k)!.sectors.push(s.at);
     }
-    for (const g of groups.values()) await onCommand({ verb: "distribute", x2: g.at.x, y2: g.at.y, sectors: g.sectors });
+    await onCommands([...groups.values()].map(g => ({ verb: "distribute", x2: g.at.x, y2: g.at.y, sectors: g.sectors })));
   };
   const cost = (verb: string) => (rules.btuCosts?.[verb] ?? rules.btuCosts?.default ?? 1) * area.length;
 

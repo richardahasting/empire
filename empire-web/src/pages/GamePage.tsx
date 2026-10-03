@@ -101,6 +101,24 @@ export function GamePage() {
     } catch (e) { setNotice((e as Error).message); } finally { setBusy(false); }
   }, [gameId, recording, view]);
 
+  /**
+   * Several orders as one action (issue #316): in turn, under one busy window, and one notice that says how each went —
+   * so a group that was refused is not hidden behind the last one's "ok". Stops at the first refused for want of BTUs.
+   */
+  const commandAll = useCallback(async (cs: CommandRequest[]) => {
+    setBusy(true); setNotice(null);
+    const lines: string[] = [];
+    try {
+      for (const c of cs) {
+        const o = await api.post<Outcome>(`/games/${gameId}/command`, c);
+        setView(o.view);
+        lines.push(o.accepted ? `${c.verb}: ${o.info ?? "ok"} (${o.btuSpent} BTU)` : `${c.verb}: ${o.error}`);
+        if (o.accepted && recording && view) { const step = stepFromCommand(c, view); if (step) setRecording(r => r ? { ...r, steps: [...r.steps, step] } : r); }
+        if (!o.accepted && /btu/i.test(o.error ?? "")) { lines.push(`stopped: ${cs.length - lines.length} more not sent`); break; }
+      }
+    } catch (e) { lines.push((e as Error).message); } finally { setNotice(lines.join(" · ")); setBusy(false); }
+  }, [gameId, recording, view]);
+
   const saveMacro = useCallback(async (m: Macro) => {
     try { const saved = await macrosApi.save(m); setMacros(ms => [...ms.filter(x => x.slot !== saved.slot), saved].sort((a, b) => a.slot - b.slot)); setNotice(`macro ${saved.slot === 10 ? 0 : saved.slot} "${saved.name}" saved: ${saved.steps.length} step${saved.steps.length === 1 ? "" : "s"}`); }
     catch (e) { setNotice((e as Error).message); }
@@ -311,7 +329,7 @@ export function GamePage() {
           {rules.planes && <div className="max-h-[22%] overflow-auto rounded-lg border border-border bg-card p-3"><div className="mb-1 text-xs font-medium">Air force{(view.planes ?? []).length ? ` (${(view.planes ?? []).length})` : ""}</div><Air view={view} rules={rules} busy={busy} onCommand={command} /></div>}
           {rules.market && <div className="max-h-[22%] overflow-auto rounded-lg border border-border bg-card p-3"><div className="mb-1 text-xs font-medium">Market{(view.market ?? []).length ? ` (${(view.market ?? []).length})` : ""}</div><Market view={view} rules={rules.market} sectorRules={rules} busy={busy} onCommand={command} /></div>}
           <div className="max-h-[40%] overflow-auto rounded-lg border border-border bg-card p-3">{area.length > 0
-            ? <AreaActions view={view} rules={rules} busy={busy} area={area} onCommand={command} onClear={() => setArea([])}
+            ? <AreaActions view={view} rules={rules} busy={busy} area={area} onCommand={command} onCommands={commandAll} onClear={() => setArea([])}
                 onPickCentre={() => { const first = view.sectors.find(s => s.at.x === area[0].x && s.at.y === area[0].y); if (first) setPick({ verb: "distribute", from: first, commodity: "", qty: 0, area }); }} />
             : <Inspector sector={sector} view={view} rules={rules} onCommand={command} busy={busy} history={sector ? last?.notes?.[`${sector.relative.x},${sector.relative.y}`] : undefined} historyUpdate={last?.updateNumber} onShowShips={setFleetAt} />}</div>
           <div className="min-h-0 flex-1"><ConsolePanel onLine={consoleLine} /></div>
