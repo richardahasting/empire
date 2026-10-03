@@ -77,6 +77,7 @@ class WorldRepositoryRoundTripTest {
         played = played.withNuke(new org.hastingtx.empire.engine.model.Nuke(2, 0, "fusion_5kt", cap, 320, 3, played.planes().get(0).id(), true));
         // mines (issue #71): a column on the sector
         played = played.withSector(played.sector(other).withMines(37));
+        played = played.withSector(played.sector(other).withFallout(412));   // fallout (issue #71): a column on the sector
         // a ship for sale with a bid on it (issue #141): its own table
         played = played.withTrade(new org.hastingtx.empire.engine.model.TradeLot(played.nextTradeId(), 0, org.hastingtx.empire.engine.model.TradeLot.SHIP, marked.id(), 25000, 1, null, played.updateNumber(), played.updateNumber() + 4));
         // the market (issue #141): a lot with a bid and one without, its own table
@@ -98,6 +99,7 @@ class WorldRepositoryRoundTripTest {
         assertThat(loaded.nukes()).isEqualTo(played.nukes()).hasSize(2);
         assertThat(loaded.nextNukeId()).isEqualTo(played.nextNukeId());
         assertThat(loaded.sector(other).mines()).isEqualTo(37);
+        assertThat(loaded.sector(other).fallout()).isEqualTo(412);
         assertThat(loaded.nextTradeId()).isEqualTo(played.nextTradeId());
         assertThat(loaded.nextLotId()).isEqualTo(played.nextLotId());
         for (int i = 0; i < played.sectors().size(); i++) assertThat(loaded.sectors().get(i).deliver()).as("deliver orders at %d", i).isEqualTo(played.sectors().get(i).deliver());

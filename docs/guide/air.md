@@ -248,6 +248,16 @@ Warheads are the original's (`nuke.config`, `build`, `arm`, `disarm`, and what a
 - The one who set it off is told what it did to the land, and what of their own it caught; what
   it caught of anyone else's is not theirs to know. A sanctuary is untouched.
 
-## What is not here yet
+## Fallout
 
-Fallout: the radiation a detonation leaves, which spreads, kills and decays.
+When the game's `fallout` option is on (it is in the classic rules), a detonation leaves
+**fallout** in every sector it hits: 3 for each point of damage, 30 from a neutron warhead, at
+most 9,999. Each update, before anything is produced, fallout:
+
+- **melts** a share of everything in the sector, its land units and the surface ships on it —
+  fast for food, workers and civilians, slowly for iron, goods and gold, hardly at all for
+  radioactive material (submarines are spared);
+- **leaks** into the six sectors around (not into a sanctuary);
+- **decays**, by about 3% an ETU.
+
+The inspector and the console's report show the fallout in your own sectors.

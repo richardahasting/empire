@@ -16,6 +16,7 @@ public final class Update {
 
     public static List<Step> steps() {
         return List.of(
+                new FalloutStep(),        // 1b fallout melts, spreads and decays, before anything is produced (issue #71; prepare_sects)
                 new AccrualStep(),        // 2
                 new UnrestStep(),         // 2a guerrillas, then loyalty and work (issue #72; populace.c, revolt.c)
                 new PopulationStep(),     // 3

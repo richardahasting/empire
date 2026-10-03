@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /** Issue #71: nuclear warheads — KNOWN buil.c build_nuke, arm.c, subs/detonate.c, subs/damage.c nukedamage. */
 class NukeTest {
-    private static final GameConfig CFG = TestWorlds.teaching();
+    private static final GameConfig CFG = TestWorlds.withFallout(TestWorlds.teaching());
     private static final Commodities COM = Commodities.of(CFG);
     private static final Coord CAP = TestWorlds.CENTER;
     private static final Coord PLANT = Hex.stepRaw(CAP, 3, 1);
@@ -102,6 +102,7 @@ class NukeTest {
         assertThat(zero.owned()).isFalse();
         assertThat(zero.designation()).isEqualTo("wasteland");
         assertThat(zero.stock().get(COM.civ)).isZero();
+        assertThat(zero.fallout()).as("KNOWN: 3 a point of damage, at most 9999").isEqualTo(Math.min(9999, 150 * 3));
         // a sector further out is damaged, not destroyed; their bomber on the next field is caught
         Sector next = after.sector(THEIR_FIELD);
         assertThat(next.owner()).isEqualTo(1);

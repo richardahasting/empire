@@ -27,12 +27,15 @@ public record UnitsCfg(boolean enabled, String table, ShipsCfg ships,
 
     /** KNOWN nuke.config and subs/detonate.c, damage.c (issue #71): see {@code units.nukes}. */
     public record NukesCfg(double plantMinEfficiency, double groundburstRadius, double airburstReach, double airburstCentre,
-                           double airburstFalloff, double minDamage, double wastelandAbove, List<NukeClassCfg> classes) {
+                           double airburstFalloff, double minDamage, double wastelandAbove, FalloutCfg fallout, List<NukeClassCfg> classes) {
         public NukeClassCfg nukeClass(String id) {
             if (classes != null) for (NukeClassCfg c : classes) if (c.id().equals(id)) return c;
             return null;
         }
     }
+    /** KNOWN update/fallout.c and constants.c: see {@code units.nukes.fallout}. */
+    public record FalloutCfg(double perDamage, double neutronPerDamage, int max, int etuCap, double spread, double decayPerEtu, double decayBase,
+                             double meltScale, Map<String, Double> melt) {}
     public record NukeClassCfg(String id, String name, double techRequired, Map<String, Double> build, double bwork,
                                int blast, double damage, double weight, List<String> flags) {
         public boolean has(String flag) { return flags != null && flags.contains(flag); }
