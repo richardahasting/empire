@@ -428,6 +428,7 @@ public final class CommandExecutor {
                 Coord to = path.get(hops);
                 ship = ship.withAt(to).withMobility(ship.mobility() - hops * rush);
                 if (perHex > 0) ship = ship.withFuel(ship.fuel() - hops * perHex);
+                ship = ship.withNote("sailed " + hops + (hops == 1 ? " hex" : " hexes") + " to " + to + " by hand; stopped by " + who + "'s blockade");   // issue #267
                 return new CommandResult(w.withShip(ship), null, 0, "ship #" + s.ship() + " sails " + hops + (hops == 1 ? " hex" : " hexes") + " and is stopped by " + who + "'s blockade at " + to + ended);
             }
             if (hops > 0) {
@@ -436,6 +437,8 @@ public final class CommandExecutor {
                 if (perHex > 0) ship = ship.withFuel(ship.fuel() - hops * perHex);
                 boolean there = to.equals(s.dest());
                 if (there) { ship = ship.withDest(null).withHandLeg(false); if (order != null) ended = " (her " + order + " resumes)"; }
+                // her note said "in harbour" until the next update, after she had sailed out (issue #267)
+                ship = ship.withNote("sailed " + hops + (hops == 1 ? " hex" : " hexes") + " to " + to + " by hand" + (there ? ", arrived" : ""));
                 return new CommandResult(w.withShip(ship), null, 0,
                         "ship #" + s.ship() + " sails " + hops + (hops == 1 ? " hex" : " hexes") + " to " + to
                                 + (there ? ", arrived" : "; " + (hexes - hops) + " to go, at the update") + capped + ended);

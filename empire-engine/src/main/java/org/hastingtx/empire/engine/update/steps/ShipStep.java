@@ -179,10 +179,23 @@ public final class ShipStep implements Step {
             // rearm (issue #68): a warship in harbour takes on guns up to what she mounts and shells up to her magazine
             if (docked && sc.combat() != null && cls.armed()) ship = rearm(ctx, ship, cls, hi, note);
             // restock (issue #182): a tender waiting in harbour loads what she will need for the next call
-            if (docked && cls.tender() && ship.mission() == null && ship.lane() == null) ship = restockTender(ctx, sc, ship, cls, hi, note);
+            // ...and one sent on a call from harbour takes it on before she goes (issue #266): she was dispatched
+            // with an empty hold and never restocked, because restocking was only for tenders with no orders
+            if (docked && cls.tender() && (ship.mission() == null || ship.rescuing()) && ship.lane() == null) {
+                ship = restockTender(ctx, sc, ship, cls, hi, note);
+                if (sc.fuel() && ship.rescuing()) ship = refuelFromOwnHold(ctx, ship, cls, note);
+            }
             Coord bingo = null;   // the harbour she was turned for because of her fuel, this update
             // a ship does not leave port until her tank is full (Richard 2026-09-14)
             boolean fillingUp = sc.fuel() && docked && cls.tankOr0() - ship.fuel() >= 1 && ship.dest() != null && !ship.dest().equals(ship.at());
+            // except a tender on a call in a harbour with no petrol left to pump (issue #266): she waited there for
+            // ever while the ship she was sent for drifted. She goes with what she has; the safe-hops check below
+            // still turns her back before she sails further than her tank and hold would bring her home from.
+            if (fillingUp && ship.rescuing() && harbourFuel(ctx, sc, hi, ship.owner()) < 1) {
+                fillingUp = false;
+                note.next().append("leaves with ").append(Ledger.q(ship.fuel())).append(" of ").append(Ledger.q(cls.tankOr0()))
+                    .append(" in her tank: the harbour has no ").append(sc.fuelId()).append(" left and ship #").append(ship.ward()).append(" is waiting");
+            }
             if (fillingUp) {
                 int pet = ctx.com.index(sc.fuelId());
                 double left = ctx.sector(hi).stock().get(pet) + ctx.led().st(hi, pet);
@@ -584,7 +597,10 @@ public final class ShipStep implements Step {
                 // a tender on her way home to wait is still on call
                 if (t.mission() != null || t.lane() != null || t.efficiency() <= sc.refitAtOrBelow()) continue;
                 if (t.dest() != null && !ownHarbor(ctx, t.owner(), ctx.snap.sector(t.dest()))) continue;
-                List<Coord> p = SeaRoutes.path(ctx.snap, ctx.cfg, t.owner(), t.at(), d.at());
+                // and with petrol to give (issue #266): an empty tender in a dry harbour took the call, then sat
+                // there, and while she held it no tender that could have helped was sent
+                if (!hasFuelToGive(ctx, sc, t)) continue;
+                List<Coord> p = routeAlongside(ctx, t, d.at());
                 if (p == null) continue;
                 if (p.size() < bestLen) { best = k; bestLen = p.size(); }
             }
@@ -596,6 +612,44 @@ public final class ShipStep implements Step {
             answered.add(d.id());
             told.computeIfAbsent(t.id(), k -> new ArrayList<>()).add("heard a distress call from ship #" + d.id() + " at " + d.at() + " and answered it");
         }
+    }
+
+    /**
+     * The way to a ship in distress: to her own hex, or, when she lies where a tender cannot sail — in a harbour
+     * lost under her, as Rick's miners at 11,7 in game 82 (issue #266) — to the nearest sea hex beside her. Null
+     * if neither can be reached.
+     */
+    private static List<Coord> routeAlongside(Ctx ctx, Ship tender, Coord at) {
+        List<Coord> p = SeaRoutes.path(ctx.snap, ctx.cfg, tender.owner(), tender.at(), at);
+        if (p != null) return p;
+        List<Coord> best = null;
+        for (Coord n : Hex.neighbours(ctx.snap, at)) {
+            List<Coord> q = SeaRoutes.path(ctx.snap, ctx.cfg, tender.owner(), tender.at(), n);
+            if (q != null && (best == null || q.size() < best.size())) best = q;
+        }
+        return best;
+    }
+
+    /** In the same hex, or beside a ship lying where the tender cannot sail. */
+    private static boolean alongside(Ctx ctx, Ship tender, Ship ward) {
+        if (tender.at().equals(ward.at())) return true;
+        return !SeaRoutes.navigable(ctx.snap, ctx.cfg, ctx.snap.sector(ward.at()), tender.owner()) && Hex.distance(ctx.snap, tender.at(), ward.at()) == 1;
+    }
+
+    /** Petrol on a harbour's quay — the harbour and its dockside warehouses, as {@link #fromQuay} sees them — after what this update has moved. */
+    private static double harbourFuel(Ctx ctx, UnitsCfg.ShipsCfg sc, int hi, int owner) {
+        int pet = ctx.com.index(sc.fuelId());
+        double sum = 0;
+        for (int i : dockside(ctx, ctx.sector(hi), owner)) sum += ctx.sector(i).stock().get(pet) + ctx.led().st(i, pet);
+        return sum;
+    }
+
+    /** A tender can answer a fuel call with petrol in her hold, or in her own harbour's, which she restocks from (issue #266). */
+    private static boolean hasFuelToGive(Ctx ctx, UnitsCfg.ShipsCfg sc, Ship tender) {
+        int pet = ctx.com.index(sc.fuelId());
+        if (tender.stock().get(pet) >= 1) return true;
+        if (!ownHarbor(ctx, tender.owner(), ctx.snap.sector(tender.at()))) return false;
+        return sc.tendersOrDefault().restockOrDefault().getOrDefault(sc.fuelId(), 0.0) >= 1 && harbourFuel(ctx, sc, ctx.idx(tender.at()), tender.owner()) >= 1;
     }
 
     /** The tender answering this ship's call, if one is. */
@@ -628,13 +682,24 @@ public final class ShipStep implements Step {
         UnitsCfg.ShipClassCfg wc = sc.shipClass(ward.cls());
         double floor = sc.limpFloor(wc, ward.tech());
         boolean needsFuel = ward.fuel() < wc.fuelPerHexOr0();
-        if (!ward.at().equals(tender.at())) {
+        if (!alongside(ctx, tender, ward)) {
             if (!needsFuel) {
                 note.next().append("ship #").append(ward.id()).append(" no longer needs her; going home");
                 return tender.withMission(null, null).withDest(home);
             }
-            if (!ward.at().equals(tender.dest())) note.next().append("answering a distress call from ship #").append(ward.id()).append(" at ").append(ward.at());
-            return tender.withDest(ward.at());
+            if (!hasFuelToGive(ctx, sc, tender)) {
+                note.next().append("has no ").append(sc.fuelId()).append(" to bring ship #").append(ward.id()).append("; she leaves the call to another tender and goes home to restock");
+                return tender.withMission(null, null).withDest(home);
+            }
+            List<Coord> route = routeAlongside(ctx, tender, ward.at());
+            if (route == null) {
+                note.next().append("no sea route to ship #").append(ward.id()).append(" at ").append(ward.at()).append("; she leaves the call");
+                return tender.withMission(null, null).withDest(home);
+            }
+            Coord meet = route.get(route.size() - 1);
+            if (!meet.equals(tender.dest())) note.next().append("answering a distress call from ship #").append(ward.id()).append(" at ").append(ward.at())
+                    .append(meet.equals(ward.at()) ? "" : ", coming alongside from " + meet);
+            return tender.withDest(meet);
         }
 
         // alongside: fuel first, then a patch
