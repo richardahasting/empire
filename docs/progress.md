@@ -2,7 +2,7 @@
 
 A running note of the state of play, so a session can pick up without re-deriving
 it. Ordered work lives in `m5-plan.md`; this page says how far along it is and
-where the open decisions sit. Last updated **2026-09-15**.
+where the open decisions sit. Last updated **2026-10-03**.
 
 ## Landed 2026-09-15: what the levels cost, forests as parks, a workforce as happy as it is
 
@@ -351,8 +351,17 @@ and #77 making the tallies `long[]` means per-thread partials merge identically.
   anyone's sectors (`miss.c`, #296); transports — `fly`, `drop`, `paradrop` (#297); carriers as floating
   airfields, with planes captured or blown up on a taken sector (#298); stealth (`do_evade`, #299). And
   #290: declaring war or peace used to delete every plane. See `docs/guide/air.md`.
-- **What is left of #71**: sea mines (laid by ships and dropped by planes, swept, and the damage they do), SAM
-  interceptors, then missiles and satellites — each a subsystem of its own.
+- **The rest of the air war (#71)**, built 2026-10-03, the original's throughout: sea and land mines (#301);
+  missiles, SAMs and ABMs (`laun.c`, `mslsub.c`, #302); landsat, spysat and anti-sats, orbits that move each
+  update (`launch_sat`, `sate.c`, `move_sat.c`, #303); the aa and aegis cruisers' anti-missile fire
+  (`shp_missile_defense`, #304); thirteen nuclear warheads built in nuclear plants, armed on bombers and attack
+  missiles, ground- and airburst (`detonate.c`, #305); fallout that melts, spreads and decays (update step 1b,
+  `fallout.c`, #306); and unit, plane and satellite markers on the map (#307). Every rule number is in
+  `planes.missiles` and `units.nukes`. One NEW departure: fallout leaks are reckoned from the update's starting
+  values, so the result does not depend on walk order. Deployed 2026-10-03 (backup
+  `~/backups/empire-pre-air-war-2026-10-03.dump`; migrations V37–V39).
+- **What is left of #71**: teaching the scripted fixture the new verbs (grammar only), and air interdiction
+  missions and radar seeing planes, which the plan lists but nothing yet needs.
 - **Trade (#141)**, built 2026-10-03: the original's MARKET option — the commodity market (`sell`, `buy`,
   `reset`, `market`; #292) and ships, planes and units for sale (`set`, `trade`; #293), settled at the update
   (step 8b) and timed in updates, not the wall clock. Richard's physical trade (foreign harbours, a shared
@@ -365,7 +374,9 @@ and #77 making the tallies `long[]` means per-thread partials merge identically.
   holds a sector back (#286) and what partisans took (#288); a deliver below the sector's own threshold is
   refused (#287). #269 (mobility brownout) waits on a rules decision.
 - **Running games keep their rules**: game 82 needs the admin *refresh config* to get `economy.enlist`,
-  `economy.market` and `planes.air_combat` / `transport` / carriers.
+  `economy.market`, `planes.air_combat` / `transport` / carriers, and now `planes.missiles` (missiles,
+  satellites, anti-missile cruisers), `units.nukes` (warheads and fallout) and the new plane and ship classes.
+  Until then `launch` says "these rules have no missiles" there.
 - **Dead config:** `levels.curves` (`research_to_tech`, `education_to_research`) in schema.yaml is read by
   nothing.
 
