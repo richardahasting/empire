@@ -38,26 +38,39 @@ public final class FalloutStep implements Step {
         double[] melt = new double[ctx.com.size()];
         for (int c = 0; c < melt.length; c++) { Double d = fc.melt() == null ? null : fc.melt().get(ctx.com.id(c)); melt[c] = d == null ? 0 : d; }
 
+        // who is where, once: the land units and surface ships on each hot sector
+        Map<Integer, java.util.List<Integer>> unitsAt = new TreeMap<>(), shipsAt = new TreeMap<>();
+        var sc = ctx.cfg.units().ships();
+        for (int k = 0; k < ctx.units.size(); k++) {
+            int i = ctx.idx(ctx.units.get(k).at());
+            if (hot.containsKey(i) && ctx.units.get(k).owner() >= 0) unitsAt.computeIfAbsent(i, x -> new java.util.ArrayList<>()).add(k);
+        }
+        for (int k = 0; k < ctx.ships.size(); k++) {
+            Ship sh = ctx.ships.get(k);
+            int i = ctx.idx(sh.at());
+            if (hot.containsKey(i) && (sc == null || !sc.shipClass(sh.cls()).submarine())) shipsAt.computeIfAbsent(i, x -> new java.util.ArrayList<>()).add(k);
+        }
+
         // melt: the sector, the land units in it, the surface ships on it (not in a sanctuary)
         for (var e : hot.entrySet()) {
             int i = e.getKey();
             double f = e.getValue();
             Sector s = ctx.sector(i);
             if (s.sanctuary()) continue;
+            StringBuilder lostHere = new StringBuilder();
             for (int c = 0; c < melt.length; c++) {
                 double lost = melted(r, fc, melt[c], etus, f, s.stock().get(c));
-                if (lost > 0) led.destroy(i, c, lost);
+                if (lost > 0) { led.destroy(i, c, lost); lostHere.append(lostHere.isEmpty() ? "" : ", ").append(Ledger.q(lost)).append(' ').append(ctx.com.id(c)); }
             }
-            for (int k = 0; k < ctx.units.size(); k++) {
+            // KNOWN meltitems: the owner is told what radiation took
+            if (!lostHere.isEmpty()) led.note(i, "lost " + lostHere + " to radiation (fallout " + e.getValue() + ")");
+            for (int k : unitsAt.getOrDefault(i, java.util.List.of())) {
                 LandUnit u = ctx.units.get(k);
-                if (u.owner() < 0 || !u.at().equals(s.at())) continue;
                 Stocks st = melt(ctx, led, r, fc, melt, etus, f, u.stock());
                 if (st != u.stock()) ctx.units.set(k, u.withStock(st));
             }
-            var sc = ctx.cfg.units().ships();
-            for (int k = 0; k < ctx.ships.size(); k++) {
+            for (int k : shipsAt.getOrDefault(i, java.util.List.of())) {
                 Ship sh = ctx.ships.get(k);
-                if (!sh.at().equals(s.at()) || (sc != null && sc.shipClass(sh.cls()).submarine())) continue;
                 Stocks st = melt(ctx, led, r, fc, melt, etus, f, sh.stock());
                 if (st != sh.stock()) ctx.ships.set(k, sh.withStock(st));
             }
@@ -66,11 +79,11 @@ public final class FalloutStep implements Step {
         // spread, from what the update began with; then decay what that leaves
         Map<Integer, Integer> next = new TreeMap<>(hot);
         for (var e : hot.entrySet()) {
-            int inc = Math.max(0, r.roundavg(etus * fc.spread() * e.getValue()) - 1);
-            if (inc == 0) continue;
             for (int k = 0; k < 6; k++) {
                 int n = ctx.neighbour(e.getKey(), k);
                 if (n < 0 || ctx.sector(n).sanctuary()) continue;
+                int inc = Math.max(0, r.roundavg(etus * fc.spread() * e.getValue()) - 1);   // KNOWN: a roll for each neighbour
+                if (inc == 0) continue;
                 next.merge(n, Math.min(fc.max(), ctx.sector(n).fallout() + inc), (a, b) -> Math.min(fc.max(), a + inc));
             }
         }
