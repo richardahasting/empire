@@ -30,6 +30,7 @@ public final class Blockade {
         for (Ship b : w.ships()) {
             if (!Ship.BLOCKADE.equals(b.mission()) || b.station() == null || !b.at().equals(b.station())) continue;
             if (!sc.shipClass(b.cls()).armed() || b.efficiency() <= sc.combat().sinkAt()) continue;
+            if (w.onTheBlock(org.hastingtx.empire.engine.model.TradeLot.SHIP, b.id()) != null) continue;   // for sale: she stops nobody (issue #141)
             if (Gunnery.hostile(w, b.owner(), mover, now)) guards.add(b);
         }
         if (guards.isEmpty()) return new Limit(hops, null);

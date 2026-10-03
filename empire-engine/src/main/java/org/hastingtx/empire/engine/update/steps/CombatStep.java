@@ -50,6 +50,7 @@ public final class CombatStep implements Step {
         List<Gunnery.Battery> batteries = new ArrayList<>();
         Map<Gunnery.Battery, Integer> sectorOf = new HashMap<>();
         for (Ship s : ctx.ships) {
+            if (ctx.snap.onTheBlock(org.hastingtx.empire.engine.model.TradeLot.SHIP, s.id()) != null) continue;   // for sale: her guns are silent (issue #141)
             Gunnery.Battery b = Gunnery.of(sc, ctx.com, s, ctx.country(s.owner()).name());
             if (b != null) batteries.add(b);
         }

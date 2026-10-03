@@ -116,7 +116,11 @@ public final class ShipStep implements Step {
             // limp home (Richard 2026-09-13): a hull at sea worn to the least she can sail on makes for
             // the nearest harbour of her owner's, whatever she was doing, and keeps her orders for after
             boolean limping = !docked && floor > 0 && ship.efficiency() <= floor + 1e-9;
-            if (limping) {
+            // for sale (issue #141; KNOWN shpsub.c: navigation refuses a ship on the trading block): she stays put
+            var forSale = ctx.snap.onTheBlock(org.hastingtx.empire.engine.model.TradeLot.SHIP, ship.id());
+            if (forSale != null) {
+                note.next().append("for sale (lot T").append(forSale.id()).append("): she stays where she is");
+            } else if (limping) {
                 Coord haven = nearestHarbour(ctx, ship, harbours.computeIfAbsent(ship.owner(), o -> ownHarbors(ctx, o)));
                 if (haven == null) { note.next().append("worn out, and no harbour of yours she can reach"); ship = ship.withDest(null); }
                 else { if (!haven.equals(ship.dest())) note.next().append("worn out: limping home to ").append(haven); ship = ship.withDest(haven); }
@@ -203,7 +207,7 @@ public final class ShipStep implements Step {
                     .append(left < 1 ? "; the harbour has no " + sc.fuelId() + " left" : "");
             }
             // sail
-            if (!fillingUp && ship.dest() != null && !ship.dest().equals(ship.at())) {
+            if (forSale == null && !fillingUp && ship.dest() != null && !ship.dest().equals(ship.at())) {
                 List<Coord> path = SeaRoutes.path(ctx.snap, ctx.cfg, ship.owner(), ship.at(), ship.dest());
                 if (path == null) note.next().append("no sea route to ").append(ship.dest());
                 else {
@@ -295,7 +299,7 @@ public final class ShipStep implements Step {
                         }
                     }
                 }
-            } else if (!fillingUp && ship.dest() != null) {
+            } else if (forSale == null && !fillingUp && ship.dest() != null) {
                 if (ship.handLeg()) ship = ship.withDest(null).withHandLeg(false);   // already where she was sent: the order resumes
                 else if (ship.lane() == null) ship = ship.withDest(null);
             }
@@ -596,6 +600,7 @@ public final class ShipStep implements Step {
                 // free: no mission, no lane, not worn out, and going nowhere but into one of her own harbours —
                 // a tender on her way home to wait is still on call
                 if (t.mission() != null || t.lane() != null || t.efficiency() <= sc.refitAtOrBelow()) continue;
+                if (ctx.snap.onTheBlock(org.hastingtx.empire.engine.model.TradeLot.SHIP, t.id()) != null) continue;   // for sale: she goes nowhere (issue #141)
                 if (t.dest() != null && !ownHarbor(ctx, t.owner(), ctx.snap.sector(t.dest()))) continue;
                 // and with petrol to give (issue #266): an empty tender in a dry harbour took the call, then sat
                 // there, and while she held it no tender that could have helped was sent

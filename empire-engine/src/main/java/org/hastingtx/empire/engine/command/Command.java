@@ -11,7 +11,7 @@ public sealed interface Command permits
         Command.Move, Command.Explore, Command.BuildRoad, Command.BuildRail, Command.RailShip, Command.Deliver,
         Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission, Command.Land, Command.Demobilize, Command.Enlist, Command.Attack, Command.Anti, Command.BuildUnit, Command.March, Command.LoadUnit, Command.Board, Command.Sabotage, Command.Incite, Command.UnitFire, Command.Work, Command.BuildPlane, Command.Bomb, Command.Recon,
         Command.RailLane, Command.Telegram, Command.Announce, Command.DeclareWar, Command.OfferPeace,
-        Command.Sell, Command.Buy, Command.ResetLot {
+        Command.Sell, Command.Buy, Command.ResetLot, Command.SetPrice, Command.Trade {
 
     String verb();
 
@@ -104,6 +104,18 @@ public sealed interface Command permits
 
     /** Lower the price of a lot nobody has bid on, or take it back with a price of 0 or less (issue #141; KNOWN rese.c). */
     record ResetLot(long lot, double price) implements Command { public String verb() { return "reset_lot"; } }
+
+    /**
+     * Put ships, planes or land units up for sale at {@code price} each, in whole dollars, or take them off with 0
+     * (issue #141; KNOWN set.c). {@code kind} is ship, plane or unit.
+     */
+    record SetPrice(String kind, java.util.List<Long> items, double price) implements Command {
+        public SetPrice { items = items == null ? java.util.List.of() : java.util.List.copyOf(items); }
+        public String verb() { return "set_price"; }
+    }
+
+    /** Bid on a ship, plane or unit for sale (issue #141; KNOWN trad.c): a plane goes to {@code dest}, an airfield; a unit to a headquarters. */
+    record Trade(long lot, double price, Coord dest) implements Command { public String verb() { return "trade"; } }
 
     /** A plane is laid down on an airfield of yours (issue #262). */
     record BuildPlane(Coord at, String cls) implements Command { public String verb() { return "build_plane"; } }

@@ -106,6 +106,8 @@ public record Ship(long id, int owner, String cls, String name, Coord at, double
      * on a hand leg the order's own steering is skipped; the automatic rules (fuel, limping) still apply.
      * Only {@code off} ends a standing order.
      */
+    /** Sold (issue #141): a new owner, and none of the old one's orders — her lane, mission, home and course were theirs. */
+    public Ship soldTo(int o) { return new Ship(id, o, cls, name, at, efficiency, stock, null, null, built, note, tech, null, null, fuel, crew, mobility, java.util.Map.of(), List.of(), 0, false, manifest); }
     public Ship withHandLeg(boolean h) { return new Ship(id, owner, cls, name, at, efficiency, stock, dest, lane, built, note, tech, mission, home, fuel, crew, mobility, firedOn, route, ward, h, manifest); }
     /** The standing order she has, lane included, as a word for the player: fishing, mining, supply, patrol… */
     public String orderLabel() {

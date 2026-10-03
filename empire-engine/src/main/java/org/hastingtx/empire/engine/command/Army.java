@@ -321,6 +321,7 @@ final class Army {
         StringBuilder story = new StringBuilder();
         for (LandUnit u : w.units()) {
             if (u.owner() != side || u.aboard() || u.at().equals(target)) continue;
+            if (w.onTheBlock(org.hastingtx.empire.engine.model.TradeLot.UNIT, u.id()) != null) continue;   // KNOWN attsub.c: not one for sale
             UnitsCfg.LandClassCfg cls = lc.landClass(u.cls());
             if (cls == null || cls.gunsOr0() < 1 || u.efficiency() < g.minEfficiency()) continue;
             if (u.stock().get(com.mil) < 1) continue;

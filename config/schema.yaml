@@ -754,6 +754,11 @@ economy:
     delay_updates: 4                  # GUESS for MARK_DELAY 7200 s: updates from listing (or a price cut) to the sale
     snipe_updates: 1                  # GUESS for buy.c:169's last five minutes: a late high bid gives the others an update
     unsellable: [civ]                 # KNOWN item.config i_sell: civilians cannot be sold
+    # Ships, planes and land units for sale (KNOWN set.c, trad.c, check_trade): set a price, others bid, it sells to
+    # the high bidder; a plane flies to the buyer's airfield, a unit to their headquarters, a ship changes hands where
+    # she lies. While on the block it does nothing.
+    trade_tax: 0.99                   # KNOWN constants.c:150 tradetax: the seller keeps 99% of the price
+    trade_delay_updates: 4            # GUESS for TRADE_DELAY 7200 s
 
   btu:
     accrual_per_capital_civ_per_etu: 0.0012   # KNOWN: btu_build_rate 0.0012, × ETUs × civilians (≤1000) × efficiency in PERCENT
@@ -772,6 +777,8 @@ economy:
       sell: 1                            # issue #141: listing a lot, bidding, re-pricing — a command each
       buy: 1
       reset_lot: 1
+      set_price: 1
+      trade: 1
       enlist: 0                          # issue #276: the cost is per draftee (enlist.btu_per_draftee), not per sector
       deliver: 1
       explore: 2

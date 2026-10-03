@@ -46,7 +46,26 @@ public record CountryView(
         /** Your planes (issue #262). */
         List<PlaneView> planes,
         /** Every lot on the commodity market (issue #141): the market is public, as the original's was. */
-        List<LotView> market) {
+        List<LotView> market,
+        /** Every ship, plane and unit for sale (issue #141), public as the original's trade report was. */
+        List<TradeView> trades) {
+
+    /** Before object trade. */
+    public CountryView(int countryId, String name, long updateNumber, Coord capital, boolean wrapX, boolean wrapY, int width, int height, double cash, double btu,
+                       Levels levels, HandicapCfg handicap, boolean inSanctuary, boolean bankrupt, List<String> commodityIds, List<SectorView> sectors,
+                       List<String> otherCountryNames, List<String> atWarWith, List<ShipView> ships, List<ContactView> contacts, List<RailLaneView> railLanes,
+                       List<TrainView> trains, List<UnitView> units, List<PlaneView> planes, List<LotView> market) {
+        this(countryId, name, updateNumber, capital, wrapX, wrapY, width, height, cash, btu, levels, handicap, inSanctuary, bankrupt, commodityIds, sectors,
+             otherCountryNames, atWarWith, ships, contacts, railLanes, trains, units, planes, market, List.of());
+    }
+
+    /**
+     * A ship, plane or unit for sale (issue #141; KNOWN trdsub.c's trade report): what it is, its class, tech and
+     * condition, what a ship or unit carries, the price (the high bid once there is one), who is selling and who is
+     * winning, and how many updates until it sells. Where a plane or unit is bound only for the one bidding.
+     */
+    public record TradeView(long id, String seller, String kind, long item, String cls, double tech, double efficiency, Map<String, Double> cargo,
+                            double price, String bidder, long updatesLeft, boolean yours, boolean yourBid, Coord destRelative) {}
 
     /** Before the market. */
     public CountryView(int countryId, String name, long updateNumber, Coord capital, boolean wrapX, boolean wrapY, int width, int height, double cash, double btu,
@@ -54,7 +73,7 @@ public record CountryView(
                        List<String> otherCountryNames, List<String> atWarWith, List<ShipView> ships, List<ContactView> contacts, List<RailLaneView> railLanes,
                        List<TrainView> trains, List<UnitView> units, List<PlaneView> planes) {
         this(countryId, name, updateNumber, capital, wrapX, wrapY, width, height, cash, btu, levels, handicap, inSanctuary, bankrupt, commodityIds, sectors,
-             otherCountryNames, atWarWith, ships, contacts, railLanes, trains, units, planes, List.of());
+             otherCountryNames, atWarWith, ships, contacts, railLanes, trains, units, planes, List.of(), List.of());
     }
 
     /**
@@ -301,7 +320,26 @@ public record CountryView(
             if (r.atWar() && r.involves(countryId)) atWar.add(w.country(r.other(countryId)).name());
 
         return new CountryView(countryId, c.name(), w.updateNumber(), c.capital(), w.wrapX(), w.wrapY(), w.width(), w.height(), c.cash(), c.btu(), c.levels(), c.handicap(),
-                c.inSanctuary(), c.bankrupt(), ids, views, others, atWar, ships, contacts, railLanes, trains, units(w, cfg, com, c), planes(w, cfg, c), market(w, com, c));
+                c.inSanctuary(), c.bankrupt(), ids, views, others, atWar, ships, contacts, railLanes, trains, units(w, cfg, com, c), planes(w, cfg, c), market(w, com, c), trades(w, com, c));
+    }
+
+    private static List<TradeView> trades(World w, Commodities com, Country c) {
+        List<TradeView> out = new ArrayList<>();
+        for (var l : w.trades()) {
+            String cls; double tech, eff; Stocks st = null;
+            switch (l.kind()) {
+                case org.hastingtx.empire.engine.model.TradeLot.SHIP -> { var s = w.ship(l.item()); if (s == null) continue; cls = s.cls(); tech = s.tech(); eff = s.efficiency(); st = s.stock(); }
+                case org.hastingtx.empire.engine.model.TradeLot.PLANE -> { var p = w.plane(l.item()); if (p == null) continue; cls = p.cls(); tech = p.tech(); eff = p.efficiency(); }
+                default -> { var u = w.unit(l.item()); if (u == null) continue; cls = u.cls(); tech = u.tech(); eff = u.efficiency(); st = u.stock(); }
+            }
+            Map<String, Double> cargo = new LinkedHashMap<>();
+            if (st != null) for (int i = 0; i < com.size(); i++) if (st.get(i) >= 1) cargo.put(com.id(i), st.get(i));
+            boolean myBid = l.bidder() == c.id();
+            out.add(new TradeView(l.id(), w.country(l.owner()).name(), l.kind(), l.item(), cls, tech, eff, cargo, l.price(),
+                    l.bid() ? w.country(l.bidder()).name() : null, Math.max(0, l.settles() - w.updateNumber()), l.owner() == c.id(), myBid,
+                    myBid && l.dest() != null ? relative(w, c.capital(), l.dest()) : null));
+        }
+        return out;
     }
 
     private static List<LotView> market(World w, Commodities com, Country c) {

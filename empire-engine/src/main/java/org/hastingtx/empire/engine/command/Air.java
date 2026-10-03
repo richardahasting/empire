@@ -297,6 +297,7 @@ final class Air {
             for (Plane f : theirs) {
                 if (up.size() >= room) break;
                 if (f.owner() != them || launched.contains(f.id())) continue;
+                if (w.onTheBlock(TradeLot.PLANE, f.id()) != null) continue;   // KNOWN aircombat.c:773: not one on the trading block
                 UnitsCfg.PlaneClassCfg fc = pc.planeClass(f.cls());
                 if (fc == null || !fc.has("intercept") || f.efficiency() < ac.minEfficiency()) continue;
                 Sector field = w.sector(f.at());
