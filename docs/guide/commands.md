@@ -12,6 +12,8 @@ disagree, something is broken.
 ```text
 map                          your map (relative coordinates, capital at 0,0)
 census                       one line per owned sector: stocks (pet, gun and shell too), days of food left, standing deliveries, stalled roads
+                             and "held back": each sector below 100% with what the last update found it short of, and its
+                             unrest (disloyal, not all at work, guerrillas, a conquered people)
 census res                   the ground: fert / min / gold / oil / uran per sector, and what it is poor for
 food                         where the food is and is not: basins, deficits, and the deliver that would help
 break                        break sanctuary

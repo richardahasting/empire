@@ -21,7 +21,8 @@ import java.util.*;
 public class Console {
     private final GameService games;
     private final org.hastingtx.empire.server.macro.MacroRepository macros;
-    public Console(GameService games, org.hastingtx.empire.server.macro.MacroRepository macros) { this.games = games; this.macros = macros; }
+    private final org.hastingtx.empire.server.persistence.Json json;
+    public Console(GameService games, org.hastingtx.empire.server.macro.MacroRepository macros, org.hastingtx.empire.server.persistence.Json json) { this.games = games; this.macros = macros; this.json = json; }
 
     public record Reply(String output, boolean accepted, String error, CountryView view) {}
 
@@ -40,7 +41,7 @@ public class Console {
             return switch (verb) {
                 case "help", "?" -> new Reply(HELP, true, null, null);
                 case "map" -> new Reply(map(v, cfg), true, null, null);
-                case "census", "cen" -> new Reply(t.length > 1 && t[1].toLowerCase(Locale.ROOT).startsWith("res") ? censusResources(v, cfg) : census(v, cfg), true, null, null);
+                case "census", "cen" -> new Reply(t.length > 1 && t[1].toLowerCase(Locale.ROOT).startsWith("res") ? censusResources(v, cfg) : census(v, cfg, games.lastNotes(gameId, a, json)), true, null, null);
                 case "food" -> new Reply(food(games.foodReport(gameId, a)), true, null, null);
                 case "break" -> { most(t, 1, "break"); yield cmd(run, new Command.BreakSanctuary()); }
                 case "des", "designate" -> { need(t, 3, "des SECTOR type"); most(t, 3, "des SECTOR type"); yield many(run, cfg, t[1], at -> new Command.Designate(at, t[2])); }
@@ -624,7 +625,10 @@ public class Console {
      * delivery orders, so a self-starving pipe or a stalled road shows in the table and not only in
      * the ack that set it.
      */
-    static String census(CountryView v, GameConfig cfg) {
+    static String census(CountryView v, GameConfig cfg) { return census(v, cfg, Map.of()); }
+
+    /** {@code notes}: the last update's notes for your sectors, by relative "x,y" — where the reasons a sector stalled are. */
+    static String census(CountryView v, GameConfig cfg, Map<String, List<String>> notes) {
         // pet, gun and shell too (issue #196): a fleet runs on them, and they were only in the view's JSON
         StringBuilder sb = new StringBuilder(String.format("%-8s %-3s %-4s %4s %4s %6s %5s %6s %6s %6s %6s %6s %6s %5s %5s %5s  %s%n", "sect", "des", "eff", "mob", "road", "civ", "cap", "mil", "food", "iron", "lcm", "hcm", "pet", "gun", "shell", "days", "deliver"));
         double[] totals = new double[4];   // pet, gun, shell, oil across the country
@@ -650,6 +654,13 @@ public class Console {
         }
         // a standing order that cannot lay a point looks exactly like a finished one; say which are waiting (issue #150)
         if (!stalled.isEmpty()) sb.append("waiting for materials: ").append(String.join("; ", stalled)).append('\n');
+        // a sector short of efficiency, and why (issue #275): a well-stocked city sat at 0% with nothing on this page to say so
+        List<String> held = heldBack(v, notes);
+        if (!held.isEmpty()) {
+            sb.append("held back: ").append(String.join("; ", held.subList(0, Math.min(15, held.size()))));
+            if (held.size() > 15) sb.append("; … and ").append(held.size() - 15).append(" more");
+            sb.append('\n');
+        }
         sb.append(String.format("country: pet %.0f · gun %.0f · shell %.0f · oil %.0f%n", totals[0], totals[1], totals[2], totals[3]));
         // how far each radar station sees (Richard 2026-09-15: "A radar should note the radius of its vision")
         List<String> radars = new ArrayList<>();
@@ -658,6 +669,28 @@ public class Console {
         sb.append("cap: the population ceiling here").append(popScale == 1.0 ? "" : String.format(" (research %.0f → ×%.2f of the flat cap)", v.levels().research(), popScale))
           .append("; days: updates the food lasts at what the people here eat (∞ = they live off the land); census res for the ground; food for basins and deficits\n");
         return sb.toString();
+    }
+
+    /**
+     * Each sector of yours below 100% with a reason it is not growing, one entry each: what the last update found it
+     * short of, and any unrest — disloyal, not all at work, guerrillas, a conquered people (issue #275).
+     */
+    static List<String> heldBack(CountryView v, Map<String, List<String>> notes) {
+        List<String> out = new ArrayList<>();
+        for (SectorView s : v.sectors()) {
+            if (!s.full() || s.owner() != v.countryId() || s.efficiency() >= 100) continue;
+            List<String> why = new ArrayList<>();
+            for (String line : notes.getOrDefault(rel(s.relative()), List.of())) if (line.startsWith("shortage: ")) why.add("short of " + line.substring("shortage: ".length()));
+            var u = s.unrest();
+            if (u != null) {
+                if (u.loyalty() > u.disloyalAbove()) why.add("disloyal (loyalty " + u.loyalty() + ", above " + u.disloyalAbove() + ")");
+                if (u.work() < 100) why.add(u.work() + "% at work");
+                if (u.che() > 0) why.add(u.che() + " guerrillas");
+                if (u.peopleOf() != null) why.add("people of " + u.peopleOf());
+            }
+            if (!why.isEmpty()) out.add(rel(s.relative()) + " " + glyph(s) + " " + Math.round(s.efficiency()) + "%: " + String.join(", ", why));
+        }
+        return out;
     }
 
     /** The ground under each owned sector (issue #156): the five endowments, and which gated designations it is poor for. */
