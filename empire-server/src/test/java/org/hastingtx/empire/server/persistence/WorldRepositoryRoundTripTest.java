@@ -65,6 +65,8 @@ class WorldRepositoryRoundTripTest {
         List<org.hastingtx.empire.engine.model.Ship> fleet = new java.util.ArrayList<>(played.ships());
         fleet.add(marked);
         played = played.withShips(fleet, marked.id() + 1);
+        // a plane on air defence (issue #71): mission, op point and radius are their own columns
+        played = played.withPlane(new org.hastingtx.empire.engine.model.Plane(played.nextPlaneId(), 0, "fighter_2", cap, 90, 100, 0, "", org.hastingtx.empire.engine.model.Plane.AIR_DEFENCE, other, 3));
         // a ship for sale with a bid on it (issue #141): its own table
         played = played.withTrade(new org.hastingtx.empire.engine.model.TradeLot(played.nextTradeId(), 0, org.hastingtx.empire.engine.model.TradeLot.SHIP, marked.id(), 25000, 1, null, played.updateNumber(), played.updateNumber() + 4));
         // the market (issue #141): a lot with a bid and one without, its own table
@@ -82,6 +84,7 @@ class WorldRepositoryRoundTripTest {
         assertThat(loaded.ships()).isEqualTo(played.ships());
         assertThat(loaded.market()).isEqualTo(played.market());
         assertThat(loaded.trades()).isEqualTo(played.trades());
+        assertThat(loaded.planes()).isEqualTo(played.planes());
         assertThat(loaded.nextTradeId()).isEqualTo(played.nextTradeId());
         assertThat(loaded.nextLotId()).isEqualTo(played.nextLotId());
         for (int i = 0; i < played.sectors().size(); i++) assertThat(loaded.sectors().get(i).deliver()).as("deliver orders at %d", i).isEqualTo(played.sectors().get(i).deliver());

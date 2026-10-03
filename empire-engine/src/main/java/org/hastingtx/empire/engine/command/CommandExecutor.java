@@ -42,6 +42,7 @@ public final class CommandExecutor {
             case Command.ResetLot rl -> Market.reset(cfg, com, w, c, rl);
             case Command.SetPrice sp -> Market.setPrice(cfg, com, w, c, sp);
             case Command.Trade tr -> Market.tradeBid(cfg, com, w, c, tr);
+            case Command.AirMission am -> Air.mission(cfg, w, c, am);
             case Command.Distribute d -> distribute(w, c, d);
             case Command.Deliver d -> deliver(w, c, d);
             case Command.BuildShip b -> buildShip(w, c, b);

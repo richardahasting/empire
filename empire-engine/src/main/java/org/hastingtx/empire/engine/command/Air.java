@@ -65,6 +65,32 @@ final class Air {
                 + " at " + q(pc.startEfficiency()) + "% for " + used + "; it fits out there");
     }
 
+    /**
+     * Air defence (KNOWN miss.c): a fighter only; its op point within its operating range — half its range, as far as it
+     * strikes — of its field; the radius at most that range too (miss.c:264-273). It rises over any sector in its area.
+     */
+    static CommandResult mission(GameConfig cfg, World w, Country c, Command.AirMission m) {
+        UnitsCfg.PlanesCfg pc = cfg.units().planes();
+        if (pc == null || pc.airCombat() == null) return CommandResult.fail(w, "these rules have no air combat");
+        Plane p = w.plane(m.plane());
+        if (p == null || p.owner() != c.id()) return CommandResult.fail(w, "no plane #" + m.plane() + " of yours");
+        UnitsCfg.PlaneClassCfg cls = pc.planeClass(p.cls());
+        if (m.off()) {
+            if (!p.onAirDefence()) return CommandResult.fail(w, "plane #" + p.id() + " is on no mission");
+            return new CommandResult(w.withPlane(p.withMission(null, null, 0)), null, 0, "plane #" + p.id() + " comes off air defence; it still rises over your own land");
+        }
+        if (cls == null || !cls.has("intercept")) return CommandResult.fail(w, "only fighters fly air defence; " + article(cls == null ? p.cls() : cls.name()) + " does not");
+        if (m.op() == null || !w.inBounds(m.op())) return CommandResult.fail(w, "air defence around where?");
+        int oprange = (int) Math.floor(cls.reachAt(p.tech()));
+        int d = Hex.distance(w, p.at(), m.op());
+        if (d > oprange) return CommandResult.fail(w, m.op() + " is " + d + " hexes from its field at " + p.at() + "; it guards within " + oprange);
+        if (m.radius() < 0 || m.radius() != Math.rint(m.radius())) return CommandResult.fail(w, "the radius is a whole number of hexes");
+        int radius = m.radius() == 0 ? oprange : (int) Math.min(oprange, m.radius());
+        return new CommandResult(w.withPlane(p.withMission(Plane.AIR_DEFENCE, m.op(), radius)), null, 0,
+                "plane #" + p.id() + " flies air defence within " + radius + " of " + m.op() + ": at war, it rises against raids over any sector there"
+                        + (m.radius() > oprange ? " (" + oprange + " is as far as it reaches)" : ""));
+    }
+
     /** What a sortie needs off the field, and what it costs when it flies. */
     private record Sortie(CommandResult fail, Plane plane, UnitsCfg.PlaneClassCfg cls, Sector field, Sector target, double bombs) {}
 
@@ -287,37 +313,42 @@ final class Air {
         List<String> story = new ArrayList<>();
         for (Coord at : flightPath(w, lead.at(), target)) {
             Sector s = w.sector(at);
-            if (!s.owned() || s.owner() == c.id() || !w.atWar(c.id(), s.owner())) continue;
-            int them = s.owner();
-            // who rises: a snapshot of their fighters, newest first
-            List<Plane> up = new ArrayList<>();
-            int room = (leadUp ? 1 : 0) + esc.size() + ac.extraInterceptors();
-            List<Plane> theirs = new ArrayList<>(w.planes());
-            theirs.sort((a, b) -> Long.compare(b.id(), a.id()));
-            for (Plane f : theirs) {
-                if (up.size() >= room) break;
-                if (f.owner() != them || launched.contains(f.id())) continue;
-                if (w.onTheBlock(TradeLot.PLANE, f.id()) != null) continue;   // KNOWN aircombat.c:773: not one on the trading block
-                UnitsCfg.PlaneClassCfg fc = pc.planeClass(f.cls());
-                if (fc == null || !fc.has("intercept") || f.efficiency() < ac.minEfficiency()) continue;
-                Sector field = w.sector(f.at());
-                if (field.owner() != them || !cfg.sectorType(field.designation()).hasFlag("builds_planes") || field.efficiency() < ac.fieldMinEfficiency()) continue;
-                if (fc.rangeAt(f.tech()) < 2 * Hex.distance(w, f.at(), at)) continue;
-                if (field.stock().get(pet) < fc.fuel()) continue;
-                w = w.withSector(field.withStock(field.stock().plus(pet, -fc.fuel())));
-                launched.add(f.id());
-                now.put(f.id(), f);
-                up.add(f);
-            }
-            if (up.isEmpty()) continue;
-            story.add(up.size() + (up.size() == 1 ? " fighter" : " fighters") + " of " + w.country(them).name() + " rose over " + at);
-            List<Long> ups = new ArrayList<>(up.stream().map(Plane::id).toList());
-            // the escorts first, then the lead plane against whoever is left (KNOWN ac_intercept)
-            airToAir(cfg, r, now, esc, ups, gone, story);
-            if (leadUp && !ups.isEmpty()) {
-                List<Long> mine = new ArrayList<>(List.of(lead.id()));
-                airToAir(cfg, r, now, mine, ups, gone, story);
-                leadUp = !mine.isEmpty();
+            // KNOWN aircombat.c:195-201: every country at war with the raider gets its chance over every sector — over its own
+            // land any fighter of its may rise, elsewhere only those flying air defence over that sector (only_mission)
+            for (int them = 0; them < w.countries().size() && leadUp; them++) {
+                if (them == c.id() || !w.atWar(c.id(), them)) continue;
+                boolean home = s.owned() && s.owner() == them;
+                // who rises: a snapshot of their fighters, newest first
+                List<Plane> up = new ArrayList<>();
+                int room = (leadUp ? 1 : 0) + esc.size() + ac.extraInterceptors();
+                List<Plane> theirs = new ArrayList<>(w.planes());
+                theirs.sort((a, b) -> Long.compare(b.id(), a.id()));
+                for (Plane f : theirs) {
+                    if (up.size() >= room) break;
+                    if (f.owner() != them || launched.contains(f.id())) continue;
+                    if (w.onTheBlock(TradeLot.PLANE, f.id()) != null) continue;   // KNOWN aircombat.c:773: not one on the trading block
+                    UnitsCfg.PlaneClassCfg fc = pc.planeClass(f.cls());
+                    if (fc == null || !fc.has("intercept") || f.efficiency() < ac.minEfficiency()) continue;
+                    if (!home && !(f.onAirDefence() && Hex.distance(w, at, f.opPoint()) <= f.radius())) continue;
+                    Sector field = w.sector(f.at());
+                    if (field.owner() != them || !cfg.sectorType(field.designation()).hasFlag("builds_planes") || field.efficiency() < ac.fieldMinEfficiency()) continue;
+                    if (fc.rangeAt(f.tech()) < 2 * Hex.distance(w, f.at(), at)) continue;
+                    if (field.stock().get(pet) < fc.fuel()) continue;
+                    w = w.withSector(field.withStock(field.stock().plus(pet, -fc.fuel())));
+                    launched.add(f.id());
+                    now.put(f.id(), f);
+                    up.add(f);
+                }
+                if (up.isEmpty()) continue;
+                story.add(up.size() + (up.size() == 1 ? " fighter" : " fighters") + " of " + w.country(them).name() + " rose over " + at);
+                List<Long> ups = new ArrayList<>(up.stream().map(Plane::id).toList());
+                // the escorts first, then the lead plane against whoever is left (KNOWN ac_intercept)
+                airToAir(cfg, r, now, esc, ups, gone, story);
+                if (leadUp && !ups.isEmpty()) {
+                    List<Long> mine = new ArrayList<>(List.of(lead.id()));
+                    airToAir(cfg, r, now, mine, ups, gone, story);
+                    leadUp = !mine.isEmpty();
+                }
             }
             if (!leadUp) break;
         }

@@ -93,8 +93,14 @@ minimum. The two lists pair off round and round until both have fought. As with 
 plane under **10%** is shot down, and one under **80%** may turn back. A bomber that turns
 back drops nothing; flak over the target comes after the fighters.
 
+**Air defence** (the original's `mission … a`). `mission PLANE air x,y [RADIUS]` puts a
+fighter on air defence around a point no further than it strikes, out to a radius no
+further than that either (0, or nothing, is as far as it reaches). At war it rises not only
+over your own land but over **any** sector in that area — a neighbour's, the sea's edge,
+the raider's own — when a raid flies over it. `mission PLANE off` takes it off; it still
+rises over your own land, as every fighter does.
+
 ## What is not here yet
 
-Air-defence missions (fighters guarding someone else's land), stealth and missile
-interceptors, transports and paradrops, carriers as floating airfields, mines from the
+Stealth and missile interceptors, transports and paradrops, carriers as floating airfields, mines from the
 air, and then missiles and satellites.

@@ -182,6 +182,7 @@ public class GameController {
                 case "sell" -> new Command.Sell(need(at), commodity, amount == null ? 0 : amount, price == null ? 0 : price);   // amount < 0: all but that many
                 case "buy" -> new Command.Buy(lot == null ? 0 : lot, price == null ? 0 : price, need(at));                           // x,y: where the goods go
                 case "reset_lot" -> new Command.ResetLot(lot == null ? 0 : lot, price == null ? 0 : price);
+                case "air_defence" -> new Command.AirMission(needPlane(), Boolean.TRUE.equals(clear) ? null : at, amount == null ? 0 : amount, Boolean.TRUE.equals(clear));   // amount: radius (0 = as far as it reaches)
                 case "set_price" -> new Command.SetPrice(type, units == null ? List.of() : units, price == null ? 0 : price);   // type: ship|plane|unit; units: their ids
                 case "trade" -> new Command.Trade(lot == null ? 0 : lot, price == null ? 0 : price, at);                       // x,y: a plane's airfield or a unit's headquarters
                 case "recon" -> new Command.Recon(needPlane(), at(x, y), units == null ? List.of() : units);

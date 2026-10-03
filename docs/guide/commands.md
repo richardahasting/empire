@@ -74,6 +74,8 @@ build x,y PLANECLASS         lay down a plane on an airfield of yours
 bomb PLANE x,y [strategic] [escort E,E]   a bombing sortie; strategic wrecks the sector, pinpoint what is in it;
                              fighters within 4 hexes of its field may escort it
 recon PLANE x,y [escort E,E]   a reconnaissance sortie: it puts the sector on your chart
+mission PLANE air x,y [RADIUS]   air defence: a fighter rises against raids over any sector within RADIUS of x,y;
+                             mission PLANE off ends it
 air / planes                 your planes, where they sit and how far they strike
 work UNIT [mobility]         an engineer builds the sector it stands in with its own mobility
 ufire UNIT x,y               artillery shells an enemy sector within its range

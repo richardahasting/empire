@@ -14,7 +14,7 @@ const rel = (c: { x: number; y: number }) => `${c.x},${c.y}`;
  * country at war with you rise against it on the way, and the escorts it takes fight them first (issue #71).
  */
 export function Air({ view, busy, onCommand }: { view: CountryView; busy: boolean; onCommand: (c: CommandRequest) => Promise<void> }) {
-  const [dialog, setDialog] = useState<{ kind: "bomb" | "recon"; plane: PlaneView } | null>(null);
+  const [dialog, setDialog] = useState<{ kind: "bomb" | "recon" | "defend"; plane: PlaneView } | null>(null);
   const planes = view.planes ?? [];
   if (planes.length === 0) return <p className="text-xs text-muted-foreground">No planes. Designate an airfield, then right-click it and choose “Build plane…”.</p>;
   return (
@@ -29,15 +29,19 @@ export function Air({ view, busy, onCommand }: { view: CountryView; busy: boolea
               {p.intercept ? " · fighter: rises against raids, can escort" : p.escort ? " · escort" : ""}{p.intercept || p.escort ? ` · attack ${p.attack.toFixed(1)}, defence ${p.defense.toFixed(1)}` : ""}
             </span>
           </div>
+          {p.opRelative && <div>Air defence within {p.radius} of {rel(p.opRelative)}: at war it rises over any sector there.</div>}
           {p.note && <div className="text-muted-foreground">{p.note}</div>}
           {p.efficiency < 80 && <div className="text-destructive">Shot up: it may turn back before it gets there. Leave it on the field to be fitted out.</div>}
           <div className="mt-1 flex flex-wrap gap-1">
             {p.load > 0 && <Button size="sm" variant="secondary" disabled={busy} onClick={() => setDialog({ kind: "bomb", plane: p })}>Bomb…</Button>}
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "recon", plane: p })}>Reconnoitre…</Button>
+            {p.intercept && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "defend", plane: p })}>Air defence…</Button>}
+            {p.opRelative && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: "air_defence", plane: p.id, clear: true })}>Off air defence</Button>}
           </div>
         </div>
       ))}
-      {dialog && <SortieDialog kind={dialog.kind} plane={dialog.plane} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
+      {dialog?.kind === "defend" && <DefendDialog plane={dialog.plane} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
+      {dialog && dialog.kind !== "defend" && <SortieDialog kind={dialog.kind} plane={dialog.plane} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
     </div>
   );
 }
@@ -122,6 +126,35 @@ export function BuildPlaneDialog({ view, rules, field, busy, onClose, onCommand 
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button disabled={busy || !c || !canBuild(c)} onClick={async () => { await onCommand({ verb: "build_plane", x: field.at.x, y: field.at.y, type: cls }); onClose(); }}>Build it</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Air defence (issue #71; the original's mission … a): a fighter guards the sectors within a radius of an op point —
+ * anybody's, not only yours — and rises against raids there at war. The op point and radius are at most as far as it strikes.
+ */
+function DefendDialog({ plane, view, busy, onClose, onCommand }: { plane: PlaneView; view: CountryView; busy: boolean; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void> }) {
+  const [op, setOp] = useState(rel(plane.relative));
+  const [radius, setRadius] = useState(String(Math.floor(plane.reach)));
+  const [ox, oy] = op.split(",").map(s => Number(s.trim()));
+  const at = Number.isFinite(ox) && Number.isFinite(oy) ? view.sectors.find(s => s.relative.x === ox && s.relative.y === oy) : undefined;
+  const r = Number(radius);
+  const ok = !!at && Number.isInteger(r) && r >= 0;
+  return (
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Air defence with plane #{plane.id}</DialogTitle>
+          <DialogDescription>At war it rises against raids over any sector within the radius of the point it guards, not only over your own land. It reaches {Math.floor(plane.reach)} hexes from its field at {rel(plane.relative)}.</DialogDescription></DialogHeader>
+        <div className="grid gap-3 text-sm">
+          <label className="grid gap-1">Guard around (x,y)<Input value={op} onChange={e => setOp(e.target.value)} autoFocus /></label>
+          <label className="grid gap-1">Radius (0: as far as it reaches)<Input value={radius} onChange={e => setRadius(e.target.value)} inputMode="numeric" /></label>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button disabled={busy || !ok} onClick={async () => { if (!at) return; await onCommand({ verb: "air_defence", plane: plane.id, x: at.at.x, y: at.at.y, amount: r }); onClose(); }}>Guard it</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
