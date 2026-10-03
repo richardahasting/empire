@@ -169,7 +169,7 @@ public record World(
                 case TradeLot.PLANE -> { Plane p = plane(item); yield p == null ? -2 : p.owner(); }
                 default -> { LandUnit u = unit(item); yield u == null ? -2 : u.owner(); }
             };
-            return owner == l.owner() ? l : null;
+            if (owner == l.owner()) return l;   // a stale lot (it changed hands since) binds nobody: look on for a live one
         }
         return null;
     }

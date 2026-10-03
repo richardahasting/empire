@@ -151,6 +151,18 @@ class TradeTest {
     }
 
     @Test
+    void aCaptorWhoListsItIsBoundByTheirOwnLot() {
+        World w = ok(world(), 0, new Command.SetPrice("unit", List.of(1L), 2000));
+        World taken = w.withUnit(w.unit(1).withOwner(1));
+        World listed = ok(taken, 1, new Command.SetPrice("unit", List.of(1L), 3000));
+        assertThat(listed.trades()).as("the dead lot is cleared: one item, one lot").singleElement().satisfies(l -> assertThat(l.owner()).isEqualTo(1));
+        assertThat(EX.execute(listed, 1, new Command.March(1, CAP)).error()).contains("unit #1 is for sale");
+        // and even with the dead lot still there, the live one binds
+        World both = taken.withTrade(new TradeLot(9, 1, TradeLot.UNIT, 1, 3000, TradeLot.NOBODY, null, 0, 4));
+        assertThat(both.onTheBlock(TradeLot.UNIT, 1)).isNotNull().extracting(TradeLot::id).isEqualTo(9L);
+    }
+
+    @Test
     void aShipForSaleStopsNobody() {
         var dc = CFG.units().ships().shipClass("destroyer");
         Ship guard = new Ship(1, 0, "destroyer", "", HARBOUR, 100, Stocks.zero(COM.size()).with(COM.index("gun"), dc.gunsOr0()).with(COM.index("shell"), 20),
