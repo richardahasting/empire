@@ -176,13 +176,13 @@ public class Console {
                     if (t[t.length - 1].equalsIgnoreCase("check")) {
                         need(t, 5, "deliver COMMODITY SECTOR DIR [N] check"); most(t, 6, "deliver COMMODITY SECTOR DIR [N] check");
                         int pd = org.hastingtx.empire.engine.geo.Hex.parseDir(t[3]);
-                        if (pd < 0) throw new IllegalArgumentException("direction is e, ne, nw, w, sw, se — got '" + t[3] + "'");
+                        if (pd < 0) throw new IllegalArgumentException(org.hastingtx.empire.engine.geo.Hex.dirError(t[3]));
                         yield new Reply(probeDeliver(v, abs(v, t[2]), pd, t[1]), true, null, null);
                     }
                     boolean clear = t[3].equalsIgnoreCase("none") || t[3].equalsIgnoreCase("off");
                     if (!clear) need(t, 5, "deliver COMMODITY SECTOR DIR N"); most(t, 5, "deliver COMMODITY SECTOR DIR N");
                     int dir = clear ? -1 : org.hastingtx.empire.engine.geo.Hex.parseDir(t[3]);
-                    if (!clear && dir < 0) throw new IllegalArgumentException("direction is e, ne, nw, w, sw, se (or the original's j u y g b n) — got '" + t[3] + "'");
+                    if (!clear && dir < 0) throw new IllegalArgumentException(org.hastingtx.empire.engine.geo.Hex.dirError(t[3]));
                     double thr = clear ? 0 : Double.parseDouble(t[4]);
                     yield many(run, cfg, t[2], at -> new Command.Deliver(at, t[1], clear ? null : dir, thr));
                 }

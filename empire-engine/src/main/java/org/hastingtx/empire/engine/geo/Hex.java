@@ -43,13 +43,27 @@ public final class Hex {
 
     public static String dirName(int d) { return DIR_NAMES[d]; }
 
-    /** 0..5 for a name ("ne", "north-east", "NE") or an original key ("u"); -1 if neither. */
+    /**
+     * 0..5 for a name ("ne", "north-east", "NE") or an original key ("u"); -1 if neither.
+     *
+     * <p>Not "n", though it is the original's key for south-east (issue #265): typed as a compass point it reads as
+     * north, and "north" itself shortened to it, so {@code deliver food 6,0 n} quietly sent food south-east into the
+     * sea. A hex has no due north or south; both are refused, and the error names ne and nw.
+     */
     public static int parseDir(String s) {
         if (s == null) return -1;
         String t = s.trim().toLowerCase(java.util.Locale.ROOT).replace("-", "").replace("north", "n").replace("south", "s").replace("east", "e").replace("west", "w");
         for (int d = 0; d < 6; d++) if (DIR_NAMES[d].equals(t)) return d;
-        if (t.length() == 1) { int k = ORIGINAL_KEYS.indexOf(t.charAt(0)); if (k >= 0) return k; }
+        if (t.length() == 1 && t.charAt(0) != 'n') { int k = ORIGINAL_KEYS.indexOf(t.charAt(0)); if (k >= 0) return k; }
         return -1;
+    }
+
+    /** Why a direction was not understood, for the player: the six names, and that a hex has no due north or south. */
+    public static String dirError(String got) {
+        String t = got == null ? "" : got.trim().toLowerCase(java.util.Locale.ROOT).replace("-", "");
+        boolean pole = t.equals("n") || t.equals("s") || t.equals("north") || t.equals("south");
+        return "direction is e, ne, nw, w, sw, se (or the original's keys j u y g b) — got '" + got + "'"
+                + (pole ? "; a hex has no due " + (t.startsWith("n") ? "north: ne or nw" : "south: se or sw") : "");
     }
 
     /** Unwrapped neighbour in direction d (may be out of bounds). */
