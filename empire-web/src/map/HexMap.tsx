@@ -244,47 +244,42 @@ export function HexMap({ view, rules, width, height, layer, stockCommodity, sele
         ctx.fillText(ct.cls ? rules.ships?.classes.find(c => c.id === ct.cls)?.glyph ?? "?" : "?", x, y + 0.5);
       }
     }
-    // land units ashore (issue #71 slice 4): a square with the class glyph at the hex's lower left; several fan out
-    if (view.units?.length && l.size >= 8) {
-      const perHex = new Map<string, number>();
-      for (const u of view.units) {
-        if (u.ship) continue;   // aboard: the ship's marker stands for her
-        const d = toDisplay(u.at); const { cx, cy } = hexCenter(d.x, d.y, l);
-        const k = `${u.at.x},${u.at.y}`; const n = perHex.get(k) ?? 0; perHex.set(k, n + 1);
-        const r = Math.max(4, l.size * 0.26), x = cx - l.size * 0.42 + n * r * 1.6, y = cy + l.size * 0.38;
-        ctx.fillStyle = p.background; ctx.strokeStyle = p.text; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.rect(x - r, y - r, r * 2, r * 2); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = p.text; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = `${Math.max(8, r * 1.4)}px ui-monospace, monospace`;
-        ctx.fillText(rules.land?.classes.find(c => c.id === u.cls)?.glyph ?? "?", x, y + 0.5);
-      }
-    }
-    // planes on the ground (issue #71 slice 4): a triangle with the class glyph at the hex's upper right, and a count
-    // where there are several; satellites up there are rings at the top — yours solid, others' you can see dashed
-    if (view.planes?.length && l.size >= 8) {
+    // land units ashore and planes on a field (issue #71 slice 4): one marker a hex each, the class letter for one and
+    // the count for several — a square on the left of the hex for units, a triangle on the right for planes, clear of
+    // the ships (lower right), contacts (upper left) and the held dot (upper right). Aboard a ship, her marker stands for them.
+    const marker = (items: { at: { x: number; y: number }; glyph: string }[], side: -1 | 1, shape: "square" | "triangle") => {
       const atHex = new Map<string, { at: { x: number; y: number }; glyph: string; n: number }>();
-      for (const pl of view.planes) {
-        if (pl.aboard || pl.orbit) continue;
-        const k = `${pl.at.x},${pl.at.y}`; const e = atHex.get(k);
-        if (e) e.n++; else atHex.set(k, { at: pl.at, glyph: rules.planes?.classes.find(c => c.id === pl.cls)?.glyph ?? "?", n: 1 });
+      for (const it of items) {
+        const k = `${it.at.x},${it.at.y}`; const e = atHex.get(k);
+        if (e) e.n++; else atHex.set(k, { ...it, n: 1 });
       }
       for (const e of atHex.values()) {
         const d = toDisplay(e.at); const { cx, cy } = hexCenter(d.x, d.y, l);
-        const r = Math.max(4, l.size * 0.3), x = cx + l.size * 0.4, y = cy - l.size * 0.34;
-        ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y + r * 0.8); ctx.lineTo(x - r, y + r * 0.8); ctx.closePath();
+        const r = Math.max(4, l.size * 0.24), x = cx + side * l.size * 0.62, y = cy;
+        ctx.beginPath();
+        if (shape === "square") ctx.rect(x - r, y - r, r * 2, r * 2);
+        else { ctx.moveTo(x, y - r); ctx.lineTo(x + r, y + r * 0.8); ctx.lineTo(x - r, y + r * 0.8); ctx.closePath(); }
         ctx.fillStyle = p.background; ctx.fill(); ctx.strokeStyle = p.text; ctx.lineWidth = 1; ctx.stroke();
-        ctx.fillStyle = p.text; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = `${Math.max(7, r * 1.1)}px ui-monospace, monospace`;
-        ctx.fillText(e.n > 1 ? String(e.n) : e.glyph, x, y + r * 0.25);
+        ctx.fillStyle = p.text; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = `${Math.max(7, r * 1.2)}px ui-monospace, monospace`;
+        ctx.fillText(e.n > 1 ? String(e.n) : e.glyph, x, shape === "square" ? y + 0.5 : y + r * 0.25);
       }
+    };
+    if (l.size >= 8) {
+      const landGlyph = new Map((rules.land?.classes ?? []).map(c => [c.id, c.glyph]));
+      const planeGlyph = new Map((rules.planes?.classes ?? []).map(c => [c.id, c.glyph]));
+      marker((view.units ?? []).filter(u => !u.ship).map(u => ({ at: u.at, glyph: landGlyph.get(u.cls) ?? "?" })), -1, "square");
+      marker((view.planes ?? []).filter(pl => !pl.aboard && !pl.orbit).map(pl => ({ at: pl.at, glyph: planeGlyph.get(pl.cls) ?? "?" })), 1, "triangle");
     }
     if (l.size >= 8) {
-      const ring = (at: { x: number; y: number }, color: string, dashed: boolean) => {
+      // above the sector's letter; yours a little left of centre, others' a little right, so both show in one hex
+      const ring = (at: { x: number; y: number }, color: string, dashed: boolean, shift: number) => {
         const d = toDisplay(at); const { cx, cy } = hexCenter(d.x, d.y, l);
         const r = Math.max(3, l.size * 0.18);
-        ctx.beginPath(); ctx.arc(cx, cy - l.size * 0.55, r, 0, Math.PI * 2);
+        ctx.beginPath(); ctx.arc(cx + shift * l.size, cy - l.size * 0.7, r, 0, Math.PI * 2);
         ctx.strokeStyle = color; ctx.lineWidth = 1.5; if (dashed) ctx.setLineDash([2, 2]); ctx.stroke(); ctx.setLineDash([]);
       };
-      for (const pl of view.planes ?? []) if (pl.orbit) ring(pl.at, p.owner(view.countryId, true), false);
-      for (const o of view.overhead ?? []) ring(o.at, p.contact("firm"), true);
+      for (const pl of view.planes ?? []) if (pl.orbit) ring(pl.at, p.owner(view.countryId, true), false, -0.18);
+      for (const o of view.overhead ?? []) ring(o.at, p.contact("firm"), true, 0.18);
     }
     if (flows && flows.length) drawFlows(ctx, flows, flowT ?? 1, p, l, toDisplay);
     if (highlightPath && highlightPath.length > 1) {
