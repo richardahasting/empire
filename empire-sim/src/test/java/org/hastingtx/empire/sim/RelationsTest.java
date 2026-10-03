@@ -6,6 +6,8 @@ import org.hastingtx.empire.engine.command.CommandExecutor;
 import org.hastingtx.empire.engine.config.GameConfig;
 import org.hastingtx.empire.engine.gen.WorldGenerator;
 import org.hastingtx.empire.engine.model.Relation;
+import org.hastingtx.empire.engine.model.Coord;
+import org.hastingtx.empire.engine.model.Plane;
 import org.hastingtx.empire.engine.model.World;
 import org.hastingtx.empire.engine.update.Update;
 import org.hastingtx.empire.engine.view.CountryView;
@@ -43,6 +45,22 @@ class RelationsTest {
         World w = world();
         assertThat(w.relations()).isEmpty();
         assertThat(w.atWar(0, 1)).isFalse();
+    }
+
+    /**
+     * World.withRelations went through the constructor from before planes and handed back a world with none: every
+     * declaration of war or peace grounded every air force for good, and the next plane built reused id 1.
+     */
+    @Test
+    void goingToWarKeepsEveryonesPlanes() {
+        World w = world();
+        Coord at = w.country(1).capital();
+        w = w.withPlane(new Plane(7, 1, "bomber", at, 100, 100, 0, ""));
+        World war = run(w, 0, new Command.DeclareWar(1));
+        assertThat(war.planes()).extracting(Plane::id).containsExactly(7L);
+        assertThat(war.nextPlaneId()).isEqualTo(w.nextPlaneId());
+        World peace = run(run(war, 0, new Command.OfferPeace(1)), 1, new Command.OfferPeace(0));
+        assertThat(peace.planes()).extracting(Plane::id).containsExactly(7L);
     }
 
     /** The point of one row per pair: B is at war with A without having done anything. */
