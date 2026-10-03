@@ -47,7 +47,8 @@ final class Market {
         if (!(s.price() > 0) || s.price() > mc.maxPrice()) return CommandResult.fail(w, "the price is a unit's, more than $0 and at most " + money(mc.maxPrice()));
         int ci = com.index(s.commodity());
         double have = Math.floor(sec.stock().get(ci));
-        double n = s.qty() >= 0 ? Math.min(Math.floor(s.qty()), have) : have + Math.ceil(s.qty());   // KNOWN: a negative number keeps that many
+        if (s.qty() != Math.rint(s.qty())) return CommandResult.fail(w, "sell a whole number of " + s.commodity());
+        double n = s.qty() >= 0 ? Math.min(s.qty(), have) : have + s.qty();   // KNOWN: a negative number keeps that many
         if (n < 1) return CommandResult.fail(w, s.sector() + " has " + q(have) + " " + s.commodity() + (s.qty() < 0 ? ", no more than the " + q(-Math.ceil(s.qty())) + " to keep" : "") + "; nothing to sell");
         long now = w.updateNumber();
         MarketLot lot = new MarketLot(w.nextLotId(), c.id(), ci, n, s.price(), MarketLot.NOBODY, s.sector(), null, now, now + mc.delayUpdates());
@@ -68,6 +69,7 @@ final class Market {
         if (lot == null) return CommandResult.fail(w, "no lot " + b.lot() + " on the market");
         if (lot.owner() == c.id()) return CommandResult.fail(w, "lot " + lot.id() + " is yours; reset it to change its price");
         double floor = lot.price() + mc.minRaise();
+        if (b.price() > mc.maxPrice()) return CommandResult.fail(w, "no unit sells for more than " + money(mc.maxPrice()));
         if (!(b.price() >= floor - 1e-9)) return CommandResult.fail(w, "the bid is a unit's and must be at least " + money(floor) + " (" + money(lot.price()) + " now)");
         double cost = b.price() * lot.amount() * mc.buyTax();
         if (c.cash() < cost) return CommandResult.fail(w, "it would cost " + money(cost) + " and you have " + money(c.cash()));

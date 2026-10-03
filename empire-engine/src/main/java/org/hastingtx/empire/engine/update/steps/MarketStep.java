@@ -41,7 +41,9 @@ public final class MarketStep implements Step {
                 why = lot.dest() + " has no room for " + what;
             if (why != null) {
                 left.add(lot.withoutBid());
-                ctx.led().event("market_failed", lot.owner(), lot.from(), "lot " + lot.id() + " (" + what + ") did not sell: " + why + "; it is back on the market", lot.amount());
+                // the seller hears only that the buyer's side failed: where the buyer meant the goods to go, and what they
+                // could not pay, are the buyer's business
+                ctx.led().event("market_failed", lot.owner(), lot.from(), "lot " + lot.id() + " (" + what + ") did not sell: the buyer's side of it fell through; it is back on the market", lot.amount());
                 ctx.led().event("market_failed", lot.bidder(), lot.dest(), "your bid on lot " + lot.id() + " (" + what + ") fell through: " + why, lot.amount());
                 continue;
             }

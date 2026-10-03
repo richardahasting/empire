@@ -98,6 +98,7 @@ class MarketTest {
         assertThat(kept.sector(OURS).stock().get(IRON)).isEqualTo(250);
         assertThat(kept.market().get(0).amount()).isEqualTo(750);
         assertThat(EX.execute(w, 0, new Command.Sell(OURS, "iron", -1000, 1)).error()).contains("nothing to sell");
+        assertThat(EX.execute(w, 0, new Command.Sell(OURS, "iron", -0.5, 1)).error()).as("not 'all of it'").contains("whole number");
     }
 
     @Test
@@ -109,6 +110,7 @@ class MarketTest {
         assertThat(EX.execute(w, 1, new Command.Buy(id, 30, THEIRS)).error()).as("12,000 against 10,000 in the bank").contains("you have $10000.00");
         assertThat(EX.execute(w, 1, new Command.Buy(id, 2.5, CAP)).error()).contains("you do not own");
         assertThat(EX.execute(w, 1, new Command.Buy(99, 2.5, THEIRS)).error()).contains("no lot 99");
+        assertThat(EX.execute(w, 1, new Command.Buy(id, 1000.5, THEIRS)).error()).contains("no unit sells for more than $1000.00");
         World bid = ok(w, 1, new Command.Buy(id, 2.05, THEIRS));
         assertThat(EX.execute(bid, 0, new Command.ResetLot(id, 1)).error()).as("out of the seller's hands").contains("has a bid");
         // a second lot they could not also pay for, on top of the first
@@ -143,6 +145,7 @@ class MarketTest {
         assertThat(w.lot(id).price()).as("at the price it reached").isEqualTo(20);
         assertThat(w.sector(THEIRS).stock().get(IRON)).isZero();
         assertThat(r.events()).anySatisfy(e -> assertThat(e.message()).contains("fell through"));
+        assertThat(r.events()).filteredOn(e -> e.country() == 0).allSatisfy(e -> assertThat(e.message()).as("the seller is not told where the buyer's warehouse is").doesNotContain(THEIRS.x() + "," + THEIRS.y()).doesNotContain("$"));
     }
 
     @Test
