@@ -161,6 +161,37 @@ of its **least** stealthy plane (stealth 80: four times in five), and then nothi
 at it or rises against it. One ordinary escort and the whole raid is as visible as it is. In a
 dogfight each side adds a point of strength for every 25 of stealth.
 
+## Missiles
+
+Missiles are the original's (`plane.config`'s missile rows, `launch`, and what rises against
+them). A missile is a plane flown **once**: it is **spent** whatever happens. It is VTOL, so it
+sits and launches from **any sector of yours**, not only an airfield, and the light ones go aboard
+a carrier. Build them on an airfield like any plane.
+
+| class | tech | warhead (shells) | range | |
+|---|---|---|---|---|
+| V2 | 145 | 3 | 4 | at a sector |
+| Harpoon | 160 | 6 | 6 | **anti-ship**, light |
+| Atlas (SRBM) | 200 | 6 | 9 | at a sector |
+| Titan (IRBM) | 260 | 8 | 15 | at a sector |
+| Trident (SLBM) | 280 | 8 | 23 | at a sector, light |
+| Minuteman (ICBM) | 310 | 10 | 41 | at a sector |
+| Sea Sparrow SAM | 180 | — | 2 | **rises** against costly raid planes |
+| Patriot ABM | 270 | — | 12 | **rises** against missiles |
+
+- **`launch MISSILE x,y`** at an enemy sector, at war, within its range (one way). Its warhead is
+  its load in **shells** off its base. **No flak and no fighter can touch it.** It may **blow up
+  on the pad** — less often the fitter and higher-tech it is. Up to **two ABMs** of the countries
+  at war with you rise against it (the target's owner's first), each spent, each able to fail on
+  its own pad; one that flies brings it down with a chance against the missile's defence. If it
+  gets through it **always hits**: damage as a strategic raid, to everything in the sector.
+- **`launch HARPOON ship N`** at an enemy ship, at war (not a submarine). It may miss — a fast,
+  small ship is harder to hit — and a hit does its damage to her hull, divided by her armour;
+  it can sink her.
+- **SAMs** rise like fighters (over their own land, or anywhere in their air-defence area), but
+  only against raid planes that **cost $1,000 or more**, one SAM a plane, before the fighters.
+  They fight as a dogfight would and are spent every time. **ABMs** and SAMs are never launched.
+
 ## What is not here yet
 
-Missile interceptors, and then missiles and satellites.
+Satellites and anti-satellite missiles; ships' anti-missile guns; nuclear warheads.

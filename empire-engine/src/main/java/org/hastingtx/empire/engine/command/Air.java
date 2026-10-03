@@ -146,6 +146,8 @@ final class Air {
         }
         Sector f = b.field();
         if (f.owner() != owner) return "plane #" + p.id() + " is on a field that is no longer yours";
+        UnitsCfg.PlaneClassCfg vc = pc.planeClass(p.cls());
+        if (vc != null && vc.has("vtol") && f.isLand()) return null;   // KNOWN pln_airbase_ok: a VTOL type needs no airfield
         if (!cfg.sectorType(f.designation()).hasFlag("builds_planes")) return "plane #" + p.id() + " is at " + f.at() + ", which is not an airfield";
         if (f.efficiency() < fieldMin) return f.at() + " is at " + q(f.efficiency()) + "%; planes take off from an airfield at " + q(fieldMin) + "% or better";
         return null;
@@ -197,6 +199,7 @@ final class Air {
             if (!seen.add(id)) return new Lift("plane #" + id + " is named twice", w, List.of(), null);
             UnitsCfg.PlaneClassCfg cls = pc.planeClass(p.cls());
             if (cls == null) return new Lift("plane #" + id + " has no class in these rules", w, List.of(), null);
+            if (cls.has("missile")) return new Lift("plane #" + id + " is a missile: it is launched, not flown (launch " + id + " x,y)", w, List.of(), null);   // KNOWN pln_sel nowant P_M
             for (String f : flags) if (!cls.has(f)) return new Lift(article(cls.name()) + " cannot " + verb + "; " + (f.equals("para") ? "it takes a transport that drops paratroops" : "it takes a cargo plane"), w, List.of(), null);
             if (p.efficiency() < minEff) return new Lift("plane #" + id + " is at " + q(p.efficiency()) + "%; it flies at " + q(minEff) + "% or better", w, List.of(), null);
             String grounded = grounded(cfg, w, p, c.id());
@@ -439,6 +442,7 @@ final class Air {
         if (p == null || p.owner() != c.id()) return new Sortie(CommandResult.fail(w, "no plane #" + id + " of yours"), null, null, null, null, 0);
         UnitsCfg.PlaneClassCfg cls = pc.planeClass(p.cls());
         if (cls == null) return new Sortie(CommandResult.fail(w, "plane #" + id + " has no class in these rules"), null, null, null, null, 0);
+        if (cls.has("missile")) return new Sortie(CommandResult.fail(w, "plane #" + id + " is a missile: it is launched, not flown (launch " + id + " x,y)"), null, null, null, null, 0);
         if (p.efficiency() < pc.minEfficiency()) return new Sortie(CommandResult.fail(w, "plane #" + id + " is wreckage at " + q(p.efficiency()) + "%"), null, null, null, null, 0);
         if (at == null || !w.inBounds(at)) return new Sortie(CommandResult.fail(w, "fly where?"), null, null, null, null, 0);
         String grounded = grounded(cfg, w, p, c.id());
@@ -620,7 +624,7 @@ final class Air {
             if (e == null || e.owner() != c.id()) return new Escorts("no plane #" + id + " of yours to fly escort", w, List.of());
             if (flying.contains(id) || !seen.add(id)) return new Escorts("plane #" + id + " is named twice", w, List.of());
             UnitsCfg.PlaneClassCfg cls = pc.planeClass(e.cls());
-            if (cls == null || !(cls.has("intercept") || cls.has("escort"))) return new Escorts("plane #" + id + " cannot fly escort; fighters and escort planes can", w, List.of());
+            if (cls == null || !(cls.has("intercept") || cls.has("escort")) || cls.has("missile")) return new Escorts("plane #" + id + " cannot fly escort; fighters and escort planes can", w, List.of());
             if (e.efficiency() < ac.minEfficiency()) return new Escorts("plane #" + id + " is at " + q(e.efficiency()) + "%; an escort needs " + q(ac.minEfficiency()) + "%", w, List.of());
             String grounded = grounded(cfg, w, e, c.id());
             if (grounded != null) return new Escorts(grounded, w, List.of());
@@ -684,6 +688,9 @@ final class Air {
             for (int them = 0; them < w.countries().size() && !mine.isEmpty(); them++) {
                 if (them == c.id() || !w.atWar(c.id(), them)) continue;
                 boolean home = s.owned() && s.owner() == them;
+                // their SAMs first (KNOWN sam_intercept): one at each plane of the raid that costs enough, bombers then escorts
+                Missiles.sams(cfg, r, w, them, at, home, mine, esc, now, launched, gone, story);
+                if (mine.isEmpty()) break;
                 // who rises: a snapshot of their fighters, newest first
                 List<Plane> up = new ArrayList<>();
                 int room = mine.size() + esc.size() + ac.extraInterceptors();
@@ -694,7 +701,7 @@ final class Air {
                     if (f.owner() != them || launched.contains(f.id())) continue;
                     if (w.onTheBlock(TradeLot.PLANE, f.id()) != null) continue;   // KNOWN aircombat.c:773: not one on the trading block
                     UnitsCfg.PlaneClassCfg fc = pc.planeClass(f.cls());
-                    if (fc == null || !fc.has("intercept") || f.efficiency() < ac.minEfficiency()) continue;
+                    if (fc == null || !fc.has("intercept") || fc.has("missile") || f.efficiency() < ac.minEfficiency()) continue;
                     if (!home && !(f.onAirDefence() && Hex.distance(w, at, f.opPoint()) <= f.radius())) continue;
                     if (grounded(cfg, w, f, them) != null) continue;   // KNOWN pln_airbase_ok: a field of theirs, or a carrier
                     Base field = base(w, f);
@@ -755,7 +762,7 @@ final class Air {
     }
 
     /** Shot down below the minimum, or turned back under {@code abort_below} with chance (80 − efficiency)/100 (KNOWN ac_damage_plane). */
-    private static boolean out(UnitsCfg.PlanesCfg pc, UnrestStep.R r, Plane p) {
+    static boolean out(UnitsCfg.PlanesCfg pc, UnrestStep.R r, Plane p) {
         return p.efficiency() < pc.minEfficiency() || (p.efficiency() < pc.abortBelow() && r.chance((pc.abortBelow() - p.efficiency()) / 100.0));
     }
 

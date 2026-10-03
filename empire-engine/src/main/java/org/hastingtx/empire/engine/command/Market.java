@@ -250,6 +250,7 @@ final class Market {
             case Command.Paradrop x -> { for (long p : x.planes()) planes.add(new long[] {p}); for (long e : x.escorts()) planes.add(new long[] {e}); }
             case Command.SweepAir x -> { for (long p : x.planes()) planes.add(new long[] {p}); for (long e : x.escorts()) planes.add(new long[] {e}); }
             case Command.Lay x -> ships.add(new long[] {x.ship()});
+            case Command.Launch x -> planes.add(new long[] {x.missile()});
             case Command.LandMine x -> units.add(new long[] {x.unit()});
             default -> { }
         }

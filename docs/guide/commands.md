@@ -76,6 +76,7 @@ bomb PLANE x,y [strategic] [escort E,E]   a bombing sortie; strategic wrecks the
 recon PLANE x,y [escort E,E]   a reconnaissance sortie: it puts the sector on your chart
 fly PLANES x,y [COMMODITY]   one way to an airfield of yours (transports carry their load twice over); PLANES like 4,5
 drop PLANES x,y COMMODITY    transports drop their load on a sector of yours and fly home; shells on the sea are mines
+launch MISSILE x,y           a missile at an enemy sector, at war (launch MISSILE ship N for an anti-ship missile); spent
 lay SHIP N                   a destroyer, submarine or minesweeper at sea lays N sea mines from her shells
 lmine UNIT N                 an engineer lays N land mines in its sector (a shell and a mobility point each)
 sweep PLANES x,y             naval planes sweep sea mines on the way to x,y and back

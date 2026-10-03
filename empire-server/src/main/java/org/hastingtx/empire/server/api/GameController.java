@@ -187,6 +187,7 @@ public class GameController {
                 case "fly" -> new Command.Fly(planes == null ? List.of() : planes, at, commodity, units == null ? List.of() : units);        // units: escorts
                 case "drop" -> new Command.Drop(planes == null ? List.of() : planes, at, commodity, units == null ? List.of() : units);
                 case "paradrop" -> new Command.Paradrop(planes == null ? List.of() : planes, at, units == null ? List.of() : units);
+                case "launch" -> new Command.Launch(needPlane(), at, ship == null ? 0 : ship);   // ship: an anti-ship missile's target
                 case "lay" -> new Command.Lay(needShip(), amount == null ? 0 : amount);
                 case "lmine" -> new Command.LandMine(unit == null ? 0 : unit, amount == null ? 0 : amount);
                 case "sweep" -> new Command.SweepAir(planes == null ? List.of() : planes, at, units == null ? List.of() : units);

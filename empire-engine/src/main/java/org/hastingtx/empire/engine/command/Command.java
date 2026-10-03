@@ -12,7 +12,7 @@ public sealed interface Command permits
         Command.BuildShip, Command.Sail, Command.Load, Command.Unload, Command.Lane, Command.Scrap, Command.Fish, Command.Mine, Command.Supply, Command.Fire, Command.Mission, Command.Land, Command.Demobilize, Command.Enlist, Command.Attack, Command.Anti, Command.BuildUnit, Command.March, Command.LoadUnit, Command.Board, Command.Sabotage, Command.Incite, Command.UnitFire, Command.Work, Command.BuildPlane, Command.Bomb, Command.Recon,
         Command.RailLane, Command.Telegram, Command.Announce, Command.DeclareWar, Command.OfferPeace,
         Command.Sell, Command.Buy, Command.ResetLot, Command.SetPrice, Command.Trade, Command.AirMission,
-        Command.Fly, Command.Drop, Command.Paradrop, Command.Lay, Command.LandMine, Command.SweepAir {
+        Command.Fly, Command.Drop, Command.Paradrop, Command.Lay, Command.LandMine, Command.SweepAir, Command.Launch {
 
     String verb();
 
@@ -157,6 +157,9 @@ public sealed interface Command permits
         public SweepAir { planes = planes == null ? java.util.List.of() : java.util.List.copyOf(planes); escorts = escorts == null ? java.util.List.of() : java.util.List.copyOf(escorts); }
         public String verb() { return "sweep"; }
     }
+
+    /** A missile launched at a sector, or an anti-ship missile at {@code ship} (issue #71; KNOWN laun.c). */
+    record Launch(long missile, Coord at, long ship) implements Command { public String verb() { return "launch"; } }
 
     /** A plane is laid down on an airfield of yours (issue #262). */
     record BuildPlane(Coord at, String cls) implements Command { public String verb() { return "build_plane"; } }
