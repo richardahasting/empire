@@ -141,4 +141,18 @@ class MinesTest {
         for (int u = 0; u < 20 && left == laid; u++) left = ok(dropped.withUpdateNumber(u), 0, new Command.SweepAir(List.of(1L), SEA1, List.of())).sector(SEA1).mines();
         assertThat(left).as("a sweep clears one now and then").isLessThan(laid);
     }
+
+    /**
+     * Issue #312: the far end of a sweep need not be water. {@code lift} only asks that the hex be in bounds, and the
+     * sweep clears every sea hex along the flight path — so a run aimed at a coast, to clear its approaches, is a legal
+     * order. The web client refused it before the server ever saw it; this pins the engine's side of that.
+     */
+    @Test
+    void aSweepMayBeAimedAtLand() {
+        Coord field = Hex.stepRaw(CAP, 1, 1);
+        World w = TestWorlds.own(world(), CFG, field, "airfield", 100, 127, Map.of("civ", 100.0, "food", 100.0, "pet", 100.0, "shell", 100.0), Map.of());
+        w = w.withPlane(new Plane(1, 0, "naval_plane", field, 100, 200, 0, ""));
+        assertThat(w.sector(HARBOUR).isLand()).as("the target really is dry land").isTrue();
+        assertThat(EX.execute(w, 0, new Command.SweepAir(List.of(1L), HARBOUR, List.of())).error()).isNull();
+    }
 }

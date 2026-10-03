@@ -28,7 +28,7 @@ const className = (rules: Rules, cls: string) => rules.ships?.classes.find(c => 
 /** Your fleet (issue #56): every ship, where it is, what it carries, where it is going, what it did last update; and the orders. */
 export function Fleet({ gameId, view, rules, busy, onCommand, onSail, at, onShowAll }: Props) {
   const [logbook, setLogbook] = useState<number | null>(null);
-  const [dialog, setDialog] = useState<{ kind: "load" | "unload" | "lane" | "fire" | "escort" | "land"; ship: ShipView } | null>(null);
+  const [dialog, setDialog] = useState<{ kind: "load" | "unload" | "lane" | "fire" | "escort" | "land" | "lay"; ship: ShipView } | null>(null);
   const [pendingScrap, setPendingScrap] = useState<number | null>(null);
   const harbors = view.sectors.filter(s => s.full && (rules.sectorTypes.find(t => t.id === s.designation)?.flags ?? []).includes("builds_ships"));
   if (view.ships.length === 0) return <p className="text-xs text-muted-foreground">No ships. Right-click a harbour and choose “Build ship…”.{harbors.length === 0 ? " You have no harbour yet: designate a coastal sector as one." : ""}</p>;
@@ -86,6 +86,9 @@ export function Fleet({ gameId, view, rules, busy, onCommand, onSail, at, onShow
                 ? <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: "fish", ship: s.id, clear: true })}>Stop fishing</Button>
                 : <Button size="sm" variant="secondary" disabled={busy || !s.docked} title={s.docked ? "roam the grounds near this harbour, fish, land the catch here, repeat" : "give the order while docked in the home harbour"} onClick={() => void onCommand({ verb: "fish", ship: s.id, x: s.at.x, y: s.at.y })}>Fish from here</Button>)}
               {armed && <Button size="sm" variant="secondary" disabled={busy} title="fire on a ship you can see; it happens now, and she answers" onClick={() => setDialog({ kind: "fire", ship: s })}>Fire…</Button>}
+              {cls?.laysMines && <Button size="sm" variant="secondary" disabled={busy || s.docked || Math.floor(s.stock["shell"] ?? 0) < 1}
+                  title={s.docked ? "mines are laid at sea: sail her out of the harbour first" : Math.floor(s.stock["shell"] ?? 0) < 1 ? "no shells aboard to make mines of" : "a shell a mine, into the water where she lies"}
+                  onClick={() => setDialog({ kind: "lay", ship: s })}>Lay mines…</Button>}
               {assault && <Button size="sm" variant="secondary" disabled={busy || s.load < 1} title={s.load < 1 ? "load mil and civ in harbour first" : "put everyone aboard ashore on unowned land next to her"} onClick={() => setDialog({ kind: "land", ship: s })}>Land…</Button>}
               {armed && (s.mission && MILITARY.includes(s.mission)
                 ? <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: s.mission!, ship: s.id, clear: true })}>Stop {s.mission}</Button>
@@ -115,6 +118,7 @@ export function Fleet({ gameId, view, rules, busy, onCommand, onSail, at, onShow
         );
       })}
       {dialog?.kind === "fire" && <FireDialog ship={dialog.ship} view={view} rules={rules} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
+      {dialog?.kind === "lay" && <LayMinesDialog ship={dialog.ship} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {dialog?.kind === "land" && <LandDialog ship={dialog.ship} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {dialog?.kind === "escort" && <EscortDialog ship={dialog.ship} view={view} rules={rules} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {dialog && (dialog.kind === "load" || dialog.kind === "unload" || dialog.kind === "lane") && (dialog.kind === "lane"
@@ -172,6 +176,36 @@ function FireDialog({ ship, view, rules, busy, onClose, onCommand }: { ship: Shi
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button variant="danger" disabled={busy || !pick} onClick={async () => { const [x, y] = pick.split(",").map(Number); const c = fresh.find(k => k.at.x === x && k.at.y === y); await onCommand({ verb: "fire", ship: ship.id, x, y, type: c?.cls ?? undefined }); onClose(); }}>Fire</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Lay sea mines (issue #71; the original's mine): a destroyer, submarine or minesweeper at sea spends a
+ * shell a mine, into the water where she lies, and her standing mission ends. Mines know no owner and
+ * nobody can see them afterwards — not even the country that laid them.
+ */
+function LayMinesDialog({ ship, busy, onClose, onCommand }: { ship: ShipView; busy: boolean; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void> }) {
+  const shells = Math.floor(ship.stock["shell"] ?? 0);
+  const [n, setN] = useState(String(shells));
+  const want = Number(n);
+  const ok = Number.isInteger(want) && want >= 1 && want <= shells;
+  return (
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Lay mines from ship #{ship.id} at {rel(ship.relative)}</DialogTitle>
+          <DialogDescription>A shell a mine, out of her magazine and into the water where she lies; whatever standing order she was on ends. Mines know no allegiance — your own ships strike them too — and no chart shows them afterwards, so note where you put them.</DialogDescription></DialogHeader>
+        {shells < 1
+          ? <p className="text-sm text-destructive">No shells aboard to make mines of. Load some in a harbour first.</p>
+          : <label className="grid gap-1 text-sm">How many <span className="text-xs text-muted-foreground">({shells} shell{shells === 1 ? "" : "s"} aboard)</span>
+              <Input value={n} onChange={e => setN(e.target.value)} inputMode="numeric" autoFocus />
+            </label>}
+        {shells >= 1 && n !== "" && !ok && <p className="text-xs text-destructive">A whole number of mines, 1 to {shells}.</p>}
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="danger" disabled={busy || !ok} onClick={async () => { await onCommand({ verb: "lay", ship: ship.id, amount: want }); onClose(); }}>Lay them</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

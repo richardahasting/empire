@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { estimate, popCeiling, prospects, type Estimate } from "@/game/production";
+import { palette } from "@/map/palette";
 
 interface Props { sector: SectorView | null; view: CountryView; rules: Rules; onCommand: (c: CommandRequest) => Promise<void>; busy: boolean; history?: string[]; historyUpdate?: number;
   /** List this sector's ships in the Fleet panel (issue #240). */
@@ -16,6 +17,7 @@ export function Inspector({ sector: s, view, rules, onCommand, busy, history, hi
   const [des, setDes] = useState("");
   const [thrCommodity, setThrCommodity] = useState("food");
   const [thrAmount, setThrAmount] = useState("");
+  const pal = palette();   // the map's commodity colours, from the theme's tokens, for the legend dots
   const [exploreCivs, setExploreCivs] = useState("20");
 
   if (!s) return <p className="text-sm text-muted-foreground">Click a sector to inspect it. Right-click one you own to move, explore, designate or set thresholds.</p>;
@@ -78,7 +80,7 @@ export function Inspector({ sector: s, view, rules, onCommand, busy, history, hi
         <tbody>
           {view.commodityIds.map(c => (
             <tr key={c} className={(s.stock[c] ?? 0) === 0 && s.thresholds[c] === undefined && !s.held[c] && !s.deliveries[c] ? "text-muted-foreground/60" : ""}>
-              <td>{c}</td><td className="text-right tabular-nums">{fmt(s.stock[c])}</td>
+              <td>{(s.thresholds[c] !== undefined && s.distCenter && !(s.distCenter.x === s.at.x && s.distCenter.y === s.at.y) || s.deliveries[c]) && <span className="mr-1 inline-block size-2 rounded-full align-middle" style={{ background: pal.commodity(c) }} title="its colour on the map" />}{c}</td><td className="text-right tabular-nums">{fmt(s.stock[c])}</td>
               <td className="text-right tabular-nums">{s.thresholds[c] !== undefined ? fmt(s.thresholds[c]) : "—"}</td>
               <td className="text-right tabular-nums" title={s.deliveries[c] ? `above ${fmt(s.deliveries[c].threshold)}, one hex ${s.deliveries[c].dir} every update` : undefined}>{s.deliveries[c] ? `${deliveryTarget(view, s.at, s.deliveries[c].dir)} >${fmt(s.deliveries[c].threshold)}` : ""}</td>
               <td className="text-right tabular-nums">{s.held[c] ? fmt(s.held[c]) : ""}</td>
@@ -86,6 +88,7 @@ export function Inspector({ sector: s, view, rules, onCommand, busy, history, hi
           ))}
         </tbody>
       </table>
+      {s.full && (s.distCenter || Object.keys(s.deliveries).length > 0) && <p className="text-xs text-muted-foreground">On the map, each coloured dot's commodity runs to the outlined distribution centre — the arrow out when there is surplus over the threshold, in when short of it — and deliver orders point to their neighbour.</p>}
       {short.length > 0 && <p className="text-xs">Short of: <span className="text-destructive">{short.join(", ")}</span></p>}
       {type && <Production s={s} type={type} rules={rules} view={view} />}
       {history && history.length > 0 && (

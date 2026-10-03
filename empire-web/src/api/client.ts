@@ -202,7 +202,9 @@ export interface ShipClass { id: string; name: string; glyph: string; role: stri
   /** Most of a commodity she may carry, by id (issue #193: an assault ship takes 100 mil and 20 civ). */
   limits?: Record<string, number> | null;
   /** How many light land units she carries (issue #252); absent or 0 for a ship that carries none. */
-  landUnits?: number | null }
+  landUnits?: number | null;
+  /** Mines (issue #71): she lays sea mines from her magazine; a sweeper also clears every sea hex she enters. */
+  laysMines?: boolean | null; sweeps?: boolean | null }
 export interface ShipsRules { startEfficiency: number; dockPointsPerUpdate: number; harborMinEfficiency: number; classes: ShipClass[] }
 export interface Rules { sectorTypes: SectorType[]; commodities: Commodity[]; etusPerUpdate: number; btuCosts: Record<string, number>; road?: RoadRules; defaultCapacity?: number; rail?: RailRules; productionMinEfficiency?: number; massThresholdMultiplierByType?: Record<string, number>; ships?: ShipsRules | null; work?: WorkRules; curves?: Record<string, Curve>; maxPopCurve?: { type: string; base?: number | null; perResearchPoint?: number | null; cap?: number | null } | null; land?: LandRules | null; planes?: PlanesRules | null; market?: MarketRules | null; nukes?: NukesRules | null }
 /** The commodity market's rules (issue #141); null in a game without one. */

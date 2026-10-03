@@ -8,6 +8,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 
 const rel = (c: { x: number; y: number }) => `${c.x},${c.y}`;
 
+/**
+ * What a plane's class can do that the view does not say outright (issue #71): "sweep" clears sea mines on
+ * the way to a hex and back, "mine" lays them by dropping shells on the water.
+ */
+const planeFlags = (rules: Rules, cls: string) => rules.planes?.classes.find(c => c.id === cls)?.flags ?? [];
+
 /** A sector relative to your capital, absolute — wrapping as the world does; undefined off the edge of one that does not. */
 function absolute(view: CountryView, dx: number, dy: number): { x: number; y: number } | undefined {
   let x = view.capital.x + dx, y = view.capital.y + dy;
@@ -21,8 +27,8 @@ function absolute(view: CountryView, dx: number, dy: number): { x: number; y: nu
  * A sortie takes petrol and bombs off the field it flies from, and whatever it flies against shoots back. Fighters of a
  * country at war with you rise against it on the way, and the escorts it takes fight them first (issue #71).
  */
-export function Air({ view, busy, onCommand }: { view: CountryView; busy: boolean; onCommand: (c: CommandRequest) => Promise<void> }) {
-  const [dialog, setDialog] = useState<{ kind: "bomb" | "recon" | "defend" | "fly" | "drop" | "paradrop" | "launch" | "arm"; plane: PlaneView } | null>(null);
+export function Air({ view, rules, busy, onCommand }: { view: CountryView; rules: Rules; busy: boolean; onCommand: (c: CommandRequest) => Promise<void> }) {
+  const [dialog, setDialog] = useState<{ kind: "bomb" | "recon" | "defend" | "fly" | "drop" | "paradrop" | "launch" | "arm" | "sweep"; plane: PlaneView } | null>(null);
   const nukes = view.nukes ?? [];
   const storedWith = (p: PlaneView) => nukes.filter(n => n.plane === 0 && n.at.x === p.at.x && n.at.y === p.at.y && n.weight <= p.load);
   const planes = view.planes ?? [];
@@ -78,6 +84,7 @@ export function Air({ view, busy, onCommand }: { view: CountryView; busy: boolea
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "fly", plane: p })}>Fly to…</Button>
             {p.cargo && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "drop", plane: p })}>Drop supplies…</Button>}
             {p.para && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDialog({ kind: "paradrop", plane: p })}>Paradrop…</Button>}
+            {planeFlags(rules, p.cls).includes("sweep") && <Button size="sm" variant="ghost" disabled={busy} title="fly out over the water and back, clearing sea mines in every hex on the way" onClick={() => setDialog({ kind: "sweep", plane: p })}>Sweep mines…</Button>}
             {p.opRelative && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onCommand({ verb: "air_defence", plane: p.id, clear: true })}>Off air defence</Button>}
           </div>}
         </div>
@@ -85,7 +92,8 @@ export function Air({ view, busy, onCommand }: { view: CountryView; busy: boolea
       {dialog?.kind === "arm" && <ArmDialog plane={dialog.plane} choices={storedWith(dialog.plane)} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {dialog?.kind === "launch" && <LaunchDialog plane={dialog.plane} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {dialog?.kind === "defend" && <DefendDialog plane={dialog.plane} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
-      {dialog && (dialog.kind === "fly" || dialog.kind === "drop" || dialog.kind === "paradrop") && <TransportDialog kind={dialog.kind} plane={dialog.plane} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
+      {dialog?.kind === "sweep" && <SweepDialog plane={dialog.plane} view={view} rules={rules} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
+      {dialog && (dialog.kind === "fly" || dialog.kind === "drop" || dialog.kind === "paradrop") && <TransportDialog kind={dialog.kind} plane={dialog.plane} view={view} rules={rules} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
       {dialog && (dialog.kind === "bomb" || dialog.kind === "recon") && <SortieDialog kind={dialog.kind} plane={dialog.plane} view={view} busy={busy} onClose={() => setDialog(null)} onCommand={onCommand} />}
     </div>
   );
@@ -207,30 +215,110 @@ function DefendDialog({ plane, view, busy, onClose, onCommand }: { plane: PlaneV
 }
 
 /**
+ * Sweep sea mines from the air (issue #71; the original's sweep): the planes fly out over the water to x,y and
+ * home again, and in each sea hex along the way each clears at most one mine. A less accurate plane sweeps
+ * better — the chance is (100 − accuracy)/100 — because it is looking down, not aiming.
+ */
+function SweepDialog({ plane, view, rules, busy, onClose, onCommand }:
+  { plane: PlaneView; view: CountryView; rules: Rules; busy: boolean; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void> }) {
+  const [to, setTo] = useState("");
+  const [with_, setWith] = useState<number[]>([]);
+  const [escorts, setEscorts] = useState<number[]>([]);
+  // Same base, not merely the same hex: lift flies a sortie "from one field or one carrier", so two carriers
+  // anchored together — or a carrier over your own harbour — would be refused outright if both were offered.
+  const mates = (view.planes ?? []).filter(p => p.id !== plane.id && p.aboard === plane.aboard
+    && p.at.x === plane.at.x && p.at.y === plane.at.y && planeFlags(rules, p.cls).includes("sweep"));
+  const canEscort = (view.planes ?? []).filter(p => p.id !== plane.id && !p.missile && !p.satellite && (p.intercept || p.escort));
+  const [tx, ty] = to.split(",").map(s => Number(s.trim()));
+  const target = Number.isFinite(tx) && Number.isFinite(ty) ? view.sectors.find(s => s.relative.x === tx && s.relative.y === ty) : undefined;
+  // The far end need not be water: Air.sweep sweeps every sea hex along the flight path and lift only asks that the
+  // hex be in bounds, so a run at a coast to clear its approaches is legal. Say so rather than refusing it here —
+  // the server stays the judge of what is allowed, and a client guard stricter than the engine hides a real order.
+  const overland = !!target && target.terrain !== "ocean";
+  return (
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Sweep mines with plane #{plane.id} from {rel(plane.relative)}</DialogTitle>
+          <DialogDescription>
+            They fly out to the hex you name and back — up to {Math.floor(plane.reach)} hexes out — and sweep every sea hex on the way, each plane clearing at most one mine a hex. Nobody can see sea mines, so sweep the water you mean to sail through. At war, enemy fighters rise against them on the way.
+          </DialogDescription></DialogHeader>
+        <div className="grid gap-3 text-sm">
+          <label className="grid gap-1">Out to (x,y)<Input value={to} onChange={e => setTo(e.target.value)} placeholder="e.g. 6,2" autoFocus /></label>
+          {mates.length > 0 && (
+            <fieldset className="grid gap-1">
+              <legend className="mb-1">With them — other sweepers on this field</legend>
+              {mates.map(m => (
+                <label key={m.id} className="flex items-center gap-2 text-xs">
+                  <Checkbox checked={with_.includes(m.id)} onChange={() => setWith(w => w.includes(m.id) ? w.filter(x => x !== m.id) : [...w, m.id])} />
+                  #{m.id} {m.name} · {m.efficiency.toFixed(0)}% · accuracy {m.accuracy.toFixed(0)}%
+                </label>
+              ))}
+            </fieldset>
+          )}
+          {canEscort.length > 0 && (
+            <fieldset className="grid gap-1">
+              <legend className="mb-1">Escorts — fighters on fields within 4 hexes; they fight interceptors first</legend>
+              {canEscort.map(e => (
+                <label key={e.id} className="flex items-center gap-2 text-xs">
+                  <Checkbox checked={escorts.includes(e.id)} onChange={() => setEscorts(s => s.includes(e.id) ? s.filter(x => x !== e.id) : [...s, e.id])} />
+                  #{e.id} {e.name} at {rel(e.relative)} · {e.efficiency.toFixed(0)}%
+                </label>
+              ))}
+            </fieldset>
+          )}
+        </div>
+        {to && !target && <p className="text-xs text-destructive">Nothing on your chart there.</p>}
+        {overland && <p className="text-xs text-muted-foreground">That hex is land: they will sweep whatever sea they cross on the way there and back, and find nothing if the whole run is overland — the petrol goes either way.</p>}
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button disabled={busy || !target} onClick={async () => {
+            if (!target) return;
+            await onCommand({ verb: "sweep", planes: [plane.id, ...with_], x: target.at.x, y: target.at.y, units: escorts });
+            onClose();
+          }}>Sweep</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
  * Air transport (issue #71; the original's fly, drop and paradrop). Fly: one way to an airfield of yours, transports carrying
  * their load twice over. Drop: supplies on a sector of yours, and home. Paradrop: the field's soldiers on a sector not yours.
  * Other transports on the same field may go too; at war, enemy fighters rise on the way.
  */
-function TransportDialog({ kind, plane, view, busy, onClose, onCommand }:
-  { kind: "fly" | "drop" | "paradrop"; plane: PlaneView; view: CountryView; busy: boolean; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void> }) {
+function TransportDialog({ kind, plane, view, rules, busy, onClose, onCommand }:
+  { kind: "fly" | "drop" | "paradrop"; plane: PlaneView; view: CountryView; rules: Rules; busy: boolean; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void> }) {
   const field = view.sectors.find(s => s.at.x === plane.at.x && s.at.y === plane.at.y);
-  const mates = (view.planes ?? []).filter(p => p.id !== plane.id && !p.missile && !p.satellite && p.at.x === plane.at.x && p.at.y === plane.at.y && (kind === "fly" || (kind === "drop" ? p.cargo : p.para)));
   const [with_, setWith] = useState<number[]>([]);
   const [to, setTo] = useState("");
   const [what, setWhat] = useState("");
-  const goods = field ? Object.entries(field.stock).filter(([, q]) => q >= 1).map(([c]) => c) : [];
+  // A plane aboard a carrier loads out of her hold, not out of the hex she floats on (Air.Base.stock does the same).
+  // Reading the sector here left the list empty for a carrier's planes, since open sea stores nothing.
+  const carrier = plane.aboard ? view.ships.find(s => s.id === plane.aboard) : undefined;
+  const hold = carrier ? carrier.stock : field?.stock;
+  const goods = hold ? Object.entries(hold).filter(([, q]) => q >= 1).map(([c]) => c) : [];
   const [tx, ty] = to.split(",").map(s => Number(s.trim()));
   const target = Number.isFinite(tx) && Number.isFinite(ty) ? view.sectors.find(s => s.relative.x === tx && s.relative.y === ty) : undefined;
   const mine = !!target && target.owner === view.countryId;
   const carrierThere = kind === "fly" && !!target && plane.light && view.ships.some(s => s.at.x === target.at.x && s.at.y === target.at.y);
-  const ok = !!target && (kind === "paradrop" ? !mine && target.terrain !== "ocean" : mine || carrierThere) && (kind !== "drop" || !!what);
+  // Shells dropped on the sea go in as mines (issue #71): the server routes a drop of shell over water to minelaying,
+  // so the target is open ocean rather than land of yours, and only planes that can mine may go.
+  const layer = (p: PlaneView) => planeFlags(rules, p.cls).includes("mine");
+  const mineDrop = kind === "drop" && what === "shell" && !!target && target.terrain === "ocean" && layer(plane);
+  const mates = (view.planes ?? []).filter(p => p.id !== plane.id && !p.missile && !p.satellite && p.aboard === plane.aboard
+    && p.at.x === plane.at.x && p.at.y === plane.at.y
+    && (kind === "fly" || (kind === "drop" ? (mineDrop ? layer(p) : p.cargo) : p.para)));
+  const ok = !!target && (kind === "paradrop" ? !mine && target.terrain !== "ocean"
+    : kind === "drop" ? !!what && (mineDrop || mine)
+    : mine || carrierThere);
   const title = kind === "fly" ? "Fly" : kind === "drop" ? "Drop supplies" : "Paradrop";
   return (
     <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent>
-        <DialogHeader><DialogTitle>{title} from {rel(plane.relative)}</DialogTitle>
+        <DialogHeader><DialogTitle>{mineDrop ? "Lay mines" : title} from {rel(plane.relative)}</DialogTitle>
           <DialogDescription>
-            {kind === "fly" ? "One way, to an airfield of yours or onto a carrier of yours there (light planes only); they stay there. Transports carry twice their load." : kind === "drop" ? "Onto land of yours; the planes fly home." : "The field's soldiers, onto a sector not yours (not mountains, a capital, a fortress or a wasteland); they fight for it."}
+            {kind === "fly" ? "One way, to an airfield of yours or onto a carrier of yours there (light planes only); they stay there. Transports carry twice their load." : kind === "drop" ? `Onto land of yours${layer(plane) ? ", or shells onto open water, where they go in as mines" : ""}; the planes fly home.` : "The field's soldiers, onto a sector not yours (not mountains, a capital, a fortress or a wasteland); they fight for it."}
             {" "}At war, enemy fighters rise on the way, and what a plane that is shot down or turns back carried is lost.
           </DialogDescription></DialogHeader>
         <div className="grid gap-3 text-sm">
@@ -239,13 +327,14 @@ function TransportDialog({ kind, plane, view, busy, onClose, onCommand }:
             <label className="grid gap-1">{kind === "fly" ? "Carry (optional)" : "Drop"}
               <Select value={what} onChange={e => setWhat(e.target.value)}>
                 <option value="">{kind === "fly" ? "nothing" : "—"}</option>
-                {goods.map(c => <option key={c} value={c}>{c} ({Math.floor(field?.stock[c] ?? 0)} on the field)</option>)}
+                {goods.map(c => <option key={c} value={c}>{c} ({Math.floor(hold?.[c] ?? 0)} {carrier ? `aboard ship #${carrier.id}` : "on the field"})</option>)}
               </Select>
             </label>
           )}
+          {kind === "drop" && layer(plane) && <p className="text-xs text-muted-foreground">Pick <span className="font-mono">shell</span> and a hex of open water to lay mines instead: they carry twice their load, a shell a mine, and nobody can see them afterwards.</p>}
           {mates.length > 0 && (
             <fieldset className="grid gap-1">
-              <legend className="mb-1">With them</legend>
+              <legend className="mb-1">{mineDrop ? "With them — other minelayers on this field" : "With them"}</legend>
               {mates.map(m => (
                 <label key={m.id} className="flex items-center gap-2 text-xs">
                   <Checkbox checked={with_.includes(m.id)} onChange={() => setWith(w => w.includes(m.id) ? w.filter(x => x !== m.id) : [...w, m.id])} />
@@ -259,9 +348,11 @@ function TransportDialog({ kind, plane, view, busy, onClose, onCommand }:
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button disabled={busy || !ok} onClick={async () => {
             if (!target) return;
-            await onCommand({ verb: kind, planes: [plane.id, ...with_], x: target.at.x, y: target.at.y, commodity: what || undefined });
+            // a mate ticked before the target became open water may no longer be able to come
+            const along = with_.filter(id => mates.some(m => m.id === id));
+            await onCommand({ verb: kind, planes: [plane.id, ...along], x: target.at.x, y: target.at.y, commodity: what || undefined });
             onClose();
-          }}>{title}</Button>
+          }}>{mineDrop ? "Lay mines" : title}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
