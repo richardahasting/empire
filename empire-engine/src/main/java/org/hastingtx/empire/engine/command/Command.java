@@ -96,10 +96,18 @@ public sealed interface Command permits
     record BuildPlane(Coord at, String cls) implements Command { public String verb() { return "build_plane"; } }
 
     /** A bombing sortie (issue #262); pinpoint aims at what is in the sector, strategic at the sector itself. */
-    record Bomb(long plane, Coord at, boolean pinpoint) implements Command { public String verb() { return "bomb"; } }
+    record Bomb(long plane, Coord at, boolean pinpoint, java.util.List<Long> escorts) implements Command {
+        public Bomb(long plane, Coord at, boolean pinpoint) { this(plane, at, pinpoint, java.util.List.of()); }
+        public Bomb { escorts = escorts == null ? java.util.List.of() : java.util.List.copyOf(escorts); }
+        public String verb() { return "bomb"; }
+    }
 
     /** A reconnaissance sortie (issue #262). */
-    record Recon(long plane, Coord at) implements Command { public String verb() { return "recon"; } }
+    record Recon(long plane, Coord at, java.util.List<Long> escorts) implements Command {
+        public Recon(long plane, Coord at) { this(plane, at, java.util.List.of()); }
+        public Recon { escorts = escorts == null ? java.util.List.of() : java.util.List.copyOf(escorts); }
+        public String verb() { return "recon"; }
+    }
 
     /** An engineer spends its mobility building the sector it stands in (issue #258); mobility 0 means all it has. */
     record Work(long unit, double mobility) implements Command { public String verb() { return "work"; } }

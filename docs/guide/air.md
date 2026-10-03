@@ -58,8 +58,43 @@ bomber flies low and is a step easier to hit than anything else.
 So guns in a sector are worth keeping even when nobody is marching at you, and a bomber's
 first raid against a well-defended sector is rarely its last problem.
 
+## Fighters, interception and escorts
+
+Fighters are the original's (`plane.config`), as they were:
+
+| class | tech | attack | defence | range | petrol | what it is for |
+|---|---|---|---|---|---|---|
+| biplane fighter | 50 | 1 | 1 | 4 | 1 | the first fighter: it rises against raids |
+| fighter | 80 | 4 | 4 | 8 | 1 | rises against raids, escorts |
+| jet fighter | 125 | 14 | 14 | 11 | 3 | the same, much harder |
+| VTOL jet fighter | 195 | 17 | 17 | 14 | 3 | the same, harder still |
+| escort fighter | 90 | 5 | 5 | 15 | 2 | escorts only: it does not rise against raids |
+| jet escort | 160 | 10 | 10 | 25 | 3 | escorts only, a long way |
+
+**Interception.** A raid flies hex by hex from its field to the target. Over each sector
+held by a country **at war** with the raider, that country's fighters rise: those at **40%**
+or better, on an airfield of theirs that is at least 40%, with the range to reach that
+sector and come back, and with their petrol on the field (the sortie takes it). The newest
+go up first, as many as the raid has planes **and one more**, and each fighter rises only
+once a raid. At peace nobody rises: reconnaissance over a neighbour still meets their
+guns, but not their fighters.
+
+**Escorts.** `bomb 3 4,-1 escort 5,6` takes fighters or escort planes along. Each must be
+at 40% or better, on a field of yours **within 4 hexes** of the bomber's, with the range
+to fly to the bomber's field, on to the target and back, and its petrol on its own field.
+A bad escort refuses the whole sortie before anything leaves the ground. Escorts fight the
+interceptors **first**; the bomber meets only whoever is left.
+
+**Dogfights** (the original's `ac_dog`). The raid plane brings its attack (its defence if
+it has no attack), the interceptor its defence, each by its efficiency and never less
+than half its class's defence. Those set the odds; then four rolls of 20, plus one, exchanges
+follow, each costing one side a point, until they run out or either is down to the
+minimum. The two lists pair off round and round until both have fought. As with flak, a
+plane under **10%** is shot down, and one under **80%** may turn back. A bomber that turns
+back drops nothing; flak over the target comes after the fighters.
+
 ## What is not here yet
 
-Fighters and interception, escorts, transports and paradrops, carriers as floating
-airfields, mines from the air, and then missiles and satellites. This slice is bombing,
-reconnaissance and the flak that answers them.
+Air-defence missions (fighters guarding someone else's land), stealth and missile
+interceptors, transports and paradrops, carriers as floating airfields, mines from the
+air, and then missiles and satellites.

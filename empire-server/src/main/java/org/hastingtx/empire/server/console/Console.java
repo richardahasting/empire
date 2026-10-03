@@ -137,8 +137,14 @@ public class Console {
                 case "army", "units" -> new Reply(army(v), true, null, null);
                 case "air", "planes" -> new Reply(air(v), true, null, null);
                 case "march", "mar" -> { need(t, 3, "march UNIT x,y"); most(t, 3, "march UNIT x,y"); yield cmd(run, new Command.March(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
-                case "bomb" -> { need(t, 3, "bomb PLANE x,y [strategic]"); most(t, 4, "bomb PLANE x,y [strategic]"); yield cmd(run, new Command.Bomb(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]), t.length < 4 || !t[3].toLowerCase().startsWith("s"))); }
-                case "recon" -> { need(t, 3, "recon PLANE x,y"); most(t, 3, "recon PLANE x,y"); yield cmd(run, new Command.Recon(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
+                case "bomb" -> {
+                    String usage = "bomb PLANE x,y [strategic] [escort E,E...]";
+                    need(t, 3, usage);
+                    boolean strategic = t.length > 3 && t[3].toLowerCase(Locale.ROOT).startsWith("s");
+                    List<Long> escorts = escorts(t, strategic ? 4 : 3, usage);
+                    yield cmd(run, new Command.Bomb(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]), !strategic, escorts));
+                }
+                case "recon" -> { String usage = "recon PLANE x,y [escort E,E...]"; need(t, 3, usage); yield cmd(run, new Command.Recon(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]), escorts(t, 3, usage))); }
                 case "work" -> { need(t, 2, "work UNIT [mobility]"); most(t, 3, "work UNIT [mobility]"); yield cmd(run, new Command.Work(Long.parseLong(t[1].replace("#", "")), t.length > 2 ? Double.parseDouble(t[2]) : 0)); }
                 case "ufire" -> { need(t, 3, "ufire UNIT x,y"); most(t, 3, "ufire UNIT x,y"); yield cmd(run, new Command.UnitFire(Long.parseLong(t[1].replace("#", "")), abs(v, t[2]))); }
                 case "sabotage" -> { need(t, 2, "sabotage UNIT"); most(t, 2, "sabotage UNIT"); yield cmd(run, new Command.Sabotage(Long.parseLong(t[1].replace("#", "")))); }
@@ -356,6 +362,19 @@ public class Console {
     private static String centre(CountryView v, Coord c) { return c == null ? "none" : rel(rel(v, c)); }
     private static String delivery(CountryView.Delivery d) { return d == null ? "none" : d.dir() + " above " + fmtQ(d.threshold()); }
 
+    /** {@code escort E,E ...} from word {@code k} on (issue #71): plane numbers, by commas or spaces; nothing else may follow. */
+    static List<Long> escorts(String[] t, int k, String usage) {
+        if (t.length <= k) return List.of();
+        if (!t[k].equalsIgnoreCase("escort") || t.length == k + 1) throw new IllegalArgumentException("usage: " + usage);
+        List<Long> out = new ArrayList<>();
+        for (int i = k + 1; i < t.length; i++)
+            for (String id : t[i].split(",")) {
+                if (id.isBlank()) continue;
+                try { out.add(Long.parseLong(id.replace("#", "").trim())); } catch (NumberFormatException e) { throw new IllegalArgumentException("usage: " + usage + " — '" + id + "' is not a plane number"); }
+            }
+        return out;
+    }
+
     /** The words after the last one a verb reads are a mistake, not a comment (issue #272): refuse them rather than ignore them. */
     private static void most(String[] t, int n, String usage) {
         if (t.length > n) throw new IllegalArgumentException("usage: " + usage + " — did not expect '" + String.join(" ", Arrays.copyOfRange(t, n, t.length)) + "'");
@@ -567,11 +586,11 @@ public class Console {
     /** Your planes (issue #262): where each sits, its condition, what it carries and how far it strikes. */
     static String air(CountryView v) {
         if (v.planes().isEmpty()) return "no planes — designate an airfield and build one there (build x,y bomber)";
-        StringBuilder sb = new StringBuilder(String.format("%-5s %-14s %-8s %4s %5s %5s %6s  %s%n", "plane", "class", "at", "eff", "bombs", "acc", "strike", "last"));
+        StringBuilder sb = new StringBuilder(String.format("%-5s %-16s %-8s %4s %5s %5s %6s %-9s  %s%n", "plane", "class", "at", "eff", "bombs", "acc", "strike", "air", "last"));
         for (var p : v.planes())
-            sb.append(String.format("#%-4d %-14s %-8s %3.0f%% %5.0f %4.0f%% %6.0f  %s%n", p.id(), p.cls(), rel(p.relative()), p.efficiency(),
-                    p.load(), p.accuracy(), Math.floor(p.reach()), p.note() == null ? "" : p.note()));
-        return sb.append("strike: hexes there and back again. bomb PLANE x,y [strategic] · recon PLANE x,y").toString();
+            sb.append(String.format("#%-4d %-16s %-8s %3.0f%% %5.0f %4.0f%% %6.0f %-9s  %s%n", p.id(), p.cls(), rel(p.relative()), p.efficiency(),
+                    p.load(), p.accuracy(), Math.floor(p.reach()), p.intercept() ? "fighter" : p.escort() ? "escort" : "", p.note() == null ? "" : p.note()));
+        return sb.append("strike: hexes there and back again. fighter: rises against raids at war, and escorts. bomb PLANE x,y [strategic] [escort E,E] · recon PLANE x,y [escort E,E]").toString();
     }
 
     /** Sectors with unrest (issue #72): disloyal, not all at work, occupied, or with guerrillas; and the happiness they want. */

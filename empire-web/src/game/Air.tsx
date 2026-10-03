@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { CommandRequest, CountryView, PlaneView, Rules, SectorView } from "@/api/client";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -9,7 +10,8 @@ const rel = (c: { x: number; y: number }) => `${c.x},${c.y}`;
 
 /**
  * Your planes (issue #262): where each sits, its condition, what it carries and how far it strikes; and its sorties.
- * A sortie takes petrol and bombs off the field it flies from, and whatever it flies against shoots back.
+ * A sortie takes petrol and bombs off the field it flies from, and whatever it flies against shoots back. Fighters of a
+ * country at war with you rise against it on the way, and the escorts it takes fight them first (issue #71).
  */
 export function Air({ view, busy, onCommand }: { view: CountryView; busy: boolean; onCommand: (c: CommandRequest) => Promise<void> }) {
   const [dialog, setDialog] = useState<{ kind: "bomb" | "recon"; plane: PlaneView } | null>(null);
@@ -24,6 +26,7 @@ export function Air({ view, busy, onCommand }: { view: CountryView; busy: boolea
             <span className="font-medium">{p.name}</span>
             <span className="text-muted-foreground">
               at {rel(p.relative)} · {p.efficiency.toFixed(0)}% · {p.load > 0 ? `${p.load.toFixed(0)} bombs · ` : ""}accuracy {p.accuracy.toFixed(0)}% · strikes {Math.floor(p.reach)} hexes
+              {p.intercept ? " · fighter: rises against raids, can escort" : p.escort ? " · escort" : ""}{p.intercept || p.escort ? ` · attack ${p.attack.toFixed(1)}, defence ${p.defense.toFixed(1)}` : ""}
             </span>
           </div>
           {p.note && <div className="text-muted-foreground">{p.note}</div>}
@@ -43,6 +46,9 @@ function SortieDialog({ kind, plane, view, busy, onClose, onCommand }:
   { kind: "bomb" | "recon"; plane: PlaneView; view: CountryView; busy: boolean; onClose: () => void; onCommand: (c: CommandRequest) => Promise<void> }) {
   const [to, setTo] = useState("");
   const [raid, setRaid] = useState(plane.tactical ? "pinpoint" : "strategic");
+  const [escorts, setEscorts] = useState<number[]>([]);
+  const canEscort = (view.planes ?? []).filter(p => p.id !== plane.id && (p.intercept || p.escort));
+  const toggle = (id: number) => setEscorts(e => e.includes(id) ? e.filter(x => x !== id) : [...e, id]);
   const [tx, ty] = to.split(",").map(s => Number(s.trim()));
   const target = Number.isFinite(tx) && Number.isFinite(ty) ? view.sectors.find(s => s.relative.x === tx && s.relative.y === ty) : undefined;
   const theirs = !!target && target.owner >= 0 && target.owner !== view.countryId && target.terrain !== "ocean";
@@ -53,7 +59,7 @@ function SortieDialog({ kind, plane, view, busy, onClose, onCommand }:
         <DialogHeader><DialogTitle>{kind === "bomb" ? "Bomb" : "Reconnoitre"} with plane #{plane.id} from {rel(plane.relative)}</DialogTitle>
           <DialogDescription>
             It strikes {Math.floor(plane.reach)} hexes out and comes home the same turn, taking its petrol{kind === "bomb" ? " and bombs" : ""} off the field.
-            Guns over the target will fire at it.
+            Guns over the target will fire at it, and at war the enemy's fighters rise against it on the way.
           </DialogDescription></DialogHeader>
         <div className="grid gap-3 text-sm">
           <label className="grid gap-1">At (x,y)<Input value={to} onChange={e => setTo(e.target.value)} placeholder="e.g. 4,-1" autoFocus /></label>
@@ -65,6 +71,17 @@ function SortieDialog({ kind, plane, view, busy, onClose, onCommand }:
               </Select>
             </label>
           )}
+          {canEscort.length > 0 && (
+            <fieldset className="grid gap-1">
+              <legend className="mb-1">Escorts — fighters on fields within 4 hexes; they fight interceptors first</legend>
+              {canEscort.map(e => (
+                <label key={e.id} className="flex items-center gap-2 text-xs">
+                  <Checkbox checked={escorts.includes(e.id)} onChange={() => toggle(e.id)} />
+                  #{e.id} {e.name} at {rel(e.relative)} · {e.efficiency.toFixed(0)}%
+                </label>
+              ))}
+            </fieldset>
+          )}
         </div>
         {to && !ok && <p className="text-xs text-destructive">{kind === "bomb" ? "Not a land sector of somebody else's." : "Nothing on your chart there."}</p>}
         <DialogFooter>
@@ -72,8 +89,8 @@ function SortieDialog({ kind, plane, view, busy, onClose, onCommand }:
           <Button disabled={busy || !ok} onClick={async () => {
             if (!target) return;
             await onCommand(kind === "bomb"
-              ? { verb: "bomb", plane: plane.id, x: target.at.x, y: target.at.y, type: raid }
-              : { verb: "recon", plane: plane.id, x: target.at.x, y: target.at.y });
+              ? { verb: "bomb", plane: plane.id, x: target.at.x, y: target.at.y, type: raid, units: escorts }
+              : { verb: "recon", plane: plane.id, x: target.at.x, y: target.at.y, units: escorts });
             onClose();
           }}>{kind === "bomb" ? "Fly the raid" : "Fly over"}</Button>
         </DialogFooter>
@@ -101,7 +118,7 @@ export function BuildPlaneDialog({ view, rules, field, busy, onClose, onCommand 
             {classes.map(x => <option key={x.id} value={x.id} disabled={!canBuild(x)}>{x.glyph} {x.name}{canBuild(x) ? "" : ` (tech ${x.techRequired})`}</option>)}
           </Select>
         </label>
-        {c && <p className="text-xs text-muted-foreground">{c.load > 0 ? `${c.load} bombs · ` : ""}accuracy {c.accuracy}% · strikes {Math.floor(c.range / 2)} hexes · {c.fuel} petrol a sortie · now {cost}</p>}
+        {c && <p className="text-xs text-muted-foreground">{c.flags.includes("intercept") ? "fighter: rises against raids · " : c.flags.includes("escort") ? "escort only · " : ""}{c.load > 0 ? `${c.load} bombs · ` : ""}accuracy {c.accuracy}% · strikes {Math.floor(c.range / 2)} hexes · {c.fuel} petrol a sortie · now {cost}</p>}
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button disabled={busy || !c || !canBuild(c)} onClick={async () => { await onCommand({ verb: "build_plane", x: field.at.x, y: field.at.y, type: cls }); onClose(); }}>Build it</Button>
