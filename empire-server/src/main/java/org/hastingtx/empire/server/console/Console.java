@@ -41,7 +41,7 @@ public class Console {
             return switch (verb) {
                 case "help", "?" -> new Reply(HELP, true, null, null);
                 case "map" -> new Reply(map(v, cfg), true, null, null);
-                case "census", "cen" -> new Reply(t.length > 1 && t[1].toLowerCase(Locale.ROOT).startsWith("res") ? censusResources(v, cfg) : census(v, cfg, games.lastNotes(gameId, a, json)), true, null, null);
+                case "census", "cen" -> new Reply(t.length > 1 && t[1].toLowerCase(Locale.ROOT).startsWith("res") ? censusResources(v, cfg) : census(v, cfg, games.lastNotes(gameId, a, json), games.recentEvents(gameId, a, LOSSES, LOSS_WINDOW)), true, null, null);
                 case "food" -> new Reply(food(games.foodReport(gameId, a)), true, null, null);
                 case "break" -> { most(t, 1, "break"); yield cmd(run, new Command.BreakSanctuary()); }
                 case "des", "designate" -> { need(t, 3, "des SECTOR type"); most(t, 3, "des SECTOR type"); yield many(run, cfg, t[1], at -> new Command.Designate(at, t[2])); }
@@ -625,10 +625,20 @@ public class Console {
      * delivery orders, so a self-starving pipe or a stalled road shows in the table and not only in
      * the ack that set it.
      */
-    static String census(CountryView v, GameConfig cfg) { return census(v, cfg, Map.of()); }
+    static String census(CountryView v, GameConfig cfg) { return census(v, cfg, Map.of(), List.of()); }
 
-    /** {@code notes}: the last update's notes for your sectors, by relative "x,y" — where the reasons a sector stalled are. */
-    static String census(CountryView v, GameConfig cfg, Map<String, List<String>> notes) {
+    /**
+     * The events that cost a country sectors, for the census to say so (issue #268), over a window an hourly look
+     * still catches: game 82's partisans took a sector every few updates, and a player checks every dozen or so.
+     */
+    private static final Set<String> LOSSES = Set.of("partisans", "revolt");
+    static final int LOSS_WINDOW = 24;
+
+    /**
+     * {@code notes}: the last update's notes for your sectors, by relative "x,y" — where the reasons a sector stalled
+     * are. {@code losses}: what revolts and partisans did to you over the last {@link #LOSS_WINDOW} updates, already worded.
+     */
+    static String census(CountryView v, GameConfig cfg, Map<String, List<String>> notes, List<String> losses) {
         // pet, gun and shell too (issue #196): a fleet runs on them, and they were only in the view's JSON
         StringBuilder sb = new StringBuilder(String.format("%-8s %-3s %-4s %4s %4s %6s %5s %6s %6s %6s %6s %6s %6s %5s %5s %5s  %s%n", "sect", "des", "eff", "mob", "road", "civ", "cap", "mil", "food", "iron", "lcm", "hcm", "pet", "gun", "shell", "days", "deliver"));
         double[] totals = new double[4];   // pet, gun, shell, oil across the country
@@ -654,6 +664,10 @@ public class Console {
         }
         // a standing order that cannot lay a point looks exactly like a finished one; say which are waiting (issue #150)
         if (!stalled.isEmpty()) sb.append("waiting for materials: ").append(String.join("; ", stalled)).append('\n');
+        // a sector that vanished between updates, and why (issue #268): partisans in a sector with no soldiers
+        if (!losses.isEmpty())
+            sb.append("in the last ").append(LOSS_WINDOW).append(" updates: ").append(String.join("; ", losses.subList(Math.max(0, losses.size() - 10), losses.size()))).append(losses.size() > 10 ? " (and " + (losses.size() - 10) + " before)" : "")
+              .append(" — guerrillas grow where there are no soldiers").append(cfg.economy().enlist() == null ? "" : "; enlist SECTOR -N puts a garrison in").append('\n');
         // a sector short of efficiency, and why (issue #275): a well-stocked city sat at 0% with nothing on this page to say so
         List<String> held = heldBack(v, notes);
         if (!held.isEmpty()) {

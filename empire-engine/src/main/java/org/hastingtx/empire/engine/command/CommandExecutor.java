@@ -1073,6 +1073,10 @@ public final class CommandExecutor {
         double forage = sub == null ? 0 : sub.civsPerSector() * (sub.scaleByFertility() ? to.resource("fertility") / 100.0 : 1.0);
         StringBuilder info = new StringBuilder(fmt(e.civs()) + " civilians settle " + e.to());
         if (food > 0) info.append(" with ").append(fmt(food)).append(" food");
+        // land that was yours before keeps what it was (issue #268): say so first, before a blind des flattens a harbour
+        if (!"wilderness".equals(to.designation()))
+            info.append(" — it is still a ").append(to.designation().replace('_', ' ')).append(" at ").append(Math.round(to.efficiency()))
+                .append("% from before it was lost; designate it only if you mean to start it again");
         if (e.civs() > forage) {
             double eating = (e.civs() - forage) * cfg.economy().population().foodPerCivPerEtu() * cfg.schedule().etusPerUpdate();
             if (food <= 0) info.append(" — WARNING: ").append(fmt(from.stock().get(com.food))).append(" food at ").append(e.from())

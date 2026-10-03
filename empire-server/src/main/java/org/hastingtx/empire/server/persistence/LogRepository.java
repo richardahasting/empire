@@ -58,6 +58,20 @@ public class LogRepository {
         return l.isEmpty() ? null : l.get(0);
     }
 
+    public record EventLine(long updateNumber, String message) {}
+
+    /** One country's events of the given types over the last {@code updates} updates, oldest first, filtered in the database. */
+    public List<EventLine> recentEvents(long gameId, int country, java.util.Collection<String> types, int updates) {
+        if (types.isEmpty()) return List.of();
+        String in = String.join(",", java.util.Collections.nCopies(types.size(), "?"));
+        List<Object> args = new java.util.ArrayList<>(List.of(gameId, gameId, updates, String.valueOf(country)));
+        args.addAll(types);
+        return jdbc.query("SELECT u.update_number, e->>'message' FROM update_log u, jsonb_array_elements(u.events) e"
+                        + " WHERE u.game_id = ? AND u.update_number > (SELECT coalesce(max(update_number), 0) FROM update_log WHERE game_id = ?) - ?"
+                        + " AND e->>'country' = ? AND e->>'type' IN (" + in + ") ORDER BY u.update_number",
+                (rs, i) -> new EventLine(rs.getLong(1), rs.getString(2)), args.toArray());
+    }
+
     public List<Map<String, Object>> updates(long gameId) {
         return jdbc.queryForList("SELECT update_number, state_hash, ran_at, millis FROM update_log WHERE game_id = ? ORDER BY update_number", gameId);
     }
