@@ -355,7 +355,7 @@ final class Air {
         if (!raid.story().isEmpty()) story.add(raid.story());
         for (long id : raid.through()) {
             Plane p = next.plane(id);
-            Flak fk = flak(cfg, com, r, next, p, pc.planeClass(p.cls()), next.sector(pd.at()));
+            Flak fk = raid.unseenAtTarget() ? new Flak(next, p, false, false, "") : flak(cfg, com, r, next, p, pc.planeClass(p.cls()), next.sector(pd.at()));
             next = fk.world();
             if (!fk.story().isEmpty()) story.add(fk.story() + (fk.shotDown() ? ", plane #" + id + " shot down" : fk.aborted() ? ", plane #" + id + " turned back" : ""));
             if (fk.shotDown() || fk.aborted()) continue;
@@ -429,8 +429,8 @@ final class Air {
         if (raid.lost()) return new CommandResult(next, null, 0, air);
         p = next.plane(p.id());
 
-        // the flak over the target, before it can drop anything
-        Flak flak = flak(cfg, com, r, next, p, cls, target);
+        // the flak over the target, before it can drop anything — unless it came in unseen (KNOWN do_evade)
+        Flak flak = raid.unseenAtTarget() ? new Flak(next, p, false, false, "") : flak(cfg, com, r, next, p, cls, target);
         next = flak.world();
         if (flak.shotDown()) return new CommandResult(next, null, 0, join(air, flak.story()) + " — plane #" + p.id() + " was shot down over " + b.at());
         p = flak.plane();
@@ -476,7 +476,7 @@ final class Air {
         p = next.plane(p.id());
 
         Sector target = next.sector(rc.at());
-        Flak flak = flak(cfg, com, r, next, p, cls, target);
+        Flak flak = raid.unseenAtTarget() ? new Flak(next, p, false, false, "") : flak(cfg, com, r, next, p, cls, target);
         next = flak.world();
         String before = join(air, flak.story());
         if (flak.shotDown()) return new CommandResult(next, null, 0, before + " — plane #" + p.id() + " was shot down over " + rc.at() + " and told you nothing");
@@ -576,7 +576,7 @@ final class Air {
      * What the flight out did to the raid: {@code through} the lead planes that got through, in order — the rest were shot
      * down or turned back. {@code lost} when none did.
      */
-    private record Raid(World world, List<Long> through, List<Long> escortsThrough, String story) {
+    private record Raid(World world, List<Long> through, List<Long> escortsThrough, String story, boolean unseenAtTarget) {
         boolean lost() { return through.isEmpty(); }
     }
 
@@ -597,7 +597,7 @@ final class Air {
         UnitsCfg.PlanesCfg pc = cfg.units().planes();
         UnitsCfg.AirCombatCfg ac = pc.airCombat();
         List<Long> mine = new ArrayList<>(leads.stream().map(Plane::id).toList());
-        if (ac == null) return new Raid(w, mine, escorts.stream().map(Plane::id).toList(), "");
+        if (ac == null) return new Raid(w, mine, escorts.stream().map(Plane::id).toList(), "", false);
         int pet = com.index("pet");
         Map<Long, Plane> now = new HashMap<>();
         for (Plane l : leads) now.put(l.id(), l);
@@ -605,8 +605,17 @@ final class Air {
         List<Long> esc = new ArrayList<>(escorts.stream().map(Plane::id).toList());
         Set<Long> launched = new HashSet<>(), gone = new HashSet<>();
         List<String> story = new ArrayList<>();
+        boolean unseenAtTarget = false;
         for (Coord at : flightPath(w, base(w, leads.get(0)).at(), target)) {
             Sector s = w.sector(at);
+            // KNOWN aircombat.c do_evade: the raid slips past unseen with the chance of its least stealthy plane
+            double evade = 1.0;
+            for (long id : mine) evade = Math.min(evade, pc.planeClass(now.get(id).cls()).stealthOr0() / 100.0);
+            for (long id : esc) evade = Math.min(evade, pc.planeClass(now.get(id).cls()).stealthOr0() / 100.0);
+            if (evade > 0 && r.chance(evade)) {
+                if (at.equals(target)) unseenAtTarget = true;
+                continue;
+            }
             // KNOWN aircombat.c:195-201: every country at war with the raider gets its chance over every sector — over its own
             // land any fighter of its may rise, elsewhere only those flying air defence over that sector (only_mission)
             for (int them = 0; them < w.countries().size() && !mine.isEmpty(); them++) {
@@ -656,7 +665,8 @@ final class Air {
             Plane after = now.get(l.id());
             story.add(after.efficiency() < pc.minEfficiency() ? "plane #" + l.id() + " was shot down on the way" : "plane #" + l.id() + " turned back at " + q(after.efficiency()) + "%");
         }
-        return new Raid(w, mine, esc, String.join("; ", story));
+        if (unseenAtTarget) story.add("unseen over " + target);
+        return new Raid(w, mine, esc, String.join("; ", story), unseenAtTarget);
     }
 
     /**
@@ -697,6 +707,8 @@ final class Air {
         double base = ac.attackAt(a.tech()) > 0 ? ac.attackAt(a.tech()) : ac.defenseAt(a.tech());
         int att = Math.max((int) (base * a.efficiency() / 100), (int) (ac.defense() / 2));
         int def = Math.max((int) (dc.defenseAt(d.tech()) * d.efficiency() / 100), (int) (dc.defense() / 2));
+        att += (int) (ac.stealthOr0() / 25);   // KNOWN ac_dog: stealth counts for each side
+        def += (int) (dc.stealthOr0() / 25);
         if (att < 1) { def += 1 - att; att = 1; }
         if (def < 1) { att += 1 - def; def = 1; }
         double odds = Math.max(k.oddsFloor(), (double) att / (att + def));
