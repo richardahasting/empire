@@ -16,6 +16,16 @@ final class TestWorlds {
 
     static GameConfig teaching() { return new ConfigLoader().loadPreset("teaching").config(); }
 
+    /** The same rules with fallout on (issue #71): the teaching preset leaves it off. */
+    static GameConfig withFallout(GameConfig c) {
+        var o = c.options();
+        var on = new org.hastingtx.empire.engine.config.OptionsCfg(true, o.plague(), o.loans(), o.market(), o.hidden(), o.scorchedEarth(), o.sanctuary(),
+                o.interest(), o.demandUpdate(), o.stateHashPerUpdate(), o.mapMemory());
+        return new GameConfig(c.schemaVersion(), c.world(), c.schedule(), c.players(), c.commodities(), c.terrain(), c.economy(),
+                c.distribution(), c.infrastructure(), c.capture(), c.detection(), c.tech(), c.units(), c.agents(),
+                c.handicapDefaults(), c.scoring(), c.news(), on);
+    }
+
     /** The same rules under a different world seed, for a test that wants many rolls of the same dice. */
     static GameConfig teaching(long seed) {
         GameConfig c = teaching();

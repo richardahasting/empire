@@ -132,6 +132,8 @@ public final class Ledger {
     public double toShip(int from, int c, double qty) { int q = (int) taken(qty); stock[from * nCom + c] -= q; return q; }
     /** Mines laid (+) or swept and struck (−) this update, by sector (issue #71). */
     public final java.util.Map<Integer, Integer> mines = new java.util.HashMap<>();
+    /** A sector's fallout after the update's melt, spread and decay (issue #71), by sector: the new value, not a delta. */
+    public final java.util.Map<Integer, Integer> fallout = new java.util.HashMap<>();
     public void mines(int sector, int delta) { if (delta != 0) mines.merge(sector, delta, Integer::sum); }
 
     public double fromShip(int to, int c, double qty) { int q = (int) taken(qty); stock[to * nCom + c] += q; return q; }

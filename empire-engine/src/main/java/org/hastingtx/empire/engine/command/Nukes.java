@@ -137,6 +137,9 @@ final class Nukes {
             Sector s = w.sector(c);
             if (s.sanctuary()) { story.add("it bounced off the sanctuary at " + c); continue; }
             Sector hit = Spy.damage(cfg, com, r, s, dam);
+            // KNOWN detonate.c (opt_FALLOUT): it leaves fallout, ten times as much from a neutron warhead
+            if (nc.fallout() != null && cfg.options() != null && cfg.options().fallout())
+                hit = hit.withFallout(Math.min(nc.fallout().max(), s.fallout() + (int) (dam * (k.has("neutron") ? nc.fallout().neutronPerDamage() : nc.fallout().perDamage()))));
             if (dam > nc.wastelandAbove() && s.isLand()) {
                 hit = hit.withOwner(Sector.NOBODY).withDesignation("wasteland", 0).withUnrest(0, 100, Sector.NOBODY, 0, 0);
                 waste++;

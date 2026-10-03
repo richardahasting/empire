@@ -47,6 +47,14 @@ below `infrastructure.rail.min_level_to_carry` treated as absent), and the
 ownership map. Apply any **pending administrative changes** scheduled for this
 update (handicap edits, schedule edits) — they are inputs, not effects.
 
+### 1b. Fallout
+**KNOWN** (`update/fallout.c`, run in `prepare_sects` before anything is produced; issue #71), with
+`options.fallout`. Every sector a detonation left fallout in melts a share of what is there — its stock, its land
+units' and its surface ships' — by `fallout × ETUs ÷ (melt_scale × the commodity's melt)`; then leaks into each
+neighbour that is not a sanctuary, and decays. Melted goods and people are tallied as destroyed. **NEW:** the leaks
+are reckoned from the fallout the update began with, not from a map being rewritten as it is read (the original's
+way, which depends on the order it walks the world). Constants in `units.nukes.fallout`.
+
 ### 2. Accrual
 Things that grow just by time passing, in no particular order because they do
 not interact:

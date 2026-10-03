@@ -833,6 +833,10 @@ public class Console {
         List<String> mined = new ArrayList<>();
         for (SectorView s : v.sectors()) if (s.full() && s.mines() > 0) mined.add(rel(s.relative()) + " " + s.mines());
         if (!mined.isEmpty()) sb.append("land mines: ").append(String.join("; ", mined)).append('\n');
+        // fallout in your land (issue #71): what a detonation left, melting people and goods each update
+        List<String> hot = new ArrayList<>();
+        for (SectorView s : v.sectors()) if (s.full() && s.fallout() > 0) hot.add(rel(s.relative()) + " " + s.fallout());
+        if (!hot.isEmpty()) sb.append("fallout: ").append(String.join("; ", hot)).append(" — it melts people and goods, spreads and decays").append('\n');
         // a sector short of efficiency, and why (issue #275): a well-stocked city sat at 0% with nothing on this page to say so
         List<String> held = heldBack(v, notes);
         if (!held.isEmpty()) {

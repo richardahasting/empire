@@ -53,6 +53,8 @@ public final class Sector {
     private final short che;
     // mines (issue #71), 2 B: KNOWN sct_mines — sea mines on the sea, land mines on land; nobody owns them
     private final short mines;
+    // fallout (issue #71), 2 B: KNOWN sct_fallout, 0..FALLOUT_MAX — radiation a detonation left, which melts what is here
+    private final short fallout;
     // distribution centre, 4 B
     private final short distX, distY;
     // references, 16 B
@@ -68,8 +70,9 @@ public final class Sector {
                    byte roadTarget, byte railTarget, boolean sanctuary,
                    short distX, short distY,
                    int[] thresholds, Stocks stock, List<HeldParcel> held, DeliverOrders deliver,
-                   byte loyalty, byte work, byte oldOwner, short che, byte cheTarget, short mines) {
+                   byte loyalty, byte work, byte oldOwner, short che, byte cheTarget, short mines, short fallout) {
         this.mines = mines;
+        this.fallout = fallout;
         this.loyalty = loyalty; this.work = work; this.oldOwner = oldOwner; this.che = che; this.cheTarget = cheTarget;
         this.x = x; this.y = y; this.terrain = terrain; this.elevation = elevation;
         this.fertility = fertility; this.minerals = minerals; this.gold = gold; this.oil = oil; this.uranium = uranium;
@@ -189,7 +192,7 @@ public final class Sector {
                         int[] thresholds, Stocks stock, List<HeldParcel> held, DeliverOrders deliver) {
         return new Sector(x, y, terrain, elevation, fertility, minerals, gold, oil, uranium, owner, designation,
                 efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget, sanctuary,
-                distX, distY, thresholds, stock, held, deliver, loyalty, work, oldOwner, che, cheTarget, mines);
+                distX, distY, thresholds, stock, held, deliver, loyalty, work, oldOwner, che, cheTarget, mines, fallout);
     }
 
     public Sector withOwner(int o) { return copy(country(o), designation, efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget, sanctuary, distX, distY, thresholds, stock, held, deliver); }
@@ -210,7 +213,7 @@ public final class Sector {
         return new Sector(x, y, terrain, elevation, fertility, minerals, gold, oil, uranium, owner, designation,
                 efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget, sanctuary,
                 distX, distY, thresholds, stock, held, deliver, scale(loyalty, 0, 127), scale(work, 0, 100),
-                oldOwner == NOBODY ? (byte) NOBODY : country(oldOwner), (short) Math.max(0, Math.min(CHE_MAX, che)), che <= 0 || cheTarget == NOBODY ? (byte) NOBODY : country(cheTarget), mines);
+                oldOwner == NOBODY ? (byte) NOBODY : country(oldOwner), (short) Math.max(0, Math.min(CHE_MAX, che)), che <= 0 || cheTarget == NOBODY ? (byte) NOBODY : country(cheTarget), mines, fallout);
     }
 
     /** KNOWN MINES_MAX: a short's worth. */
@@ -220,7 +223,18 @@ public final class Sector {
     public Sector withMines(int m) {
         return new Sector(x, y, terrain, elevation, fertility, minerals, gold, oil, uranium, owner, designation,
                 efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget, sanctuary,
-                distX, distY, thresholds, stock, held, deliver, loyalty, work, oldOwner, che, cheTarget, (short) Math.max(0, Math.min(MINES_MAX, m)));
+                distX, distY, thresholds, stock, held, deliver, loyalty, work, oldOwner, che, cheTarget, (short) Math.max(0, Math.min(MINES_MAX, m)), fallout);
+    }
+    /** KNOWN FALLOUT_MAX. */
+    public static final int FALLOUT_MAX = 9999;
+    public int fallout() { return fallout; }
+    /** Fallout here (issue #71), clamped to 0..{@link #FALLOUT_MAX}. */
+    public Sector withFallout(int f) {
+        int v = Math.max(0, Math.min(FALLOUT_MAX, f));
+        if (v == fallout) return this;
+        return new Sector(x, y, terrain, elevation, fertility, minerals, gold, oil, uranium, owner, designation,
+                efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget, sanctuary,
+                distX, distY, thresholds, stock, held, deliver, loyalty, work, oldOwner, che, cheTarget, mines, (short) v);
     }
     /** Sea mines lie on the sea, land mines on land (KNOWN SCT_MINES_ARE_SEAMINES). */
     public boolean seaMines() { return !isLand(); }
@@ -250,13 +264,13 @@ public final class Sector {
         return new Sector(x, y, (byte) t.ordinal(), elev(elev), scale(r.fertility(), 0, 100), scale(r.minerals(), 0, 100),
                 scale(r.gold(), 0, 100), scale(r.oil(), 0, 100), scale(r.uranium(), 0, 100), owner, designation,
                 efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget, sanctuary,
-                distX, distY, thresholds, stock, held, deliver, loyalty, work, oldOwner, che, cheTarget, mines);
+                distX, distY, thresholds, stock, held, deliver, loyalty, work, oldOwner, che, cheTarget, mines, fallout);
     }
 
     public Sector withAt(Coord c) {
         return new Sector(coord(c.x()), coord(c.y()), terrain, elevation, fertility, minerals, gold, oil, uranium,
                 owner, designation, efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget,
-                sanctuary, distX, distY, thresholds, stock, held, deliver, loyalty, work, oldOwner, che, cheTarget, mines);
+                sanctuary, distX, distY, thresholds, stock, held, deliver, loyalty, work, oldOwner, che, cheTarget, mines, fallout);
     }
 
     // --- construction ----------------------------------------------------------------------------
@@ -280,7 +294,7 @@ public final class Sector {
                 (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, false,
                 NO_COORD, NO_COORD,
                 noThresholds(nCommodities), Stocks.zero(nCommodities), List.of(), DeliverOrders.none(nCommodities),
-                (byte) 0, (byte) 100, (byte) NOBODY, (short) 0, (byte) NOBODY, (short) 0);
+                (byte) 0, (byte) 100, (byte) NOBODY, (short) 0, (byte) NOBODY, (short) 0, (short) 0);
     }
 
     // --- value semantics -------------------------------------------------------------------------
@@ -294,13 +308,13 @@ public final class Sector {
                 && efficiency == s.efficiency && mobility == s.mobility && roadLevel == s.roadLevel && railLevel == s.railLevel
                 && radarLevel == s.radarLevel && roadTarget == s.roadTarget && railTarget == s.railTarget && sanctuary == s.sanctuary
                 && distX == s.distX && distY == s.distY
-                && loyalty == s.loyalty && work == s.work && oldOwner == s.oldOwner && che == s.che && cheTarget == s.cheTarget && mines == s.mines
+                && loyalty == s.loyalty && work == s.work && oldOwner == s.oldOwner && che == s.che && cheTarget == s.cheTarget && mines == s.mines && fallout == s.fallout
                 && Arrays.equals(thresholds, s.thresholds) && stock.equals(s.stock) && held.equals(s.held) && deliver.equals(s.deliver);
     }
 
     @Override public int hashCode() {
         int h = Objects.hash(x, y, terrain, elevation, fertility, minerals, gold, oil, uranium, owner, designation,
-                efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget, sanctuary, distX, distY, stock, held, deliver, loyalty, work, oldOwner, che, cheTarget, mines);
+                efficiency, mobility, roadLevel, railLevel, radarLevel, roadTarget, railTarget, sanctuary, distX, distY, stock, held, deliver, loyalty, work, oldOwner, che, cheTarget, mines, fallout);
         return 31 * h + Arrays.hashCode(thresholds);
     }
 

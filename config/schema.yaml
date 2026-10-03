@@ -1231,6 +1231,22 @@ units:
     min_damage: 5
     # over wasteland_above, a land sector is left a radioactive wasteland that nobody owns
     wasteland_above: 100
+    # KNOWN detonate.c, update/fallout.c, constants.c (with options.fallout): a detonation leaves per_damage × its damage
+    # (neutron_per_damage for a neutron warhead) of fallout in each sector it hits, at most max. Each update, early, with
+    # ETUs counted to etu_cap at most: every sector with fallout melts melt_scale-ths of fallout × ETUs ÷ the commodity's
+    # melt of each thing in it, its land units and its surface ships; leaks spread × ETUs × fallout − 1 into each neighbour
+    # (not a sanctuary); and decays by (decay_per_etu + decay_base) × spread × ETUs × fallout.
+    fallout:
+      per_damage: 3
+      neutron_per_damage: 30
+      max: 9999
+      etu_cap: 24
+      spread: 0.005
+      decay_per_etu: 0.006
+      decay_base: 6.0
+      melt_scale: 1000
+      # KNOWN item.config melt column; a commodity not named does not melt
+      melt: { civ: 4, mil: 20, shell: 80, gun: 100, pet: 50, iron: 100, dust: 100, bar: 200, food: 2, oil: 50, lcm: 100, hcm: 100, uw: 2, rad: 1000 }
     classes:
       - { id: fission_10kt,   name: 10kt fission,   tech_required: 280, build: { lcm: 50, hcm: 50, oil: 25, rad: 70, cash: 10000 }, bwork: 49, blast: 3, damage: 70, weight: 4, flags: [] }
       - { id: fission_15kt,   name: 15kt fission,   tech_required: 290, build: { lcm: 50, hcm: 50, oil: 25, rad: 80, cash: 15000 }, bwork: 51, blast: 3, damage: 90, weight: 5, flags: [] }

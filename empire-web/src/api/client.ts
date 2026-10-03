@@ -56,6 +56,8 @@ export interface SectorView {
   unrest?: { loyalty: number; work: number; peopleOf: string | null; che: number; disloyalAbove: number } | null;
   /** your land mines here (issue #71); 0 where you do not know of any */
   mines?: number;
+  /** fallout in a sector of yours (issue #71): radiation that melts what is here, spreads and decays */
+  fallout?: number;
   /**
    * On the chart from memory rather than from sight (issue #64): everything here is as it was at
    * `seenUpdate`, not as it is. `age` is updates since, so it can be dimmed by how stale it is.
