@@ -190,12 +190,7 @@ final class Assault {
                 }
             }
         }
-        // warheads stored there are taken with it (issue #71; KNOWN takeover.c takeover: nukes in the sector change hands)
-        for (Nuke n : new ArrayList<>(world[0].nukes()))
-            if (!n.armed() && n.owner() == loser && n.at().equals(at)) {
-                world[0] = world[0].withNuke(n.withOwner(attacker));
-                unitsTaken.append(unitsTaken.isEmpty() ? "" : "; ").append("captured their warhead #").append(n.id());
-            }
+        // warheads stored there are not taken (KNOWN takeover.c: only those armed on a captured plane go with it)
         String out = spoiled.toString();
         if (!partisans.isEmpty()) out = (out.isEmpty() ? "" : out + "; ") + partisans + " against you";
         if (!unitsTaken.isEmpty()) out = (out.isEmpty() ? "" : out + "; ") + unitsTaken;

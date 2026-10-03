@@ -107,6 +107,27 @@ class NukeTest {
         assertThat(next.owner()).isEqualTo(1);
         assertThat(next.stock().get(COM.civ)).isLessThan(400);
         assertThat(after.plane(2) == null || after.plane(2).efficiency() < 100).isTrue();
+        assertThat(r.info()).as("what it caught of theirs is not ours to know").doesNotContain("plane").doesNotContain("warhead");
+    }
+
+    @Test
+    void aSanctuaryIsUntouchedAndAnArmedPlaneCarriesNothingElse() {
+        // a third country still in sanctuary, its ship beside the target: the blast passes it by
+        World w = nuke(plane(world(true), 1, 0, "srbm", CAP), 7, "fusion_1mt", CAP);
+        List<Country> cs = new ArrayList<>(w.countries());
+        cs.add(new Country(2, "Haven", new Coord(1, 1), 1000, 100, Levels.ZERO, HandicapCfg.NONE, true, false, 0));
+        var dc = CFG.units().ships().shipClass("destroyer");
+        Coord beside = Hex.stepRaw(THEIRS, 2, 1);
+        w = w.withCountries(cs).withShip(new Ship(9, 2, "destroyer", "", beside, 100, Stocks.zero(COM.size()), null, null, 0, "", 100, null, null, dc.tankOr0(), dc.crewOr0()));
+        w = EX.execute(w, 0, new Command.Arm(1, 7, false)).world();
+        CommandResult r = null;
+        for (int u = 0; u < 20 && (r == null || r.info().contains("blew up")); u++) r = EX.execute(w.withUpdateNumber(u), 0, new Command.Launch(1, THEIRS, 0));
+        assertThat(r.world().ship(9).efficiency()).isEqualTo(100);
+        // armed, a transport drops nothing and flies no mission
+        World t = nuke(plane(world(false), 1, 0, "transport", FIELD), 8, "fusion_5kt", FIELD);
+        t = EX.execute(t, 0, new Command.Arm(1, 8, false)).world();
+        assertThat(t.nuke(8).plane()).isEqualTo(1);
+        assertThat(EX.execute(t, 0, new Command.Drop(List.of(1L), FIELD, "food", List.of())).error()).contains("carries warhead #8");
     }
 
     @Test

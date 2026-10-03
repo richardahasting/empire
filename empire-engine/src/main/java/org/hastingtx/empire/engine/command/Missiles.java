@@ -133,7 +133,7 @@ final class Missiles {
             next = abm.world();
             if (abm.hit()) return new CommandResult(next, null, 0, name + " launched at " + at + "; " + abm.story());
             if (nuke != null) {   // KNOWN msl_hit: a nuclear missile always hits, and detonates
-                Nukes.Blast blast = Nukes.detonate(cfg, com, next, nuke, at);
+                Nukes.Blast blast = Nukes.detonate(cfg, com, next, nuke, at, c.id());
                 return new CommandResult(blast.world(), null, 0, name + " launched at " + at + (abm.story().isEmpty() ? "" : "; " + abm.story()) + ": " + blast.story());
             }
             int dam = damage(cfg, r, cls, p, false);

@@ -242,7 +242,11 @@ Warheads are the original's (`nuke.config`, `build`, `arm`, `disarm`, and what a
   of everything (a sanctuary shrugs it off); over 100% a land sector is left a **radioactive
   wasteland** that nobody owns. Planes on the ground, land units, ships (a submarine at sea only if
   hit squarely) and other warheads in reach are caught too.
-- A stored warhead is **captured** with its sector.
+- A warhead armed on a plane is taken with the plane; one stored in a sector is not taken with
+  the sector (the original's way). A plane carrying a warhead flies but drops, paradrops, lays
+  and sweeps nothing, flies no mission, and carries no cargo.
+- The one who set it off is told what it did to the land, and what of their own it caught; what
+  it caught of anyone else's is not theirs to know. A sanctuary is untouched.
 
 ## What is not here yet
 

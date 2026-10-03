@@ -116,9 +116,11 @@ final class Nukes {
      * KNOWN detonate.c: a warhead goes off over {@code at}. Within its radius — the blast for an airburst, two-thirds of it
      * for a groundburst, and only ground zero over the sea — every sector takes {@link #damage} as sect_damage (a sanctuary
      * shrugs it off), and over {@code wasteland_above} land becomes a radioactive wasteland nobody owns. Planes on the ground
-     * or on a deck, land units, ships (a submarine at sea only at ground zero) and other warheads there are hit too.
+     * or on a deck, land units, ships (a submarine at sea only at ground zero) and other warheads there are hit too —
+     * none of a country in sanctuary, nor in a sanctuary. {@code by} is told what it did to the land, and what of its
+     * own was caught; what it caught of anyone else's is theirs to learn (KNOWN: the original tells each owner).
      */
-    static Blast detonate(GameConfig cfg, Commodities com, World w, Nuke n, Coord at) {
+    static Blast detonate(GameConfig cfg, Commodities com, World w, Nuke n, Coord at, int by) {
         UnitsCfg.NukesCfg nc = cfg.units().nukes();
         UnitsCfg.NukeClassCfg k = nc.nukeClass(n.cls());
         boolean air = n.airburst();
@@ -152,44 +154,49 @@ final class Nukes {
             if (p.orbiting()) continue;
             Ship deck = p.aboard() ? w.ship(p.ship()) : null;
             Coord where = deck != null ? deck.at() : p.at();
-            if (!zone.contains(where) || (deck != null && submergedAway(w, sc, deck, at))) continue;
+            if (!zone.contains(where) || (deck != null && submergedAway(w, sc, deck, at)) || sheltered(w, p.owner(), where)) continue;
             int dam = damage(nc, k, Hex.distance(w, at, where), air);
             if (dam <= 0) continue;
             double eff = p.efficiency() - dam;
             w = eff < pc.minEfficiency() ? w.withoutPlane(p.id()) : w.withPlane(p.withEfficiency(eff));
-            planes++;
+            if (p.owner() == by) planes++;
         }
         var lc = cfg.units().land();
         if (lc != null) for (LandUnit u : List.copyOf(w.units())) {
             Ship deck = u.ship() != 0 ? w.ship(u.ship()) : null;
             Coord where = deck != null ? deck.at() : u.at();
-            if (!zone.contains(where) || (deck != null && submergedAway(w, sc, deck, at))) continue;
+            if (!zone.contains(where) || (deck != null && submergedAway(w, sc, deck, at)) || sheltered(w, u.owner(), where)) continue;
             int dam = damage(nc, k, Hex.distance(w, at, where), air);
             if (dam <= 0) continue;
             double eff = u.efficiency() - dam;
             w = eff < lc.startEfficiency() ? w.withoutUnit(u.id()) : w.withUnit(u.withEfficiency(eff));
-            units++;
+            if (u.owner() == by) units++;
         }
         if (sc != null) for (Ship s : List.copyOf(w.ships())) {
-            if (w.ship(s.id()) == null || !zone.contains(s.at()) || submergedAway(w, sc, s, at)) continue;
+            if (w.ship(s.id()) == null || !zone.contains(s.at()) || submergedAway(w, sc, s, at) || sheltered(w, s.owner(), s.at())) continue;
             int dam = damage(nc, k, Hex.distance(w, at, s.at()), air);
             if (dam <= 0) continue;
             Ship hit = s.withEfficiency(s.efficiency() - dam);
             w = sc.combat() != null && hit.efficiency() <= sc.combat().sinkAt() ? Engagement.sink(cfg, sc, com, w.withShip(hit), hit, Sector.NOBODY) : w.withShip(hit);
-            ships++;
+            if (s.owner() == by) ships++;
         }
         // other warheads there go with chance damage% (KNOWN)
         for (Nuke o : List.copyOf(w.nukes())) {
-            if (w.nuke(o.id()) == null || !zone.contains(w.nukeAt(o))) continue;
+            if (w.nuke(o.id()) == null || !zone.contains(w.nukeAt(o)) || sheltered(w, w.nukeOwner(o), w.nukeAt(o))) continue;
             int dam = damage(nc, k, Hex.distance(w, at, w.nukeAt(o)), air);
-            if (dam > 0 && r.chance(dam / 100.0)) { w = w.withoutNuke(o.id()); warheads++; }
+            if (dam > 0 && r.chance(dam / 100.0)) { if (w.nukeOwner(o) == by) warheads++; w = w.withoutNuke(o.id()); }
         }
-        if (planes > 0) story.add(planes + (planes == 1 ? " plane" : " planes") + " caught");
-        if (units > 0) story.add(units + (units == 1 ? " unit" : " units") + " caught");
-        if (ships > 0) story.add(ships + (ships == 1 ? " ship" : " ships") + " caught");
-        if (warheads > 0) story.add(warheads + (warheads == 1 ? " warhead" : " warheads") + " destroyed");
+        if (planes > 0) story.add(planes + " of your planes caught");
+        if (units > 0) story.add(units + " of your units caught");
+        if (ships > 0) story.add(ships + " of your ships caught");
+        if (warheads > 0) story.add(warheads + " of your warheads destroyed");
         String how = (air ? "an airburst" : "a groundburst") + " of a " + k.name() + " over " + at;
         return new Blast(w, how + (story.isEmpty() ? "" : ": " + String.join("; ", story)));
+    }
+
+    /** A sanctuary cannot be touched (issue #54): neither a country in it, nor anything in a sanctuary sector. */
+    private static boolean sheltered(World w, int owner, Coord where) {
+        return (owner >= 0 && owner < w.countries().size() && w.country(owner).inSanctuary()) || w.sector(where).sanctuary();
     }
 
     /** KNOWN detonate.c: a submarine out at sea is untouched unless the warhead came down right on her. */

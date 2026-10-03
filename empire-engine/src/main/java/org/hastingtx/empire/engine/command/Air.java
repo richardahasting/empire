@@ -80,6 +80,7 @@ final class Air {
             return new CommandResult(w.withPlane(p.withMission(null, null, 0)), null, 0, "plane #" + p.id() + " comes off air defence; it still rises over your own land");
         }
         if (cls == null || !cls.has("intercept")) return CommandResult.fail(w, "only fighters fly air defence; " + article(cls == null ? p.cls() : cls.name()) + " does not");
+        if (w.nukeOn(p.id()) != null) return CommandResult.fail(w, "plane #" + p.id() + " carries a warhead; disarm it first");   // KNOWN miss.c: no missions armed
         if (m.op() == null || !w.inBounds(m.op())) return CommandResult.fail(w, "air defence around where?");
         int oprange = (int) Math.floor(cls.reachAt(p.tech()));
         Base b = base(w, p);
@@ -204,6 +205,8 @@ final class Air {
             UnitsCfg.PlaneClassCfg cls = pc.planeClass(p.cls());
             if (cls == null) return new Lift("plane #" + id + " has no class in these rules", w, List.of(), null);
             if (rocket(cls) != null) return new Lift("plane #" + id + " is a " + rocket(cls) + ": it is launched, not flown (launch " + id + " x,y)", w, List.of(), null);   // KNOWN pln_sel nowant P_M|P_O
+            // KNOWN pln_equip: a plane carrying a warhead flies, but drops, paradrops and lays nothing (issue #71)
+            if (!flags.isEmpty() && w.nukeOn(id) != null) return new Lift("plane #" + id + " carries warhead #" + w.nukeOn(id).id() + "; disarm it to " + verb, w, List.of(), null);
             for (String f : flags) if (!cls.has(f)) return new Lift(article(cls.name()) + " cannot " + verb + "; " + (f.equals("para") ? "it takes a transport that drops paratroops" : "it takes a cargo plane"), w, List.of(), null);
             if (p.efficiency() < minEff) return new Lift("plane #" + id + " is at " + q(p.efficiency()) + "%; it flies at " + q(minEff) + "% or better", w, List.of(), null);
             String grounded = grounded(cfg, w, p, c.id());
@@ -223,13 +226,14 @@ final class Air {
     }
 
     /** What each plane carries (KNOWN pln_equip: load × the mission's multiple ÷ the commodity's weight), loaded in turn from {@code have}. */
-    private static Map<Long, Double> loads(GameConfig cfg, Commodities com, List<Plane> planes, int ci, double multiple, double have) {
+    private static Map<Long, Double> loads(GameConfig cfg, Commodities com, World w, List<Plane> planes, int ci, double multiple, double have) {
         UnitsCfg.PlanesCfg pc = cfg.units().planes();
         double weight = cfg.commodities().get(ci).weight();
         Map<Long, Double> out = new java.util.LinkedHashMap<>();
         for (Plane p : planes) {
             UnitsCfg.PlaneClassCfg cls = pc.planeClass(p.cls());
-            double cap = cls.has("cargo") ? Math.floor(cls.loadAt(p.tech()) * multiple / weight) : 0;
+            // a warhead aboard is its load: nothing else goes (issue #71; KNOWN pln_equip)
+            double cap = cls.has("cargo") && w.nukeOn(p.id()) == null ? Math.floor(cls.loadAt(p.tech()) * multiple / weight) : 0;
             double take = Math.min(cap, have);
             have -= take;
             out.put(p.id(), take);
@@ -281,7 +285,7 @@ final class Air {
             String no = civilianRule(com, ci, l.base(), to, c.id());
             if (no != null) return CommandResult.fail(w, no);
             // no more than the field can take: what the update would cut away is lost (issue #103)
-            load = loads(cfg, com, l.planes(), ci, tc.flyLoadMultiple(), Math.floor(Math.min(l.base().stock().get(ci), room.roomFor(to, ci))));
+            load = loads(cfg, com, l.world(), l.planes(), ci, tc.flyLoadMultiple(), Math.floor(Math.min(l.base().stock().get(ci), room.roomFor(to, ci))));
             double total = load.values().stream().mapToDouble(Double::doubleValue).sum();
             if (total < 1) return CommandResult.fail(w, "nothing to carry: " + (l.base().stock().get(ci) < 1 ? l.base().name() + " has no " + f.commodity()
                     : room.roomFor(to, ci) < 1 ? f.to() + " has no room for more " + f.commodity() : "none of them is a cargo plane"));
@@ -319,7 +323,7 @@ final class Air {
         int ci = com.index(d.commodity());
         String no = civilianRule(com, ci, l.base(), to, c.id());
         if (no != null) return CommandResult.fail(w, no);
-        Map<Long, Double> load = loads(cfg, com, l.planes(), ci, pc.transport().dropLoadMultiple(), Math.floor(Math.min(l.base().stock().get(ci), room.roomFor(to, ci))));
+        Map<Long, Double> load = loads(cfg, com, l.world(), l.planes(), ci, pc.transport().dropLoadMultiple(), Math.floor(Math.min(l.base().stock().get(ci), room.roomFor(to, ci))));
         double total = load.values().stream().mapToDouble(Double::doubleValue).sum();
         if (total < 1) return CommandResult.fail(w, l.base().stock().get(ci) < 1 ? l.base().name() + " has no " + d.commodity() + " to drop" : d.at() + " has no room for more " + d.commodity());
         World next = l.base().take(l.world(), ci, total);
@@ -410,7 +414,7 @@ final class Air {
         if (tc.noParadropTerrain().contains(target.terrain().name().toLowerCase(java.util.Locale.ROOT))) return CommandResult.fail(w, "paratroops cannot land on " + target.terrain().name().toLowerCase(java.util.Locale.ROOT));
         if (tc.noParadropDesignations().contains(target.designation())) return CommandResult.fail(w, "paratroops cannot take a " + target.designation());
         if (target.owned()) { String no = Assault.refused(cfg, w, c, target, "paradrop on"); if (no != null) return CommandResult.fail(w, no); }
-        Map<Long, Double> load = loads(cfg, com, l.planes(), com.mil, tc.dropLoadMultiple(), Math.floor(l.base().stock().get(com.mil)));
+        Map<Long, Double> load = loads(cfg, com, l.world(), l.planes(), com.mil, tc.dropLoadMultiple(), Math.floor(l.base().stock().get(com.mil)));
         double total = load.values().stream().mapToDouble(Double::doubleValue).sum();
         if (total < 1) return CommandResult.fail(w, l.base().name() + " has no soldiers to drop");
         World next = l.base().take(l.world(), com.mil, total);
@@ -510,7 +514,7 @@ final class Air {
         // a warhead aboard goes off over the target instead of bombs (issue #71; KNOWN strat_bomb, detonate)
         Nuke warhead = next.nukeOn(p.id());
         if (warhead != null) {
-            Nukes.Blast blast = Nukes.detonate(cfg, com, next, warhead, target.at());
+            Nukes.Blast blast = Nukes.detonate(cfg, com, next, warhead, target.at(), c.id());
             Plane home = blast.world().plane(p.id());
             next = home == null ? blast.world() : blast.world().withPlane(home.withNote("dropped a warhead on " + target.at()));
             String before = join(air, flak.story());
