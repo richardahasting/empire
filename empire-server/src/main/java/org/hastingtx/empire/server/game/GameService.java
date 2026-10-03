@@ -1078,21 +1078,8 @@ public class GameService {
 
     public record Outcome(boolean accepted, String error, double btuSpent, CountryView view, String info) {}
 
-    private static final java.util.regex.Pattern ABS = java.util.regex.Pattern.compile("(?<![\\d.,-])(\\d+),(\\d+)(?![\\d.])");
-
     /** Engine messages name sectors by absolute coordinates; players only ever see offsets from their capital. */
-    public static String relativise(World w, Coord capital, String msg) {
-        if (msg == null) return null;
-        java.util.regex.Matcher m = ABS.matcher(msg);
-        StringBuilder sb = new StringBuilder();
-        while (m.find()) {
-            Coord abs = new Coord(Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)));
-            Coord r = w.inBounds(abs) ? CountryView.relative(w, capital, abs) : abs;
-            m.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(r.x() + "," + r.y()));
-        }
-        m.appendTail(sb);
-        return sb.toString();
-    }
+    public static String relativise(World w, Coord capital, String msg) { return CountryView.relativise(w, capital, msg); }
 
     public Outcome command(long gameId, Account a, Command cmd, String source) {
         Game g = get(gameId);
