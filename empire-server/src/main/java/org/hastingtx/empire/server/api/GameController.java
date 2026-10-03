@@ -102,7 +102,9 @@ public class GameController {
                         /** Land unit classes and rules (issue #247); null in a world without them. */
                         org.hastingtx.empire.engine.config.UnitsCfg.LandCfg land,
                         /** Plane classes and rules (issue #262); null in a world without them. */
-                        org.hastingtx.empire.engine.config.UnitsCfg.PlanesCfg planes) {}
+                        org.hastingtx.empire.engine.config.UnitsCfg.PlanesCfg planes,
+                        /** The commodity market (issue #141); null in a game without one. */
+                        org.hastingtx.empire.engine.config.MarketCfg market) {}
 
     @GetMapping("/{id}/rules")
     public Rules rules(@PathVariable long id) {
@@ -110,7 +112,8 @@ public class GameController {
         Double minEff = cfg.economy().efficiency().productionMinEfficiency();
         return new Rules(cfg.economy().sectorTypes(), cfg.commodities(), cfg.etus(), cfg.economy().btu().costByCommand(), cfg.infrastructure().road(), cfg.economy().defaultCapacity(),
                 cfg.infrastructure().rail(), minEff == null ? 0 : minEff, cfg.distribution().massThresholdMultiplierByType() == null ? Map.of() : cfg.distribution().massThresholdMultiplierByType(), cfg.units().ships(),
-                cfg.economy().work(), cfg.economy().curves() == null ? Map.of() : cfg.economy().curves(), cfg.economy().population().maxPopResearchCurve(), cfg.units().land(), cfg.units().planes());
+                cfg.economy().work(), cfg.economy().curves() == null ? Map.of() : cfg.economy().curves(), cfg.economy().population().maxPopResearchCurve(), cfg.units().land(), cfg.units().planes(),
+                cfg.options() != null && cfg.options().market() ? cfg.economy().market() : null);
     }
 
     /**
@@ -131,7 +134,9 @@ public class GameController {
                                  /** A land unit's id for march / lload / lunload; land units joining an attack (issue #247). */
                                  Long unit, List<Long> units,
                                  /** A plane's id for bomb / recon (issue #262). */
-                                 Long plane) {
+                                 Long plane,
+                                 /** The market (issue #141): a lot's number for buy / reset_lot, and a price a unit for sell / buy / reset_lot. */
+                                 Long lot, Double price) {
         boolean isMass() { return (scope != null && !scope.isBlank()) || (sectors != null && !sectors.isEmpty()); }
         boolean listed() { return sectors != null && !sectors.isEmpty(); }
         Command toCommand() { return toCommand(x == null || y == null ? null : new Coord(x, y)); }
@@ -174,6 +179,9 @@ public class GameController {
                 case "work" -> new Command.Work(needUnit(), amount == null ? 0 : amount);
                 case "build_plane" -> new Command.BuildPlane(at(x, y), type);
                 case "bomb" -> new Command.Bomb(needPlane(), at(x, y), !"strategic".equalsIgnoreCase(type), units == null ? List.of() : units);   // units: escorts (#71)
+                case "sell" -> new Command.Sell(need(at), commodity, amount == null ? 0 : amount, price == null ? 0 : price);   // amount < 0: all but that many
+                case "buy" -> new Command.Buy(lot == null ? 0 : lot, price == null ? 0 : price, need(at));                           // x,y: where the goods go
+                case "reset_lot" -> new Command.ResetLot(lot == null ? 0 : lot, price == null ? 0 : price);
                 case "recon" -> new Command.Recon(needPlane(), at(x, y), units == null ? List.of() : units);
                 case "sabotage" -> new Command.Sabotage(needUnit());
                 case "incite" -> new Command.Incite(needUnit());

@@ -483,8 +483,10 @@ step-attributed log in one transaction.
   now; if mobility along the route is short the quantity is capped to what
   fits and the rest stays at the source. Rail shipments are the exception:
   recorded at issue time, executed in step 6 with range-and-hold.
-- Market and loans — options that, when enabled, run as their own step 8b
-  (settle market orders, accrue loan interest). Schema slot reserved.
+- Market — step 8b (issue #141, `MarketStep`): every lot with a bid whose time is up sells
+  to its high bidder; the buyer pays, the seller is paid, the goods arrive in the buyer's
+  harbour or warehouse; a sale that cannot go through puts the lot back with no bid. Goods
+  on the market count toward conservation. Loans are still a reserved slot.
 
 ## Calibration probes (per the playbook)
 

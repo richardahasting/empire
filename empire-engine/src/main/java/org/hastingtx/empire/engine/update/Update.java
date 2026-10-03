@@ -25,6 +25,7 @@ public final class Update {
                 new ShipStep(),           // 7c ships: fit out, fish, cruise, lanes, sail (issue #56)
                 new LandStep(),           // 7d land units: pay, maintenance, rations, repair, mobility (issue #247)
                 new MoneyStep(),          // 8
+                new MarketStep(),         // 8b lots whose time is up sell to their high bidders (issue #141)
                 new LevelsStep(),         // 9
                 new DetectionStep(),      // 10 (stub in M0)
                 new CombatStep(),         // 10a everyone who can see a quarrel fires, all at once (issue #68)

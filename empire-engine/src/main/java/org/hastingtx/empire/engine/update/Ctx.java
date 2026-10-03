@@ -96,6 +96,8 @@ public final class Ctx {
     public final List<org.hastingtx.empire.engine.model.LandUnit> units;
     /** Planes as this update leaves them (issue #262); apply copies them out. */
     public final List<org.hastingtx.empire.engine.model.Plane> planes;
+    /** The market's open lots as this update leaves them (issue #141): the market step sells some; apply copies them out. */
+    public final List<org.hastingtx.empire.engine.model.MarketLot> market;
     /** Contacts as this update leaves them (the detection step rewrites this list; apply copies it out). */
     public final List<Contact> contacts;
     /** Map memory as this update leaves it (issue #64); apply copies it out. */
@@ -108,6 +110,7 @@ public final class Ctx {
         this.ships = new ArrayList<>(snap.ships());
         this.units = new ArrayList<>(snap.units());
         this.planes = new ArrayList<>(snap.planes());
+        this.market = new ArrayList<>(snap.market());
         this.contacts = new ArrayList<>(snap.contacts());
         this.seen = new ArrayList<>(snap.seen());
         this.typeIndex = new java.util.HashMap<>();
